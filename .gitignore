@@ -1,0 +1,12 @@
+target/
+*.class
+*.iml
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+*.ipa
+incoming/
+reports/
+.env

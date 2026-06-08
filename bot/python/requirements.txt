@@ -1,0 +1,4 @@
+slack-bolt>=1.20.0
+slack-sdk>=3.27.0
+aiosqlite>=0.21.0
+python-dotenv>=1.0.0

@@ -1,0 +1,1257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Mailmite — IPA Scanner</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f8f9fb;--surface:#fff;--border:#e2e4e9;--text:#1a1d23;
+  --muted:#6b7280;--accent:#5571f7;--accent-h:#3d56e0;
+  --high:#dc2626;--medium:#d97706;--low:#2563eb;--info:#6b7280;
+  --green:#16a34a;--red:#dc2626;--yellow:#ca8a04;
+  --radius:8px;--shadow:0 1px 3px rgba(0,0,0,.08);
+}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* nav */
+nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;align-items:center;gap:1rem;height:52px;position:sticky;top:0;z-index:100}
+.nav-logo{font-weight:700;font-size:1.1rem;color:var(--text);display:flex;align-items:center;gap:.4rem}
+.nav-logo svg{width:22px;height:22px}
+nav a.nav-link{color:var(--muted);font-size:.875rem;padding:.25rem .5rem;border-radius:4px}
+nav a.nav-link:hover,nav a.nav-link.active{color:var(--text);background:var(--bg)}
+.nav-spacer{flex:1}
+.nav-apikey{display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:var(--muted)}
+.nav-apikey input{padding:.3rem .5rem;border:1px solid var(--border);border-radius:4px;font-size:.8rem;width:160px}
+
+/* layout */
+main{max-width:1100px;margin:0 auto;padding:1.5rem}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.25rem}
+.card + .card{margin-top:1rem}
+.card-title{font-weight:600;font-size:.95rem;margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
+
+/* grid */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem}
+@media(max-width:640px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}}
+
+/* stat tile */
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.9rem 1.1rem}
+.stat-val{font-size:1.6rem;font-weight:700;line-height:1}
+.stat-label{font-size:.75rem;color:var(--muted);margin-top:.25rem}
+
+/* upload */
+.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:3rem;text-align:center;cursor:pointer;transition:all .15s}
+.drop-zone:hover,.drop-zone.drag-over{background:#f0f3ff;border-color:var(--accent)}
+.drop-zone p{color:var(--muted);font-size:.9rem;margin-top:.5rem}
+.drop-file-btn{display:inline-block;margin-top:.8rem;padding:.5rem 1.2rem;background:var(--accent);color:#fff;border-radius:var(--radius);font-weight:600;cursor:pointer;font-size:.875rem}
+.drop-file-btn:hover{background:var(--accent-h)}
+input[type=file]{display:none}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;border-radius:var(--radius);font-size:.8rem;font-weight:600;cursor:pointer;border:none;transition:background .12s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-h)}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{background:var(--bg)}
+.btn-danger{background:#fee2e2;color:var(--red)}.btn-danger:hover{background:#fecaca}
+.btn-sm{padding:.3rem .65rem;font-size:.75rem}
+
+/* badges */
+.badge{display:inline-block;padding:.15rem .5rem;border-radius:999px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.badge-queued{background:#f3f4f6;color:var(--muted)}
+.badge-running{background:#fef3c7;color:var(--yellow)}
+.badge-done{background:#dcfce7;color:var(--green)}
+.badge-error{background:#fee2e2;color:var(--red)}
+.badge-critical{background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4}
+.badge-high{background:#fee2e2;color:var(--high)}
+.badge-medium{background:#fef3c7;color:var(--medium)}
+.badge-low{background:#dbeafe;color:var(--low)}
+.badge-info{background:#f3f4f6;color:var(--info)}
+
+/* vulnerability cards */
+.vuln-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:.75rem;overflow:hidden}
+.vuln-head{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;cursor:pointer;user-select:none;transition:background .1s}
+.vuln-head:hover{background:var(--bg)}
+.vuln-head-l{display:flex;align-items:center;gap:.6rem;flex:1;min-width:0;flex-wrap:wrap}
+.vuln-head-r{display:flex;align-items:center;gap:.6rem;font-size:.72rem;color:var(--muted)}
+.vuln-id{font-size:.72rem;color:var(--muted);font-weight:600}
+.vuln-title{font-weight:600;font-size:.88rem;color:var(--text);flex:1;min-width:0}
+.vuln-cvss{font-size:.72rem;font-weight:700;color:var(--muted);background:var(--bg);padding:.1rem .45rem;border-radius:4px}
+.vuln-cat{padding:.1rem .5rem;background:var(--bg);border-radius:4px;font-weight:600}
+.vuln-chev{font-size:.75rem;color:var(--muted)}
+.vuln-body{padding:0 1rem 1rem;border-top:1px solid var(--border)}
+.vuln-section{margin-top:1rem}
+.vuln-section p{font-size:.85rem;line-height:1.55;color:var(--text)}
+.vuln-section-title{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem}
+.vuln-code,.vuln-poc{background:#111;color:#e2e8f0;padding:.65rem .85rem;border-radius:6px;font-family:monospace;font-size:.72rem;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto}
+.vuln-poc{background:#0c1a2b;color:#bcd9ff}
+
+/* triage editor */
+.vuln-card.is-fp{opacity:.55}
+.vuln-card.is-fp .vuln-title{text-decoration:line-through;text-decoration-color:#999}
+.vuln-card.is-overridden{box-shadow:inset 3px 0 0 var(--accent)}
+.vuln-status-strip{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;font-size:.72rem;color:var(--muted);margin-bottom:.6rem;padding:.4rem .6rem;background:var(--bg);border-radius:4px}
+.vuln-status-strip .label{font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.triage-form{background:var(--bg);border-radius:6px;padding:.8rem;margin-top:.85rem;display:grid;grid-template-columns:1fr 1fr;gap:.6rem;align-items:end}
+.triage-form .full{grid-column:1/-1}
+.triage-form label{display:flex;flex-direction:column;gap:.25rem;font-size:.75rem;color:var(--muted);font-weight:600}
+.triage-form select,.triage-form input,.triage-form textarea{padding:.35rem .55rem;border:1px solid var(--border);border-radius:4px;font-size:.8rem;font-family:inherit;background:var(--surface)}
+.triage-form textarea{resize:vertical;min-height:60px}
+.triage-actions{display:flex;gap:.4rem;align-items:center}
+.triage-msg{font-size:.72rem;color:var(--green);font-weight:600}
+.triage-msg.err{color:var(--red)}
+.btn-link{background:transparent;border:0;color:var(--accent);font-size:.72rem;font-weight:600;cursor:pointer;padding:.2rem .4rem}
+.btn-link:hover{text-decoration:underline}
+.badge-falseposit{background:#e5e7eb;color:#374151}
+.badge-accepted{background:#fef3c7;color:#92400e}
+.badge-fixed{background:#dcfce7;color:#166534}
+.badge-open{background:#dbeafe;color:#1e40af}
+
+/* table */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+th,td{padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--border)}
+th{font-weight:600;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;background:var(--bg)}
+tr:hover td{background:#fafbfc}
+td.mono{font-family:monospace;font-size:.75rem}
+td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* tabs */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:1.25rem}
+.tab{padding:.5rem 1rem;font-size:.8rem;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .1s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* log */
+.log-box{background:#111;color:#e2e8f0;border-radius:var(--radius);padding:.9rem 1rem;font-family:monospace;font-size:.72rem;max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+
+/* code viewer */
+.fn-code{background:#111;color:#e2e8f0;border-radius:0 0 var(--radius) var(--radius);padding:.75rem;font-family:monospace;font-size:.72rem;max-height:300px;overflow-y:auto;white-space:pre;display:none}
+.fn-row td{cursor:pointer;user-select:none}
+.fn-row.open td:first-child::before{content:"▾ "}
+.fn-row:not(.open) td:first-child::before{content:"▸ "}
+
+/* search bar */
+.search-bar{display:flex;gap:.5rem;margin-bottom:1rem}
+.search-bar input,.search-bar select{padding:.4rem .7rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.8rem;flex:1}
+.search-bar select{flex:0 0 auto;max-width:280px}
+
+/* pagination */
+.pagination{display:flex;align-items:center;gap:.5rem;margin-top:.75rem;font-size:.8rem;color:var(--muted)}
+.pagination .page-btn{padding:.3rem .65rem;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--surface)}
+.pagination .page-btn:hover{background:var(--bg)}
+.pagination .page-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* scan list row */
+.scan-row{display:flex;align-items:center;gap:1rem;padding:.75rem 1rem;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.scan-row:hover{background:var(--bg)}
+.scan-name{font-weight:600;font-size:.875rem}
+.scan-meta{font-size:.75rem;color:var(--muted)}
+.scan-meta span+span::before{content:" · "}
+
+/* progress */
+progress{width:100%;height:6px;border-radius:3px;appearance:none;margin-top:.75rem}
+progress::-webkit-progress-bar{background:var(--border);border-radius:3px}
+progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
+
+/* alerts */
+.alert{padding:.75rem 1rem;border-radius:var(--radius);font-size:.85rem;margin-bottom:1rem}
+.alert-info{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.alert-error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+.alert-warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+
+/* detail header */
+.detail-header{display:flex;align-items:flex-start;gap:1rem;margin-bottom:1.25rem}
+.detail-title{font-size:1.1rem;font-weight:700}
+.detail-sub{font-size:.8rem;color:var(--muted);margin-top:.2rem}
+.detail-actions{margin-left:auto;display:flex;gap:.5rem}
+
+/* kv list */
+.kv{display:grid;grid-template-columns:160px 1fr;gap:.35rem .75rem;font-size:.82rem}
+.kv-key{color:var(--muted);font-weight:500}
+.kv-val{font-family:monospace;word-break:break-all}
+
+/* loading / empty */
+.loading{text-align:center;padding:3rem;color:var(--muted)}
+.empty{text-align:center;padding:2.5rem;color:var(--muted);font-size:.875rem}
+
+/* spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
+
+/* hidden */
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="nav-logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+    </svg>
+    Mailmite
+  </span>
+  <a class="nav-link" href="#/" data-route="home">Home</a>
+  <a class="nav-link" href="#/scans" data-route="scans">Scans</a>
+  <a class="nav-link" href="#/learned" data-route="learned">Learned Rules</a>
+  <span class="nav-spacer"></span>
+  <span class="nav-apikey">
+    <label for="nav-key">API Key</label>
+    <input id="nav-key" type="password" placeholder="optional"/>
+  </span>
+</nav>
+
+<main id="app"><div class="loading"><div class="spinner"></div></div></main>
+
+<script>
+/* ── LLM provider change handler ── */
+window.onProviderChange = function() {
+  const provider = document.getElementById('llm-provider')?.value || 'none';
+  const keyRow   = document.getElementById('llm-key-row');
+  const keyLabel = document.getElementById('llm-key-label');
+  if (!keyRow) return;
+  const needsKey = provider === 'openai' || provider === 'claude' || provider === 'deepseek';
+  keyRow.hidden = !needsKey;
+  if (provider === 'openai') keyLabel.innerHTML = 'OpenAI API Key (sk-...) <span style="color:var(--red)">*</span>';
+  if (provider === 'claude') keyLabel.innerHTML = 'Anthropic API Key (sk-ant-...) <span style="color:var(--red)">*</span>';
+  if (provider === 'deepseek') keyLabel.innerHTML = 'DeepSeek API Key <span style="color:var(--red)">*</span>';
+  const modelEl = document.getElementById('llm-model');
+  const modelSelect = document.getElementById('llm-model-select');
+  if (modelEl && modelSelect) {
+    const useDeepSeek = provider === 'deepseek';
+    modelEl.hidden = useDeepSeek;
+    modelSelect.hidden = !useDeepSeek;
+    if (useDeepSeek && !modelSelect.value) modelSelect.value = 'deepseek-v4-flash';
+    if (!useDeepSeek) modelEl.placeholder = provider === 'openai' ? 'e.g. gpt-4o-mini'
+      : provider === 'claude' ? 'e.g. claude-sonnet-4-6' : 'leave empty for default';
+  }
+  // Clear any previous error when switching provider
+  clearKeyError();
+};
+
+window.clearKeyError = function() {
+  const keyInput = document.getElementById('llm-api-key');
+  const keyError = document.getElementById('llm-key-error');
+  if (keyInput) keyInput.style.borderColor = '';
+  if (keyError) keyError.hidden = true;
+};
+
+/* ── config ── */
+const keyEl = () => document.getElementById('nav-key');
+function apiKey() { return keyEl() ? keyEl().value : ''; }
+
+function headers(extra={}) {
+  const h = {'Accept':'application/json', ...extra};
+  if (apiKey()) h['X-Api-Key'] = apiKey();
+  return h;
+}
+
+async function api(path, opts={}) {
+  const r = await fetch('/api/v1' + path, {headers: headers(opts.headers||{}), ...opts});
+  if (!r.ok) {
+    const txt = await r.text().catch(()=>'');
+    throw new Error(txt || r.statusText);
+  }
+  return r.json();
+}
+
+/* ── router ── */
+const routes = {};
+function route(pattern, fn) { routes[pattern] = fn; }
+
+function router() {
+  const hash = location.hash.replace(/^#\/?/,'') || '';
+  document.querySelectorAll('.nav-link').forEach(a => {
+    const r = a.dataset.route;
+    a.classList.toggle('active',
+      (r==='home' && hash==='') || (r!=='home' && hash.startsWith(r)));
+  });
+  const parts = hash.split('/');
+  if (parts[0]==='scan' && parts[1]) return routes['scan'](parts[1], parts[2]||'summary');
+  if (routes[parts[0]]) return routes[parts[0]](parts[1]);
+  routes['home']();
+}
+
+window.addEventListener('hashchange', router);
+function render(html) { document.getElementById('app').innerHTML = html; }
+function $(s) { return document.querySelector(s); }
+function $$(s) { return [...document.querySelectorAll(s)]; }
+
+/* ── utils ── */
+function badge(state) {
+  return `<span class="badge badge-${state}">${state}</span>`;
+}
+function sevBadge(text='') {
+  if (/\bHIGH\b/i.test(text)) return '<span class="badge badge-high">HIGH</span>';
+  if (/\bMEDIUM\b/i.test(text)) return '<span class="badge badge-medium">MEDIUM</span>';
+  if (/\bLOW\b/i.test(text)) return '<span class="badge badge-low">LOW</span>';
+  return '<span class="badge badge-info">INFO</span>';
+}
+function fmt(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString();
+}
+function dur(a, b) {
+  if (!a||!b) return '—';
+  const ms = new Date(b)-new Date(a);
+  if (ms < 60000) return (ms/1000).toFixed(1)+'s';
+  return (ms/60000).toFixed(1)+'m';
+}
+function esc(s='') {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function num(n) { return n==null?'—':n.toLocaleString(); }
+
+/* ── home view ── */
+route('home', async function() {
+  render(`
+  <div style="max-width:680px;margin:0 auto">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Upload IPA</div>
+      <div class="drop-zone" id="drop">
+        <div style="font-size:2rem">📦</div>
+        <p><strong>Drag &amp; drop .ipa here</strong></p>
+        <p>Ghidra decompiles, Mailmite finds the sketchy bits.</p>
+        <label class="drop-file-btn">Browse file<input type="file" id="ipa-file" accept=".ipa"/></label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-top:1rem;font-size:.8rem">
+        <label style="display:flex;flex-direction:column;gap:.3rem">
+          LLM Enrichment
+          <select id="llm-provider" onchange="onProviderChange()">
+            <option value="none">Disabled</option>
+            <option value="openai">OpenAI</option>
+            <option value="claude">Claude</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="ollama">Ollama (local)</option>
+          </select>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:.3rem">
+          Mode
+          <select id="llm-mode">
+            <option value="summarize">Summarize</option>
+            <option value="find_vulns">Find Vulns</option>
+            <option value="auto_fix">Auto Fix</option>
+          </select>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:.3rem">
+          Model override
+          <select id="llm-model-select" hidden style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px">
+            <option value="deepseek-v4-flash">deepseek-v4-flash (default, fast)</option>
+            <option value="deepseek-v4-pro">deepseek-v4-pro (higher quality)</option>
+            <option value="deepseek-chat">deepseek-chat (legacy alias)</option>
+            <option value="deepseek-reasoner">deepseek-reasoner (reasoning)</option>
+          </select>
+          <input id="llm-model" type="text" placeholder="e.g. gpt-4o-mini" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
+        </label>
+      </div>
+      <div id="llm-key-row" hidden style="margin-top:.75rem;font-size:.8rem">
+        <label style="display:flex;flex-direction:column;gap:.3rem">
+          <span id="llm-key-label">API Key <span style="color:var(--red)">*</span></span>
+          <input id="llm-api-key" type="password" placeholder="Paste your API key here" oninput="clearKeyError()"
+            style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px;max-width:420px"/>
+          <span id="llm-key-error" hidden style="color:var(--red);font-weight:600">API key is required to use this provider.</span>
+          <span style="color:var(--muted);font-size:.72rem">Sent only to this server to authenticate with the LLM provider. Never stored.</span>
+        </label>
+      </div>
+      <progress id="upload-bar" value="0" max="100" hidden></progress>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        Recent scans
+        <a href="#/scans" style="font-size:.75rem;font-weight:400">View all →</a>
+      </div>
+      <div id="recent-list"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>`);
+
+  const drop = $('#drop');
+  const fileEl = $('#ipa-file');
+  ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag-over')}));
+  ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag-over')}));
+  drop.addEventListener('drop', ev=>doUpload(ev.dataTransfer.files[0]));
+  fileEl.addEventListener('change', ev=>doUpload(ev.target.files[0]));
+
+  async function doUpload(file) {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.ipa')) { alert('Only .ipa files accepted'); return; }
+
+    // Validate: API key required when provider needs one
+    const provider = $('#llm-provider').value;
+    const needsKey = provider === 'openai' || provider === 'claude' || provider === 'deepseek';
+    const apiKeyVal = ($('#llm-api-key')?.value || '').trim();
+    if (needsKey && !apiKeyVal) {
+      const keyInput = $('#llm-api-key');
+      const keyError = $('#llm-key-error');
+      if (keyInput) keyInput.style.borderColor = 'var(--red)';
+      if (keyError) keyError.hidden = false;
+      keyInput?.focus();
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('llm_enabled', provider !== 'none');
+    fd.append('llm_provider', provider);
+    fd.append('llm_mode', $('#llm-mode').value);
+    fd.append('llm_model', ($('#llm-model-select') && !$('#llm-model-select').hidden)
+      ? $('#llm-model-select').value : $('#llm-model').value);
+    fd.append('llm_api_key', apiKeyVal);
+
+    const bar = $('#upload-bar');
+    bar.hidden = false; bar.value = 0;
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/v1/scans');
+    if (apiKey()) xhr.setRequestHeader('X-Api-Key', apiKey());
+    xhr.upload.onprogress = e => { bar.value = (e.loaded/e.total)*100; };
+    xhr.onload = () => {
+      bar.value = 100;
+      try {
+        const j = JSON.parse(xhr.responseText);
+        if (j.scan_id) location.hash = '#/scan/' + j.scan_id;
+      } catch(_) { alert('Upload failed: ' + xhr.responseText); }
+    };
+    xhr.onerror = () => alert('Network error');
+    xhr.send(fd);
+  }
+
+  try {
+    const scans = await api('/scans');
+    const list = document.getElementById('recent-list');
+    if (!scans.length) { list.innerHTML = '<div class="empty">No scans yet.</div>'; return; }
+    list.innerHTML = scans.slice(0,5).map(s => `
+      <div class="scan-row" onclick="location.hash='#/scan/${s.scan_id}'">
+        <div style="flex:1">
+          <div class="scan-name">${esc(s.filename)}</div>
+          <div class="scan-meta"><span>${fmt(s.created_at)}</span><span>${esc(s.scan_id.slice(0,8))}</span></div>
+        </div>
+        ${badge(s.state)}
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('recent-list').innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+  }
+});
+
+/* ── scans list view ── */
+route('scans', async function() {
+  render('<div class="loading"><div class="spinner"></div></div>');
+  try {
+    const scans = await api('/scans');
+    if (!scans.length) { render('<div class="empty">No scans yet. <a href="#/">Upload an IPA →</a></div>'); return; }
+    render(`
+      <div class="card">
+        <div class="card-title" style="justify-content:space-between">
+          All Scans
+          <a href="#/" class="btn btn-primary btn-sm">+ New Scan</a>
+        </div>
+        <table>
+          <thead><tr><th>File</th><th>Scan ID</th><th>State</th><th>Started</th><th>Duration</th><th></th></tr></thead>
+          <tbody>${scans.map(s=>`
+            <tr>
+              <td><a href="#/scan/${s.scan_id}">${esc(s.filename)}</a></td>
+              <td class="mono">${s.scan_id.slice(0,8)}</td>
+              <td>${badge(s.state)}</td>
+              <td>${fmt(s.created_at)}</td>
+              <td>${dur(s.started_at, s.finished_at)}</td>
+              <td><button class="btn btn-danger btn-sm" onclick="deleteScan('${s.scan_id}',event)">Delete</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`);
+  } catch(e) {
+    render(`<div class="alert alert-error">${esc(e.message)}</div>`);
+  }
+});
+
+window.deleteScan = async function(id, ev) {
+  ev.stopPropagation();
+  if (!confirm('Delete this scan?')) return;
+  await fetch('/api/v1/scans/'+id, {method:'DELETE', headers: headers()});
+  router();
+};
+
+/* ── learned rules view ── */
+route('learned', async function() {
+  render('<div class="loading"><div class="spinner"></div></div>');
+  try {
+    const data = await api('/learned-rules');
+    if (!data.count) {
+      render(`
+        <div class="card">
+          <div class="card-title">Learned Rules</div>
+          <p style="color:var(--muted);font-size:.875rem">
+            No learned rules yet. Run a scan with <strong>LLM enrichment</strong> in
+            <em>Find Vulns</em> mode — vulnerabilities the LLM discovers will be
+            distilled into reusable detection rules and stored at
+            <code>${esc(data.path)}</code>.
+          </p>
+          <p style="margin-top:.5rem;font-size:.875rem">
+            Once stored, every subsequent scan (even without LLM) will check
+            for these patterns alongside the built-in MSTG rules.
+          </p>
+        </div>`);
+      return;
+    }
+    const rows = data.rules.map(r => `
+      <tr>
+        <td class="mono">${esc(r.id||'')}</td>
+        <td>${esc(r.scope||'')}</td>
+        <td>${esc(r.title||'')}</td>
+        <td>${badgeSev(r.severity)}</td>
+        <td>${(r.cvssScore||0).toFixed(1)}</td>
+        <td class="mono truncate" style="max-width:300px" title="${esc(r.regex||'')}">${esc(r.regex||'')}</td>
+        <td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ''}</td>
+      </tr>`).join('');
+    render(`
+      <div class="card">
+        <div class="card-title" style="justify-content:space-between">
+          Learned Rules
+          <span style="font-size:.75rem;color:var(--muted);font-weight:400">${data.count} rule(s) · ${esc(data.path)}</span>
+        </div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:.75rem">
+          These rules were auto-generated by the LLM from previous scans.
+          They run on every scan, even ones without LLM enrichment.
+        </p>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Rule ID</th><th>Scope</th><th>Title</th><th>Severity</th><th>CVSS</th><th>Regex</th><th>Created</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </div>`);
+  } catch(e) {
+    render(`<div class="alert alert-error">${esc(e.message)}</div>`);
+  }
+});
+
+function badgeSev(sev) {
+  const cls = (sev||'INFO').toLowerCase();
+  return `<span class="badge badge-${cls}">${esc(sev||'INFO')}</span>`;
+}
+
+/* ── scan detail view ── */
+const TABS = ['summary','vulnerabilities','functions','strings','resources','entrypoints','llm','log','downloads'];
+
+route('scan', async function(id, tab='summary') {
+  render('<div class="loading"><div class="spinner"></div></div>');
+  let detail;
+  try { detail = await api('/scans/'+id); }
+  catch(e) { render(`<div class="alert alert-error">${esc(e.message)}</div>`); return; }
+
+  const tabsHtml = TABS.map(t=>
+    `<div class="tab${t===tab?' active':''}" onclick="goTab('${id}','${t}')">${t.charAt(0).toUpperCase()+t.slice(1)}</div>`
+  ).join('');
+
+  render(`
+    <div class="detail-header">
+      <div>
+        <div class="detail-title">${esc(detail.bundle_id || detail.filename)}</div>
+        <div class="detail-sub">${esc(detail.filename)} &nbsp;·&nbsp; ${detail.scan_id.slice(0,8)} &nbsp;·&nbsp; ${badge(detail.state)}</div>
+      </div>
+      <div class="detail-actions">
+        ${detail.has_html?`<a class="btn btn-ghost btn-sm" href="/api/v1/scans/${id}/report" target="_blank">HTML Report</a>`:''}
+        ${detail.has_sarif?`<a class="btn btn-ghost btn-sm" href="/api/v1/scans/${id}/sarif">Download SARIF</a>`:''}
+        <button class="btn btn-danger btn-sm" onclick="deleteScan('${id}', event)">Delete</button>
+      </div>
+    </div>
+    <div class="tabs">${tabsHtml}</div>
+    <div id="tab-content"><div class="loading"><div class="spinner"></div></div></div>`);
+
+  await renderTab(id, tab, detail);
+
+  // auto-refresh if running
+  if (detail.state === 'queued' || detail.state === 'running') {
+    const iv = setInterval(async () => {
+      const d = await api('/scans/'+id).catch(()=>null);
+      if (!d) return;
+      if (d.state === 'done' || d.state === 'error') {
+        clearInterval(iv);
+        location.hash = '#/scan/' + id + '/summary';
+      }
+    }, 3000);
+  }
+});
+
+window.goTab = function(id, tab) {
+  history.replaceState(null,'','#/scan/'+id+'/'+tab);
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.classList.toggle('active', t.textContent.toLowerCase()===tab);
+  });
+  api('/scans/'+id).then(detail => renderTab(id, tab, detail));
+};
+
+async function renderTab(id, tab, detail) {
+  const el = document.getElementById('tab-content');
+  if (!el) return;
+  try {
+    switch(tab) {
+      case 'summary':         el.innerHTML = await tabSummary(detail); break;
+      case 'vulnerabilities': await tabVulnerabilities(el, id, detail); break;
+      case 'functions':       await tabFunctions(el, id, detail); break;
+      case 'strings':     await tabStrings(el, id, detail); break;
+      case 'resources':   await tabResources(el, id); break;
+      case 'entrypoints': await tabEntryPoints(el, id, detail); break;
+      case 'llm':         await tabLlm(el, id, detail); break;
+      case 'log':         await tabLog(el, id); break;
+      case 'downloads':   el.innerHTML = tabDownloads(id, detail); break;
+      default:            el.innerHTML = '<div class="empty">Unknown tab.</div>';
+    }
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+  }
+}
+
+/* ── log → human-friendly error reason ── */
+function extractErrorReason(log) {
+  if (!log) return {reason:'', hint:''};
+
+  // Known patterns ranked by specificity (first match wins)
+  const patterns = [
+    {
+      re: /chainedImport.*null|DyldChainedImport\.getName/,
+      reason: 'Ghidra Mach-O loader crashed on chained-fixups — a chained import entry has a null target name. This is a known upstream bug in Ghidra (verified present in 12.0.4 and 12.1) triggered by some IPAs built with recent Xcode toolchains.',
+      hint: 'There is no clean workaround as of Ghidra 12.1. Options: (a) wait for an upstream fix, (b) re-build the IPA with chained-fixups disabled (linker flag <code>-fixup_chains</code> in some toolchain configs), or (c) skip this app from your scan queue. The CLI now fails fast (~15s) instead of hanging, so retrying gains nothing.',
+    },
+    {
+      re: /DyldChainedFixups[\s\S]{0,200}NullPointerException/,
+      reason: 'Ghidra Mach-O loader hit a NullPointerException while processing dyld chained fixups.',
+      hint: 'Known Ghidra Mach-O parser issue. See the full log for the specific cause, and check the Ghidra issue tracker for updates.',
+    },
+    {
+      re: /Ghidra subprocess exited[\s\S]{0,200}before heartbeat/,
+      reason: 'Ghidra crashed during Mach-O import before our post-script could run. The binary loaded but the loader threw — usually a Mach-O parsing bug.',
+      hint: 'Check the [ghidra-output] ERROR REPORT lines in the full log for the specific Ghidra exception.',
+    },
+    {
+      re: /Ghidra subprocess exited[\s\S]{0,200}before data/,
+      reason: 'Ghidra started the post-script but the script died before sending data. Usually a script error or out-of-memory during decompilation.',
+      hint: 'Check Ghidra script output and consider raising -Xmx for large binaries.',
+    },
+    {
+      re: /Timed out[\s\S]{0,200}waiting for Ghidra/,
+      reason: 'Ghidra ran for the full deadline (30 min) without finishing. Binary is unusually large or the decompiler stalled.',
+      hint: 'Try increasing the deadline or excluding certain library frameworks via CoreConfig.',
+    },
+    {
+      re: /Only \.ipa files|wrong extension|not a valid IPA/i,
+      reason: 'Uploaded file failed IPA validation.',
+      hint: 'Make sure the file is a real `.ipa` (not a renamed .zip) and has at least one .app bundle inside.',
+    },
+    {
+      re: /ANTHROPIC_API_KEY missing|OPENAI_API_KEY missing/,
+      reason: 'LLM enrichment was enabled but the corresponding API key was not provided.',
+      hint: 'Either provide a valid API key on upload, or disable LLM in the upload form.',
+    },
+    {
+      re: /OutOfMemoryError/,
+      reason: 'Java ran out of heap memory during analysis.',
+      hint: 'Try a smaller IPA or run the CLI with `-Xmx4g` (or higher) in JAVA_OPTS.',
+    },
+  ];
+
+  for (const p of patterns) {
+    if (p.re.test(log)) return {reason: p.reason, hint: p.hint};
+  }
+
+  // Fallback: surface the last "Caused by:" line, or last RuntimeException line
+  const causedBy = log.match(/Caused by: [^\n]+/g);
+  if (causedBy && causedBy.length) {
+    return {reason: causedBy[causedBy.length - 1].trim(), hint: ''};
+  }
+  const runtimeEx = log.match(/^\S*Exception:[^\n]+/gm);
+  if (runtimeEx && runtimeEx.length) {
+    return {reason: runtimeEx[runtimeEx.length - 1].trim(), hint: ''};
+  }
+  return {reason: '(no exception found in log — check full log for context)', hint:''};
+}
+
+/* ── summary tab ── */
+async function tabSummary(d) {
+  if (d.state !== 'done') {
+    const isPending = d.state === 'queued' || d.state === 'running';
+    if (isPending) {
+      return `<div class="alert alert-warn">
+          Analysis is <strong>${d.state}</strong> — this page will refresh automatically.
+        </div>
+        ${d.has_log?`<div class="card"><div class="card-title">Live log</div>
+          <div id="live-log" class="log-box">Loading…</div></div>`:''}`;
+    }
+    // state === 'error' — fetch log tail, extract friendly reason
+    let logTail = '';
+    let reason  = 'Scan exited with code ' + (d.exit_code ?? '?');
+    let hint    = '';
+    try {
+      const r = await api('/scans/'+d.scan_id+'/log?tail=500');
+      logTail = (r.lines || []).join('\n');
+      const extracted = extractErrorReason(logTail);
+      if (extracted.reason) reason = extracted.reason;
+      if (extracted.hint)   hint   = extracted.hint;
+    } catch(_) {}
+
+    return `
+      <div class="alert alert-error">
+        <strong>Scan failed</strong> — exit code ${d.exit_code ?? '?'}.
+      </div>
+      <div class="card" style="border-left:4px solid var(--red)">
+        <div class="card-title">Why did this fail?</div>
+        <p style="font-family:monospace;font-size:.82rem;line-height:1.55;color:var(--text);white-space:pre-wrap">${esc(reason)}</p>
+        ${hint ? `<div class="alert alert-info" style="margin-top:.75rem">${hint}</div>` : ''}
+      </div>
+      <div class="card">
+        <div class="card-title" style="justify-content:space-between">
+          <span>Last ${Math.min(40, (logTail.split('\n').length))} log lines</span>
+          <a href="#/scan/${d.scan_id}/log" style="font-size:.75rem;font-weight:400">View full log →</a>
+        </div>
+        <div class="log-box">${esc(logTail.split('\n').slice(-40).join('\n')) || '(log empty)'}</div>
+      </div>`;
+  }
+  const archs = (d.architectures||[]).join(', ') || '—';
+  return `
+    <div class="grid-4" style="margin-bottom:1rem">
+      <div class="stat"><div class="stat-val">${num(d.class_count)}</div><div class="stat-label">Classes</div></div>
+      <div class="stat"><div class="stat-val">${num(d.function_count)}</div><div class="stat-label">Functions</div></div>
+      <div class="stat"><div class="stat-val">${num(d.string_count)}</div><div class="stat-label">Strings</div></div>
+      <div class="stat" style="cursor:pointer" onclick="goTab('${d.scan_id}','vulnerabilities')">
+        <div class="stat-val" style="color:${(d.vulnerability_counts?.total||0)>0?'var(--high)':'var(--text)'}">${num(d.vulnerability_counts?.total)}</div>
+        <div class="stat-label">Vulnerabilities ${d.vulnerability_counts?.CRITICAL?'<span class="badge badge-critical" style="margin-left:.3rem">'+d.vulnerability_counts.CRITICAL+' CRIT</span>':''}</div>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Bundle</div>
+        <div class="kv">
+          <span class="kv-key">Identifier</span><span class="kv-val">${esc(d.bundle_id||'—')}</span>
+          <span class="kv-key">Executable</span><span class="kv-val">${esc(d.bundle_executable||'—')}</span>
+          <span class="kv-key">Swift</span><span class="kv-val">${d.is_swift?'Yes':'No'}</span>
+          <span class="kv-key">Universal</span><span class="kv-val">${d.is_universal?'Yes':'No'}</span>
+          <span class="kv-key">Architectures</span><span class="kv-val">${esc(archs)}</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Signing</div>
+        <div class="kv">
+          <span class="kv-key">Team ID</span><span class="kv-val">${esc(d.team_id||'—')}</span>
+          <span class="kv-key">Profile</span><span class="kv-val">${esc(d.provisioning_profile||'—')}</span>
+          <span class="kv-key">Expiry</span><span class="kv-val">${esc(d.provisioning_expiry||'—')}</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Scan</div>
+        <div class="kv">
+          <span class="kv-key">Scan ID</span><span class="kv-val">${esc(d.scan_id)}</span>
+          <span class="kv-key">File</span><span class="kv-val">${esc(d.filename)}</span>
+          <span class="kv-key">LLM</span><span class="kv-val">${d.llm_enabled?esc(d.llm_provider)+' / '+esc(d.llm_mode):'disabled'}</span>
+          <span class="kv-key">Started</span><span class="kv-val">${fmt(d.started_at)}</span>
+          <span class="kv-key">Duration</span><span class="kv-val">${dur(d.started_at, d.finished_at)}</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Entry Points (${num(d.entry_point_count)})</div>
+        <div id="ep-mini"><div class="spinner"></div></div>
+      </div>
+    </div>`;
+}
+
+// Populate entry points in summary after render
+document.addEventListener('DOMContentLoaded', ()=>{});
+function postSummaryHydrate(id) {
+  const el = document.getElementById('ep-mini');
+  if (!el) return;
+  api('/scans/'+id+'/entrypoints').then(eps=>{
+    if (!eps.length) { el.innerHTML='<div class="empty" style="padding:.5rem">None detected.</div>'; return; }
+    el.innerHTML = '<ul style="list-style:none;font-size:.78rem;font-family:monospace;line-height:1.7">'+
+      eps.map(e=>`<li>${esc(e)}</li>`).join('')+'</ul>';
+  }).catch(()=>{ el.innerHTML='<span class="muted">—</span>'; });
+}
+
+/* ── functions tab ── */
+let fnState = {page:0, size:50, class_name:null};
+
+async function tabFunctions(el, id, detail) {
+  el.innerHTML = `
+    <div class="search-bar">
+      <select id="fn-class"><option value="">All classes</option></select>
+      <button class="btn btn-ghost btn-sm" id="fn-load-btn">Load</button>
+    </div>
+    <div id="fn-table"><div class="empty">Select a class and click Load.</div></div>
+    <div id="fn-pages" class="pagination"></div>`;
+
+  if (detail.state !== 'done') {
+    el.innerHTML = `<div class="alert alert-warn">Scan not complete.</div>`; return;
+  }
+  try {
+    const data = await api('/scans/'+id+'/functions?size=0&page=0');
+    const sel = document.getElementById('fn-class');
+    data.classes.forEach(c => { const o=document.createElement('option'); o.value=c; o.text=c; sel.appendChild(o); });
+  } catch(e) { /* ignore */ }
+
+  document.getElementById('fn-load-btn').onclick = () => {
+    fnState.page = 0;
+    fnState.class_name = document.getElementById('fn-class').value || null;
+    loadFunctions(id);
+  };
+}
+
+async function loadFunctions(id) {
+  const el = document.getElementById('fn-table');
+  if (!el) return;
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const q = new URLSearchParams({page:fnState.page, size:fnState.size});
+    if (fnState.class_name) q.set('class_name', fnState.class_name);
+    const data = await api('/scans/'+id+'/functions?'+q);
+    if (!data.items.length) { el.innerHTML='<div class="empty">No functions found.</div>'; return; }
+    el.innerHTML = `
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Function</th><th>Has Decompiled</th></tr></thead>
+          <tbody>${data.items.map((fn,i)=>`
+            <tr class="fn-row" data-i="${i}" onclick="toggleFn(this,${JSON.stringify(esc(fn.function_name))},${JSON.stringify(esc(fn.decompiled||''))})">
+              <td>${esc(fn.function_name)}</td>
+              <td>${fn.decompiled?'Yes':'—'}</td>
+            </tr>
+            <tr class="fn-code-row" id="fn-code-${i}" hidden>
+              <td colspan="2"><pre class="fn-code" style="display:block">${esc(fn.decompiled||'(no decompiled code)')}</pre></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    renderFnPagination(id, data.page, data.size, data.total);
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+  }
+}
+
+window.toggleFn = function(row, name, code) {
+  const i = row.dataset.i;
+  const codeRow = document.getElementById('fn-code-'+i);
+  if (!codeRow) return;
+  const isOpen = !codeRow.hidden;
+  codeRow.hidden = isOpen;
+  row.classList.toggle('open', !isOpen);
+};
+
+function renderFnPagination(id, page, size, total) {
+  const el = document.getElementById('fn-pages');
+  if (!el) return;
+  const pages = Math.ceil(total/size);
+  if (pages<=1) { el.innerHTML=''; return; }
+  let html = `<span>${total.toLocaleString()} total</span>`;
+  if (page>0) html+=`<button class="page-btn" onclick="fnPage('${id}',${page-1})">←</button>`;
+  const start=Math.max(0,page-2), end=Math.min(pages,page+3);
+  for(let i=start;i<end;i++)
+    html+=`<button class="page-btn${i===page?' active':''}" onclick="fnPage('${id}',${i})">${i+1}</button>`;
+  if (page<pages-1) html+=`<button class="page-btn" onclick="fnPage('${id}',${page+1})">→</button>`;
+  el.innerHTML=html;
+}
+
+window.fnPage = function(id, p) { fnState.page=p; loadFunctions(id); };
+
+/* ── strings tab ── */
+async function tabStrings(el, id, detail) {
+  if (detail.state !== 'done') { el.innerHTML=`<div class="alert alert-warn">Scan not complete.</div>`; return; }
+  el.innerHTML = `
+    <div class="search-bar">
+      <input id="str-q" type="text" placeholder="Search strings…"/>
+      <button class="btn btn-primary btn-sm" onclick="loadStrings('${id}')">Search</button>
+    </div>
+    <div id="str-table"><div class="empty">Click Search to load strings.</div></div>`;
+  document.getElementById('str-q').addEventListener('keydown', e=>{ if(e.key==='Enter') loadStrings(id); });
+}
+
+async function loadStrings(id) {
+  const el = document.getElementById('str-table');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const q = document.getElementById('str-q')?.value || '';
+  try {
+    const params = new URLSearchParams({limit:300});
+    if (q) params.set('q', q);
+    const items = await api('/scans/'+id+'/strings?'+params);
+    if (!items.length) { el.innerHTML='<div class="empty">No strings found.</div>'; return; }
+    el.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Address</th><th>Value</th><th>Segment</th><th>Label</th></tr></thead>
+      <tbody>${items.map(s=>`<tr>
+        <td class="mono">${esc(s.address||'')}</td>
+        <td class="truncate" title="${esc(s.value)}">${esc(s.value)}</td>
+        <td>${esc(s.segment||'')}</td>
+        <td>${esc(s.label||'')}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+}
+
+/* ── resources tab ── */
+async function tabResources(el, id) {
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const items = await api('/scans/'+id+'/resources?limit=500');
+    if (!items.length) { el.innerHTML='<div class="empty">No resource strings found.</div>'; return; }
+    el.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Resource</th><th>Value</th><th>Type</th></tr></thead>
+      <tbody>${items.map(r=>`<tr>
+        <td class="mono truncate">${esc(r.resource_id)}</td>
+        <td class="truncate">${esc(r.value)}</td>
+        <td>${esc(r.type)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+}
+
+/* ── entry points tab ── */
+async function tabEntryPoints(el, id, detail) {
+  if (detail.state !== 'done') { el.innerHTML=`<div class="alert alert-warn">Scan not complete.</div>`; return; }
+  el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const eps = await api('/scans/'+id+'/entrypoints');
+    if (!eps.length) { el.innerHTML='<div class="empty">No entry points detected.</div>'; return; }
+    el.innerHTML = `<div class="card">
+      <div class="card-title">Detected Entry Points (${eps.length})</div>
+      <ul style="list-style:none">${eps.map(e=>`
+        <li style="padding:.4rem 0;border-bottom:1px solid var(--border);font-family:monospace;font-size:.82rem">${esc(e)}</li>`).join('')}
+      </ul></div>`;
+  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+}
+
+/* ── vulnerabilities tab ── */
+async function tabVulnerabilities(el, id, detail) {
+  if (detail.state !== 'done') {
+    el.innerHTML = `<div class="alert alert-warn">Scan not complete — vulnerabilities will appear when analysis finishes.</div>`;
+    return;
+  }
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const findings = await api('/scans/'+id+'/vulnerabilities');
+    if (!findings.length) {
+      el.innerHTML = `<div class="card"><div class="card-title">No vulnerabilities detected</div>
+        <p style="color:var(--muted);font-size:.85rem">No MSTG-derived patterns matched. This does <em>not</em> mean the app is secure — consider running dynamic analysis as well.</p></div>`;
+      return;
+    }
+
+    const counts = (detail.vulnerability_counts || {});
+    const totals = `
+      <div class="grid-4" style="margin-bottom:1rem">
+        <div class="stat"><div class="stat-val" style="color:var(--high)">${counts.CRITICAL||0}</div><div class="stat-label">Critical</div></div>
+        <div class="stat"><div class="stat-val" style="color:var(--medium)">${counts.HIGH||0}</div><div class="stat-label">High</div></div>
+        <div class="stat"><div class="stat-val" style="color:var(--yellow)">${counts.MEDIUM||0}</div><div class="stat-label">Medium</div></div>
+        <div class="stat"><div class="stat-val" style="color:var(--low)">${counts.LOW||0}</div><div class="stat-label">Low</div></div>
+      </div>`;
+
+    // Filter bar (severity + status + free-text search)
+    const fpCount = findings.filter(f => f.status === 'false_positive').length;
+    const filter = `
+      <div class="search-bar">
+        <input id="vuln-q" type="text" placeholder="Filter by ID, title, category, severity, status…"/>
+        <select id="vuln-sev">
+          <option value="">All severities</option>
+          <option value="CRITICAL">Critical</option>
+          <option value="HIGH">High</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="LOW">Low</option>
+        </select>
+        <select id="vuln-status">
+          <option value="active">Active only</option>
+          <option value="all" selected>Show all</option>
+          <option value="open">Open only</option>
+          <option value="false_positive">False positive only</option>
+          <option value="accepted_risk">Accepted risk only</option>
+          <option value="fixed">Fixed only</option>
+        </select>
+      </div>
+      ${fpCount ? `<div class="alert alert-info" style="margin-bottom:.75rem">
+         <strong>${fpCount}</strong> finding${fpCount===1?'':'s'} marked as <em>false positive</em> &mdash;
+         shown here with a dimmed style, but excluded from generated reports.
+       </div>` : ''}`;
+
+    const cards = findings.map((v, i) => renderVulnCard(v, i)).join('');
+    el.innerHTML = totals + filter + '<div id="vuln-list">' + cards + '</div>';
+
+    const filterFn = () => {
+      const q   = (document.getElementById('vuln-q')?.value || '').toLowerCase();
+      const sev = document.getElementById('vuln-sev')?.value || '';
+      const st  = document.getElementById('vuln-status')?.value || 'all';
+      $$('#vuln-list .vuln-card').forEach(card => {
+        const text    = card.dataset.search || '';
+        const cardSev = card.dataset.severity || '';
+        const cardSt  = card.dataset.status   || 'open';
+        const matchQ  = !q   || text.includes(q);
+        const matchS  = !sev || cardSev === sev;
+        const matchT  =  st === 'all'   ? true
+                      : st === 'active' ? (cardSt !== 'false_positive' && cardSt !== 'fixed')
+                      : cardSt === st;
+        card.style.display = (matchQ && matchS && matchT) ? '' : 'none';
+      });
+    };
+    document.getElementById('vuln-q').addEventListener('input', filterFn);
+    document.getElementById('vuln-sev').addEventListener('change', filterFn);
+    document.getElementById('vuln-status').addEventListener('change', filterFn);
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+  }
+}
+
+function renderVulnCard(v, i) {
+  const origSev   = v.severity || 'INFO';
+  const effSev    = v.effective_severity || v.override_severity || origSev;
+  const effCvss   = (v.effective_cvss_score ?? v.cvss_score ?? 0).toFixed(1);
+  const origCvss  = (v.cvss_score || 0).toFixed(1);
+  const overridden = v.override_severity && v.override_severity.toUpperCase() !== origSev.toUpperCase();
+  const sevClass  = effSev.toLowerCase();
+  const status    = (v.status || 'open').toLowerCase();
+  const isFp      = status === 'false_positive';
+  const search    = [v.rule_id, v.title, v.category, effSev, v.affected_name, v.evidence, status]
+    .filter(Boolean).join(' ').toLowerCase();
+
+  const statusBadge = status !== 'open' ? `<span class="badge badge-${statusKey(status)}">${statusLabel(status)}</span>` : '';
+  const overrideStrip = (overridden || v.override_note) ? `
+    <div class="vuln-status-strip">
+      ${overridden ? `<span><span class="label">Override:</span> ${esc(v.override_severity)} (originally ${esc(origSev)})</span>` : ''}
+      ${v.override_note ? `<span>· ${esc(v.override_note)}</span>` : ''}
+    </div>` : '';
+
+  return `
+    <div class="vuln-card ${isFp?'is-fp':''} ${overridden?'is-overridden':''}"
+         id="vuln-${v.id}" data-severity="${effSev}" data-status="${status}" data-search="${esc(search)}">
+      <div class="vuln-head" onclick="toggleVuln(${i})">
+        <div class="vuln-head-l">
+          <span class="badge badge-${sevClass}">${esc(effSev)}</span>
+          <span class="vuln-cvss">CVSS ${effCvss}</span>
+          <span class="vuln-id mono">${esc(v.rule_id||'')}</span>
+          <span class="vuln-title">${esc(v.title||'')}</span>
+          ${statusBadge}
+        </div>
+        <div class="vuln-head-r">
+          <span class="vuln-cat">${esc(v.category||'')}</span>
+          <span class="vuln-chev" id="chev-${i}">▾</span>
+        </div>
+      </div>
+      <div class="vuln-body" id="vbody-${i}" hidden>
+        ${overrideStrip}
+        <div class="vuln-section">
+          <div class="vuln-section-title">Description</div>
+          <p>${esc(v.description||'')}</p>
+        </div>
+        <div class="grid-2">
+          <div class="vuln-section">
+            <div class="vuln-section-title">Affected</div>
+            <div class="kv">
+              <span class="kv-key">Type</span><span class="kv-val">${esc(v.affected_type||'—')}</span>
+              <span class="kv-key">Name</span><span class="kv-val">${esc(v.affected_name||'—')}</span>
+              <span class="kv-key">Location</span><span class="kv-val">${esc(v.evidence_location||'—')}</span>
+            </div>
+          </div>
+          <div class="vuln-section">
+            <div class="vuln-section-title">Risk</div>
+            <div class="kv">
+              <span class="kv-key">Severity</span><span class="kv-val">${esc(effSev)}${overridden?` <em style="color:var(--muted);font-size:.7rem">(was ${esc(origSev)})</em>`:''}</span>
+              <span class="kv-key">CVSS</span><span class="kv-val">${effCvss}${overridden && effCvss !== origCvss ?` <em style="color:var(--muted);font-size:.7rem">(was ${origCvss})</em>`:''}</span>
+              <span class="kv-key">CWE</span><span class="kv-val">${esc(v.cwe||'—')}</span>
+              <span class="kv-key">MSTG ID</span><span class="kv-val">${esc(v.rule_id||'—')}</span>
+              <span class="kv-key">Status</span><span class="kv-val">${statusLabel(status)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="vuln-section">
+          <div class="vuln-section-title">Evidence</div>
+          <pre class="vuln-code">${esc(v.evidence||'(no evidence captured)')}</pre>
+        </div>
+        <div class="vuln-section">
+          <div class="vuln-section-title">Proof of Concept (steps to reproduce)</div>
+          <pre class="vuln-poc">${esc(v.poc_steps||'No PoC provided.')}</pre>
+        </div>
+        <div class="vuln-section">
+          <div class="vuln-section-title">Remediation</div>
+          <p>${esc(v.remediation||'')}</p>
+        </div>
+        <div class="vuln-section">
+          <div class="vuln-section-title">Reference</div>
+          <p><a href="${esc(v.reference_url||'#')}" target="_blank" rel="noopener">${esc(v.reference_url||'')}</a></p>
+        </div>
+        <div class="vuln-section">
+          <div class="vuln-section-title" style="display:flex;justify-content:space-between;align-items:center">
+            <span>Triage</span>
+            <button class="btn-link" onclick="toggleTriage(${v.id})">Edit</button>
+          </div>
+          <div id="triage-${v.id}" hidden>${renderTriageForm(v)}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function statusKey(s) {
+  return s === 'false_positive' ? 'falseposit'
+       : s === 'accepted_risk'  ? 'accepted'
+       : s === 'fixed'          ? 'fixed'
+       : 'open';
+}
+function statusLabel(s) {
+  return s === 'false_positive' ? 'False Positive'
+       : s === 'accepted_risk'  ? 'Accepted Risk'
+       : s === 'fixed'          ? 'Fixed'
+       : 'Open';
+}
+
+function renderTriageForm(v) {
+  const cur = (v.status || 'open');
+  const ovs = (v.override_severity || '');
+  const ovc = (v.override_cvss_score ?? '');
+  const ovn = (v.override_note || '');
+  const opt = (val,label,sel) => `<option value="${val}" ${sel===val?'selected':''}>${label}</option>`;
+  return `
+    <form class="triage-form" onsubmit="submitTriage(event, ${v.id})">
+      <label>Status
+        <select name="status">
+          ${opt('open','Open',cur)}
+          ${opt('false_positive','False Positive (exclude from report)',cur)}
+          ${opt('accepted_risk','Accepted Risk',cur)}
+          ${opt('fixed','Fixed (exclude from report)',cur)}
+        </select>
+      </label>
+      <label>Override Severity
+        <select name="override_severity">
+          ${opt('','— keep original —',ovs.toUpperCase())}
+          ${opt('CRITICAL','Critical',ovs.toUpperCase())}
+          ${opt('HIGH','High',ovs.toUpperCase())}
+          ${opt('MEDIUM','Medium',ovs.toUpperCase())}
+          ${opt('LOW','Low',ovs.toUpperCase())}
+          ${opt('INFO','Info',ovs.toUpperCase())}
+        </select>
+      </label>
+      <label>Override CVSS (0.0–10.0)
+        <input type="number" name="override_cvss_score" step="0.1" min="0" max="10" value="${esc(ovc)}" placeholder="leave empty to keep original"/>
+      </label>
+      <label class="full">Reviewer Note
+        <textarea name="override_note" placeholder="Why is this being changed? Visible in reports.">${esc(ovn)}</textarea>
+      </label>
+      <div class="triage-actions full">
+        <button class="btn btn-primary btn-sm" type="submit">Save</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="toggleTriage(${v.id})">Cancel</button>
+        <span class="triage-msg" id="triage-msg-${v.id}"></span>
+      </div>
+    </form>`;
+}
+
+window.toggleTriage = function(id) {
+  const el = document.getElementById('triage-'+id);
+  if (el) el.hidden = !el.hidden;
+};
+
+window.submitTriage = async function(ev, id) {
+  ev.preventDefault();
+  const form = ev.target;
+  const msg  = document.getElementById('triage-msg-'+id);
+  const body = {};
+  for (const [k, v] of new FormData(form)) {
+    if (k === 'override_cvss_score') {
+      body[k] = v === '' ? null : parseFloat(v);
+    } else {
+      body[k] = v;
+    }
+  }
+  msg.textContent = 'Saving…'; msg.className = 'triage-msg';
+  try {
+    const scanId = location.hash.split('/')[2];
+    const r = await fetch(`/api/v1/scans/${scanId}/vulnerabilities/${id}`, {
+      method: 'PATCH',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) { const txt = await r.text(); throw new Error(txt); }
+    msg.textContent = 'Saved · refreshing…';
+    setTimeout(() => router(), 400);
+  } catch(e) {
+    msg.textContent = 'Error: ' + (e.message || e).slice(0, 200);
+    msg.className = 'triage-msg err';
+  }
+};
+
+window.toggleVuln = function(i) {
+  const body = document.getElementById('vbody-'+i);
+  const chev = document.getElementById('chev-'+i);
+  if (!body) return;
+  body.hidden = !body.hidden;
+  if (chev) chev.textContent = body.hidden ? '▾' : '▴';
+};
+
+/* ── llm tab ── */
+async function tabLlm(el, id, detail) {
+  if (!detail.llm_enabled) {
+    el.innerHTML=`<div class="alert alert-info">LLM enrichment was not enabled for this scan.
+      Re-run with LLM enabled to see findings.</div>`; return;
+  }
+  if (detail.state !== 'done') { el.innerHTML=`<div class="alert alert-warn">Scan not complete.</div>`; return; }
+  el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const findings = await api('/scans/'+id+'/llm');
+    if (!findings.length) { el.innerHTML='<div class="empty">No LLM findings.</div>'; return; }
+    el.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Severity</th><th>Function</th><th>Class</th><th>Mode</th><th>Finding</th></tr></thead>
+      <tbody>${findings.map(f=>`<tr>
+        <td>${sevBadge(f.finding)}</td>
+        <td class="mono truncate" style="max-width:180px">${esc(f.function_name)}</td>
+        <td class="truncate" style="max-width:140px">${esc(f.class_name||'')}</td>
+        <td>${esc(f.mode)}</td>
+        <td style="max-width:320px;white-space:pre-wrap;font-size:.75rem">${esc(f.finding)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+}
+
+/* ── log tab ── */
+async function tabLog(el, id) {
+  el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const {lines} = await api('/scans/'+id+'/log?tail=500');
+    el.innerHTML = `<div class="log-box">${lines.map(esc).join('\n')}</div>`;
+  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+}
+
+/* ── downloads tab ── */
+function tabDownloads(id, detail) {
+  const rows = [
+    ['SARIF 2.1 Report', 'findings.sarif', detail.has_sarif, `/api/v1/scans/${id}/sarif`],
+    ['HTML Report', 'report.html', detail.has_html, `/api/v1/scans/${id}/report`],
+    ['Analysis Log', 'analysis.log', detail.has_log, `/api/v1/scans/${id}/log`],
+  ];
+  return `<div class="card">
+    <div class="card-title">Downloads</div>
+    <table>
+      <thead><tr><th>File</th><th>Available</th><th></th></tr></thead>
+      <tbody>${rows.map(([name, file, avail, url])=>`<tr>
+        <td>${esc(name)}</td>
+        <td>${avail?'<span class="badge badge-done">Ready</span>':'<span class="badge badge-queued">Not generated</span>'}</td>
+        <td>${avail?`<a class="btn btn-primary btn-sm" href="${url}" target="_blank">Open / Download</a>`:'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">Raw API</div>
+    <div style="font-size:.8rem;font-family:monospace;line-height:2">
+      <div>GET <a href="/api/v1/scans/${id}" target="_blank">/api/v1/scans/${id}</a></div>
+      <div>GET <a href="/api/v1/scans/${id}/functions" target="_blank">/api/v1/scans/${id}/functions</a></div>
+      <div>GET <a href="/api/v1/scans/${id}/strings" target="_blank">/api/v1/scans/${id}/strings</a></div>
+      <div>GET <a href="/api/v1/scans/${id}/resources" target="_blank">/api/v1/scans/${id}/resources</a></div>
+      <div>GET <a href="/api/v1/scans/${id}/entrypoints" target="_blank">/api/v1/scans/${id}/entrypoints</a></div>
+      <div>GET <a href="/api/v1/scans/${id}/llm" target="_blank">/api/v1/scans/${id}/llm</a></div>
+    </div>
+    <p style="margin-top:.75rem;font-size:.75rem;color:var(--muted)">
+      Full OpenAPI spec at <a href="/docs">/docs</a>
+    </p>
+  </div>`;
+}
+
+/* ── init ── */
+router();
+
+// Hydrate entry points mini-widget after summary renders
+const _origRoute = routes['scan'];
+routes['scan'] = async function(id, tab='summary') {
+  await _origRoute(id, tab);
+  if (tab==='summary') setTimeout(()=>postSummaryHydrate(id), 200);
+};
+</script>
+</body>
+</html>

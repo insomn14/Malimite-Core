@@ -1,0 +1,56 @@
+# Mailmite IPA Security Scan — Bitbucket Pipelines
+# Add to your repository root as bitbucket-pipelines.yml or merge the
+# 'mailmite-scan' step into your existing pipeline.
+#
+# Required repository variables (Repository settings → Pipelines → Repository variables):
+#   MAILMITE_IMAGE     — Docker image (default: ghcr.io/mailmite/mailmite:latest)
+#   GHIDRA_HOME        — path inside container  (default: /opt/ghidra)
+#   LLM_PROVIDER       — openai | claude | ollama | none
+#   OPENAI_API_KEY     — (secured)
+#   ANTHROPIC_API_KEY  — (secured)
+#   IPA_PATH           — relative path to .ipa in repo (default: app.ipa)
+
+image: atlassian/default-image:4
+
+definitions:
+  steps:
+    - step: &mailmite-scan
+        name: Mailmite IPA Security Scan
+        services:
+          - docker
+        script:
+          - export MAILMITE_IMAGE="${MAILMITE_IMAGE:-ghcr.io/mailmite/mailmite:latest}"
+          - export IPA="${IPA_PATH:-app.ipa}"
+          - export FAIL_ON="${FAIL_ON:-HIGH}"
+          - export LLM_MODE="${LLM_MODE:-find_vulns}"
+          - mkdir -p mailmite-report
+          - |
+            docker run --rm \
+              -v "$BITBUCKET_CLONE_DIR:/work" \
+              -e GHIDRA_HOME="${GHIDRA_HOME:-/opt/ghidra}" \
+              -e LLM_PROVIDER="${LLM_PROVIDER:-none}" \
+              -e LLM_MODE="$LLM_MODE" \
+              -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+              -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+              "$MAILMITE_IMAGE" \
+              mailmite "/work/$IPA" \
+                --out /work/mailmite-report \
+                --sarif \
+                --html \
+                --llm \
+                --llm-mode "$LLM_MODE" \
+                --fail-on "$FAIL_ON"
+        artifacts:
+          - mailmite-report/**
+
+pipelines:
+  default:
+    - step: *mailmite-scan
+
+  branches:
+    main:
+      - step: *mailmite-scan
+
+  pull-requests:
+    '**':
+      - step: *mailmite-scan

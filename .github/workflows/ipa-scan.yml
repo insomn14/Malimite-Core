@@ -1,0 +1,69 @@
+name: IPA Scan
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: 'URL to .ipa (Releases asset, S3, etc.)'
+        required: true
+      fail_on:
+        description: 'Fail if findings reach severity: HIGH | MEDIUM | LOW | NONE'
+        required: false
+        default: 'HIGH'
+      llm_mode:
+        description: 'LLM enrichment mode: summarize | auto_fix | find_vulns'
+        required: false
+        default: 'find_vulns'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # required for uploading SARIF
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch IPA
+        run: |
+          if [ -n "${{ inputs.ipa_url }}" ]; then
+            curl -fL "${{ inputs.ipa_url }}" -o app.ipa
+          else
+            asset_url=$(jq -r '.release.assets[] | select(.name|endswith(".ipa")) | .browser_download_url' \
+              "$GITHUB_EVENT_PATH" | head -1)
+            curl -fL "$asset_url" -o app.ipa
+          fi
+          file app.ipa
+
+      - name: Mailmite analyze
+        env:
+          LLM_PROVIDER:      ${{ secrets.LLM_PROVIDER }}
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          docker run --rm \
+            -v "$PWD:/work" \
+            -e GHIDRA_HOME=/opt/ghidra \
+            -e LLM_PROVIDER="${LLM_PROVIDER:-none}" \
+            -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+            -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+            ghcr.io/${{ github.repository_owner }}/mailmite:latest \
+            mailmite /work/app.ipa --out /work/report \
+              --sarif \
+              --llm \
+              --llm-mode "${{ inputs.llm_mode || 'find_vulns' }}" \
+              --fail-on "${{ inputs.fail_on || 'HIGH' }}"
+
+      - name: Upload SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: report/findings.sarif
+
+      - name: Upload full report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mailmite-report-${{ github.sha }}
+          path: report/

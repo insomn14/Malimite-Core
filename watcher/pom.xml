@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.mailmite</groupId>
+    <artifactId>mailmite-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>mailmite-watcher</artifactId>
+  <packaging>jar</packaging>
+
+  <dependencies>
+    <dependency><groupId>io.mailmite</groupId><artifactId>mailmite-core</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
+    <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-simple</artifactId></dependency>
+  </dependencies>
+
+  <build>
+    <finalName>mailmite-watcher</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>io.mailmite.watcher.WatcherDaemon</mainClass>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter><artifact>*:*</artifact><excludes>
+                  <exclude>META-INF/*.SF</exclude>
+                  <exclude>META-INF/*.DSA</exclude>
+                  <exclude>META-INF/*.RSA</exclude>
+                  <exclude>module-info.class</exclude>
+                  <exclude>META-INF/versions/*/module-info.class</exclude>
+                </excludes></filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

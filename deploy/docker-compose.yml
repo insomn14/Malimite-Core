@@ -1,0 +1,89 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [ minio-data:/data ]
+
+  api:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    image: mailmite:latest
+    command: ["java","-jar","/app/api.jar"]
+    environment:
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS: minioadmin
+      MINIO_SECRET: minioadmin
+      MINIO_BUCKET: mailmite-ipa
+      MAX_IPA_MB: "4096"
+      MAILMITE_API_KEY: "${MAILMITE_API_KEY:-}"
+    depends_on: [redis, minio]
+    ports: ["8080:8080"]
+    volumes: [ reports:/var/mailmite/reports ]
+
+  worker:
+    image: mailmite:latest
+    command: ["java","-jar","/app/worker.jar"]
+    environment:
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS: minioadmin
+      MINIO_SECRET: minioadmin
+      MINIO_BUCKET: mailmite-ipa
+      GHIDRA_HOME: /opt/ghidra
+      REPORT_DIR: /var/mailmite/reports
+      # LLM enrichment (Phase 4) — all optional, defaults to disabled
+      LLM_ENABLED:       "${LLM_ENABLED:-false}"
+      LLM_PROVIDER:      "${LLM_PROVIDER:-none}"
+      LLM_MODE:          "${LLM_MODE:-summarize}"
+      LLM_MODEL:         "${LLM_MODEL:-}"
+      LLM_MAX_TOKENS:    "${LLM_MAX_TOKENS:-2000}"
+      OPENAI_API_KEY:    "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      DEEPSEEK_API_KEY:  "${DEEPSEEK_API_KEY:-}"
+      DEEPSEEK_BASE_URL: "${DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
+      OLLAMA_BASE_URL:   "${OLLAMA_BASE_URL:-http://localhost:11434}"
+      # Phase 5.7 — optional webhook on scan completion
+      WEBHOOK_URL:       "${WEBHOOK_URL:-}"
+    depends_on: [redis, minio, api]
+    volumes: [ reports:/var/mailmite/reports ]
+    deploy:
+      replicas: 2     # horizontally scale
+
+  watcher:
+    image: mailmite:latest
+    command: ["java","-jar","/app/watcher.jar"]
+    environment:
+      INCOMING_DIR: /var/mailmite/incoming
+      REPORT_DIR: /var/mailmite/reports
+      GHIDRA_HOME: /opt/ghidra
+    volumes:
+      - ./incoming:/var/mailmite/incoming
+      - reports:/var/mailmite/reports
+
+  bot:
+    image: mailmite:latest
+    command: ["java","-jar","/app/bot.jar"]
+    environment:
+      MAILMITE_API_URL:   http://api:8080
+      MAILMITE_API_KEY:   "${MAILMITE_API_KEY:-}"
+      # Enable any combination — each is optional
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+      DISCORD_BOT_TOKEN:  "${DISCORD_BOT_TOKEN:-}"
+      SLACK_APP_TOKEN:    "${SLACK_APP_TOKEN:-}"
+      SLACK_BOT_TOKEN:    "${SLACK_BOT_TOKEN:-}"
+    depends_on: [api]
+    profiles: ["bot"]   # only start with: docker compose --profile bot up
+
+volumes:
+  minio-data:
+  reports:

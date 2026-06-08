@@ -1,0 +1,61 @@
+# Mailmite IPA Security Scan — GitLab CI template
+# Include this in your .gitlab-ci.yml:
+#
+#   include:
+#     - project: 'your-group/mailmite-core'
+#       file: '.gitlab/mailmite.yml'
+#
+# Required CI/CD variables (Settings → CI/CD → Variables):
+#   MAILMITE_IMAGE   — Docker image, e.g. ghcr.io/yourorg/mailmite:latest
+#   GHIDRA_HOME      — path inside the container (default: /opt/ghidra)
+#   LLM_PROVIDER     — openai | claude | ollama | none  (default: none)
+#   OPENAI_API_KEY   — (masked)
+#   ANTHROPIC_API_KEY — (masked)
+
+.mailmite_defaults:
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    MAILMITE_IMAGE:  "${MAILMITE_IMAGE:-ghcr.io/mailmite/mailmite:latest}"
+    GHIDRA_HOME:     "/opt/ghidra"
+    LLM_PROVIDER:    "${LLM_PROVIDER:-none}"
+    LLM_MODE:        "${LLM_MODE:-find_vulns}"
+    FAIL_ON:         "${FAIL_ON:-HIGH}"
+    REPORT_DIR:      "$CI_PROJECT_DIR/mailmite-report"
+
+mailmite-scan:
+  extends: .mailmite_defaults
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - when: manual
+  script:
+    - |
+      IPA_PATH="${IPA_PATH:-app.ipa}"
+      [ -f "$IPA_PATH" ] || { echo "IPA not found at $IPA_PATH"; exit 1; }
+      mkdir -p "$REPORT_DIR"
+      docker run --rm \
+        -v "$CI_PROJECT_DIR:/work" \
+        -e GHIDRA_HOME="$GHIDRA_HOME" \
+        -e LLM_PROVIDER="$LLM_PROVIDER" \
+        -e LLM_MODE="$LLM_MODE" \
+        -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+        -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+        "$MAILMITE_IMAGE" \
+        mailmite "/work/$IPA_PATH" \
+          --out /work/mailmite-report \
+          --sarif \
+          --html \
+          --llm \
+          --llm-mode "$LLM_MODE" \
+          --fail-on "$FAIL_ON"
+  artifacts:
+    when: always
+    paths:
+      - mailmite-report/
+    reports:
+      # GitLab Security Dashboard integration via SAST report
+      sast: mailmite-report/findings.sarif
+    expire_in: 30 days
