@@ -26,6 +26,7 @@ services:
       MINIO_BUCKET: mailmite-ipa
       MAX_IPA_MB: "4096"
       MAILMITE_API_KEY: "${MAILMITE_API_KEY:-}"
+      REPORT_DIR: /var/mailmite/reports
     depends_on: [redis, minio]
     ports: ["8080:8080"]
     volumes: [ reports:/var/mailmite/reports ]

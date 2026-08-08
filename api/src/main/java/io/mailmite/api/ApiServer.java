@@ -18,7 +18,8 @@ public class ApiServer {
                 env("MINIO_ENDPOINT", "http://localhost:9000"),
                 env("MINIO_ACCESS", "minioadmin"),
                 env("MINIO_SECRET", "minioadmin"),
-                env("MINIO_BUCKET", "mailmite-ipa"));
+                env("MINIO_BUCKET", "mailmite-ipa"),
+                env("REPORT_DIR", "/var/mailmite/reports"));
 
         Javalin app = Javalin.create(cfg -> {
             cfg.http.maxRequestSize = maxIpaMb * 1024L * 1024L;
@@ -30,16 +31,18 @@ public class ApiServer {
         });
 
         app.before("/api/*", ctx -> {
-            String apiKey = ctx.header("X-Api-Key");
             String expected = System.getenv("MAILMITE_API_KEY");
-            if (expected != null && !expected.equals(apiKey)) {
+            if (expected == null || expected.isBlank()) return; // auth disabled
+            String apiKey = ctx.header("X-Api-Key");
+            if (!expected.equals(apiKey)) {
                 ctx.status(401).result("unauthorized");
                 ctx.skipRemainingHandlers();
             }
         });
 
         ScanController ctrl = new ScanController(svc);
-        app.post("/api/v1/scans",                  ctrl::createScan);
+        app.get ("/api/v1/scans",                    ctrl::listScans);
+        app.post("/api/v1/scans",                    ctrl::createScan);
         app.get ("/api/v1/scans/{id}",             ctrl::getScan);
         app.get ("/api/v1/scans/{id}/result",      ctrl::getResult);
         app.get ("/api/v1/scans/{id}/summary",     ctrl::getSummary);

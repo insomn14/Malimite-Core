@@ -11,6 +11,11 @@ public class ScanController {
     private final ScanService svc;
     public ScanController(ScanService svc) { this.svc = svc; }
 
+    /** GET /api/v1/scans — list all scans (newest first). */
+    public void listScans(Context ctx) {
+        ctx.json(svc.listScans());
+    }
+
     /** POST /api/v1/scans — multipart 'file' (IPA). */
     public void createScan(Context ctx) {
         UploadedFile up = ctx.uploadedFile("file");
@@ -26,10 +31,12 @@ public class ScanController {
                 "result_url", "/api/v1/scans/" + scanId + "/result"));
     }
 
-    /** GET /api/v1/scans/{id} — status. */
+    /** GET /api/v1/scans/{id} — scan detail (SPA-compatible). */
     public void getScan(Context ctx) {
         String id = ctx.pathParam("id");
-        ctx.json(svc.status(id));
+        ScanRecord.Detail detail = svc.getDetail(id);
+        if (detail == null) { ctx.status(404).json(Map.of("error", "scan not found")); return; }
+        ctx.json(detail);
     }
 
     /** GET /api/v1/scans/{id}/result — full AnalysisReport JSON. */

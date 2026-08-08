@@ -80,7 +80,9 @@ public class Worker {
                     String scanId = f.get("scan_id");
                     String key    = f.get("object_key");
                     try {
-                        redis.hset("mailmite:status:" + scanId, Map.of("state", "running"));
+                        redis.hset("mailmite:status:" + scanId, Map.of(
+                                "state", "running",
+                                "started_at", java.time.Instant.now().toString()));
                         Path local = Files.createTempFile("mailmite-", ".ipa");
                         minio.downloadObject(DownloadObjectArgs.builder()
                                 .bucket(bucket).object(key)
@@ -112,7 +114,9 @@ public class Worker {
 
                         redis.set("mailmite:result:" + scanId, reportJson);
                         redis.hset("mailmite:status:" + scanId,
-                                Map.of("state", "done", "report_dir", r.reportDir().toString()));
+                                Map.of("state", "done",
+                                       "report_dir", r.reportDir().toString(),
+                                       "finished_at", java.time.Instant.now().toString()));
 
                         // Phase 5.7: webhook notification
                         if (webhookUrl != null && !webhookUrl.isBlank())
@@ -121,7 +125,9 @@ public class Worker {
                     } catch (Exception ex) {
                         log.error("scan {} failed", scanId, ex);
                         redis.hset("mailmite:status:" + scanId,
-                                Map.of("state", "error", "message", String.valueOf(ex.getMessage())));
+                                Map.of("state", "error",
+                                       "message", String.valueOf(ex.getMessage()),
+                                       "finished_at", java.time.Instant.now().toString()));
                     } finally {
                         redis.xack(STREAM, GROUP, m.getID());
                     }
