@@ -10,9 +10,10 @@ import java.util.List;
  * No file persistence, no GUI — replaces Malimite's Config.java for server-side use.
  *
  * Env vars:
- *   GHIDRA_HOME   — required (path to Ghidra installation)
- *   EXTRA_LIBS    — optional comma-separated library prefixes to add
- *   REMOVE_LIBS   — optional comma-separated library prefixes to remove
+ *   GHIDRA_HOME      — required (path to Ghidra installation)
+ *   GHIDRA_JAVA_HOME — optional JDK 17/21 home for analyzeHeadless (avoid Java 23+/25)
+ *   EXTRA_LIBS       — optional comma-separated library prefixes to add
+ *   REMOVE_LIBS      — optional comma-separated library prefixes to remove
  */
 public class CoreConfig {
 

@@ -16,7 +16,7 @@ import java.util.Map;
  * DEEPSEEK_BASE_URL = https://api.deepseek.com   (optional override)
  * OLLAMA_BASE_URL   = http://localhost:11434
  * LLM_MODEL         = override default model id
- * LLM_MAX_TOKENS    = 2000
+ * LLM_MAX_TOKENS    = 4096   (default; raise if FIND_VULNS responses truncate)
  * </pre>
  */
 public final class LlmProviderFactory {
@@ -32,7 +32,7 @@ public final class LlmProviderFactory {
     public static LlmProvider create(Map<String, String> cfg) {
         String provider  = cfg.getOrDefault("LLM_PROVIDER", "none").toLowerCase();
         String model     = cfg.getOrDefault("LLM_MODEL", "");
-        int    maxTokens = Integer.parseInt(cfg.getOrDefault("LLM_MAX_TOKENS", "2000"));
+        int    maxTokens = Integer.parseInt(cfg.getOrDefault("LLM_MAX_TOKENS", "4096"));
 
         return switch (provider) {
             case "openai" -> {

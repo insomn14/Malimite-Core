@@ -53,7 +53,7 @@ public class Worker {
                 "DEEPSEEK_BASE_URL", env("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
                 "OLLAMA_BASE_URL",   env("OLLAMA_BASE_URL", "http://localhost:11434"),
                 "LLM_MODEL",         env("LLM_MODEL", ""),
-                "LLM_MAX_TOKENS",    env("LLM_MAX_TOKENS", "2000"));
+                "LLM_MAX_TOKENS",    env("LLM_MAX_TOKENS", "4096"));
 
         String webhookUrl = System.getenv("WEBHOOK_URL"); // Phase 5.7
 

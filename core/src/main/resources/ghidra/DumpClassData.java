@@ -12,24 +12,46 @@ import ghidra.program.model.data.StringDataType;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.json.JSONObject;
 import org.json.JSONArray;
 
 public class DumpClassData extends GhidraScript {
 
-    private int port;
-    private List<String> libraryPrefixes;
+    /** Per-function decompile budget (seconds). 0 would use Ghidra's default and can stall for ages. */
+    private static final int DECOMPILE_TIMEOUT_SECS = 45;
+
+    /** Log progress every N non-library decompiles so Mailmite/Ghidra logs show the script is alive. */
+    private static final int DECOMPILE_PROGRESS_EVERY = 50;
+
+    private int port = -1;
+    private List<String> libraryPrefixes = Collections.emptyList();
 
     private void parseArgs() {
         String[] args = getScriptArgs();
-        if (args.length < 2) {
-            println("Insufficient arguments. Expected: <port> <libraries>");
+        if (args == null || args.length < 1) {
+            printerr("Insufficient arguments. Expected: <port> [libraries]");
+            this.port = -1;
             return;
         }
-        this.port = Integer.parseInt(args[0]);
-        // Parse libraries from comma-separated string
-        this.libraryPrefixes = Arrays.asList(args[1].split(","));
+        try {
+            this.port = Integer.parseInt(args[0].trim());
+        } catch (NumberFormatException e) {
+            printerr("Invalid port argument: " + args[0]);
+            this.port = -1;
+            return;
+        }
+        if (args.length >= 2 && args[1] != null && !args[1].isBlank()) {
+            this.libraryPrefixes = Arrays.asList(args[1].split(","));
+        } else {
+            this.libraryPrefixes = Collections.emptyList();
+        }
+        println("DumpClassData args: port=" + this.port + " libraries=" + this.libraryPrefixes.size());
     }
 
     private boolean isLibraryNamespace(String namespace) {
@@ -38,12 +60,7 @@ public class DumpClassData extends GhidraScript {
     }
 
     private int getPort() {
-        String[] args = getScriptArgs();
-        if (args.length > 0) {
-            return Integer.parseInt(args[0]);
-        }
-        println("No port provided. Exiting script.");
-        return -1;
+        return this.port;
     }
 
     private String formatNamespaceName(String namespaceName) {
@@ -124,48 +141,76 @@ public class DumpClassData extends GhidraScript {
         Map<String, List<Function>> namespaceFunctionsMap = new HashMap<>();
         JSONArray jsonOutput = new JSONArray();
 
-        decompInterface.openProgram(program);
+        try {
+            decompInterface.openProgram(program);
 
-        // Collect functions for each namespace
-        for (Function function : functionManager.getFunctions(true)) {
-            Namespace namespace = function.getParentNamespace();
-            String namespaceName = formatNamespaceName(namespace != null ? namespace.getName() : "<global>");
-            
-            // Skip decompilation if namespace is a library
-            if (isLibraryNamespace(namespaceName)) {
-                // Add basic function info without decompilation
-                JSONObject jsonEntry = new JSONObject();
-                jsonEntry.put("FunctionName", function.getName());
-                jsonEntry.put("ClassName", namespaceName);
-                jsonEntry.put("DecompiledCode", ""); // Empty string for library functions
-                jsonOutput.put(jsonEntry);
-                continue;
+            // Collect functions for each namespace
+            for (Function function : functionManager.getFunctions(true)) {
+                Namespace namespace = function.getParentNamespace();
+                String namespaceName = formatNamespaceName(namespace != null ? namespace.getName() : "<global>");
+
+                // Skip decompilation if namespace is a library
+                if (isLibraryNamespace(namespaceName)) {
+                    JSONObject jsonEntry = new JSONObject();
+                    jsonEntry.put("FunctionName", function.getName());
+                    jsonEntry.put("ClassName", namespaceName);
+                    jsonEntry.put("DecompiledCode", "");
+                    jsonOutput.put(jsonEntry);
+                    continue;
+                }
+
+                namespaceFunctionsMap.computeIfAbsent(namespaceName, k -> new ArrayList<>()).add(function);
             }
 
-            // Add function to namespace map for non-library functions
-            namespaceFunctionsMap.computeIfAbsent(namespaceName, k -> new ArrayList<>()).add(function);
-        }
+            int totalToDecompile = namespaceFunctionsMap.values().stream().mapToInt(List::size).sum();
+            println("Decompiling " + totalToDecompile + " non-library function(s) "
+                    + "(timeout=" + DECOMPILE_TIMEOUT_SECS + "s each)");
 
-        // Decompile non-library functions
-        for (Map.Entry<String, List<Function>> entry : namespaceFunctionsMap.entrySet()) {
-            String namespace = entry.getKey();
-            List<Function> functions = entry.getValue();
+            int completed = 0;
+            int failed = 0;
 
-            for (Function function : functions) {
-                var decompiledFunction = decompInterface.decompileFunction(function, 0, new ConsoleTaskMonitor());
-                if (decompiledFunction.decompileCompleted()) {
-                    String decompiledCode = decompiledFunction.getDecompiledFunction().getC();
+            for (Map.Entry<String, List<Function>> entry : namespaceFunctionsMap.entrySet()) {
+                String namespace = entry.getKey();
+                List<Function> functions = entry.getValue();
+
+                for (Function function : functions) {
+                    String decompiledCode = "";
+                    try {
+                        var decompiledFunction = decompInterface.decompileFunction(
+                                function, DECOMPILE_TIMEOUT_SECS, new ConsoleTaskMonitor());
+                        if (decompiledFunction != null && decompiledFunction.decompileCompleted()) {
+                            decompiledCode = decompiledFunction.getDecompiledFunction().getC();
+                        } else {
+                            failed++;
+                            decompiledCode = "";
+                        }
+                    } catch (Exception e) {
+                        // Never hang the whole script on a single bad function
+                        failed++;
+                        printerr("Decompile failed for " + namespace + "::" + function.getName()
+                                + ": " + e.getMessage());
+                        decompiledCode = "";
+                    }
 
                     JSONObject jsonEntry = new JSONObject();
                     jsonEntry.put("FunctionName", function.getName());
                     jsonEntry.put("ClassName", namespace);
                     jsonEntry.put("DecompiledCode", decompiledCode);
                     jsonOutput.put(jsonEntry);
+
+                    completed++;
+                    if (completed % DECOMPILE_PROGRESS_EVERY == 0 || completed == totalToDecompile) {
+                        println("Decompile progress: " + completed + "/" + totalToDecompile
+                                + " (failed/timed-out: " + failed + ")");
+                    }
                 }
             }
-        }
 
-        decompInterface.dispose();
+            println("Decompilation finished: " + completed + " function(s), "
+                    + failed + " failed/timed-out");
+        } finally {
+            decompInterface.dispose();
+        }
         return jsonOutput;
     }
 
@@ -173,20 +218,18 @@ public class DumpClassData extends GhidraScript {
         Memory memory = program.getMemory();
         Listing listing = program.getListing();
         JSONArray stringsArray = new JSONArray();
-        
+
         for (MemoryBlock block : memory.getBlocks()) {
             if (!block.isInitialized()) continue;
-            
+
             DataIterator dataIterator = listing.getDefinedData(block.getStart(), true);
             while (dataIterator.hasNext()) {
                 Data data = dataIterator.next();
                 if (!block.contains(data.getAddress())) continue;
-                
-                // Check if the data type is a string
+
                 DataType dataType = data.getDataType();
                 if (dataType instanceof StringDataType) {
-                    String value = data.getDefaultValueRepresentation(); // Retrieves the string value
-                    // Only include strings of length 5 or more
+                    String value = data.getDefaultValueRepresentation();
                     if (value.length() >= 5) {
                         JSONObject stringObj = new JSONObject();
                         stringObj.put("address", data.getAddress().toString());
@@ -201,63 +244,77 @@ public class DumpClassData extends GhidraScript {
         return stringsArray;
     }
 
-    private void sendDataViaSocket(JSONArray classData, JSONObject machoData, JSONArray functionData) {
-        int port = getPort();
-        if (port == -1) return;
-
-        try (Socket socket = new Socket("localhost", port);
+    /**
+     * Protocol with Mailmite {@code GhidraRunner.decompile}:
+     * <ol>
+     *   <li>HEARTBEAT on a short-lived connection (handled in {@link #run()})</li>
+     *   <li>Second connection: send CONNECTED immediately, then stream blocks as work finishes:
+     *       class → END_CLASS_DATA, macho → END_MACHO_DATA, functions → END_DATA,
+     *       strings → END_STRING_DATA</li>
+     * </ol>
+     * CONNECTED must precede heavy decompile work so the Java-side accept watchdog returns quickly.
+     */
+    private void openDataSocketAndStream(int port) throws IOException {
+        try (Socket socket = new Socket("127.0.0.1", port);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
-            
+
+            // Early CONNECTED — before any long decompile work
             out.println("CONNECTED");
-            println("Beginning analysis...");
-            
-            // Send class data
+            println("Data connection established (CONNECTED) — beginning analysis...");
+
+            println("Extracting class/function index...");
+            JSONArray classData = extractClassFunctionData(currentProgram);
             out.println(classData.toString(4));
             out.println("END_CLASS_DATA");
+            println("Sent class data (" + classData.length() + " namespaces)");
 
-            // Send Macho data
+            println("Extracting defined data in segments...");
+            JSONObject machoData = listDefinedDataInAllSegments(currentProgram);
             out.println(machoData.toString(4));
             out.println("END_MACHO_DATA");
+            println("Sent macho/segment data");
 
-            // Send function decompilation data
+            println("Decompiling functions (this may take a while on large Swift apps)...");
+            JSONArray functionData = listFunctionsAndNamespaces(currentProgram);
             out.println(functionData.toString(4));
             out.println("END_DATA");
+            println("Sent function data (" + functionData.length() + " entries)");
 
-            // Send string data
+            println("Extracting strings...");
             JSONArray stringData = extractStrings(currentProgram);
             out.println(stringData.toString(4));
             out.println("END_STRING_DATA");
-
-        } catch (IOException e) {
-            printerr("Error sending data via socket: " + e.getMessage());
+            println("Sent string data (" + stringData.length() + " strings) — script complete");
         }
     }
 
     @Override
     public void run() throws Exception {
-        System.err.println("Running DumpCombinedData script");
+        println("Running DumpClassData script");
         parseArgs();
-        
-        if (port == -1) {
+
+        if (port <= 0) {
+            printerr("DumpClassData: refusing to run with invalid port=" + port);
             return;
         }
 
-        // Perform heartbeat check first
-        try (Socket heartbeatSocket = new Socket("localhost", port);
+        // Heartbeat first — use 127.0.0.1 so we don't hit IPv6 localhost (::1) mismatches
+        try (Socket heartbeatSocket = new Socket("127.0.0.1", port);
              PrintWriter heartbeatOut = new PrintWriter(heartbeatSocket.getOutputStream(), true)) {
-            
             heartbeatOut.println("HEARTBEAT");
-            println("Heartbeat sent successfully, proceeding with analysis...");
+            println("Heartbeat sent successfully to 127.0.0.1:" + port);
         } catch (IOException e) {
-            printerr("Failed to establish initial connection: " + e.getMessage());
-            return;
+            printerr("Failed to establish heartbeat to 127.0.0.1:" + port + " — " + e.getMessage());
+            throw e; // surface as script failure instead of silent success
         }
 
-        // Continue with analysis after successful heartbeat
-        JSONArray classData = extractClassFunctionData(currentProgram);
-        JSONObject machoData = listDefinedDataInAllSegments(currentProgram);
-        JSONArray functionData = listFunctionsAndNamespaces(currentProgram);
-
-        sendDataViaSocket(classData, machoData, functionData);
+        // Open data socket + CONNECTED immediately, then stream payload blocks as work completes.
+        // Do NOT decompile before CONNECTED — that races the Java accept watchdog (30 min).
+        try {
+            openDataSocketAndStream(port);
+        } catch (IOException e) {
+            printerr("Error on data socket to 127.0.0.1:" + port + " — " + e.getMessage());
+            throw e;
+        }
     }
 }

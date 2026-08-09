@@ -47,7 +47,7 @@ services:
       LLM_PROVIDER:      "${LLM_PROVIDER:-none}"
       LLM_MODE:          "${LLM_MODE:-summarize}"
       LLM_MODEL:         "${LLM_MODEL:-}"
-      LLM_MAX_TOKENS:    "${LLM_MAX_TOKENS:-2000}"
+      LLM_MAX_TOKENS:    "${LLM_MAX_TOKENS:-4096}"
       OPENAI_API_KEY:    "${OPENAI_API_KEY:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       DEEPSEEK_API_KEY:  "${DEEPSEEK_API_KEY:-}"

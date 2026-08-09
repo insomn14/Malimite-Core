@@ -186,6 +186,39 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 
 /* hidden */
 [hidden]{display:none!important}
+
+/* LLM findings list + detail drawer */
+.llm-row{cursor:pointer}
+.llm-row:hover td{background:#f0f3ff}
+.llm-row.selected td{background:#eef2ff}
+.llm-row.selected td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.llm-preview{color:var(--muted);font-size:.75rem;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.llm-drawer-backdrop{position:fixed;inset:0;background:rgba(26,29,35,.28);z-index:200;opacity:0;pointer-events:none;transition:opacity .2s}
+.llm-drawer-backdrop.open{opacity:1;pointer-events:auto}
+.llm-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:-8px 0 24px rgba(0,0,0,.08);z-index:210;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .22s ease;outline:none}
+.llm-drawer.open{transform:translateX(0)}
+.llm-drawer-head{display:flex;align-items:flex-start;gap:.75rem;padding:1rem 1.1rem;border-bottom:1px solid var(--border);flex-shrink:0}
+.llm-drawer-head-main{flex:1;min-width:0}
+.llm-drawer-title{font-weight:700;font-size:.95rem;word-break:break-word}
+.llm-drawer-meta{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin-top:.45rem;font-size:.72rem;color:var(--muted)}
+.meta-chip{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:.1rem .45rem;font-weight:600;font-size:.72rem;color:var(--muted)}
+.llm-drawer-close{flex-shrink:0;width:32px;height:32px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--muted);font-size:1.1rem;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.llm-drawer-close:hover{background:var(--bg);color:var(--text)}
+.llm-drawer-body{flex:1;overflow-y:auto;padding:1rem 1.1rem 1.5rem}
+.llm-empty-state{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:.875rem;background:var(--bg);border:1px dashed var(--border);border-radius:var(--radius)}
+.llm-empty-state strong{display:block;color:var(--text);margin-bottom:.35rem}
+.llm-vuln-item{border:1px solid var(--border);border-radius:var(--radius);padding:.85rem;margin-bottom:.75rem;background:var(--bg)}
+.llm-vuln-item:last-child{margin-bottom:0}
+.llm-vuln-item-head{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.5rem}
+.llm-vuln-item-title{font-weight:600;font-size:.88rem;flex:1;min-width:0}
+.llm-kv{display:grid;grid-template-columns:100px 1fr;gap:.3rem .6rem;font-size:.8rem;margin:.5rem 0}
+.llm-kv .k{color:var(--muted);font-weight:500}
+.llm-kv .v{word-break:break-word}
+.llm-prose{background:#111;color:#e2e8f0;border-radius:var(--radius);padding:.85rem 1rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.75rem;white-space:pre-wrap;word-break:break-word;line-height:1.55}
+.llm-section-label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 .55rem}
+@media(max-width:640px){
+  .llm-drawer{width:100vw}
+}
 </style>
 </head>
 <body>
@@ -288,10 +321,20 @@ function badge(state) {
   return `<span class="badge badge-${state}">${state}</span>`;
 }
 function sevBadge(text='') {
+  if (/\bCRITICAL\b/i.test(text)) return '<span class="badge badge-critical">CRITICAL</span>';
   if (/\bHIGH\b/i.test(text)) return '<span class="badge badge-high">HIGH</span>';
   if (/\bMEDIUM\b/i.test(text)) return '<span class="badge badge-medium">MEDIUM</span>';
   if (/\bLOW\b/i.test(text)) return '<span class="badge badge-low">LOW</span>';
   return '<span class="badge badge-info">INFO</span>';
+}
+function sevBadgeLevel(level='') {
+  const s = String(level||'').toUpperCase();
+  if (s === 'CRITICAL') return '<span class="badge badge-critical">CRITICAL</span>';
+  if (s === 'HIGH') return '<span class="badge badge-high">HIGH</span>';
+  if (s === 'MEDIUM') return '<span class="badge badge-medium">MEDIUM</span>';
+  if (s === 'LOW') return '<span class="badge badge-low">LOW</span>';
+  if (!s) return '<span class="badge badge-info">INFO</span>';
+  return `<span class="badge badge-info">${esc(s)}</span>`;
 }
 function fmt(iso) {
   if (!iso) return '—';
@@ -305,6 +348,9 @@ function dur(a, b) {
 }
 function esc(s='') {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escAttr(s='') {
+  return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function num(n) { return n==null?'—':n.toLocaleString(); }
 
@@ -587,6 +633,7 @@ window.goTab = function(id, tab) {
 async function renderTab(id, tab, detail) {
   const el = document.getElementById('tab-content');
   if (!el) return;
+  if (typeof closeLlmDrawer === 'function') closeLlmDrawer();
   try {
     switch(tab) {
       case 'summary':         el.innerHTML = await tabSummary(detail); break;
@@ -622,9 +669,19 @@ function extractErrorReason(log) {
       hint: 'Known Ghidra Mach-O parser issue. See the full log for the specific cause, and check the Ghidra issue tracker for updates.',
     },
     {
+      re: /osgi\.ee=UNKNOWN|GhidraScriptLoadException|ClassNotFoundException: DumpClassData/,
+      reason: 'Ghidra imported the IPA, but DumpClassData.java failed to load. Root cause is usually an unsupported Java version for Ghidra\'s OSGi script loader (osgi.ee=UNKNOWN) — common with Homebrew Java 23/25.',
+      hint: 'Install Temurin/OpenJDK <strong>21</strong>, then restart Mailmite with <code>export GHIDRA_JAVA_HOME=$(/usr/libexec/java_home -v 21)</code> (or point it at your JDK 21 home). Ghidra 11.x expects Java 17/21, not 25.',
+    },
+    {
+      re: /Import succeeded[\s\S]{0,2000}before heartbeat|Post-analysis succeeded[\s\S]{0,2000}before heartbeat|before heartbeat[\s\S]{0,800}post-script likely failed|SCRIPT ERROR: DumpClassData/,
+      reason: 'Ghidra imported the binary successfully, but DumpClassData never connected back to Mailmite (heartbeat missing). This is a post-script/IPC failure, not a Mach-O parse crash.',
+      hint: 'Open the full log and search for <code>SCRIPT ERROR</code> / <code>osgi.ee</code>. If you see Java 23/25, switch Ghidra to Java 21 via <code>GHIDRA_JAVA_HOME</code>.',
+    },
+    {
       re: /Ghidra subprocess exited[\s\S]{0,200}before heartbeat/,
-      reason: 'Ghidra crashed during Mach-O import before our post-script could run. The binary loaded but the loader threw — usually a Mach-O parsing bug.',
-      hint: 'Check the [ghidra-output] ERROR REPORT lines in the full log for the specific Ghidra exception.',
+      reason: 'Ghidra exited before our post-script could connect. Often a Mach-O loader crash during import — but if the log also shows Import succeeded, treat it as a DumpClassData/IPC failure instead.',
+      hint: 'Check the [ghidra-output] ERROR REPORT lines in the full log for the specific Ghidra exception or DumpClassData stack trace.',
     },
     {
       re: /Ghidra subprocess exited[\s\S]{0,200}before data/,
@@ -632,9 +689,19 @@ function extractErrorReason(log) {
       hint: 'Check Ghidra script output and consider raising -Xmx for large binaries.',
     },
     {
+      re: /Timed out[\s\S]{0,200}waiting for Ghidra data connection/,
+      reason: 'Heartbeat succeeded, but DumpClassData never opened the data connection within 30 minutes. The post-script was likely still in early setup — or hung — before sending CONNECTED (not merely “binary too large”).',
+      hint: 'Check [ghidra-output] for DumpClassData progress. After CONNECTED, long Swift decompiles are expected and are no longer limited by the 30-min accept watchdog. If this persists, look for script errors between HEARTBEAT and CONNECTED.',
+    },
+    {
+      re: /Timed out[\s\S]{0,200}waiting for Ghidra heartbeat/,
+      reason: 'Ghidra never reached the DumpClassData heartbeat within 30 minutes. Import/analysis may still be running, or Ghidra stalled before the post-script.',
+      hint: 'Check [ghidra-output] for import progress or ERROR REPORT. Very large binaries can take a long time to import before the post-script starts.',
+    },
+    {
       re: /Timed out[\s\S]{0,200}waiting for Ghidra/,
-      reason: 'Ghidra ran for the full deadline (30 min) without finishing. Binary is unusually large or the decompiler stalled.',
-      hint: 'Try increasing the deadline or excluding certain library frameworks via CoreConfig.',
+      reason: 'Ghidra ran for the full accept deadline (30 min) without connecting. Binary may still be importing, or the post-script stalled before HEARTBEAT/CONNECTED.',
+      hint: 'Check [ghidra-output] for progress. After CONNECTED, payload transfer is not limited by this deadline — exclude noisy libraries via CoreConfig if decompile itself is too slow.',
     },
     {
       re: /Only \.ipa files|wrong extension|not a valid IPA/i,
@@ -1177,7 +1244,183 @@ window.toggleVuln = function(i) {
 };
 
 /* ── llm tab ── */
+let _llmFindings = [];
+let _llmDrawerOpen = false;
+
+function parseLlmPayload(raw='') {
+  const text = String(raw||'').trim();
+  if (!text) return {kind:'empty', vulns:[]};
+
+  const asVulns = (obj) => {
+    if (obj && Array.isArray(obj.vulnerabilities)) {
+      return {kind: obj.vulnerabilities.length ? 'vulns' : 'empty', vulns: obj.vulnerabilities, raw: text};
+    }
+    return null;
+  };
+
+  // 1) Whole response, optionally fence-wrapped
+  let candidate = text;
+  const wholeFence = candidate.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
+  if (wholeFence) candidate = wholeFence[1].trim();
+  try {
+    const parsed = asVulns(JSON.parse(candidate));
+    if (parsed) return parsed;
+  } catch (_) { /* continue */ }
+
+  // 2) Any fenced block in the response
+  const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let m;
+  while ((m = fenceRe.exec(text)) !== null) {
+    try {
+      const parsed = asVulns(JSON.parse(m[1].trim()));
+      if (parsed) return parsed;
+    } catch (_) { /* continue */ }
+  }
+
+  // 3) Last embedded {"vulnerabilities":...} after prose (brace-balanced)
+  const key = '"vulnerabilities"';
+  let from = 0, bestStart = -1;
+  while (true) {
+    const keyIdx = text.indexOf(key, from);
+    if (keyIdx < 0) break;
+    let i = keyIdx - 1;
+    while (i >= 0 && /\s/.test(text[i])) i--;
+    if (i >= 0 && text[i] === '{') bestStart = i;
+    from = keyIdx + 1;
+  }
+  if (bestStart >= 0) {
+    let depth = 0, inStr = false, esc = false, end = -1;
+    for (let i = bestStart; i < text.length; i++) {
+      const c = text[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === '\\') esc = true;
+        else if (c === '"') inStr = false;
+      } else {
+        if (c === '"') inStr = true;
+        else if (c === '{') depth++;
+        else if (c === '}') {
+          depth--;
+          if (depth === 0) { end = i + 1; break; }
+        }
+      }
+    }
+    if (end > bestStart) {
+      try {
+        const parsed = asVulns(JSON.parse(text.slice(bestStart, end)));
+        if (parsed) return parsed;
+      } catch (_) { /* prose / non-JSON */ }
+    }
+  }
+
+  return {kind:'prose', raw: text};
+}
+
+function llmStatusBadge(parsed) {
+  if (parsed.kind === 'empty') return '<span class="badge badge-done">CLEAN</span>';
+  if (parsed.kind === 'vulns') {
+    const worst = parsed.vulns.reduce((acc, v) => {
+      const order = {CRITICAL:4, HIGH:3, MEDIUM:2, LOW:1};
+      const s = String(v.severity||'').toUpperCase();
+      return (order[s]||0) > (order[acc]||0) ? s : acc;
+    }, '');
+    return worst ? sevBadgeLevel(worst) : `<span class="badge badge-high">${parsed.vulns.length} FINDING${parsed.vulns.length===1?'':'S'}</span>`;
+  }
+  // Prose/CoT without recoverable JSON — do NOT keyword-match CRITICAL/HIGH in the narrative
+  // (that falsely implies a promoted Vulnerabilities-tab finding).
+  return '<span class="badge badge-info">UNPARSED</span>';
+}
+
+function llmPreviewText(parsed) {
+  if (parsed.kind === 'empty') return 'No vulnerabilities found';
+  if (parsed.kind === 'vulns') {
+    const titles = parsed.vulns.map(v => v.title || v.scope || 'Finding').filter(Boolean);
+    return titles.length ? titles.join(' · ') : `${parsed.vulns.length} vulnerability(ies)`;
+  }
+  const t = (parsed.raw||'').replace(/\s+/g,' ').trim();
+  return t.length > 120 ? t.slice(0,117)+'…' : t;
+}
+
+function renderLlmDrawerBody(f) {
+  const parsed = parseLlmPayload(f.finding);
+  if (parsed.kind === 'empty') {
+    return `<div class="llm-empty-state">
+      <strong>No vulnerabilities found</strong>
+      The model returned an empty vulnerability list for this function.
+    </div>`;
+  }
+  if (parsed.kind === 'vulns') {
+    return `<div class="llm-section-label">${parsed.vulns.length} vulnerabilit${parsed.vulns.length===1?'y':'ies'}</div>` +
+      parsed.vulns.map(v => {
+        const sev = String(v.severity||'').toUpperCase();
+        return `<div class="llm-vuln-item">
+          <div class="llm-vuln-item-head">
+            ${sevBadgeLevel(sev)}
+            ${v.scope?`<span class="meta-chip">${esc(v.scope)}</span>`:''}
+            <span class="llm-vuln-item-title">${esc(v.title||'Untitled finding')}</span>
+          </div>
+          ${v.description?`<p style="font-size:.85rem;line-height:1.55;margin-bottom:.5rem">${esc(v.description)}</p>`:''}
+          <div class="llm-kv">
+            ${v.cvss!=null?`<span class="k">CVSS</span><span class="v">${esc(String(v.cvss))}</span>`:''}
+            ${v.cwe?`<span class="k">CWE</span><span class="v">${esc(v.cwe)}</span>`:''}
+          </div>
+          ${v.evidence?`<div class="vuln-section"><div class="vuln-section-title">Evidence</div><div class="vuln-code">${esc(v.evidence)}</div></div>`:''}
+          ${v.poc_steps?`<div class="vuln-section"><div class="vuln-section-title">PoC steps</div><div class="vuln-poc">${esc(v.poc_steps)}</div></div>`:''}
+          ${v.remediation?`<div class="vuln-section"><div class="vuln-section-title">Remediation</div><p style="font-size:.85rem">${esc(v.remediation)}</p></div>`:''}
+          ${v.detection_regex?`<div class="vuln-section"><div class="vuln-section-title">Detection regex</div><div class="vuln-code">${esc(v.detection_regex)}</div></div>`:''}
+        </div>`;
+      }).join('');
+  }
+  return `<div class="llm-section-label">Analysis</div><pre class="llm-prose">${esc(parsed.raw||'')}</pre>`;
+}
+
+function closeLlmDrawer() {
+  _llmDrawerOpen = false;
+  const drawer = document.getElementById('llm-drawer');
+  const backdrop = document.getElementById('llm-drawer-backdrop');
+  if (drawer) drawer.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+  $$('.llm-row.selected').forEach(r => r.classList.remove('selected'));
+  document.removeEventListener('keydown', onLlmDrawerKeydown);
+}
+
+function onLlmDrawerKeydown(e) {
+  if (e.key === 'Escape') closeLlmDrawer();
+}
+
+window.openLlmDrawer = function(idx) {
+  const f = _llmFindings[idx];
+  if (!f) return;
+  const drawer = document.getElementById('llm-drawer');
+  const backdrop = document.getElementById('llm-drawer-backdrop');
+  const title = document.getElementById('llm-drawer-title');
+  const meta = document.getElementById('llm-drawer-meta');
+  const body = document.getElementById('llm-drawer-body');
+  if (!drawer || !body) return;
+
+  const parsed = parseLlmPayload(f.finding);
+  title.textContent = f.function_name || 'LLM finding';
+  meta.innerHTML = `
+    ${llmStatusBadge(parsed)}
+    ${f.mode?`<span class="meta-chip">${esc(f.mode)}</span>`:''}
+    ${f.class_name?`<span class="meta-chip">${esc(f.class_name)}</span>`:''}
+  `;
+  body.innerHTML = renderLlmDrawerBody(f);
+
+  $$('.llm-row').forEach(r => r.classList.toggle('selected', Number(r.dataset.idx) === idx));
+  backdrop.classList.add('open');
+  drawer.classList.add('open');
+  _llmDrawerOpen = true;
+  document.removeEventListener('keydown', onLlmDrawerKeydown);
+  document.addEventListener('keydown', onLlmDrawerKeydown);
+  drawer.focus({preventScroll:true});
+};
+
+window.closeLlmDrawer = closeLlmDrawer;
+
 async function tabLlm(el, id, detail) {
+  closeLlmDrawer();
+  _llmFindings = [];
   if (!detail.llm_enabled) {
     el.innerHTML=`<div class="alert alert-info">LLM enrichment was not enabled for this scan.
       Re-run with LLM enabled to see findings.</div>`; return;
@@ -1187,16 +1430,33 @@ async function tabLlm(el, id, detail) {
   try {
     const findings = await api('/scans/'+id+'/llm');
     if (!findings.length) { el.innerHTML='<div class="empty">No LLM findings.</div>'; return; }
-    el.innerHTML = `<div class="tbl-wrap"><table>
-      <thead><tr><th>Severity</th><th>Function</th><th>Class</th><th>Mode</th><th>Finding</th></tr></thead>
-      <tbody>${findings.map(f=>`<tr>
-        <td>${sevBadge(f.finding)}</td>
-        <td class="mono truncate" style="max-width:180px">${esc(f.function_name)}</td>
-        <td class="truncate" style="max-width:140px">${esc(f.class_name||'')}</td>
-        <td>${esc(f.mode)}</td>
-        <td style="max-width:320px;white-space:pre-wrap;font-size:.75rem">${esc(f.finding)}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
+    _llmFindings = findings;
+    el.innerHTML = `
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Status</th><th>Function</th><th>Class</th><th>Mode</th><th>Preview</th></tr></thead>
+        <tbody>${findings.map((f,i)=>{
+          const parsed = parseLlmPayload(f.finding);
+          const preview = llmPreviewText(parsed);
+          return `<tr class="llm-row" data-idx="${i}" onclick="openLlmDrawer(${i})">
+            <td>${llmStatusBadge(parsed)}</td>
+            <td class="mono truncate" style="max-width:200px" title="${escAttr(f.function_name)}">${esc(f.function_name)}</td>
+            <td class="truncate" style="max-width:160px" title="${escAttr(f.class_name||'')}">${esc(f.class_name||'—')}</td>
+            <td>${esc(f.mode||'')}</td>
+            <td><div class="llm-preview" title="${escAttr(preview)}">${esc(preview)}</div></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+      <div id="llm-drawer-backdrop" class="llm-drawer-backdrop" onclick="closeLlmDrawer()"></div>
+      <aside id="llm-drawer" class="llm-drawer" tabindex="-1" role="dialog" aria-label="LLM finding detail">
+        <div class="llm-drawer-head">
+          <div class="llm-drawer-head-main">
+            <div id="llm-drawer-title" class="llm-drawer-title"></div>
+            <div id="llm-drawer-meta" class="llm-drawer-meta"></div>
+          </div>
+          <button type="button" class="llm-drawer-close" onclick="closeLlmDrawer()" aria-label="Close">×</button>
+        </div>
+        <div id="llm-drawer-body" class="llm-drawer-body"></div>
+      </aside>`;
   } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
 }
 

@@ -47,7 +47,11 @@ public class LlmEnricher {
             "auth bypass, hardcoded secrets, insecure API usage, injection (SQL/command/format string), " +
             "XSS via evaluateJavaScript/postMessage, path traversal, weak crypto, insecure keychain " +
             "(missing kSecAttrAccessible), sensitive logging. Skip style or readability issues.\n\n" +
-            "Output ONLY valid JSON, no markdown fences, no preamble, no trailing comments. Schema:\n" +
+            "RESPONSE FORMAT (mandatory):\n" +
+            "- Your ENTIRE response MUST be a single JSON object. The first character MUST be '{'.\n" +
+            "- Do NOT write chain-of-thought, analysis, preamble, markdown fences, or trailing commentary.\n" +
+            "- Reason silently; emit JSON only. If unsure, return {\"vulnerabilities\": []}.\n\n" +
+            "Schema:\n" +
             "{\n" +
             "  \"vulnerabilities\": [\n" +
             "    {\n" +
@@ -112,7 +116,7 @@ public class LlmEnricher {
             if (fn.decompiledCode() == null || fn.decompiledCode().isBlank()) continue;
 
             // PROMPT_VERSION bumped whenever the system prompt changes — invalidates the cache.
-            String hash = sha256(fn.decompiledCode() + "|" + mode.name() + "|v3");
+            String hash = sha256(fn.decompiledCode() + "|" + mode.name() + "|v4");
 
             String finding = cache.get(hash).orElse(null);
             if (finding != null) {
@@ -155,19 +159,13 @@ public class LlmEnricher {
      */
     private int[] processVulnsJson(String raw, SqliteStore.DecompilationResult fn,
                                     SqliteStore store, String executableName) {
-        String json = stripCodeFences(raw);
-        if (json.isBlank() || !json.trim().startsWith("{")) return new int[]{0, 0};
-
-        JsonObject root;
-        try {
-            root = JsonParser.parseString(json).getAsJsonObject();
-        } catch (Exception e) {
-            log.debug("LLM did not return valid JSON for {}.{}: {}",
-                    fn.className(), fn.functionName(), e.getMessage());
+        JsonObject root = extractVulnsJson(raw);
+        if (root == null) {
+            log.debug("LLM did not return recoverable vulnerabilities JSON for {}.{}",
+                    fn.className(), fn.functionName());
             return new int[]{0, 0};
         }
 
-        if (!root.has("vulnerabilities")) return new int[]{0, 0};
         JsonArray arr;
         try { arr = root.getAsJsonArray("vulnerabilities"); }
         catch (Exception e) { return new int[]{0, 0}; }
@@ -282,7 +280,153 @@ public class LlmEnricher {
         }
     }
 
-    /** Strip markdown code fences if the LLM wraps the JSON in them despite instructions. */
+    /**
+     * Recover a {@code {"vulnerabilities":[...]}} object from messy LLM output:
+     * clean JSON, markdown fences, prose preamble + trailing JSON, or truncated JSON.
+     * Returns {@code null} when no recoverable object is found.
+     */
+    static JsonObject extractVulnsJson(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+
+        String text = raw.trim();
+
+        // 1) Whole response (optionally fence-wrapped)
+        JsonObject direct = tryParseVulnsObject(stripCodeFences(text));
+        if (direct != null) return direct;
+
+        // 2) Any fenced ```json ... ``` block in the response
+        int searchFrom = 0;
+        while (true) {
+            int fence = indexOfIgnoreCase(text, "```", searchFrom);
+            if (fence < 0) break;
+            int afterOpen = fence + 3;
+            // skip optional language tag
+            int nl = text.indexOf('\n', afterOpen);
+            if (nl < 0) break;
+            String lang = text.substring(afterOpen, nl).trim();
+            if (!lang.isEmpty() && !lang.equalsIgnoreCase("json")) {
+                // still allow non-json fences that contain our schema
+            }
+            int close = text.indexOf("```", nl + 1);
+            if (close < 0) break;
+            JsonObject fromFence = tryParseVulnsObject(text.substring(nl + 1, close).trim());
+            if (fromFence != null) return fromFence;
+            searchFrom = close + 3;
+        }
+
+        // 3) Last embedded {"vulnerabilities": ...} (prose + JSON), with truncation repair
+        int idx = lastIndexOfVulnsObject(text);
+        if (idx >= 0) {
+            String candidate = extractBalancedOrRepair(text, idx);
+            JsonObject embedded = tryParseVulnsObject(candidate);
+            if (embedded != null) return embedded;
+        }
+
+        return null;
+    }
+
+    /** Package-visible for unit tests — same recovery pipeline as promotion. */
+    static String extractVulnsJsonString(String raw) {
+        JsonObject o = extractVulnsJson(raw);
+        return o == null ? null : o.toString();
+    }
+
+    private static JsonObject tryParseVulnsObject(String json) {
+        if (json == null || json.isBlank()) return null;
+        String t = json.trim();
+        if (!t.startsWith("{")) return null;
+        try {
+            JsonObject root = JsonParser.parseString(t).getAsJsonObject();
+            if (!root.has("vulnerabilities") || !root.get("vulnerabilities").isJsonArray()) return null;
+            return root;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Index of the last `{` that begins a `"vulnerabilities"` object. */
+    private static int lastIndexOfVulnsObject(String text) {
+        int best = -1;
+        int from = 0;
+        while (from < text.length()) {
+            int key = text.indexOf("\"vulnerabilities\"", from);
+            if (key < 0) break;
+            // walk back over whitespace to an opening brace
+            int i = key - 1;
+            while (i >= 0 && Character.isWhitespace(text.charAt(i))) i--;
+            if (i >= 0 && text.charAt(i) == '{') best = i;
+            from = key + 1;
+        }
+        return best;
+    }
+
+    /**
+     * Return the balanced JSON substring starting at {@code start}, or a repaired
+     * truncation that keeps only complete vulnerability objects.
+     */
+    private static String extractBalancedOrRepair(String text, int start) {
+        if (start < 0 || start >= text.length() || text.charAt(start) != '{') return null;
+
+        String balanced = extractBalanced(text, start);
+        if (balanced != null) return balanced;
+
+        // Truncated — salvage complete objects inside the vulnerabilities array
+        return repairTruncatedJson(text.substring(start));
+    }
+
+    /** Balanced `{...}` starting at {@code start}, or {@code null} if unclosed. */
+    private static String extractBalanced(String text, int start) {
+        int depth = 0;
+        boolean inStr = false;
+        boolean esc = false;
+        for (int i = start; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (inStr) {
+                if (esc) esc = false;
+                else if (c == '\\') esc = true;
+                else if (c == '"') inStr = false;
+            } else {
+                if (c == '"') inStr = true;
+                else if (c == '{') depth++;
+                else if (c == '}') {
+                    depth--;
+                    if (depth == 0) return text.substring(start, i + 1);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Rebuild {@code {"vulnerabilities":[...complete objects...]}} from a truncated
+     * fragment. Incomplete trailing objects are dropped.
+     */
+    static String repairTruncatedJson(String fragment) {
+        if (fragment == null || fragment.isBlank()) return null;
+        int key = fragment.indexOf("\"vulnerabilities\"");
+        if (key < 0) return null;
+        int arrStart = fragment.indexOf('[', key);
+        if (arrStart < 0) return "{\"vulnerabilities\":[]}";
+
+        StringBuilder entries = new StringBuilder();
+        int i = arrStart + 1;
+        while (i < fragment.length()) {
+            while (i < fragment.length() && Character.isWhitespace(fragment.charAt(i))) i++;
+            if (i >= fragment.length()) break;
+            char c = fragment.charAt(i);
+            if (c == ']') break;
+            if (c == ',') { i++; continue; }
+            if (c != '{') break;
+            String obj = extractBalanced(fragment, i);
+            if (obj == null) break; // truncated mid-object — stop
+            if (!entries.isEmpty()) entries.append(',');
+            entries.append(obj);
+            i += obj.length();
+        }
+        return "{\"vulnerabilities\":[" + entries + "]}";
+    }
+
+    /** Strip a leading/trailing markdown fence wrapping the whole string. */
     private static String stripCodeFences(String s) {
         if (s == null) return "";
         String t = s.trim();
@@ -293,6 +437,10 @@ public class LlmEnricher {
             if (closing > 0) t = t.substring(0, closing);
         }
         return t.trim();
+    }
+
+    private static int indexOfIgnoreCase(String haystack, String needle, int from) {
+        return haystack.toLowerCase().indexOf(needle.toLowerCase(), from);
     }
 
     private static String truncate(String s, int max) {

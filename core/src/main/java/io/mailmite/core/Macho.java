@@ -23,6 +23,12 @@ public class Macho {
 
     private static final int UNIVERSAL_MAGIC = 0xcafebabe;
     private static final int UNIVERSAL_CIGAM = 0xbebafeca;
+    private static final int MH_MAGIC_64     = 0xfeedfacf;
+    private static final int MH_CIGAM_64     = 0xcffaedfe;
+    private static final int MH_MAGIC        = 0xfeedface;
+    private static final int MH_CIGAM        = 0xcefaedfe;
+    /** MH_PIE — ASLR / position-independent executable flag. */
+    private static final int MH_PIE_FLAG     = 0x00200000;
 
     private final List<Integer> cpuTypes    = new ArrayList<>();
     private final List<Integer> cpuSubTypes = new ArrayList<>();
@@ -31,6 +37,8 @@ public class Macho {
 
     private boolean isUniversal;
     private boolean isSwift;
+    /** null = unknown / unreadable header; otherwise whether MH_PIE is set. */
+    private Boolean pieEnabled;
     private String  machoExecutablePath;
     private String  outputDirectoryPath;
     private String  machoExecutableName;
@@ -116,8 +124,38 @@ public class Macho {
                 log.info("Single-architecture Mach-O detected");
             }
             detectSwift();
+            detectPie();
         } catch (IOException e) {
             log.error("Error reading Mach-O file: {}", machoExecutablePath, e);
+        }
+    }
+
+    /**
+     * Reads the Mach-O header {@code flags} field and records whether {@code MH_PIE} is set.
+     * Defaults to {@code true} (do not false-positive) when the header cannot be parsed.
+     */
+    private void detectPie() {
+        try (RandomAccessFile raf = new RandomAccessFile(machoExecutablePath, "r")) {
+            int magic = raf.readInt();
+            boolean swap;
+            if (magic == MH_MAGIC_64 || magic == MH_MAGIC) {
+                swap = false;
+            } else if (magic == MH_CIGAM_64 || magic == MH_CIGAM) {
+                swap = true;
+            } else {
+                pieEnabled = Boolean.TRUE;
+                log.debug("Unknown Mach-O magic 0x{}; assuming PIE present", Integer.toHexString(magic));
+                return;
+            }
+            // flags is at offset 24 for both 32-bit and 64-bit Mach-O headers
+            raf.seek(24);
+            int flags = raf.readInt();
+            if (swap) flags = Integer.reverseBytes(flags);
+            pieEnabled = (flags & MH_PIE_FLAG) != 0;
+            log.info("Mach-O MH_PIE: {}", pieEnabled);
+        } catch (IOException e) {
+            log.warn("Could not read Mach-O PIE flag: {}", e.getMessage());
+            pieEnabled = Boolean.TRUE;
         }
     }
 
@@ -174,6 +212,8 @@ public class Macho {
 
     public boolean isUniversalBinary()    { return isUniversal; }
     public boolean isSwift()              { return isSwift; }
+    /** Whether the thin Mach-O has {@code MH_PIE} set. Unknown headers are treated as enabled. */
+    public boolean hasPie()               { return pieEnabled == null || pieEnabled; }
     public String  getMachoExecutableName() { return machoExecutableName; }
     public long    getSize()              { return Paths.get(machoExecutablePath).toFile().length(); }
     public List<Integer> getCpuTypes()    { return cpuTypes; }

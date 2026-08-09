@@ -127,7 +127,7 @@ public class Main implements Callable<Integer> {
         Map<String, String> cfg = new HashMap<>();
         cfg.put("LLM_PROVIDER",      llmProvider);
         cfg.put("LLM_MODEL",         llmModel == null ? "" : llmModel);
-        cfg.put("LLM_MAX_TOKENS",    envOr("LLM_MAX_TOKENS", "2000"));
+        cfg.put("LLM_MAX_TOKENS",    envOr("LLM_MAX_TOKENS", "4096"));
         cfg.put("OPENAI_API_KEY",      envOr("OPENAI_API_KEY", ""));
         cfg.put("ANTHROPIC_API_KEY",   envOr("ANTHROPIC_API_KEY", ""));
         cfg.put("DEEPSEEK_API_KEY",    envOr("DEEPSEEK_API_KEY", ""));

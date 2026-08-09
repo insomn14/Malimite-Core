@@ -15,7 +15,7 @@ import java.util.Map;
  * <p>Layout (top to bottom):
  * <ol>
  *   <li>Header — bundle id, executable, scan id, generation timestamp</li>
- *   <li>Risk dashboard — severity stat tiles + counts per MSTG category</li>
+ *   <li>Risk dashboard — severity stat tiles + counts per MASTG category</li>
  *   <li>Bundle &amp; signing — Team ID, Swift flag, architectures, provisioning</li>
  *   <li><b>Vulnerabilities</b> — every finding rendered as a full card with
  *       description, affected, evidence, PoC, remediation, reference</li>
@@ -143,7 +143,7 @@ public final class HtmlReporter {
             .badge-medium{background:var(--med-bg);color:var(--med)}
             .badge-low{background:var(--low-bg);color:var(--low)}
             .badge-info{background:var(--info-bg);color:var(--info)}
-            .badge-mstg{background:#eef2ff;color:#4338ca}
+            .badge-mastg,.badge-mstg{background:#eef2ff;color:#4338ca}
             .badge-llm{background:#fef3c7;color:#92400e}
 
             /* vuln cards */
@@ -230,14 +230,14 @@ public final class HtmlReporter {
         catCounts.put("AUTH", 0);
         catCounts.put("CODE", 0);
         catCounts.put("RESILIENCE", 0);
-        int mstgCount = 0, llmCount = 0;
+        int mastgCount = 0, llmCount = 0;
         for (var v : vulns) {
             String s = v.effectiveSeverity() == null ? "INFO" : v.effectiveSeverity().toUpperCase();
             sevCounts.merge(s, 1, Integer::sum);
             String c = v.category() == null ? "OTHER" : v.category().toUpperCase();
             catCounts.merge(c, 1, Integer::sum);
             if (v.ruleId() != null && v.ruleId().startsWith("LLM-")) llmCount++;
-            else mstgCount++;
+            else mastgCount++;
         }
         int total = vulns.size();
         int crit = sevCounts.getOrDefault("CRITICAL", 0);
@@ -263,8 +263,8 @@ public final class HtmlReporter {
                 h.append("<span class='chip'><strong>").append(e.getValue()).append("</strong> ")
                  .append(esc(e.getKey())).append("</span>");
         }
-        if (mstgCount > 0)
-            h.append("<span class='chip badge-mstg'><strong>").append(mstgCount).append("</strong> MSTG rules</span>");
+        if (mastgCount > 0)
+            h.append("<span class='chip badge-mastg'><strong>").append(mastgCount).append("</strong> MASTG rules</span>");
         if (llmCount > 0)
             h.append("<span class='chip badge-llm'><strong>").append(llmCount).append("</strong> LLM findings</span>");
         h.append("</div>");
@@ -384,7 +384,7 @@ public final class HtmlReporter {
         h.append("<div class='vuln-meta' style='margin-bottom:.7rem'>");
         h.append("<span class='vuln-rule'>").append(esc(v.ruleId())).append("</span>");
         if (isLlm) h.append("<span class='badge badge-llm'>LLM</span>");
-        else       h.append("<span class='badge badge-mstg'>MSTG</span>");
+        else       h.append("<span class='badge badge-mastg'>MASTG</span>");
         if (v.category() != null)  h.append("<span class='chip'>").append(esc(v.category())).append("</span>");
         if (v.cwe() != null && !v.cwe().isBlank()) h.append("<span class='chip'>").append(esc(v.cwe())).append("</span>");
         h.append("</div>");

@@ -73,7 +73,13 @@ public class MailmiteAnalyzer {
             GhidraRunner  runner = new GhidraRunner(execName, config, store);
             runner.decompile(execPath, opts.outputDir().toString(), macho);
 
-            // ── 8b. MSTG-based vulnerability scan ─────────────────────────────
+            // ── 8a. Mach-O security flags for static rules (e.g. MASTG-TEST-0228)
+            store.insertResourceString(
+                    "MachOSecurityFlags",
+                    macho.hasPie() ? "MH_PIE=1" : "MH_PIE=0",
+                    "macho-flags");
+
+            // ── 8b. MASTG/MSTG static vulnerability scan ──────────────────────
             try {
                 int vulnCount = new VulnerabilityScanner().scan(store, execName);
                 log.info("VulnerabilityScanner found {} finding(s)", vulnCount);

@@ -15,6 +15,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * Regression tests for the "CLI hangs forever when Ghidra crashes during import"
  * bug. Verifies the watchdog inside {@link GhidraRunner#acceptWithWatchdog} aborts
  * promptly when the subprocess dies before the post-script can connect.
+ *
+ * <p>Note: {@link GhidraRunner#ACCEPT_DEADLINE_MS} bounds only the accept/dial phase
+ * (heartbeat then data CONNECTED). DumpClassData sends CONNECTED before heavy decompile
+ * so long Swift analysis is not killed by this deadline — see {@link GhidraRunnerProtocolTest}.
  */
 class GhidraRunnerWatchdogTest {
 
@@ -55,6 +59,9 @@ class GhidraRunnerWatchdogTest {
                     "error message should mention subprocess exit: " + msg);
             assertTrue(msg.contains("test-phase"),
                     "error message should mention which phase failed: " + msg);
+            // rc=0 from `true` → post-script hint, not Mach-O parse claim
+            assertTrue(msg.contains("post-script") || msg.contains("Mach-O"),
+                    "error message should include a cause hint: " + msg);
         }
     }
 
