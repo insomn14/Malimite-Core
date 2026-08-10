@@ -1,12 +1,13 @@
 # Mailmite-Core
 
-**Headless iOS static analysis platform** — decompile `.ipa` files with Ghidra, scan against OWASP MSTG rules, optionally enrich with LLM, and deliver findings through a web UI, REST API, Slack bot, or CI/CD pipeline.
+**Headless iOS & Android static analysis platform** — decompile `.ipa` (Ghidra) and `.apk` (JADX for DEX, optional Ghidra for arm64 `.so`), scan against OWASP MASTG/MSTG rules, optionally enrich with LLM, and deliver findings through a web UI, REST API, Slack bot, or CI/CD pipeline.
 
 > Inspired by and ported from [**Malimite**](https://github.com/LaurieWired/Malimite) by [@LaurieWired](https://github.com/LaurieWired) — the excellent interactive iOS/macOS decompiler. Mailmite-Core takes the same Ghidra-backed analysis pipeline and refactors it for **automation, team workflows, and continuous security scanning** instead of desktop GUI use.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17+-orange.svg)](https://openjdk.org/)
 [![Ghidra](https://img.shields.io/badge/Ghidra-%E2%89%A511.1-purple.svg)](https://ghidra-sre.org/)
+[![JADX](https://img.shields.io/badge/JADX-%E2%89%A51.5-green.svg)](https://github.com/skylot/jadx)
 
 ---
 
@@ -35,7 +36,7 @@
 
 [Malimite](https://github.com/LaurieWired/Malimite) is built for researchers who want a rich desktop experience: drag an IPA, browse decompiled Swift/Objective-C, and translate methods with built-in LLM support. That workflow is ideal for interactive reverse engineering.
 
-**Mailmite-Core** targets a different problem:
+**Mailmite-Core** targets a different problem (and adds Android APK analysis via JADX alongside the iOS Ghidra path):
 
 - Run scans in **CI/CD** on every release build
 - Let security teams **triage findings** (false positive, accepted risk, severity override)
@@ -54,7 +55,7 @@ Same Ghidra decompilation DNA. Different deployment model.
 | **Interface** | Desktop GUI (Swing) | Headless CLI + Web SPA + Slack |
 | **Primary use** | Interactive RE | Automation & AppSec pipelines |
 | **Output** | In-app browsing | SQLite, HTML report, SARIF 2.1 |
-| **Security rules** | Manual review | 26 built-in MSTG rules + LLM + learned rules |
+| **Security rules** | Manual review | Built-in iOS MASTG/MSTG + Android MASTG catalogs + LLM + learned rules |
 | **Triage** | — | Status, severity/CVSS override, reviewer notes |
 | **CI/CD** | Manual | GitHub Actions, GitLab CI, Bitbucket Pipelines |
 | **LLM providers** | OpenAI (upstream) | OpenAI, Claude, **DeepSeek**, Ollama |
@@ -68,13 +69,14 @@ Mailmite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 
 | Capability | Description |
 |---|---|
-| **Ghidra decompilation** | Headless `analyzeHeadless` → C-like pseudocode per function, stored in SQLite |
-| **MSTG rule engine** | 26 static rules across STORAGE, CRYPTO, NETWORK, PLATFORM, AUTH, CODE, RESILIENCE |
-| **LLM enrichment** | Per-function analysis via OpenAI, Claude, DeepSeek, or Ollama |
+| **Ghidra decompilation** | Headless `analyzeHeadless` → C-like pseudocode (iOS Mach-O; Android `lib/arm64-v8a/*.so`) |
+| **JADX decompilation** | Android DEX → Java sources via `jadx` CLI, ingested into SQLite |
+| **MASTG / MSTG rule engines** | Platform catalogs: iOS (`VulnerabilityCatalog`) + Android (`AndroidVulnerabilityCatalog`) — STORAGE, CRYPTO, NETWORK, PLATFORM, AUTH, CODE, RESILIENCE |
+| **LLM enrichment** | Per-function analysis via OpenAI, Claude, DeepSeek, or Ollama (platform-aware prompts) |
 | **Security Assessment** | Controls inventory (obfuscation, SSL pinning, root/Frida detection, FLAG_SECURE, …) — separate from vulnerability findings |
-| **Self-learning rules** | LLM `detection_regex` validated and persisted to `~/.mailmite/learned_rules.json` |
+| **Self-learning rules** | LLM `detection_regex` validated and persisted per platform (`learned_rules.json` / `learned_rules_android.json`) |
 | **Triage workflow** | Mark false positive / accepted risk / fixed; override severity & CVSS |
-| **HTML reports** | Vulnerability-centric layout with evidence, PoC, remediation, MSTG references |
+| **HTML reports** | Vulnerability-centric layout with evidence, PoC, remediation, MASTG/MSTG references; unique issues grouped by `rule_id` |
 | **SARIF 2.1** | Native integration with GitHub Code Scanning and other SARIF consumers |
 | **Multiple ingress paths** | Web UI, REST API, Slack bot, CLI, watch-folder daemon, CI templates |
 
@@ -91,13 +93,15 @@ Mailmite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
                                           ▼
               ┌───────────────────────────────────────────────────────┐
               │              mailmite-cli.jar  (fat JAR)              │
-              │  MailmiteAnalyzer: validate → extract → Ghidra → scan │
-              └───────────────────────────────────────────────────────┘
-                     │                    │                    │
-                     ▼                    ▼                    ▼
-              Ghidra headless      SQLite store         LLM providers
-              + DumpClassData      + MSTG rules         OpenAI / Claude /
-              decompiler           + learned rules      DeepSeek / Ollama
+              │  MailmiteAnalyzer: validate → extract → decompile     │
+              │       → vuln scan + optional Assessment + LLM         │
+              └─────────────────────┬─────────────────────────────────┘
+                     │              │              │              │
+                     ▼              ▼              ▼              ▼
+              iOS: Ghidra     Android: JADX   SQLite store    LLM providers
+              Mach-O +        DEX/Java +      + MASTG/MSTG    OpenAI / Claude /
+              DumpClassData   optional Ghidra  + Assessment   DeepSeek / Ollama
+                              on arm64 .so     + learned rules
                                           │
                                           ▼
                               Per-scan output directory
@@ -202,14 +206,15 @@ cp .env.example .env    # optional: GHIDRA_HOME, API_KEY, LLM defaults
 # → http://localhost:7070
 ```
 
-Drop an `.ipa` on the upload page. The FastAPI service runs the CLI in the background and exposes everything under `/api/v1/*`. OpenAPI docs: `http://localhost:7070/docs`.
+Drop an `.ipa` or `.apk` on the upload page (enable **Security Assessment** via the checkbox — on by default). The FastAPI service runs the CLI in the background and exposes everything under `/api/v1/*`. OpenAPI docs: `http://localhost:7070/docs`. The UI groups findings by `rule_id` (unique issues) and has a dedicated **Assessment** tab for controls inventory.
 
 **Key endpoints:**
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/scans` | Upload IPA (multipart form) |
+| `POST` | `/api/v1/scans` | Upload IPA or APK (multipart form; `assessment_enabled`) |
 | `GET` | `/api/v1/scans/{id}/vulnerabilities` | List findings |
+| `GET` | `/api/v1/scans/{id}/assessments` | Security Assessment controls inventory |
 | `PATCH` | `/api/v1/scans/{id}/vulnerabilities/{vuln_id}` | Triage (status, severity override) |
 | `GET` | `/api/v1/scans/{id}/report` | HTML report |
 | `GET` | `/api/v1/scans/{id}/sarif` | SARIF download |
@@ -228,7 +233,7 @@ cp .env.example .env
 ./run.sh
 ```
 
-DM the bot an `.ipa` file → it replies with a severity-sorted summary, HTML report, and SARIF attachment. See [`bot/python/README.md`](bot/python/README.md) for Slack App setup.
+DM the bot an `.ipa` or `.apk` file → it replies with a severity-sorted summary, HTML report, and SARIF attachment. See [`bot/python/README.md`](bot/python/README.md) for Slack App setup.
 
 ---
 
@@ -242,27 +247,32 @@ Ready-to-use templates:
 | GitLab CI | [`.gitlab/mailmite.yml`](.gitlab/mailmite.yml) |
 | Bitbucket Pipelines | [`bitbucket-pipelines.yml`](bitbucket-pipelines.yml) |
 
-GitHub Actions uploads SARIF to the **Security → Code scanning** tab automatically. Set repository secrets: `GHIDRA_HOME`, optional `LLM_PROVIDER`, `DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`.
+GitHub Actions uploads SARIF to the **Security → Code scanning** tab automatically. Stock templates target `.ipa` + Ghidra; for APK scans set `JADX_HOME` (Docker image includes JADX at `/opt/jadx`) alongside `GHIDRA_HOME`. Optional secrets: `LLM_PROVIDER`, `DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`.
 
 ---
 
 ## Detection engines
 
-### Built-in MSTG rules
+### Built-in MASTG / MSTG rules
 
-26 rules derived from the [OWASP MSTG](https://github.com/OWASP/owasp-mstg) iOS checklist:
+Platform-specific catalogs derived from [OWASP MASTG](https://mas.owasp.org/MASTG/) (legacy iOS IDs keep `MSTG-*`):
 
-| Category | Examples |
-|----------|----------|
-| **STORAGE** | Hardcoded API keys, NSUserDefaults misuse, keychain accessibility |
+| Platform | Catalog | Coverage |
+|----------|---------|----------|
+| **iOS** | `VulnerabilityCatalog` | Mach-O / plist / Info.plist patterns — STORAGE, CRYPTO, NETWORK, PLATFORM, AUTH, CODE, RESILIENCE |
+| **Android** | `AndroidVulnerabilityCatalog` | JADX Java, manifest/NSC, and optional Ghidra arm64 `.so` rules |
+
+| Category | Examples (iOS / Android) |
+|----------|--------------------------|
+| **STORAGE** | NSUserDefaults / SharedPreferences misuse, keychain & credential leaks |
 | **CRYPTO** | MD5, SHA-1, DES/RC4, ECB mode, weak RNG |
-| **NETWORK** | Cleartext HTTP, `NSAllowsArbitraryLoads`, missing cert pinning |
-| **PLATFORM** | UIWebView, unvalidated URL schemes |
-| **AUTH** | Biometrics without Keychain binding |
-| **CODE** | Unsafe C functions, missing stack canaries |
-| **RESILIENCE** | No jailbreak / anti-debug / Frida detection |
+| **NETWORK** | Cleartext HTTP, ATS / NSC misconfig, missing cert pinning |
+| **PLATFORM** | UIWebView, exported components, unvalidated URL schemes |
+| **AUTH** | Biometrics without Keychain/Keystore binding |
+| **CODE** | Unsafe C functions, missing stack canaries / ELF hardening |
+| **RESILIENCE** | Jailbreak / root / anti-debug / Frida detection gaps |
 
-Each finding includes rule ID, severity, CVSS, CWE, evidence, PoC steps, remediation, and MSTG reference URL.
+Each finding includes rule ID, severity, CVSS, CWE, evidence, PoC steps, remediation, and MASTG/MSTG reference URL. Web UI and HTML reports count **unique issues by `rule_id`** (same issue across many assets = one open issue).
 
 ### Security Assessment
 
@@ -274,7 +284,7 @@ Supported providers: **OpenAI**, **Anthropic Claude**, **DeepSeek**, **Ollama**.
 
 Modes: `summarize` · `find_vulns` · `auto_fix`
 
-When LLM finds a vulnerability, it returns a `detection_regex`. Regexes that self-validate against the source function are saved to `~/.mailmite/learned_rules.json` and reused on future scans **without further LLM calls**.
+When LLM finds a vulnerability, it returns a `detection_regex`. Regexes that self-validate against the source function are saved per platform — `~/.mailmite/learned_rules.json` (iOS) or `learned_rules_android.json` (Android) — and reused on future scans **without further LLM calls**. Hollow placeholders such as `...` are rejected.
 
 ### DeepSeek models
 
@@ -337,7 +347,6 @@ mailmite [OPTIONS] <ipa|apk>
 | `DEEPSEEK_BASE_URL` | Default `https://api.deepseek.com` |
 | `OLLAMA_BASE_URL` | Default `http://localhost:11434` |
 | `LLM_MODEL` / `LLM_MAX_TOKENS` | Override provider defaults |
-| `MAILMITE_LEARNED_RULES` | Path to learned-rules JSON |
 | `SCAN_DIR` | Web service scan output directory |
 | `API_KEY` | Optional `X-Api-Key` for web API |
 
@@ -347,7 +356,7 @@ mailmite [OPTIONS] <ipa|apk>
 
 ```
 Mailmite-Core/
-├── core/           # Analysis engine (Ghidra, MSTG scanner, LLM, SARIF, HTML)
+├── core/           # Analysis engine (Ghidra, JADX, MASTG scanners, Assessment, LLM, SARIF, HTML)
 ├── cli/            # mailmite-cli.jar entry point
 ├── web/            # FastAPI + SPA (recommended deployment)
 ├── bot/python/     # Slack bot (Socket Mode)
@@ -367,7 +376,7 @@ Mailmite-Core/
 mvn test -pl core
 ```
 
-47 unit tests cover IPA validation, plist/Mach-O parsing, LLM providers, SARIF schema, HTML reporter (including triage severity overrides), and learned-rules persistence.
+Unit tests in `core/` cover IPA/APK validation & extraction, Android manifest/NSC ingest, Assessment scanner, MASTG catalogs, LLM providers, SARIF schema, HTML reporter (including triage severity overrides and unique `rule_id` grouping), and platform-scoped learned-rules persistence.
 
 ---
 
@@ -375,8 +384,10 @@ mvn test -pl core
 
 See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 
-- ✅ Core Ghidra pipeline, MSTG scanner, LLM, SARIF/HTML, CI templates
-- 🔄 Closure items: real-IPA integration test, cross-reference REST API
+- ✅ Core Ghidra pipeline, MSTG/MASTG scanner, LLM, SARIF/HTML, CI templates
+- ✅ Android APK analysis (JADX DEX + optional Ghidra arm64 `.so`)
+- ✅ Security Assessment mode (PRESENT / PARTIAL / ABSENT / UNKNOWN)
+- 🔄 Closure items: real-IPA/APK integration test, cross-reference REST API
 - 📋 Next major phase: **Observability** (Prometheus metrics, enriched health checks)
 - 📋 Future: security hardening, Helm/Kubernetes, enterprise SSO
 
