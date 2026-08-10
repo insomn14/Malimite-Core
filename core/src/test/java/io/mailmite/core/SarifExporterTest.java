@@ -32,7 +32,8 @@ class SarifExporterTest {
                         "buttonTapped", "ViewController", "FIND_VULNS",
                         "HIGH: SQL injection risk in user input handling")),
                 List.of(),
-                "/tmp/test.sqlite"
+                "/tmp/test.sqlite",
+                "IOS"
         );
     }
 

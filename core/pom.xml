@@ -11,6 +11,7 @@
 
   <dependencies>
     <dependency><groupId>com.googlecode.plist</groupId><artifactId>dd-plist</artifactId><version>1.27</version></dependency>
+    <dependency><groupId>net.dongliu</groupId><artifactId>apk-parser</artifactId><version>2.6.10</version></dependency>
     <dependency><groupId>org.xerial</groupId><artifactId>sqlite-jdbc</artifactId><version>3.44.1.0</version></dependency>
     <dependency><groupId>org.json</groupId><artifactId>json</artifactId><version>20231013</version></dependency>
     <dependency><groupId>com.google.code.gson</groupId><artifactId>gson</artifactId><version>2.10.1</version></dependency>

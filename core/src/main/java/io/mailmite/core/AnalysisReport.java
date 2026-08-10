@@ -42,14 +42,47 @@ public record AnalysisReport(
         List<VulnerabilityRecord> vulnerabilities,
 
         // pointer to SQLite on the reports volume for /functions queries
-        String dbPath
+        String dbPath,
+
+        /** IOS or ANDROID (null on legacy reports). */
+        String platform,
+
+        /** Security-controls inventory (empty when Assessment disabled). */
+        List<AssessmentRecord> assessments
 ) {
+    /** Backward-compatible ctor for tests that omit assessments. */
+    public AnalysisReport(
+            String scanId, String bundleExecutable, String bundleIdentifier,
+            boolean isSwift, boolean isUniversal, List<String> architectures, long durationMs,
+            int classCount, int functionCount, int stringCount,
+            Map<String, List<String>> classes, List<StringEntry> strings, List<String> entryPoints,
+            String bundleTeamId, String provisioningProfile, String provisioningExpiry,
+            List<LlmFinding> llmFindings, List<VulnerabilityRecord> vulnerabilities,
+            String dbPath, String platform) {
+        this(scanId, bundleExecutable, bundleIdentifier, isSwift, isUniversal, architectures,
+                durationMs, classCount, functionCount, stringCount, classes, strings, entryPoints,
+                bundleTeamId, provisioningProfile, provisioningExpiry, llmFindings, vulnerabilities,
+                dbPath, platform, List.of());
+    }
 
     /** A single extracted Mach-O string. */
     public record StringEntry(String address, String value, String segment, String label) {}
 
     /** A single LLM enrichment result for one function. */
     public record LlmFinding(String functionName, String className, String mode, String finding) {}
+
+    /** One security-control assessment row. */
+    public record AssessmentRecord(
+            long id,
+            String controlId,
+            String title,
+            String category,
+            String status,
+            String confidence,
+            String evidence,
+            String detail,
+            String platform
+    ) {}
 
     /** A single security finding (MSTG rule or LLM-discovered). */
     public record VulnerabilityRecord(
@@ -105,7 +138,8 @@ public record AnalysisReport(
             int stringCount,
             List<String> entryPoints,
             String bundleTeamId,
-            String provisioningExpiry
+            String provisioningExpiry,
+            String platform
     ) {}
 
     /** A single function returned by the {@code /functions} endpoint. */
@@ -128,6 +162,6 @@ public record AnalysisReport(
         return new ScanSummary(scanId, bundleExecutable, bundleIdentifier,
                 isSwift, isUniversal, architectures, durationMs,
                 classCount, functionCount, stringCount,
-                entryPoints, bundleTeamId, provisioningExpiry);
+                entryPoints, bundleTeamId, provisioningExpiry, platform);
     }
 }

@@ -24,7 +24,8 @@ import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
 
 /**
- * Runs Ghidra headless analysis on a Mach-O binary and ingests results into SqliteStore.
+ * Runs Ghidra headless analysis on a Mach-O (iOS) or ELF {@code .so} (Android native)
+ * binary and ingests results into SqliteStore.
  *
  * Port of Malimite's GhidraProject.java:
  *  - Swing/GUI removed; progress logged via SLF4J
@@ -63,29 +64,30 @@ public class GhidraRunner {
 
     // ── public API ────────────────────────────────────────────────────────────
 
+    /** iOS Mach-O convenience overload. */
     public void decompile(String executableFilePath, String projectDirectoryPath, Macho macho) {
-        log.info("Starting Ghidra decompilation: {}", executableFilePath);
+        List<String> activeLibs = LibraryDefinitions.getActiveLibraries(config);
+        decompile(executableFilePath, projectDirectoryPath, BinaryIdentity.fromMacho(macho, activeLibs));
+    }
+
+    public void decompile(String executableFilePath, String projectDirectoryPath, BinaryIdentity identity) {
+        log.info("Starting Ghidra decompilation: {} (objcAnalyzer={})",
+                executableFilePath, identity.enableObjectiveCAnalyzer());
 
         ServerSocket serverSocket = openServerSocket();
-        List<String> activeLibs  = LibraryDefinitions.getActiveLibraries(config);
-        String libsArg           = String.join(",", activeLibs);
+        List<String> activeLibs = identity.libraryPrefixes();
+        String libsArg = String.join(",", activeLibs);
 
         try (ServerSocket ss = serverSocket) {
-            Process ghidra = launchGhidra(executableFilePath, projectDirectoryPath, ss.getLocalPort(), libsArg);
+            Process ghidra = launchGhidra(
+                    executableFilePath, projectDirectoryPath, ss.getLocalPort(), libsArg,
+                    identity.enableObjectiveCAnalyzer());
             streamGhidraOutput(ghidra);
 
-            // Short poll interval so we notice a dead Ghidra subprocess quickly,
-            // total deadline generous enough for slow imports of large binaries.
             ss.setSoTimeout(ACCEPT_POLL_MS);
 
             log.info("Waiting for Ghidra script connection on port {}", ss.getLocalPort());
 
-            // Handshake (DumpClassData):
-            //   1) HEARTBEAT on a short-lived connection
-            //   2) New connection with CONNECTED immediately (before heavy decompile)
-            //   3) Stream END_* blocks while decompile proceeds; processData blocks on reads
-            // ACCEPT_DEADLINE_MS applies only to establishing each accept(), not to post-CONNECTED
-            // payload transfer (dataSocket soTimeout=0 allows long Swift decompiles).
             try (Socket hb = acceptWithWatchdog(ss, ghidra, "heartbeat");
                  BufferedReader hbIn = new BufferedReader(new InputStreamReader(hb.getInputStream()))) {
                 String beat = hbIn.readLine();
@@ -95,8 +97,6 @@ public class GhidraRunner {
             }
 
             Socket dataSocket = acceptWithWatchdog(ss, ghidra, "data");
-            // Unlimited read timeout: script may decompile for a long time after CONNECTED
-            // before sending END_CLASS_DATA / END_DATA / etc.
             dataSocket.setSoTimeout(0);
 
             try (BufferedReader in = new BufferedReader(new InputStreamReader(dataSocket.getInputStream()))) {
@@ -105,7 +105,7 @@ public class GhidraRunner {
                     throw new RuntimeException("Expected CONNECTED, got: " + confirm);
                 log.info("Ghidra script connected — reading analysis data (decompile may take a while)");
 
-                processData(in, macho, activeLibs);
+                processData(in, identity);
             }
 
             ghidra.waitFor();
@@ -182,24 +182,34 @@ public class GhidraRunner {
 
     // ── Ghidra process ────────────────────────────────────────────────────────
 
-    private Process launchGhidra(String execPath, String projDir, int port, String libsArg)
-            throws IOException {
-        ProcessBuilder pb = new ProcessBuilder(
-                config.analyzeHeadlessPath().toString(),
-                projDir,
-                ghidraProjectName,
-                "-import",      execPath,
-                "-scriptPath",  scriptDir.toString(),
-                "-postScript",  "DumpClassData.java",
-                String.valueOf(port),
-                libsArg,
-                "-enableAnalyzer",  "Objective-C",
-                "-enableAnalyzer",  "String Extraction",
-                "-disableAnalyzer", "Decompiler Parameter ID",
-                "-disableAnalyzer", "DWARF",
-                "-skipAnalysisPrompt",
-                "-deleteProject"
-        );
+    private Process launchGhidra(String execPath, String projDir, int port, String libsArg,
+                                 boolean enableObjectiveC) throws IOException {
+        List<String> cmd = new ArrayList<>();
+        cmd.add(config.analyzeHeadlessPath().toString());
+        cmd.add(projDir);
+        cmd.add(ghidraProjectName);
+        cmd.add("-import");
+        cmd.add(execPath);
+        cmd.add("-scriptPath");
+        cmd.add(scriptDir.toString());
+        cmd.add("-postScript");
+        cmd.add("DumpClassData.java");
+        cmd.add(String.valueOf(port));
+        cmd.add(libsArg);
+        if (enableObjectiveC) {
+            cmd.add("-enableAnalyzer");
+            cmd.add("Objective-C");
+        }
+        cmd.add("-enableAnalyzer");
+        cmd.add("String Extraction");
+        cmd.add("-disableAnalyzer");
+        cmd.add("Decompiler Parameter ID");
+        cmd.add("-disableAnalyzer");
+        cmd.add("DWARF");
+        cmd.add("-skipAnalysisPrompt");
+        cmd.add("-deleteProject");
+
+        ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         // Ghidra 11.x script loader (Felix OSGi) needs a supported JDK (17/21).
         // Homebrew Java 23/25 often yields: osgi.ee=UNKNOWN → DumpClassData ClassNotFoundException.
@@ -303,7 +313,7 @@ public class GhidraRunner {
 
     // ── data ingestion ────────────────────────────────────────────────────────
 
-    private void processData(BufferedReader in, Macho macho, List<String> activeLibs) throws IOException {
+    private void processData(BufferedReader in, BinaryIdentity identity) throws IOException {
         JSONArray classData    = readBlock(in, "END_CLASS_DATA");
         JSONArray machoData    = readBlockAsArray(in, "END_MACHO_DATA");  // stored for future use
         JSONArray functionData = readBlock(in, "END_DATA");
@@ -312,8 +322,8 @@ public class GhidraRunner {
         log.info("Received {} classes, {} functions, {} strings",
                 classData.length(), functionData.length(), stringData.length());
 
-        ingestFunctions(functionData, macho, activeLibs);
-        ingestStrings(stringData, macho.getMachoExecutableName());
+        ingestFunctions(functionData, identity);
+        ingestStrings(stringData, identity.executableName());
     }
 
     // Known entry-point function names (ObjC, Swift AppDelegate, C main)
@@ -327,7 +337,7 @@ public class GhidraRunner {
             "+load"
     );
 
-    private void ingestFunctions(JSONArray functionData, Macho macho, List<String> activeLibs) {
+    private void ingestFunctions(JSONArray functionData, BinaryIdentity identity) {
         Map<String, JSONArray>   classToFunctions = new HashMap<>();
         List<SqliteStore.DecompilationResult> decomps   = new ArrayList<>();
         List<SyntaxParser.FunctionRefResult>  fnRefs    = new ArrayList<>();
@@ -335,7 +345,11 @@ public class GhidraRunner {
         List<SyntaxParser.TypeInfoResult>     typeInfos = new ArrayList<>();
         List<String[]>                        entryPts  = new ArrayList<>(); // [fn, cls]
 
-        String execName = macho.getMachoExecutableName();
+        String execName = identity.executableName();
+        List<String> activeLibs = identity.libraryPrefixes();
+        // Android native libs also treat JNI_OnLoad as an entry point
+        boolean androidNative = identity.classNamespacePrefix() != null
+                && identity.classNamespacePrefix().startsWith("native:");
 
         for (int i = 0; i < functionData.length(); i++) {
             JSONObject obj          = functionData.getJSONObject(i);
@@ -343,8 +357,7 @@ public class GhidraRunner {
             String     className    = obj.getString("ClassName");
             String     decomp       = obj.getString("DecompiledCode");
 
-            // Swift name demangling (non-Mac headless always uses Java demangler)
-            if (macho.isSwift() && functionName.startsWith("_$s")) {
+            if (identity.isSwift() && functionName.startsWith("_$s")) {
                 DemangleSwift.DemangledName dn = DemangleSwift.demangleSwiftName(functionName);
                 if (dn != null) {
                     className    = dn.className();
@@ -355,14 +368,20 @@ public class GhidraRunner {
 
             if (className == null || className.isBlank()) className = "Global";
 
+            if (identity.classNamespacePrefix() != null) {
+                className = identity.classNamespacePrefix() + "/" + className;
+            }
+
             final String cls = className;
             final String fn  = functionName;
 
-            boolean isLib = activeLibs.stream().anyMatch(cls::startsWith);
+            boolean isLib = activeLibs.stream().anyMatch(lib ->
+                    cls.equals(lib) || cls.startsWith(lib) || cls.contains("/" + lib));
 
             if (isLib) {
                 String libFn = cls + "::" + fn;
-                decomps.add(new SqliteStore.DecompilationResult(libFn, "Libraries", "", execName));
+                decomps.add(new SqliteStore.DecompilationResult(
+                        libFn, "Libraries", "", execName, "GHIDRA"));
                 classToFunctions.computeIfAbsent("Libraries", k -> new JSONArray()).put(libFn);
             } else {
                 decomp = decomp.replaceAll("/\\*.*?\\*/", ""); // remove Ghidra inline comments
@@ -370,10 +389,12 @@ public class GhidraRunner {
                     decomp = "// Class: " + cls + "\n// Function: " + fn + "\n\n" + decomp.trim();
                 }
 
-                decomps.add(new SqliteStore.DecompilationResult(fn, cls, decomp, execName));
+                decomps.add(new SqliteStore.DecompilationResult(
+                        fn, cls, decomp, execName, "GHIDRA"));
                 classToFunctions.computeIfAbsent(cls, k -> new JSONArray()).put(fn);
 
-                if (ENTRY_POINT_NAMES.contains(fn) || fn.equals("entry"))
+                if (ENTRY_POINT_NAMES.contains(fn) || fn.equals("entry")
+                        || (androidNative && ("JNI_OnLoad".equals(fn) || fn.startsWith("Java_"))))
                     entryPts.add(new String[]{fn, cls});
 
                 if (!decomp.isBlank()) {
