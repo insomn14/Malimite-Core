@@ -71,6 +71,7 @@ Mailmite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 | **Ghidra decompilation** | Headless `analyzeHeadless` → C-like pseudocode per function, stored in SQLite |
 | **MSTG rule engine** | 26 static rules across STORAGE, CRYPTO, NETWORK, PLATFORM, AUTH, CODE, RESILIENCE |
 | **LLM enrichment** | Per-function analysis via OpenAI, Claude, DeepSeek, or Ollama |
+| **Security Assessment** | Controls inventory (obfuscation, SSL pinning, root/Frida detection, FLAG_SECURE, …) — separate from vulnerability findings |
 | **Self-learning rules** | LLM `detection_regex` validated and persisted to `~/.mailmite/learned_rules.json` |
 | **Triage workflow** | Mark false positive / accepted risk / fixed; override severity & CVSS |
 | **HTML reports** | Vulnerability-centric layout with evidence, PoC, remediation, MSTG references |
@@ -113,7 +114,9 @@ Mailmite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 |---|---|
 | **Java JDK** | 17+ |
 | **Maven** | 3.8+ |
-| **Ghidra** | ≥ 11.1 — must contain `support/analyzeHeadless` |
+| **Ghidra** | ≥ 11.1 — must contain `support/analyzeHeadless` (required for `.ipa`) |
+| **JADX** | ≥ 1.5 — CLI `bin/jadx` (required for `.apk` DEX; set `JADX_HOME`) |
+| **Ghidra (Android native)** | Same install as iOS — used for APK `lib/arm64-v8a/*.so` when `GHIDRA_HOME` is set |
 | **Python** | 3.10+ (web service & Slack bot only) |
 | **LLM API key** | Optional — only when `--llm` is enabled |
 
@@ -121,6 +124,13 @@ Install Ghidra on Debian/Kali:
 
 ```bash
 sudo apt install ghidra   # or set GHIDRA_HOME to your install path
+```
+
+Install JADX (Android APK decompilation):
+
+```bash
+# Download a release from https://github.com/skylot/jadx/releases
+export JADX_HOME=/opt/jadx   # directory containing bin/jadx
 ```
 
 ---
@@ -136,15 +146,23 @@ mvn -DskipTests package -pl core,cli
 # → cli/target/mailmite-cli.jar
 ```
 
-### 2. Scan an IPA (CLI)
+### 2. Scan an IPA or APK (CLI)
 
 ```bash
 export GHIDRA_HOME=/usr/share/ghidra
+export JADX_HOME=/opt/jadx
 
 java -jar cli/target/mailmite-cli.jar path/to/MyApp.ipa \
      --ghidra "$GHIDRA_HOME" \
      --out /tmp/mailmite-scan \
      --sarif --html
+
+java -jar cli/target/mailmite-cli.jar path/to/MyApp.apk \
+     --jadx "$JADX_HOME" \
+     --ghidra "$GHIDRA_HOME" \
+     --out /tmp/mailmite-apk-scan \
+     --sarif --html
+# JADX decompiles DEX; Ghidra decompiles lib/arm64-v8a/*.so when present
 ```
 
 **Outputs:**
@@ -246,6 +264,10 @@ GitHub Actions uploads SARIF to the **Security → Code scanning** tab automatic
 
 Each finding includes rule ID, severity, CVSS, CWE, evidence, PoC steps, remediation, and MSTG reference URL.
 
+### Security Assessment
+
+Enable (default) with `--assessment` or the web **Security Assessment** checkbox. Mailmite inventories implemented protections — obfuscation (R8 vs commercial vendors), root/jailbreak & Frida detection, SSL pinning style, FLAG_SECURE, native ELF hardening, and more — as `PRESENT` / `PARTIAL` / `ABSENT` / `UNKNOWN`. Results appear in the **Assessment** tab and the HTML report section *Security Controls Assessment*, and are **not** mixed into vulnerability severity counts.
+
 ### LLM enrichment
 
 Supported providers: **OpenAI**, **Anthropic Claude**, **DeepSeek**, **Ollama**.
@@ -285,15 +307,18 @@ Reports (`report.html`, `findings.sarif`) regenerate automatically after each tr
 ### CLI flags
 
 ```
-mailmite [OPTIONS] <ipa>
+mailmite [OPTIONS] <ipa|apk>
   -o, --out=<dir>          Output directory
-  -g, --ghidra=<dir>       Ghidra install (or env GHIDRA_HOME)
+  -g, --ghidra=<dir>       Ghidra install (or env GHIDRA_HOME) — iOS Mach-O + Android arm64 .so
+  -j, --jadx=<dir>         JADX install (or env JADX_HOME) — Android DEX/Java
       --sarif              Write findings.sarif
       --html               Write report.html
       --llm                Enable LLM enrichment
       --llm-provider=<x>   openai | claude | deepseek | ollama
       --llm-mode=<x>       summarize | find_vulns | auto_fix
       --llm-model=<x>      Override default model per provider
+      --assessment / --no-assessment
+                           Security-controls Assessment (default: on)
       --fail-on=<severity> Exit 1 if findings ≥ HIGH|MEDIUM|LOW
 ```
 
@@ -301,7 +326,10 @@ mailmite [OPTIONS] <ipa>
 
 | Variable | Purpose |
 |----------|---------|
-| `GHIDRA_HOME` | Ghidra install directory |
+| `GHIDRA_HOME` | Ghidra install (iOS Mach-O; Android `lib/arm64-v8a/*.so`) |
+| `JADX_HOME` / `JADX_PATH` | JADX install root or binary path (Android DEX) |
+| `MAILMITE_LEARNED_RULES` / `MAILMITE_LEARNED_RULES_IOS` | iOS learned-rules JSON (default `~/.mailmite/learned_rules.json`) |
+| `MAILMITE_LEARNED_RULES_ANDROID` | Android learned-rules JSON (default `~/.mailmite/learned_rules_android.json`) |
 | `LLM_PROVIDER` | `openai` · `claude` · `deepseek` · `ollama` · `none` |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
