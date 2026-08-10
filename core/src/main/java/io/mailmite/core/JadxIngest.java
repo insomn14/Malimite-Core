@@ -23,15 +23,25 @@ public final class JadxIngest {
 
     private static final Logger log = LoggerFactory.getLogger(JadxIngest.class);
     private static final Gson GSON = new Gson();
-    private static final Pattern STRING_LIT = Pattern.compile("\"((?:\\\\.|[^\"\\\\])*)\"");
     private static final Pattern PACKAGE = Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;");
-    /** Heuristic method/ctor start for JADX Java output. */
+    /**
+     * Heuristic method start for JADX Java output.
+     * Possessive modifier group ({@code *+}) and bounded param/throws spans avoid
+     * catastrophic backtracking (StackOverflowError) on truncated/synthetic sources.
+     */
     private static final Pattern METHOD_START = Pattern.compile(
-            "(?m)^[ \\t]*(?:(?:public|protected|private|static|final|native|synchronized|abstract|default|strictfp)[ \\t]+)*"
-                    + "(?:<[^>]+>[ \\t]+)?[\\w.<>\\[\\]?]+[ \\t]+([\\w$]+)\\s*\\([^;]*\\)\\s*(?:throws[^{]*)?\\{");
+            "(?m)^[ \\t]*"
+                    + "(?:(?:public|protected|private|static|final|native|synchronized|abstract|default|strictfp)[ \\t]++)*+"
+                    + "(?:<[^>\\n]{1,200}>[ \\t]+)?"
+                    + "[\\w.<>\\[\\]?]+[ \\t]+"
+                    + "([\\w$]+)\\s*\\([^;\\n]{0,2000}\\)\\s*(?:throws[^{\\n]{0,500})?\\{");
     private static final int MAX_STRINGS = 50_000;
     private static final int MAX_FILE_CHARS = 200_000;
+    /** Skip method splitting on large files — regex scan is O(n) and low-value past this. */
+    private static final int MAX_METHOD_SPLIT_CHARS = 80_000;
     private static final int MAX_METHODS_PER_CLASS = 200;
+    /** Cap per-literal scan length — long / unclosed literals used to StackOverflow the regex engine. */
+    private static final int MAX_STRING_LIT_CHARS = 2_000;
 
     private JadxIngest() {}
 
@@ -55,48 +65,30 @@ public final class JadxIngest {
                     .toList();
 
             for (Path javaFile : javaFiles) {
-                String fqcn = toFqcn(sourcesRoot, javaFile);
-                if (AndroidLibraryDefinitions.shouldSkip(fqcn)) {
-                    skipped++;
-                    continue;
-                }
-                String code = Files.readString(javaFile, StandardCharsets.UTF_8);
-                if (code.length() > MAX_FILE_CHARS)
-                    code = code.substring(0, MAX_FILE_CHARS) + "\n/* truncated */\n";
-
-                String classSimple = fqcn.contains(".")
-                        ? fqcn.substring(fqcn.lastIndexOf('.') + 1)
-                        : fqcn;
-
-                List<String> methodNames = new ArrayList<>();
-                methodNames.add("<class>");
-                batch.add(new SqliteStore.DecompilationResult(
-                        "<class>", fqcn, code, executableName, "JADX"));
-
-                for (MethodSlice slice : splitMethods(code)) {
-                    methodNames.add(slice.name());
-                    batch.add(new SqliteStore.DecompilationResult(
-                            slice.name(), fqcn, slice.body(), executableName, "JADX"));
-                }
-                classFns.put(fqcn, methodNames);
-                ingested++;
-
-                Matcher m = STRING_LIT.matcher(code);
-                while (m.find() && stringIdx < MAX_STRINGS) {
-                    String lit = unescape(m.group(1));
-                    if (lit.length() < 4 || lit.length() > 500) continue;
-                    store.insertMachoString(
-                            "jadx:" + stringIdx,
-                            lit,
-                            "__JADX",
-                            classSimple,
-                            executableName);
-                    stringIdx++;
-                }
-
-                if (batch.size() >= 100) {
-                    store.insertFunctionDecompilations(batch);
-                    batch.clear();
+                try {
+                    String fqcn = toFqcn(sourcesRoot, javaFile);
+                    if (AndroidLibraryDefinitions.shouldSkip(fqcn)) {
+                        skipped++;
+                        continue;
+                    }
+                    stringIdx = ingestJavaFile(
+                            javaFile, fqcn, store, executableName,
+                            classFns, batch, stringIdx);
+                    ingested++;
+                    if (batch.size() >= 100) {
+                        store.insertFunctionDecompilations(batch);
+                        batch.clear();
+                    }
+                } catch (StackOverflowError e) {
+                    // Error, not Exception — must not kill the JVM mid-scan.
+                    log.warn("JADX ingest StackOverflowError on {} — skipping file", javaFile.getFileName());
+                } catch (VirtualMachineError e) {
+                    throw e;
+                } catch (Error e) {
+                    log.warn("JADX ingest Error ({}) on {} — skipping file",
+                            e.getClass().getSimpleName(), javaFile.getFileName());
+                } catch (Exception e) {
+                    log.warn("JADX ingest skip {}: {}", javaFile.getFileName(), e.getMessage());
                 }
             }
         }
@@ -113,10 +105,125 @@ public final class JadxIngest {
         log.info("JADX ingest: classes={} skippedLibs={} strings={}", ingested, skipped, stringIdx);
     }
 
+    /**
+     * Ingest one JADX .java file. Returns the updated string index.
+     * String literals are extracted with a linear scanner — never {@code Pattern} —
+     * because {@code "((?:\\\\.|[^\"\\\\])*)"} StackOverflows on truncated / long sources.
+     */
+    private static int ingestJavaFile(
+            Path javaFile,
+            String fqcn,
+            SqliteStore store,
+            String executableName,
+            Map<String, List<String>> classFns,
+            List<SqliteStore.DecompilationResult> batch,
+            int stringIdx) throws IOException {
+
+        String code = Files.readString(javaFile, StandardCharsets.UTF_8);
+        boolean truncated = code.length() > MAX_FILE_CHARS;
+        if (truncated)
+            code = code.substring(0, MAX_FILE_CHARS) + "\n/* truncated */\n";
+
+        String classSimple = fqcn.contains(".")
+                ? fqcn.substring(fqcn.lastIndexOf('.') + 1)
+                : fqcn;
+
+        List<String> methodNames = new ArrayList<>();
+        methodNames.add("<class>");
+        batch.add(new SqliteStore.DecompilationResult(
+                "<class>", fqcn, code, executableName, "JADX"));
+
+        if (!isLowValueGenerated(classSimple) && !truncated
+                && code.length() <= MAX_METHOD_SPLIT_CHARS) {
+            for (MethodSlice slice : splitMethods(code)) {
+                methodNames.add(slice.name());
+                batch.add(new SqliteStore.DecompilationResult(
+                        slice.name(), fqcn, slice.body(), executableName, "JADX"));
+            }
+        }
+        classFns.put(fqcn, methodNames);
+
+        for (String lit : extractStringLiterals(code, MAX_STRINGS - stringIdx)) {
+            if (stringIdx >= MAX_STRINGS) break;
+            store.insertMachoString(
+                    "jadx:" + stringIdx,
+                    lit,
+                    "__JADX",
+                    classSimple,
+                    executableName);
+            stringIdx++;
+        }
+        return stringIdx;
+    }
+
+    /**
+     * Linear Java string-literal extractor (no regex). Skips unclosed / oversized literals.
+     * Returns unescaped contents with length in {@code [4, 500]}.
+     */
+    static List<String> extractStringLiterals(String code, int maxResults) {
+        List<String> out = new ArrayList<>();
+        if (code == null || maxResults <= 0) return out;
+        int n = code.length();
+        for (int i = 0; i < n && out.size() < maxResults; i++) {
+            char c = code.charAt(i);
+            if (c == '"' && !isTextBlockOpen(code, i)) {
+                int start = i + 1;
+                int j = start;
+                boolean closed = false;
+                while (j < n && j - start <= MAX_STRING_LIT_CHARS) {
+                    char ch = code.charAt(j);
+                    if (ch == '\\') {
+                        if (j + 1 >= n) break; // truncated escape
+                        j += 2;
+                        continue;
+                    }
+                    if (ch == '"') {
+                        closed = true;
+                        break;
+                    }
+                    if (ch == '\n' || ch == '\r') break; // unclosed / truncated
+                    j++;
+                }
+                if (closed) {
+                    String raw = code.substring(start, Math.min(j, n));
+                    String lit = unescape(raw);
+                    if (lit.length() >= 4 && lit.length() <= 500)
+                        out.add(lit);
+                    i = j; // continue after closing quote
+                } else {
+                    i = Math.min(j, n) - 1; // skip past abandoned span
+                }
+            }
+        }
+        return out;
+    }
+
+    /** True when {@code code[i]} starts a Java text block {@code """}. */
+    private static boolean isTextBlockOpen(String code, int i) {
+        return i + 2 < code.length()
+                && code.charAt(i + 1) == '"'
+                && code.charAt(i + 2) == '"';
+    }
+
     record MethodSlice(String name, String body) {}
 
-    /** Split JADX Java into method bodies; empty if none detected. */
+    /** Split JADX Java into method bodies; empty if none detected or on regex failure. */
     static List<MethodSlice> splitMethods(String code) {
+        try {
+            return splitMethodsUnsafe(code);
+        } catch (StackOverflowError e) {
+            log.warn("JADX method split StackOverflowError — keeping class body only");
+            return List.of();
+        } catch (VirtualMachineError e) {
+            throw e; // OOM / InternalError — do not continue
+        } catch (Error e) {
+            // One pathological file must not abort the whole ingest.
+            log.warn("JADX method split Error ({}) — keeping class body only", e.getClass().getSimpleName());
+            return List.of();
+        }
+    }
+
+    private static List<MethodSlice> splitMethodsUnsafe(String code) {
         List<MethodSlice> out = new ArrayList<>();
         Matcher m = METHOD_START.matcher(code);
         List<int[]> starts = new ArrayList<>();
@@ -139,6 +246,13 @@ public final class JadxIngest {
             out.add(new MethodSlice(names.get(i), body));
         }
         return out;
+    }
+
+    /** R.java / R$*.java / BuildConfig — huge or low-signal for method-level rules. */
+    static boolean isLowValueGenerated(String classSimple) {
+        return "R".equals(classSimple)
+                || (classSimple != null && classSimple.startsWith("R$"))
+                || "BuildConfig".equals(classSimple);
     }
 
     private static int findMatchingBrace(String code, int openIdx) {

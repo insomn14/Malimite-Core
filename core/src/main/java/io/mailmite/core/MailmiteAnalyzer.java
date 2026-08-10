@@ -80,6 +80,8 @@ public class MailmiteAnalyzer {
             try {
                 int vulnCount = new VulnerabilityScanner().scan(store, execName, PackagePlatform.IOS);
                 log.info("VulnerabilityScanner found {} finding(s)", vulnCount);
+            } catch (StackOverflowError e) {
+                log.error("VulnerabilityScanner StackOverflowError — skipping rule scan");
             } catch (Exception e) {
                 log.warn("VulnerabilityScanner failed — {}", e.getMessage());
             }
@@ -119,7 +121,12 @@ public class MailmiteAnalyzer {
         try (SqliteStore store = new SqliteStore(dbPath.toString())) {
             JadxRunner jadx = new JadxRunner(opts.jadxHome());
             Path sources = jadx.decompile(opts.packagePath(), jadxOut);
-            JadxIngest.ingest(sources, store, execName, manifest, extraction);
+            try {
+                JadxIngest.ingest(sources, store, execName, manifest, extraction);
+            } catch (StackOverflowError e) {
+                // StackOverflowError is an Error — must not abort the whole Android scan.
+                log.error("JadxIngest StackOverflowError — continuing with partial ingest");
+            }
 
             if (arm64Libs.isEmpty()) {
                 if (!extraction.nativeLibs().isEmpty()) {
@@ -165,6 +172,8 @@ public class MailmiteAnalyzer {
             try {
                 int vulnCount = new VulnerabilityScanner().scan(store, execName, PackagePlatform.ANDROID);
                 log.info("VulnerabilityScanner found {} finding(s)", vulnCount);
+            } catch (StackOverflowError e) {
+                log.error("VulnerabilityScanner StackOverflowError — skipping rule scan");
             } catch (Exception e) {
                 log.warn("VulnerabilityScanner failed — {}", e.getMessage());
             }
