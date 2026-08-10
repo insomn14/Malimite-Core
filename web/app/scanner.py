@@ -65,14 +65,17 @@ def get_scan_detail(scan_id: str) -> Optional[ScanDetail]:
     if scan_json:
         detail.bundle_id = scan_json.get("bundleIdentifier")
         detail.bundle_executable = scan_json.get("bundleExecutable")
+        detail.platform = scan_json.get("platform")
         detail.is_swift = scan_json.get("isSwift")
         detail.is_universal = scan_json.get("isUniversal")
         detail.architectures = scan_json.get("architectures", [])
         detail.db_path = scan_json.get("dbPath")
-        detail.ipa_path = scan_json.get("ipaPath")
+        detail.ipa_path = scan_json.get("ipaPath") or scan_json.get("packagePath")
         detail.team_id = scan_json.get("bundleTeamId")
         detail.provisioning_profile = scan_json.get("provisioningProfile")
         detail.provisioning_expiry = scan_json.get("provisioningExpiry")
+        detail.min_sdk = scan_json.get("minSdk")
+        detail.target_sdk = scan_json.get("targetSdk")
 
     d = _scan_dir(scan_id)
     detail.has_sarif = (d / "findings.sarif").exists()
@@ -131,13 +134,15 @@ async def create_scan(
     llm_mode: str,
     llm_model: str,
     llm_api_key: str = "",
+    assessment_enabled: bool = True,
 ) -> ScanMeta:
     settings.scan_dir.mkdir(parents=True, exist_ok=True)
     scan_id = str(uuid.uuid4())
     d = _scan_dir(scan_id)
     d.mkdir(parents=True)
 
-    ipa_path = d / "upload.ipa"
+    ext = ".apk" if filename.lower().endswith(".apk") else ".ipa"
+    ipa_path = d / f"upload{ext}"
     ipa_path.write_bytes(ipa_bytes)
 
     meta = {
@@ -152,6 +157,7 @@ async def create_scan(
         "llm_provider": llm_provider,
         "llm_mode": llm_mode,
         "llm_model": llm_model,
+        "assessment_enabled": assessment_enabled,
         # not exposed in ScanMeta — only used internally by _run
         "_llm_api_key": llm_api_key,
     }
@@ -181,6 +187,10 @@ async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
                 "--llm-mode", meta["llm_mode"]]
         if meta["llm_model"]:
             cmd += ["--llm-model", meta["llm_model"]]
+    # Default CLI assessment=true; omit the flag when enabled so older picocli
+    # jars with inverted --assessment polarity cannot disable the scan.
+    if not meta.get("assessment_enabled", True):
+        cmd += ["--no-assessment"]
 
     env = dict(os.environ)
     # Per-request key takes priority over the .env/settings key

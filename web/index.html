@@ -45,6 +45,7 @@ main{max-width:1100px;margin:0 auto;padding:1.5rem}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.9rem 1.1rem}
 .stat-val{font-size:1.6rem;font-weight:700;line-height:1}
 .stat-label{font-size:.75rem;color:var(--muted);margin-top:.25rem}
+.stat-sub{font-size:.65rem;color:var(--muted);margin-top:.2rem;opacity:.85}
 
 /* upload */
 .drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:3rem;text-align:center;cursor:pointer;transition:all .15s}
@@ -72,6 +73,8 @@ input[type=file]{display:none}
 .badge-medium{background:#fef3c7;color:var(--medium)}
 .badge-low{background:#dbeafe;color:var(--low)}
 .badge-info{background:#f3f4f6;color:var(--info)}
+.badge-ios{background:#e0e7ff;color:#3730a3}
+.badge-android{background:#dcfce7;color:#166534}
 
 /* vulnerability cards */
 .vuln-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:.75rem;overflow:hidden}
@@ -174,7 +177,19 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 /* kv list */
 .kv{display:grid;grid-template-columns:160px 1fr;gap:.35rem .75rem;font-size:.82rem}
 .kv-key{color:var(--muted);font-weight:500}
-.kv-val{font-family:monospace;word-break:break-all}
+.kv-val{font-family:monospace;overflow-wrap:anywhere;word-break:break-word}
+
+/* entry-point lists (summary mini + full tab) */
+.ep-list{list-style:none;margin:0;padding:0}
+.ep-item{display:flex;align-items:baseline;gap:.45rem;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.78rem;line-height:1.45;min-width:0}
+.ep-item:last-child{border-bottom:none}
+.ep-type{flex-shrink:0;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:.1rem .4rem;border-radius:4px;background:var(--bg);color:var(--muted)}
+.ep-type-activity{background:#dbeafe;color:#1e40af}
+.ep-type-service{background:#dcfce7;color:#166534}
+.ep-type-receiver{background:#fef3c7;color:#92400e}
+.ep-type-provider{background:#e0e7ff;color:#3730a3}
+.ep-name{font-weight:600;color:var(--text);flex-shrink:0}
+.ep-class{font-family:monospace;color:var(--muted);overflow-wrap:anywhere;word-break:break-word;min-width:0}
 
 /* loading / empty */
 .loading{text-align:center;padding:3rem;color:var(--muted)}
@@ -193,6 +208,12 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 .llm-row.selected td{background:#eef2ff}
 .llm-row.selected td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 .llm-preview{color:var(--muted);font-size:.75rem;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.th-sort{cursor:pointer;user-select:none;white-space:nowrap}
+.th-sort:hover{color:var(--text)}
+.th-sort .sort-ind{display:inline-block;min-width:0.9em;margin-left:.2rem;font-size:.65rem;color:var(--muted);opacity:0}
+.th-sort:hover .sort-ind{opacity:.45}
+.th-sort.active{color:var(--text)}
+.th-sort.active .sort-ind{opacity:1;color:var(--accent)}
 .llm-drawer-backdrop{position:fixed;inset:0;background:rgba(26,29,35,.28);z-index:200;opacity:0;pointer-events:none;transition:opacity .2s}
 .llm-drawer-backdrop.open{opacity:1;pointer-events:auto}
 .llm-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:-8px 0 24px rgba(0,0,0,.08);z-index:210;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .22s ease;outline:none}
@@ -219,6 +240,25 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 @media(max-width:640px){
   .llm-drawer{width:100vw}
 }
+
+/* learned rules */
+.learned-paths{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.9rem;font-size:.78rem;color:var(--muted)}
+.learned-paths code{font-size:.75rem;word-break:break-all}
+.learned-paths .path-row{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem}
+.learned-summary{margin:0 0 1rem}
+.learned-plat-strip{display:flex;flex-wrap:wrap;gap:1rem;align-items:center;font-size:.8rem;color:var(--muted);margin:.75rem 0 0;padding:.65rem .85rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)}
+.learned-plat-strip .plat-stat{display:inline-flex;align-items:center;gap:.35rem}
+.learned-plat-strip .plat-n{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.regex-cell{max-width:320px}
+.regex-cell .regex-text{display:block;font-family:monospace;font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.regex-cell.expanded .regex-text{white-space:pre-wrap;word-break:break-all;overflow:visible;text-overflow:unset}
+.affected-list{display:flex;flex-direction:column;gap:.45rem}
+.affected-item{font-size:.8rem;padding:.45rem .6rem;background:var(--bg);border:1px solid var(--border);border-radius:6px}
+.affected-item .aff-name{font-family:monospace;font-weight:600;word-break:break-all}
+.affected-item .aff-meta{font-size:.72rem;color:var(--muted);margin-top:.15rem;word-break:break-all}
+.vuln-loc-count{font-size:.72rem;font-weight:600;color:var(--muted);background:var(--bg);padding:.1rem .45rem;border-radius:4px;white-space:nowrap}
+.regex-cell .regex-toggle{display:none;margin-top:.2rem;font-size:.68rem;font-weight:600;color:var(--accent);cursor:pointer;background:none;border:0;padding:0}
+.regex-cell.long .regex-toggle{display:inline}
 </style>
 </head>
 <body>
@@ -354,17 +394,31 @@ function escAttr(s='') {
 }
 function num(n) { return n==null?'—':n.toLocaleString(); }
 
+/** True for blank or LLM filler like "...", "…", "1. ...\n2. ...". */
+function isEmptyField(s) {
+  if (s == null) return true;
+  const t = String(s).trim();
+  if (!t) return true;
+  if (/^[.\u2026\s]+$/.test(t)) return true;
+  if (/^(todo|tbd|n\/a|none|placeholder)$/i.test(t)) return true;
+  if (/^(\d+\.\s*[.\u2026]+\s*)+$/s.test(t)) return true;
+  return false;
+}
+function fieldOr(s, fallback) {
+  return isEmptyField(s) ? fallback : s;
+}
+
 /* ── home view ── */
 route('home', async function() {
   render(`
   <div style="max-width:680px;margin:0 auto">
     <div class="card" style="margin-bottom:1rem">
-      <div class="card-title">Upload IPA</div>
+      <div class="card-title">Upload package</div>
       <div class="drop-zone" id="drop">
         <div style="font-size:2rem">📦</div>
-        <p><strong>Drag &amp; drop .ipa here</strong></p>
-        <p>Ghidra decompiles, Mailmite finds the sketchy bits.</p>
-        <label class="drop-file-btn">Browse file<input type="file" id="ipa-file" accept=".ipa"/></label>
+        <p><strong>Drag &amp; drop .ipa or .apk here</strong></p>
+        <p>iOS via Ghidra · Android via JADX (+ Ghidra for native .so) · Mailmite finds the sketchy bits.</p>
+        <label class="drop-file-btn">Browse file<input type="file" id="ipa-file" accept=".ipa,.apk"/></label>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-top:1rem;font-size:.8rem">
         <label style="display:flex;flex-direction:column;gap:.3rem">
@@ -378,7 +432,7 @@ route('home', async function() {
           </select>
         </label>
         <label style="display:flex;flex-direction:column;gap:.3rem">
-          Mode
+          LLM Mode
           <select id="llm-mode">
             <option value="summarize">Summarize</option>
             <option value="find_vulns">Find Vulns</option>
@@ -405,6 +459,10 @@ route('home', async function() {
           <span style="color:var(--muted);font-size:.72rem">Sent only to this server to authenticate with the LLM provider. Never stored.</span>
         </label>
       </div>
+      <label style="display:flex;align-items:center;gap:.5rem;margin-top:.85rem;font-size:.8rem;cursor:pointer">
+        <input type="checkbox" id="assessment-enabled" checked/>
+        <span><strong>Security Assessment</strong> — inventory controls (obfuscation, pinning, root/Frida detection, FLAG_SECURE, …). Independent of LLM.</span>
+      </label>
       <progress id="upload-bar" value="0" max="100" hidden></progress>
     </div>
 
@@ -426,7 +484,8 @@ route('home', async function() {
 
   async function doUpload(file) {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.ipa')) { alert('Only .ipa files accepted'); return; }
+    const n = file.name.toLowerCase();
+    if (!n.endsWith('.ipa') && !n.endsWith('.apk')) { alert('Only .ipa or .apk files accepted'); return; }
 
     // Validate: API key required when provider needs one
     const provider = $('#llm-provider').value;
@@ -449,6 +508,7 @@ route('home', async function() {
     fd.append('llm_model', ($('#llm-model-select') && !$('#llm-model-select').hidden)
       ? $('#llm-model-select').value : $('#llm-model').value);
     fd.append('llm_api_key', apiKeyVal);
+    fd.append('assessment_enabled', $('#assessment-enabled')?.checked !== false);
 
     const bar = $('#upload-bar');
     bar.hidden = false; bar.value = 0;
@@ -523,64 +583,310 @@ window.deleteScan = async function(id, ev) {
 };
 
 /* ── learned rules view ── */
-route('learned', async function() {
-  render('<div class="loading"><div class="spinner"></div></div>');
-  try {
-    const data = await api('/learned-rules');
-    if (!data.count) {
-      render(`
-        <div class="card">
-          <div class="card-title">Learned Rules</div>
-          <p style="color:var(--muted);font-size:.875rem">
-            No learned rules yet. Run a scan with <strong>LLM enrichment</strong> in
-            <em>Find Vulns</em> mode — vulnerabilities the LLM discovers will be
-            distilled into reusable detection rules and stored at
-            <code>${esc(data.path)}</code>.
-          </p>
-          <p style="margin-top:.5rem;font-size:.875rem">
-            Once stored, every subsequent scan (even without LLM) will check
-            for these patterns alongside the built-in MSTG rules.
-          </p>
-        </div>`);
-      return;
-    }
-    const rows = data.rules.map(r => `
-      <tr>
-        <td class="mono">${esc(r.id||'')}</td>
-        <td>${esc(r.scope||'')}</td>
-        <td>${esc(r.title||'')}</td>
-        <td>${badgeSev(r.severity)}</td>
-        <td>${(r.cvssScore||0).toFixed(1)}</td>
-        <td class="mono truncate" style="max-width:300px" title="${esc(r.regex||'')}">${esc(r.regex||'')}</td>
-        <td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ''}</td>
-      </tr>`).join('');
-    render(`
-      <div class="card">
-        <div class="card-title" style="justify-content:space-between">
-          Learned Rules
-          <span style="font-size:.75rem;color:var(--muted);font-weight:400">${data.count} rule(s) · ${esc(data.path)}</span>
-        </div>
-        <p style="font-size:.85rem;color:var(--muted);margin-bottom:.75rem">
-          These rules were auto-generated by the LLM from previous scans.
-          They run on every scan, even ones without LLM enrichment.
-        </p>
-        <div class="tbl-wrap"><table>
-          <thead><tr><th>Rule ID</th><th>Scope</th><th>Title</th><th>Severity</th><th>CVSS</th><th>Regex</th><th>Created</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table></div>
-      </div>`);
-  } catch(e) {
-    render(`<div class="alert alert-error">${esc(e.message)}</div>`);
-  }
-});
+let _learnedCache = null;
+let _learnedPlat = 'ALL';
+/** @type {{key:string, dir:'asc'|'desc'}} */
+let _learnedSort = {key: 'severity', dir: 'desc'};
+
+const SEV_RANK = { CRITICAL: 5, HIGH: 4, MEDIUM: 3, LOW: 2, INFO: 1 };
 
 function badgeSev(sev) {
   const cls = (sev||'INFO').toLowerCase();
   return `<span class="badge badge-${cls}">${esc(sev||'INFO')}</span>`;
 }
 
+function badgePlatform(plat) {
+  const p = String(plat||'IOS').toUpperCase();
+  const cls = p === 'ANDROID' ? 'android' : 'ios';
+  const label = p === 'ANDROID' ? 'Android' : 'iOS';
+  return `<span class="badge badge-${cls}">${label}</span>`;
+}
+
+function renderRegexCell(regex) {
+  const raw = regex || '';
+  const long = raw.length > 64;
+  return `<td class="regex-cell${long?' long':''}" title="${escAttr(raw)}">
+    <span class="regex-text" onclick="toggleRegex(this)">${esc(raw)}</span>
+    ${long?`<button type="button" class="regex-toggle" onclick="toggleRegex(this)">Show more</button>`:''}
+  </td>`;
+}
+
+window.toggleRegex = function(el) {
+  const cell = el.closest('.regex-cell');
+  if (!cell) return;
+  const open = cell.classList.toggle('expanded');
+  const btn = cell.querySelector('.regex-toggle');
+  if (btn) btn.textContent = open ? 'Show less' : 'Show more';
+};
+
+function learnedStoreMeta(stores, plat) {
+  return (stores || []).find(s => s.platform === plat) || {platform: plat, path: '', exists: false, count: 0};
+}
+
+function learnedRuleSearchText(r) {
+  return [r.id, r.scope, r.title, r.category, r.severity, r.platform, r.regex]
+    .map(x => String(x||'').toLowerCase()).join(' ');
+}
+
+function learnedSortValue(r, key) {
+  switch (key) {
+    case 'platform': return String(r.platform||'IOS').toUpperCase();
+    case 'id': return String(r.id||'').toLowerCase();
+    case 'scope': return String(r.scope||'').toLowerCase();
+    case 'title': return String(r.title||'').toLowerCase();
+    case 'severity': return SEV_RANK[String(r.severity||'INFO').toUpperCase()] || 0;
+    case 'cvss': return Number(r.cvssScore||0);
+    case 'regex': return String(r.regex||'').toLowerCase();
+    case 'created': return r.createdAt ? new Date(r.createdAt).getTime() : 0;
+    default: return '';
+  }
+}
+
+function sortedLearnedRules() {
+  const rules = (_learnedCache && _learnedCache.rules) ? _learnedCache.rules.slice() : [];
+  const {key, dir} = _learnedSort;
+  const mul = dir === 'asc' ? 1 : -1;
+  rules.sort((a, b) => {
+    const va = learnedSortValue(a, key);
+    const vb = learnedSortValue(b, key);
+    let cmp = 0;
+    if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+    else cmp = String(va).localeCompare(String(vb), undefined, {sensitivity:'base'});
+    if (cmp !== 0) return cmp * mul;
+    return String(a.id||'').localeCompare(String(b.id||''), undefined, {sensitivity:'base'});
+  });
+  return rules;
+}
+
+function learnedSortHeaderHtml(key, label) {
+  const active = _learnedSort.key === key;
+  const ind = active ? (_learnedSort.dir === 'asc' ? '▲' : '▼') : '▼';
+  return `<th class="th-sort${active?' active':''}" data-sort="${key}"
+      onclick="sortLearnedColumn('${key}')"
+      title="Sort by ${label}">${label}<span class="sort-ind" aria-hidden="true">${ind}</span></th>`;
+}
+
+function renderLearnedThead() {
+  return `<tr>
+    ${learnedSortHeaderHtml('platform','Platform')}
+    ${learnedSortHeaderHtml('id','Rule ID')}
+    ${learnedSortHeaderHtml('scope','Scope')}
+    ${learnedSortHeaderHtml('title','Title')}
+    ${learnedSortHeaderHtml('severity','Severity')}
+    ${learnedSortHeaderHtml('cvss','CVSS')}
+    ${learnedSortHeaderHtml('regex','Regex')}
+    ${learnedSortHeaderHtml('created','Created')}
+  </tr>`;
+}
+
+function renderLearnedRows() {
+  return sortedLearnedRules().map(r => {
+    const plat = String(r.platform||'IOS').toUpperCase();
+    return `<tr data-search="${escAttr(learnedRuleSearchText(r))}" data-platform="${escAttr(plat)}"
+        data-severity="${escAttr(String(r.severity||'INFO').toUpperCase())}">
+      <td>${badgePlatform(plat)}</td>
+      <td class="mono">${esc(r.id||'')}</td>
+      <td>${esc(r.scope||'')}</td>
+      <td>${esc(r.title||'')}</td>
+      <td>${badgeSev(r.severity)}</td>
+      <td>${(r.cvssScore||0).toFixed(1)}</td>
+      ${renderRegexCell(r.regex)}
+      <td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateLearnedSummary() {
+  const plat = _learnedPlat || 'ALL';
+  const q = (document.getElementById('learned-q')?.value || '').trim().toLowerCase();
+  const sevCounts = { CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0, INFO:0 };
+  const platCounts = { IOS:0, ANDROID:0 };
+  let shown = 0;
+  (sortedLearnedRules()).forEach(r => {
+    const p = String(r.platform||'IOS').toUpperCase();
+    const matchP = plat === 'ALL' || p === plat;
+    const matchQ = !q || learnedRuleSearchText(r).includes(q);
+    if (!matchP || !matchQ) return;
+    shown++;
+    const sev = String(r.severity||'INFO').toUpperCase();
+    if (sev in sevCounts) sevCounts[sev]++;
+    else sevCounts.INFO++;
+    if (p === 'ANDROID') platCounts.ANDROID++;
+    else platCounts.IOS++;
+  });
+
+  const setStat = (id, n) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(n);
+  };
+  setStat('learned-sev-critical', sevCounts.CRITICAL);
+  setStat('learned-sev-high', sevCounts.HIGH);
+  setStat('learned-sev-medium', sevCounts.MEDIUM);
+  setStat('learned-sev-low', sevCounts.LOW);
+
+  const strip = document.getElementById('learned-plat-strip');
+  if (strip) {
+    strip.innerHTML = `
+      <span class="plat-stat">${badgePlatform('IOS')} <span class="plat-n">${platCounts.IOS}</span> rule(s)</span>
+      <span class="plat-stat">${badgePlatform('ANDROID')} <span class="plat-n">${platCounts.ANDROID}</span> rule(s)</span>
+      <span class="plat-stat">Visible <span class="plat-n">${shown}</span></span>
+      ${sevCounts.INFO ? `<span class="plat-stat">Info <span class="plat-n">${sevCounts.INFO}</span></span>` : ''}`;
+  }
+  return shown;
+}
+
+function applyLearnedFilters() {
+  const plat = _learnedPlat || 'ALL';
+  const q = (document.getElementById('learned-q')?.value || '').trim().toLowerCase();
+  const rows = document.querySelectorAll('#learned-tbody tr');
+  let shown = 0;
+  rows.forEach(tr => {
+    const matchP = plat === 'ALL' || tr.dataset.platform === plat;
+    const matchQ = !q || (tr.dataset.search || '').includes(q);
+    const ok = matchP && matchQ;
+    tr.style.display = ok ? '' : 'none';
+    if (ok) shown++;
+  });
+  updateLearnedSummary();
+  const countEl = document.getElementById('learned-shown');
+  if (countEl) countEl.textContent = shown + ' shown';
+  const emptyEl = document.getElementById('learned-empty');
+  if (emptyEl) {
+    if (!shown) {
+      emptyEl.hidden = false;
+      if (q) emptyEl.textContent = 'No rules match this filter.';
+      else if (plat === 'ANDROID') emptyEl.textContent = 'No Android learned rules yet. Run an APK scan with LLM enrichment in Find Vulns mode.';
+      else if (plat === 'IOS') emptyEl.textContent = 'No iOS learned rules yet. Run an IPA scan with LLM enrichment in Find Vulns mode.';
+      else emptyEl.textContent = 'No learned rules yet.';
+    } else {
+      emptyEl.hidden = true;
+    }
+    const wrap = document.getElementById('learned-tbl-wrap');
+    if (wrap) wrap.hidden = !shown;
+  }
+  document.querySelectorAll('#learned-tabs .tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.plat === plat);
+  });
+}
+
+function refreshLearnedTable() {
+  const tbody = document.getElementById('learned-tbody');
+  const thead = document.getElementById('learned-thead');
+  if (!tbody) return;
+  tbody.innerHTML = renderLearnedRows();
+  if (thead) thead.innerHTML = renderLearnedThead();
+  applyLearnedFilters();
+}
+
+window.sortLearnedColumn = function(key) {
+  if (_learnedSort.key === key) {
+    _learnedSort.dir = _learnedSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _learnedSort.key = key;
+    _learnedSort.dir = (key === 'severity' || key === 'cvss' || key === 'created') ? 'desc' : 'asc';
+  }
+  refreshLearnedTable();
+};
+
+function renderLearnedTable(data, platFilter) {
+  const ios = learnedStoreMeta(data.stores, 'IOS');
+  const and = learnedStoreMeta(data.stores, 'ANDROID');
+  const totalAll = (data.stores||[]).reduce((n,s)=>n+(s.count||0), 0);
+  const tabCount = (p) => p === 'ALL' ? totalAll
+    : (learnedStoreMeta(data.stores, p).count || 0);
+
+  const tabs = ['ALL','IOS','ANDROID'].map(p => {
+    const label = p === 'ALL' ? 'All' : (p === 'ANDROID' ? 'Android' : 'iOS');
+    return `<div class="tab${platFilter===p?' active':''}" data-plat="${p}" onclick="setLearnedPlat('${p}')">${label} (${tabCount(p)})</div>`;
+  }).join('');
+
+  const pathsHtml = `
+    <div class="learned-paths">
+      <div class="path-row">${badgePlatform('IOS')}
+        <code>${esc(ios.path||'')}</code>
+        <span>· ${ios.exists ? ios.count+' rule(s)' : 'file not found'}</span>
+      </div>
+      <div class="path-row">${badgePlatform('ANDROID')}
+        <code>${esc(and.path||'')}</code>
+        <span>· ${and.exists ? and.count+' rule(s)' : 'file not found'}</span>
+      </div>
+    </div>`;
+
+  if (!totalAll) {
+    return `
+      <div class="card">
+        <div class="card-title">Learned Rules</div>
+        <p style="color:var(--muted);font-size:.875rem;margin-bottom:.75rem">
+          No learned rules yet. Run a scan with <strong>LLM enrichment</strong> in
+          <em>Find Vulns</em> mode — vulnerabilities the LLM discovers will be
+          distilled into reusable detection rules, stored separately per platform.
+        </p>
+        ${pathsHtml}
+        <p style="font-size:.875rem;color:var(--muted)">
+          Once stored, every subsequent scan (even without LLM) will check
+          for these patterns alongside the built-in MSTG/MASTG rules.
+        </p>
+      </div>`;
+  }
+
+  return `
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        Learned Rules
+        <span style="font-size:.75rem;color:var(--muted);font-weight:400">${totalAll} rule(s) across platforms</span>
+      </div>
+      <p style="font-size:.85rem;color:var(--muted);margin-bottom:.75rem">
+        These rules were auto-generated by the LLM from previous scans.
+        They run on every scan for the matching platform, even without LLM enrichment.
+      </p>
+      ${pathsHtml}
+      <div class="tabs" id="learned-tabs" style="margin-bottom:.9rem">${tabs}</div>
+      <div class="search-bar">
+        <input id="learned-q" type="text" placeholder="Filter by scope, title, ID, severity…" oninput="filterLearned()"/>
+      </div>
+      <div class="learned-summary" id="learned-summary">
+        <div class="grid-4">
+          <div class="stat"><div class="stat-val" style="color:var(--high)" id="learned-sev-critical">0</div><div class="stat-label">Critical</div></div>
+          <div class="stat"><div class="stat-val" style="color:var(--medium)" id="learned-sev-high">0</div><div class="stat-label">High</div></div>
+          <div class="stat"><div class="stat-val" style="color:var(--yellow)" id="learned-sev-medium">0</div><div class="stat-label">Medium</div></div>
+          <div class="stat"><div class="stat-val" style="color:var(--low)" id="learned-sev-low">0</div><div class="stat-label">Low</div></div>
+        </div>
+        <div class="learned-plat-strip" id="learned-plat-strip"></div>
+      </div>
+      <div id="learned-empty" class="empty" hidden></div>
+      <div class="tbl-wrap" id="learned-tbl-wrap"><table>
+        <thead id="learned-thead">${renderLearnedThead()}</thead>
+        <tbody id="learned-tbody">${renderLearnedRows()}</tbody>
+      </table></div>
+      <div style="margin-top:.6rem;font-size:.75rem;color:var(--muted)" id="learned-shown"></div>
+    </div>`;
+}
+
+window.setLearnedPlat = function(plat) {
+  _learnedPlat = plat || 'ALL';
+  applyLearnedFilters();
+};
+
+window.filterLearned = function() {
+  applyLearnedFilters();
+};
+
+route('learned', async function() {
+  render('<div class="loading"><div class="spinner"></div></div>');
+  try {
+    const data = await api('/learned-rules');
+    _learnedCache = data;
+    if (!_learnedPlat) _learnedPlat = 'ALL';
+    render(renderLearnedTable(data, _learnedPlat));
+    applyLearnedFilters();
+  } catch(e) {
+    render(`<div class="alert alert-error">${esc(e.message)}</div>`);
+  }
+});
+
+
 /* ── scan detail view ── */
-const TABS = ['summary','vulnerabilities','functions','strings','resources','entrypoints','llm','log','downloads'];
+const TABS = ['summary','vulnerabilities','assessment','functions','strings','resources','entrypoints','llm','log','downloads'];
 
 route('scan', async function(id, tab='summary') {
   render('<div class="loading"><div class="spinner"></div></div>');
@@ -638,6 +944,7 @@ async function renderTab(id, tab, detail) {
     switch(tab) {
       case 'summary':         el.innerHTML = await tabSummary(detail); break;
       case 'vulnerabilities': await tabVulnerabilities(el, id, detail); break;
+      case 'assessment':      await tabAssessment(el, id, detail); break;
       case 'functions':       await tabFunctions(el, id, detail); break;
       case 'strings':     await tabStrings(el, id, detail); break;
       case 'resources':   await tabResources(el, id); break;
@@ -704,7 +1011,7 @@ function extractErrorReason(log) {
       hint: 'Check [ghidra-output] for progress. After CONNECTED, payload transfer is not limited by this deadline — exclude noisy libraries via CoreConfig if decompile itself is too slow.',
     },
     {
-      re: /Only \.ipa files|wrong extension|not a valid IPA/i,
+      re: /Only \.ipa(?: or \.apk)? files|wrong extension|not a valid IPA|not an APK/i,
       reason: 'Uploaded file failed IPA validation.',
       hint: 'Make sure the file is a real `.ipa` (not a renamed .zip) and has at least one .app bundle inside.',
     },
@@ -785,25 +1092,37 @@ async function tabSummary(d) {
       <div class="stat" style="cursor:pointer" onclick="goTab('${d.scan_id}','vulnerabilities')">
         <div class="stat-val" style="color:${(d.vulnerability_counts?.total||0)>0?'var(--high)':'var(--text)'}">${num(d.vulnerability_counts?.total)}</div>
         <div class="stat-label">Vulnerabilities ${d.vulnerability_counts?.CRITICAL?'<span class="badge badge-critical" style="margin-left:.3rem">'+d.vulnerability_counts.CRITICAL+' CRIT</span>':''}</div>
+        ${(d.vulnerability_counts?.occurrences||0) > (d.vulnerability_counts?.total||0)
+          ? `<div class="stat-sub">${num(d.vulnerability_counts.occurrences)} occurrences</div>` : ''}
       </div>
     </div>
     <div class="grid-2">
       <div class="card">
         <div class="card-title">Bundle</div>
         <div class="kv">
+          <span class="kv-key">Platform</span><span class="kv-val">${esc(d.platform||'IOS')}</span>
           <span class="kv-key">Identifier</span><span class="kv-val">${esc(d.bundle_id||'—')}</span>
           <span class="kv-key">Executable</span><span class="kv-val">${esc(d.bundle_executable||'—')}</span>
+          ${d.platform==='ANDROID' ? `
+          <span class="kv-key">Min / Target SDK</span><span class="kv-val">${esc(d.min_sdk??'—')} / ${esc(d.target_sdk??'—')}</span>
+          ` : `
           <span class="kv-key">Swift</span><span class="kv-val">${d.is_swift?'Yes':'No'}</span>
           <span class="kv-key">Universal</span><span class="kv-val">${d.is_universal?'Yes':'No'}</span>
           <span class="kv-key">Architectures</span><span class="kv-val">${esc(archs)}</span>
+          `}
         </div>
       </div>
       <div class="card">
-        <div class="card-title">Signing</div>
+        <div class="card-title">${d.platform==='ANDROID' ? 'Android' : 'Signing'}</div>
         <div class="kv">
+          ${d.platform==='ANDROID' ? `
+          <span class="kv-key">Package</span><span class="kv-val">${esc(d.bundle_id||'—')}</span>
+          <span class="kv-key">Decompiler</span><span class="kv-val">JADX</span>
+          ` : `
           <span class="kv-key">Team ID</span><span class="kv-val">${esc(d.team_id||'—')}</span>
           <span class="kv-key">Profile</span><span class="kv-val">${esc(d.provisioning_profile||'—')}</span>
           <span class="kv-key">Expiry</span><span class="kv-val">${esc(d.provisioning_expiry||'—')}</span>
+          `}
         </div>
       </div>
       <div class="card">
@@ -825,13 +1144,35 @@ async function tabSummary(d) {
 
 // Populate entry points in summary after render
 document.addEventListener('DOMContentLoaded', ()=>{});
+
+/** Parse Android "name.type:class" entry points; leave other formats as raw. */
+function parseEntryPoint(raw) {
+  const s = String(raw || '');
+  const m = s.match(/^([^.:]+)\.([a-zA-Z]+):(.+)$/);
+  if (!m) return { raw: s, name: s, type: '', cls: '', short: s };
+  const cls = m[3];
+  const short = cls.includes('.') ? cls.split('.').pop() : cls;
+  return { raw: s, name: m[1], type: m[2].toLowerCase(), cls, short };
+}
+
+function renderEntryPointItem(raw) {
+  const ep = parseEntryPoint(raw);
+  if (!ep.type) {
+    return `<li class="ep-item" title="${esc(ep.raw)}"><span class="ep-class">${esc(ep.raw)}</span></li>`;
+  }
+  return `<li class="ep-item" title="${esc(ep.raw)}">
+    <span class="ep-type ep-type-${esc(ep.type)}">${esc(ep.type)}</span>
+    <span class="ep-name">${esc(ep.name)}</span>
+    <span class="ep-class">${esc(ep.short)}</span>
+  </li>`;
+}
+
 function postSummaryHydrate(id) {
   const el = document.getElementById('ep-mini');
   if (!el) return;
   api('/scans/'+id+'/entrypoints').then(eps=>{
     if (!eps.length) { el.innerHTML='<div class="empty" style="padding:.5rem">None detected.</div>'; return; }
-    el.innerHTML = '<ul style="list-style:none;font-size:.78rem;font-family:monospace;line-height:1.7">'+
-      eps.map(e=>`<li>${esc(e)}</li>`).join('')+'</ul>';
+    el.innerHTML = '<ul class="ep-list">'+eps.map(renderEntryPointItem).join('')+'</ul>';
   }).catch(()=>{ el.innerHTML='<span class="muted">—</span>'; });
 }
 
@@ -977,13 +1318,145 @@ async function tabEntryPoints(el, id, detail) {
     if (!eps.length) { el.innerHTML='<div class="empty">No entry points detected.</div>'; return; }
     el.innerHTML = `<div class="card">
       <div class="card-title">Detected Entry Points (${eps.length})</div>
-      <ul style="list-style:none">${eps.map(e=>`
-        <li style="padding:.4rem 0;border-bottom:1px solid var(--border);font-family:monospace;font-size:.82rem">${esc(e)}</li>`).join('')}
-      </ul></div>`;
+      <ul class="ep-list" style="font-size:.82rem">${eps.map(renderEntryPointItem).join('')}</ul>
+    </div>`;
   } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
 }
 
+/* ── assessment tab (security controls inventory) ── */
+async function tabAssessment(el, id, detail) {
+  if (detail.state !== 'done') {
+    el.innerHTML = `<div class="alert alert-warn">Scan not complete — assessment appears when analysis finishes.</div>`;
+    return;
+  }
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const rows = await api('/scans/'+id+'/assessments');
+    if (!rows.length) {
+      el.innerHTML = `<div class="card"><div class="card-title">No assessment data</div>
+        <p style="color:var(--muted);font-size:.85rem">Security Assessment was disabled for this scan, or the database predates Assessment mode. Re-scan with the Assessment checkbox enabled.</p></div>`;
+      return;
+    }
+    const counts = { PRESENT: 0, PARTIAL: 0, ABSENT: 0, UNKNOWN: 0 };
+    for (const r of rows) {
+      const s = String(r.status || 'UNKNOWN').toUpperCase();
+      if (s in counts) counts[s]++; else counts.UNKNOWN++;
+    }
+    const byCat = {};
+    for (const r of rows) {
+      const c = r.category || 'OTHER';
+      (byCat[c] ||= []).push(r);
+    }
+    const statusBadge = s => {
+      const u = String(s||'UNKNOWN').toUpperCase();
+      const cls = u === 'PRESENT' ? 'sev-info' : u === 'PARTIAL' ? 'sev-medium' : u === 'ABSENT' ? 'sev-high' : 'sev-info';
+      const bg = u === 'PRESENT' ? '#dcfce7;color:#16a34a' : u === 'PARTIAL' ? '#fef3c7;color:#d97706'
+        : u === 'ABSENT' ? '#fee2e2;color:#dc2626' : '#f3f4f6;color:#6b7280';
+      return `<span class="badge" style="background:${bg.split(';')[0]};${bg.includes('color')?bg.split(';').slice(1).join(';'):''}">${esc(u)}</span>`;
+    };
+    el.innerHTML = `
+      <div class="sev-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-bottom:1rem">
+        <div class="stat"><div class="stat-n" style="color:#16a34a">${counts.PRESENT}</div><div class="stat-l">Present</div></div>
+        <div class="stat"><div class="stat-n" style="color:#d97706">${counts.PARTIAL}</div><div class="stat-l">Partial</div></div>
+        <div class="stat"><div class="stat-n" style="color:#dc2626">${counts.ABSENT}</div><div class="stat-l">Absent</div></div>
+        <div class="stat"><div class="stat-n" style="color:#6b7280">${counts.UNKNOWN}</div><div class="stat-l">Unknown</div></div>
+      </div>
+      <p style="color:var(--muted);font-size:.8rem;margin-bottom:1rem">Static best-effort inventory of implemented protections. Not counted in vulnerability severity totals.</p>
+      ${Object.keys(byCat).sort().map(cat => `
+        <div class="card" style="margin-bottom:.75rem">
+          <div class="card-title">${esc(cat)} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${byCat[cat].length}</span></div>
+          ${byCat[cat].map(a => `
+            <div style="display:flex;gap:.75rem;padding:.65rem 0;border-bottom:1px solid var(--border);align-items:flex-start">
+              ${statusBadge(a.status)}
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600">${esc(a.title||'')}</div>
+                ${a.detail ? `<div style="font-size:.78rem;color:var(--muted);margin-top:.15rem">${esc(a.detail)}</div>` : ''}
+                ${a.evidence ? `<div style="font-size:.72rem;font-family:monospace;color:var(--muted);margin-top:.25rem;word-break:break-word">${esc(a.evidence)}</div>` : ''}
+                <div style="font-size:.72rem;color:var(--muted);margin-top:.2rem"><code>${esc(a.control_id||'')}</code> · ${esc(a.confidence||'')}</div>
+              </div>
+            </div>`).join('')}
+        </div>`).join('')}`;
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+  }
+}
+
 /* ── vulnerabilities tab ── */
+/** Group raw vulnerability rows by rule_id (same issue, many assets). */
+function groupFindingsByRule(findings) {
+  const STATUS_PREF = { open: 0, accepted_risk: 1, fixed: 2, false_positive: 3 };
+  const map = new Map();
+  for (const f of findings) {
+    const key = f.rule_id || `__id_${f.id}`;
+    let g = map.get(key);
+    if (!g) {
+      g = { rule_id: f.rule_id, occurrences: [], representative: f };
+      map.set(key, g);
+    }
+    g.occurrences.push(f);
+    const cur = g.representative;
+    const stA = STATUS_PREF[(f.status || 'open').toLowerCase()] ?? 9;
+    const stB = STATUS_PREF[(cur.status || 'open').toLowerCase()] ?? 9;
+    const sevA = SEV_RANK[String(f.effective_severity || f.severity || 'INFO').toUpperCase()] || 0;
+    const sevB = SEV_RANK[String(cur.effective_severity || cur.severity || 'INFO').toUpperCase()] || 0;
+    // Prefer open/active for triage; then higher severity; then lower id (stable).
+    if (stA < stB || (stA === stB && (sevA > sevB || (sevA === sevB && (f.id||0) < (cur.id||0))))) {
+      g.representative = f;
+    }
+  }
+  return [...map.values()];
+}
+
+function assetDedupeKey(f) {
+  return [
+    String(f.affected_type||'').trim().toLowerCase(),
+    String(f.affected_name||'').trim().toLowerCase(),
+    String(f.evidence_location||'').trim().toLowerCase(),
+  ].join('\0');
+}
+
+function uniqueAffectedAssets(occurrences) {
+  const seen = new Set();
+  const out = [];
+  for (const f of occurrences) {
+    const k = assetDedupeKey(f);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(f);
+  }
+  return out;
+}
+
+function countUniqueIssueSeverities(groups) {
+  const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 };
+  for (const g of groups) {
+    const st = (g.representative.status || 'open').toLowerCase();
+    // Unique open/active issues (exclude FP + fixed from summary cards)
+    if (st === 'false_positive' || st === 'fixed') continue;
+    const sev = String(g.representative.effective_severity || g.representative.severity || 'INFO').toUpperCase();
+    if (sev in counts) counts[sev]++;
+    else counts.INFO++;
+  }
+  return counts;
+}
+
+function renderAffectedAssetsList(assets) {
+  if (!assets.length) {
+    return `<div class="kv">
+      <span class="kv-key">Type</span><span class="kv-val">—</span>
+      <span class="kv-key">Name</span><span class="kv-val">—</span>
+      <span class="kv-key">Location</span><span class="kv-val">—</span>
+    </div>`;
+  }
+  return `<div class="affected-list">${assets.map(a => `
+    <div class="affected-item">
+      <div class="aff-name">${esc(a.affected_name || '—')}</div>
+      <div class="aff-meta">
+        ${esc(a.affected_type || 'asset')}${a.evidence_location ? ' · ' + esc(a.evidence_location) : ''}
+      </div>
+    </div>`).join('')}</div>`;
+}
+
 async function tabVulnerabilities(el, id, detail) {
   if (detail.state !== 'done') {
     el.innerHTML = `<div class="alert alert-warn">Scan not complete — vulnerabilities will appear when analysis finishes.</div>`;
@@ -998,17 +1471,23 @@ async function tabVulnerabilities(el, id, detail) {
       return;
     }
 
-    const counts = (detail.vulnerability_counts || {});
+    const groups = groupFindingsByRule(findings);
+    const counts = countUniqueIssueSeverities(groups);
     const totals = `
       <div class="grid-4" style="margin-bottom:1rem">
         <div class="stat"><div class="stat-val" style="color:var(--high)">${counts.CRITICAL||0}</div><div class="stat-label">Critical</div></div>
         <div class="stat"><div class="stat-val" style="color:var(--medium)">${counts.HIGH||0}</div><div class="stat-label">High</div></div>
         <div class="stat"><div class="stat-val" style="color:var(--yellow)">${counts.MEDIUM||0}</div><div class="stat-label">Medium</div></div>
         <div class="stat"><div class="stat-val" style="color:var(--low)">${counts.LOW||0}</div><div class="stat-label">Low</div></div>
-      </div>`;
+      </div>
+      <p style="font-size:.75rem;color:var(--muted);margin:-.35rem 0 1rem">
+        ${groups.length} unique issue${groups.length===1?'':'s'}
+        · ${findings.length} occurrence${findings.length===1?'':'s'}
+        · summary counts unique open/active issues
+      </p>`;
 
     // Filter bar (severity + status + free-text search)
-    const fpCount = findings.filter(f => f.status === 'false_positive').length;
+    const fpCount = groups.filter(g => (g.representative.status || '') === 'false_positive').length;
     const filter = `
       <div class="search-bar">
         <input id="vuln-q" type="text" placeholder="Filter by ID, title, category, severity, status…"/>
@@ -1029,11 +1508,11 @@ async function tabVulnerabilities(el, id, detail) {
         </select>
       </div>
       ${fpCount ? `<div class="alert alert-info" style="margin-bottom:.75rem">
-         <strong>${fpCount}</strong> finding${fpCount===1?'':'s'} marked as <em>false positive</em> &mdash;
+         <strong>${fpCount}</strong> unique issue${fpCount===1?'':'s'} marked as <em>false positive</em> &mdash;
          shown here with a dimmed style, but excluded from generated reports.
        </div>` : ''}`;
 
-    const cards = findings.map((v, i) => renderVulnCard(v, i)).join('');
+    const cards = groups.map((g, i) => renderVulnCard(g, i)).join('');
     el.innerHTML = totals + filter + '<div id="vuln-list">' + cards + '</div>';
 
     const filterFn = () => {
@@ -1060,7 +1539,11 @@ async function tabVulnerabilities(el, id, detail) {
   }
 }
 
-function renderVulnCard(v, i) {
+function renderVulnCard(group, i) {
+  const v = group.representative;
+  const assets = uniqueAffectedAssets(group.occurrences);
+  const occCount = group.occurrences.length;
+  const locCount = assets.length;
   const origSev   = v.severity || 'INFO';
   const effSev    = v.effective_severity || v.override_severity || origSev;
   const effCvss   = (v.effective_cvss_score ?? v.cvss_score ?? 0).toFixed(1);
@@ -1069,10 +1552,14 @@ function renderVulnCard(v, i) {
   const sevClass  = effSev.toLowerCase();
   const status    = (v.status || 'open').toLowerCase();
   const isFp      = status === 'false_positive';
-  const search    = [v.rule_id, v.title, v.category, effSev, v.affected_name, v.evidence, status]
+  const assetSearch = assets.map(a => [a.affected_name, a.affected_type, a.evidence_location].filter(Boolean).join(' ')).join(' ');
+  const search    = [v.rule_id, v.title, v.category, effSev, assetSearch, v.evidence, status]
     .filter(Boolean).join(' ').toLowerCase();
 
   const statusBadge = status !== 'open' ? `<span class="badge badge-${statusKey(status)}">${statusLabel(status)}</span>` : '';
+  const locBadge = locCount > 1
+    ? `<span class="vuln-loc-count" title="${occCount} occurrence${occCount===1?'':'s'}">${locCount} locations</span>`
+    : (occCount > 1 ? `<span class="vuln-loc-count">${occCount} hits</span>` : '');
   const overrideStrip = (overridden || v.override_note) ? `
     <div class="vuln-status-strip">
       ${overridden ? `<span><span class="label">Override:</span> ${esc(v.override_severity)} (originally ${esc(origSev)})</span>` : ''}
@@ -1081,7 +1568,8 @@ function renderVulnCard(v, i) {
 
   return `
     <div class="vuln-card ${isFp?'is-fp':''} ${overridden?'is-overridden':''}"
-         id="vuln-${v.id}" data-severity="${effSev}" data-status="${status}" data-search="${esc(search)}">
+         id="vuln-${v.id}" data-severity="${escAttr(effSev)}" data-status="${escAttr(status)}" data-search="${escAttr(search)}"
+         data-rule-id="${escAttr(v.rule_id||'')}" data-rep-id="${v.id}">
       <div class="vuln-head" onclick="toggleVuln(${i})">
         <div class="vuln-head-l">
           <span class="badge badge-${sevClass}">${esc(effSev)}</span>
@@ -1089,6 +1577,7 @@ function renderVulnCard(v, i) {
           <span class="vuln-id mono">${esc(v.rule_id||'')}</span>
           <span class="vuln-title">${esc(v.title||'')}</span>
           ${statusBadge}
+          ${locBadge}
         </div>
         <div class="vuln-head-r">
           <span class="vuln-cat">${esc(v.category||'')}</span>
@@ -1099,16 +1588,12 @@ function renderVulnCard(v, i) {
         ${overrideStrip}
         <div class="vuln-section">
           <div class="vuln-section-title">Description</div>
-          <p>${esc(v.description||'')}</p>
+          <p>${esc(fieldOr(v.description, 'No description provided for this finding.'))}</p>
         </div>
         <div class="grid-2">
           <div class="vuln-section">
-            <div class="vuln-section-title">Affected</div>
-            <div class="kv">
-              <span class="kv-key">Type</span><span class="kv-val">${esc(v.affected_type||'—')}</span>
-              <span class="kv-key">Name</span><span class="kv-val">${esc(v.affected_name||'—')}</span>
-              <span class="kv-key">Location</span><span class="kv-val">${esc(v.evidence_location||'—')}</span>
-            </div>
+            <div class="vuln-section-title">Affected (${locCount} unique)</div>
+            ${renderAffectedAssetsList(assets)}
           </div>
           <div class="vuln-section">
             <div class="vuln-section-title">Risk</div>
@@ -1118,28 +1603,33 @@ function renderVulnCard(v, i) {
               <span class="kv-key">CWE</span><span class="kv-val">${esc(v.cwe||'—')}</span>
               <span class="kv-key">MSTG ID</span><span class="kv-val">${esc(v.rule_id||'—')}</span>
               <span class="kv-key">Status</span><span class="kv-val">${statusLabel(status)}</span>
+              <span class="kv-key">Occurrences</span><span class="kv-val">${occCount}</span>
             </div>
           </div>
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Evidence</div>
-          <pre class="vuln-code">${esc(v.evidence||'(no evidence captured)')}</pre>
+          <pre class="vuln-code">${esc(fieldOr(v.evidence, '(no evidence captured)'))}</pre>
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Proof of Concept (steps to reproduce)</div>
-          <pre class="vuln-poc">${esc(v.poc_steps||'No PoC provided.')}</pre>
+          <pre class="vuln-poc">${esc(fieldOr(v.poc_steps, 'No PoC provided.'))}</pre>
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Remediation</div>
-          <p>${esc(v.remediation||'')}</p>
+          <p>${esc(fieldOr(v.remediation, 'No remediation guidance provided.'))}</p>
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Reference</div>
-          <p><a href="${esc(v.reference_url||'#')}" target="_blank" rel="noopener">${esc(v.reference_url||'')}</a></p>
+          <p>${isEmptyField(v.reference_url)
+            ? '—'
+            : (String(v.reference_url).startsWith('http')
+                ? `<a href="${escAttr(v.reference_url)}" target="_blank" rel="noopener">${esc(v.reference_url)}</a>`
+                : `<span>${esc(v.reference_url)}</span>`)}</p>
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title" style="display:flex;justify-content:space-between;align-items:center">
-            <span>Triage</span>
+            <span>Triage <em style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(applies to finding #${v.id})</em></span>
             <button class="btn-link" onclick="toggleTriage(${v.id})">Edit</button>
           </div>
           <div id="triage-${v.id}" hidden>${renderTriageForm(v)}</div>
@@ -1246,6 +1736,13 @@ window.toggleVuln = function(i) {
 /* ── llm tab ── */
 let _llmFindings = [];
 let _llmDrawerOpen = false;
+/** @type {{key:string, dir:'asc'|'desc'}} */
+let _llmSort = {key:'status', dir:'desc'};
+let _llmSelectedIdx = -1;
+
+const LLM_STATUS_RANK = {
+  CRITICAL: 7, HIGH: 6, MEDIUM: 5, LOW: 4, INFO: 3, UNPARSED: 2, CLEAN: 1
+};
 
 function parseLlmPayload(raw='') {
   const text = String(raw||'').trim();
@@ -1331,6 +1828,21 @@ function llmStatusBadge(parsed) {
   return '<span class="badge badge-info">UNPARSED</span>';
 }
 
+/** Status label used for severity sorting (not display). */
+function llmStatusSortKey(parsed) {
+  if (parsed.kind === 'empty') return 'CLEAN';
+  if (parsed.kind !== 'vulns') return 'UNPARSED';
+  const order = {CRITICAL:4, HIGH:3, MEDIUM:2, LOW:1, INFO:0};
+  let worst = '', best = -1;
+  for (const v of parsed.vulns) {
+    const s = String(v.severity||'').toUpperCase();
+    const r = order[s];
+    if (r != null && r > best) { best = r; worst = s; }
+  }
+  // Findings with no severity still surface above UNPARSED/CLEAN
+  return worst || 'INFO';
+}
+
 function llmPreviewText(parsed) {
   if (parsed.kind === 'empty') return 'No vulnerabilities found';
   if (parsed.kind === 'vulns') {
@@ -1340,6 +1852,91 @@ function llmPreviewText(parsed) {
   const t = (parsed.raw||'').replace(/\s+/g,' ').trim();
   return t.length > 120 ? t.slice(0,117)+'…' : t;
 }
+
+function llmSortValue(f, key) {
+  const parsed = parseLlmPayload(f.finding);
+  switch (key) {
+    case 'status': return LLM_STATUS_RANK[llmStatusSortKey(parsed)] || 0;
+    case 'function': return String(f.function_name||'').toLowerCase();
+    case 'class': return String(f.class_name||'').toLowerCase();
+    case 'mode': return String(f.mode||'').toLowerCase();
+    case 'preview': return llmPreviewText(parsed).toLowerCase();
+    default: return '';
+  }
+}
+
+function applyLlmSort() {
+  const {key, dir} = _llmSort;
+  const mul = dir === 'asc' ? 1 : -1;
+  _llmFindings.sort((a, b) => {
+    const va = llmSortValue(a, key);
+    const vb = llmSortValue(b, key);
+    let cmp = 0;
+    if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+    else cmp = String(va).localeCompare(String(vb), undefined, {sensitivity:'base'});
+    if (cmp !== 0) return cmp * mul;
+    // Tie-break: function name A→Z (independent of primary direction)
+    if (key !== 'function') {
+      return String(a.function_name||'').localeCompare(String(b.function_name||''), undefined, {sensitivity:'base'});
+    }
+    return 0;
+  });
+}
+
+function llmSortHeaderHtml(key, label) {
+  const active = _llmSort.key === key;
+  const ind = active ? (_llmSort.dir === 'asc' ? '▲' : '▼') : '▼';
+  return `<th class="th-sort${active?' active':''}" data-sort="${key}"
+      onclick="event.stopPropagation();sortLlmColumn('${key}')"
+      title="Sort by ${label}">${label}<span class="sort-ind" aria-hidden="true">${ind}</span></th>`;
+}
+
+function renderLlmTableRows() {
+  return _llmFindings.map((f, i) => {
+    const parsed = parseLlmPayload(f.finding);
+    const preview = llmPreviewText(parsed);
+    const sel = i === _llmSelectedIdx ? ' selected' : '';
+    return `<tr class="llm-row${sel}" data-idx="${i}" onclick="openLlmDrawer(${i})">
+      <td>${llmStatusBadge(parsed)}</td>
+      <td class="mono truncate" style="max-width:200px" title="${escAttr(f.function_name)}">${esc(f.function_name)}</td>
+      <td class="truncate" style="max-width:160px" title="${escAttr(f.class_name||'')}">${esc(f.class_name||'—')}</td>
+      <td>${esc(f.mode||'')}</td>
+      <td><div class="llm-preview" title="${escAttr(preview)}">${esc(preview)}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+function refreshLlmTable() {
+  const tbody = document.getElementById('llm-findings-tbody');
+  const thead = document.getElementById('llm-findings-thead');
+  if (!tbody) return;
+  tbody.innerHTML = renderLlmTableRows();
+  if (thead) {
+    thead.innerHTML = `<tr>
+      ${llmSortHeaderHtml('status','Status')}
+      ${llmSortHeaderHtml('function','Function')}
+      ${llmSortHeaderHtml('class','Class')}
+      ${llmSortHeaderHtml('mode','Mode')}
+      ${llmSortHeaderHtml('preview','Preview')}
+    </tr>`;
+  }
+}
+
+window.sortLlmColumn = function(key) {
+  const selected = _llmSelectedIdx >= 0 ? _llmFindings[_llmSelectedIdx] : null;
+  if (_llmSort.key === key) {
+    _llmSort.dir = _llmSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _llmSort.key = key;
+    // Status defaults to severity-desc; text columns default A→Z
+    _llmSort.dir = key === 'status' ? 'desc' : 'asc';
+  }
+  applyLlmSort();
+  if (selected) {
+    _llmSelectedIdx = _llmFindings.indexOf(selected);
+  }
+  refreshLlmTable();
+};
 
 function renderLlmDrawerBody(f) {
   const parsed = parseLlmPayload(f.finding);
@@ -1353,21 +1950,26 @@ function renderLlmDrawerBody(f) {
     return `<div class="llm-section-label">${parsed.vulns.length} vulnerabilit${parsed.vulns.length===1?'y':'ies'}</div>` +
       parsed.vulns.map(v => {
         const sev = String(v.severity||'').toUpperCase();
+        const desc = fieldOr(v.description, 'No description provided for this finding.');
+        const poc = fieldOr(v.poc_steps, 'No PoC provided.');
+        const rem = fieldOr(v.remediation, 'No remediation guidance provided.');
+        const evidence = fieldOr(v.evidence, '');
+        const regex = fieldOr(v.detection_regex, '');
         return `<div class="llm-vuln-item">
           <div class="llm-vuln-item-head">
             ${sevBadgeLevel(sev)}
             ${v.scope?`<span class="meta-chip">${esc(v.scope)}</span>`:''}
             <span class="llm-vuln-item-title">${esc(v.title||'Untitled finding')}</span>
           </div>
-          ${v.description?`<p style="font-size:.85rem;line-height:1.55;margin-bottom:.5rem">${esc(v.description)}</p>`:''}
+          <p style="font-size:.85rem;line-height:1.55;margin-bottom:.5rem">${esc(desc)}</p>
           <div class="llm-kv">
             ${v.cvss!=null?`<span class="k">CVSS</span><span class="v">${esc(String(v.cvss))}</span>`:''}
             ${v.cwe?`<span class="k">CWE</span><span class="v">${esc(v.cwe)}</span>`:''}
           </div>
-          ${v.evidence?`<div class="vuln-section"><div class="vuln-section-title">Evidence</div><div class="vuln-code">${esc(v.evidence)}</div></div>`:''}
-          ${v.poc_steps?`<div class="vuln-section"><div class="vuln-section-title">PoC steps</div><div class="vuln-poc">${esc(v.poc_steps)}</div></div>`:''}
-          ${v.remediation?`<div class="vuln-section"><div class="vuln-section-title">Remediation</div><p style="font-size:.85rem">${esc(v.remediation)}</p></div>`:''}
-          ${v.detection_regex?`<div class="vuln-section"><div class="vuln-section-title">Detection regex</div><div class="vuln-code">${esc(v.detection_regex)}</div></div>`:''}
+          ${!isEmptyField(evidence)?`<div class="vuln-section"><div class="vuln-section-title">Evidence</div><div class="vuln-code">${esc(evidence)}</div></div>`:''}
+          <div class="vuln-section"><div class="vuln-section-title">PoC steps</div><div class="vuln-poc">${esc(poc)}</div></div>
+          <div class="vuln-section"><div class="vuln-section-title">Remediation</div><p style="font-size:.85rem">${esc(rem)}</p></div>
+          ${!isEmptyField(regex)?`<div class="vuln-section"><div class="vuln-section-title">Detection regex</div><div class="vuln-code">${esc(regex)}</div></div>`:''}
         </div>`;
       }).join('');
   }
@@ -1376,6 +1978,7 @@ function renderLlmDrawerBody(f) {
 
 function closeLlmDrawer() {
   _llmDrawerOpen = false;
+  _llmSelectedIdx = -1;
   const drawer = document.getElementById('llm-drawer');
   const backdrop = document.getElementById('llm-drawer-backdrop');
   if (drawer) drawer.classList.remove('open');
@@ -1398,6 +2001,7 @@ window.openLlmDrawer = function(idx) {
   const body = document.getElementById('llm-drawer-body');
   if (!drawer || !body) return;
 
+  _llmSelectedIdx = idx;
   const parsed = parseLlmPayload(f.finding);
   title.textContent = f.function_name || 'LLM finding';
   meta.innerHTML = `
@@ -1421,6 +2025,8 @@ window.closeLlmDrawer = closeLlmDrawer;
 async function tabLlm(el, id, detail) {
   closeLlmDrawer();
   _llmFindings = [];
+  _llmSelectedIdx = -1;
+  _llmSort = {key:'status', dir:'desc'};
   if (!detail.llm_enabled) {
     el.innerHTML=`<div class="alert alert-info">LLM enrichment was not enabled for this scan.
       Re-run with LLM enabled to see findings.</div>`; return;
@@ -1431,20 +2037,17 @@ async function tabLlm(el, id, detail) {
     const findings = await api('/scans/'+id+'/llm');
     if (!findings.length) { el.innerHTML='<div class="empty">No LLM findings.</div>'; return; }
     _llmFindings = findings;
+    applyLlmSort(); // default: severity desc, then function name
     el.innerHTML = `
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Status</th><th>Function</th><th>Class</th><th>Mode</th><th>Preview</th></tr></thead>
-        <tbody>${findings.map((f,i)=>{
-          const parsed = parseLlmPayload(f.finding);
-          const preview = llmPreviewText(parsed);
-          return `<tr class="llm-row" data-idx="${i}" onclick="openLlmDrawer(${i})">
-            <td>${llmStatusBadge(parsed)}</td>
-            <td class="mono truncate" style="max-width:200px" title="${escAttr(f.function_name)}">${esc(f.function_name)}</td>
-            <td class="truncate" style="max-width:160px" title="${escAttr(f.class_name||'')}">${esc(f.class_name||'—')}</td>
-            <td>${esc(f.mode||'')}</td>
-            <td><div class="llm-preview" title="${escAttr(preview)}">${esc(preview)}</div></td>
-          </tr>`;
-        }).join('')}</tbody>
+        <thead id="llm-findings-thead"><tr>
+          ${llmSortHeaderHtml('status','Status')}
+          ${llmSortHeaderHtml('function','Function')}
+          ${llmSortHeaderHtml('class','Class')}
+          ${llmSortHeaderHtml('mode','Mode')}
+          ${llmSortHeaderHtml('preview','Preview')}
+        </tr></thead>
+        <tbody id="llm-findings-tbody">${renderLlmTableRows()}</tbody>
       </table></div>
       <div id="llm-drawer-backdrop" class="llm-drawer-backdrop" onclick="closeLlmDrawer()"></div>
       <aside id="llm-drawer" class="llm-drawer" tabindex="-1" role="dialog" aria-label="LLM finding detail">

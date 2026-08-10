@@ -184,6 +184,41 @@ async def get_entry_points(db_path: str, executable: str) -> list[str]:
     return [f"{r[0]}.{r[1]}" if r[0] else r[1] for r in rows]
 
 
+# ── Assessments (security controls inventory) ─────────────────────────────────
+
+async def get_assessments(db_path: str, executable: str) -> list[dict]:
+    async with aiosqlite.connect(db_path) as db:
+        # Table may be absent on pre-Assessment DBs
+        async with db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='Assessments'"
+        ) as cur:
+            if await cur.fetchone() is None:
+                return []
+        async with db.execute(
+            """SELECT id, ControlId, Title, Category, Status, Confidence,
+                      Evidence, Detail, Platform, CreatedAt
+               FROM Assessments WHERE ExecutableName=?
+               ORDER BY Category, ControlId""",
+            (executable,),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [
+        {
+            "id": r[0],
+            "control_id": r[1],
+            "title": r[2],
+            "category": r[3],
+            "status": r[4],
+            "confidence": r[5],
+            "evidence": r[6],
+            "detail": r[7],
+            "platform": r[8],
+            "created_at": r[9],
+        }
+        for r in rows
+    ]
+
+
 # ── LLM findings ──────────────────────────────────────────────────────────────
 
 async def get_vulnerabilities(db_path: str, executable: str) -> list[dict]:
@@ -281,34 +316,73 @@ async def update_vulnerability_triage(
             return cur.rowcount > 0
 
 
+# Prefer open/active for triage; then higher severity; then lower id (stable).
+# Mirrors web/index.html groupFindingsByRule / countUniqueIssueSeverities.
+_STATUS_PREF = {"open": 0, "accepted_risk": 1, "fixed": 2, "false_positive": 3}
+_SEV_RANK = {"CRITICAL": 5, "HIGH": 4, "MEDIUM": 3, "LOW": 2, "INFO": 1}
+
+
 async def get_vulnerability_counts(db_path: str, executable: str) -> dict:
     """
-    Counts use effective severity (override takes priority) and exclude
-    findings marked as false-positive or fixed.
+    Count unique open/active issues by RuleId (same grouping as the
+    Vulnerabilities tab). Effective severity uses override when set.
+    Groups whose representative status is false_positive or fixed are
+    excluded from severity/total. ``occurrences`` is the raw row count.
     """
     async with aiosqlite.connect(db_path) as db:
         await _ensure_triage_columns(db)
         async with db.execute(
-            """SELECT COALESCE(OverrideSeverity, Severity) AS sev,
-                      COALESCE(Status,'open') AS status,
-                      COUNT(*)
+            """SELECT id, RuleId,
+                      COALESCE(OverrideSeverity, Severity, 'INFO') AS sev,
+                      COALESCE(Status, 'open') AS status
                FROM Vulnerabilities
-               WHERE ExecutableName=?
-               GROUP BY sev, status""",
-            (executable,)
+               WHERE ExecutableName=?""",
+            (executable,),
         ) as cur:
             rows = await cur.fetchall()
-    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0,
-              "suppressed": 0, "false_positive": 0}
-    for sev, status, n in rows:
+
+    # rule_key -> (status_pref, sev_rank, id, sev, status)
+    reps: dict[str, tuple[int, int, int, str, str]] = {}
+    for vid, rule_id, sev, status in rows:
+        key = rule_id if rule_id else f"__id_{vid}"
+        st = (status or "open").lower()
+        sev_u = (sev or "INFO").upper()
+        cand = (
+            _STATUS_PREF.get(st, 9),
+            _SEV_RANK.get(sev_u, 0),
+            int(vid or 0),
+            sev_u,
+            st,
+        )
+        cur = reps.get(key)
+        if cur is None:
+            reps[key] = cand
+            continue
+        # Prefer lower status_pref; then higher sev_rank; then lower id
+        if (cand[0] < cur[0]
+                or (cand[0] == cur[0] and cand[1] > cur[1])
+                or (cand[0] == cur[0] and cand[1] == cur[1] and cand[2] < cur[2])):
+            reps[key] = cand
+
+    counts = {
+        "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0,
+        "suppressed": 0, "false_positive": 0,
+        "occurrences": len(rows),
+    }
+    for _pref, _rank, _vid, sev, status in reps.values():
         if status in ("false_positive", "fixed"):
-            counts["suppressed"] += n
+            counts["suppressed"] += 1
             if status == "false_positive":
-                counts["false_positive"] += n
+                counts["false_positive"] += 1
             continue
         if sev in counts:
-            counts[sev] += n
-    counts["total"] = counts["CRITICAL"] + counts["HIGH"] + counts["MEDIUM"] + counts["LOW"] + counts["INFO"]
+            counts[sev] += 1
+        else:
+            counts["INFO"] += 1
+    counts["total"] = (
+        counts["CRITICAL"] + counts["HIGH"] + counts["MEDIUM"]
+        + counts["LOW"] + counts["INFO"]
+    )
     return counts
 
 
