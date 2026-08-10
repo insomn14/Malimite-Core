@@ -142,4 +142,45 @@ class LearnedRulesStoreTest {
         assertEquals(0, store.size());
         assertFalse(Files.exists(file), "no JSON file should be written when nothing was added");
     }
+
+    @Test void rejectsPlaceholderEllipsisRegex(@TempDir Path tmp) {
+        Path file = tmp.resolve("learned.json");
+        LearnedRulesStore store = new LearnedRulesStore(file);
+        assertNull(store.addRule("PATH-TRAVERSAL", "t", "CODE", "HIGH", 7.5, "CWE-22",
+                "d", "r", "DECOMPILED", "...", "p", "u"));
+        assertNull(store.addRule("PATH-TRAVERSAL", "t", "CODE", "HIGH", 7.5, "CWE-22",
+                "d", "r", "DECOMPILED", ".*", "p", "u"));
+        assertEquals(0, store.size());
+        assertTrue(LearnedRulesStore.isPlaceholderText("..."));
+        assertTrue(LearnedRulesStore.isPlaceholderText("1. ...\n2. ...\n3. ..."));
+        assertFalse(LearnedRulesStore.isUsableDetectionRegex("..."));
+        assertTrue(LearnedRulesStore.isUsableDetectionRegex(
+                "new File\\(\\s*CopyUtil\\.DOWNLOADS_DIRECTORY\\s*,\\s*fileName\\s*\\)"));
+    }
+
+    @Test void asVulnerabilityRulesSkipsStoredPlaceholderRegex(@TempDir Path tmp) throws Exception {
+        Path file = tmp.resolve("learned.json");
+        Files.writeString(file, """
+            {"rules":[{
+              "id":"LLM-PATH-TRAVERSAL-001",
+              "scope":"PATH-TRAVERSAL",
+              "title":"Bad",
+              "category":"CODE",
+              "severity":"HIGH",
+              "cvssScore":7.5,
+              "cwe":"CWE-22",
+              "description":"...",
+              "remediation":"...",
+              "referenceUrl":"ref",
+              "target":"DECOMPILED",
+              "regex":"...",
+              "pocTemplate":"1. ...",
+              "createdAt":1,
+              "platform":"ANDROID"
+            }]}
+            """);
+        LearnedRulesStore store = new LearnedRulesStore(file, PackagePlatform.ANDROID);
+        assertEquals(1, store.size(), "raw store still holds the bad rule");
+        assertEquals(0, store.asVulnerabilityRules().size(), "scanner must not load placeholder regex");
+    }
 }

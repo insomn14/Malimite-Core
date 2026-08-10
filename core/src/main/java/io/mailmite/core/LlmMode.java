@@ -2,7 +2,7 @@ package io.mailmite.core;
 
 /** Analysis mode passed to the LLM enricher. */
 public enum LlmMode {
-    /** Translate decompiled C++ pseudocode to Swift or Objective-C. */
+    /** Translate decompiled code to idiomatic Swift/Objective-C (iOS) or Java (Android). */
     AUTO_FIX,
     /** Summarise what a function does in plain English. */
     SUMMARIZE,

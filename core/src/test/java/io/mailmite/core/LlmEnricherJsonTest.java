@@ -103,6 +103,55 @@ class LlmEnricherJsonTest {
         }
     }
 
+    @Test void rejectsPlaceholderRegexAndSanitizesEllipsisFields(@TempDir Path tmp) throws Exception {
+        String sourceCode =
+            "void invokeSuspend() {\n" +
+            "  this.$assetManager.open(this.$fileName);\n" +
+            "  new FileOutputStream(this.$outFile);\n" +
+            "}";
+        String llmJson = """
+            {
+              "vulnerabilities": [
+                {
+                  "scope": "PATH-TRAVERSAL",
+                  "title": "Unsanitized asset file name enables path traversal on file write",
+                  "severity": "HIGH",
+                  "cvss": 7.5,
+                  "cwe": "CWE-22",
+                  "description": "...",
+                  "evidence": "this.$assetManager.open(this.$fileName); ... new FileOutputStream(this.$outFile);",
+                  "poc_steps": "1. ...\\n2. ...\\n3. ...",
+                  "remediation": "...",
+                  "detection_regex": "..."
+                }
+              ]
+            }
+            """;
+
+        Path dbPath = tmp.resolve("test.sqlite");
+        Path rulesPath = tmp.resolve("learned_rules.json");
+        try (SqliteStore store = new SqliteStore(dbPath.toString())) {
+            store.insertFunctionDecompilations(List.of(new SqliteStore.DecompilationResult(
+                    "invokeSuspend", "CopyUtil$Companion$copyFileFromAssets$1", sourceCode, "App")));
+            LearnedRulesStore rs = new LearnedRulesStore(rulesPath);
+
+            new LlmEnricher(new FakeProvider(llmJson), LlmMode.FIND_VULNS,
+                    new MemoryCache(), false, PackagePlatform.ANDROID, rs)
+                    .enrich(store, "App");
+
+            var vulns = store.getVulnerabilities("App");
+            assertEquals(1, vulns.size());
+            assertTrue(vulns.get(0).get("rule_id").toString().endsWith("-ADHOC"),
+                    "placeholder regex must not become a learned rule id");
+            assertEquals("", String.valueOf(vulns.get(0).get("description")),
+                    "ellipsis description should be stored as empty");
+            assertEquals("", String.valueOf(vulns.get(0).get("remediation")));
+            assertEquals("", String.valueOf(vulns.get(0).get("poc_steps")));
+            assertFalse(String.valueOf(vulns.get(0).get("evidence")).isBlank());
+            assertEquals(0, rs.size(), "placeholder regex must NOT be persisted");
+        }
+    }
+
     @Test void rejectsRegexThatFailsSelfTest(@TempDir Path tmp) throws Exception {
         // Function source contains 'window.postMessage' (offset 0-ish) then 'evaluateJavaScript' later
         String sourceCode =

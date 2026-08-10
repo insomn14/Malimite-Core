@@ -20,15 +20,17 @@ import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.WRITE;
 
 /**
- * Persistent JSON-backed store of LLM-discovered rules.
- * Survives between scans so that a vulnerability discovered via LLM on scan #N
- * is detected purely-statically (no LLM call) on scan #N+1.
+ * Persistent JSON-backed store of LLM-discovered rules, separated by platform.
  *
- * <p>File path: {@code $MAILMITE_LEARNED_RULES} or {@code $HOME/.mailmite/learned_rules.json}.
+ * <p>Paths:
+ * <ul>
+ *   <li>iOS: {@code $MAILMITE_LEARNED_RULES_IOS} or {@code $MAILMITE_LEARNED_RULES}
+ *       or {@code ~/.mailmite/learned_rules.json}</li>
+ *   <li>Android: {@code $MAILMITE_LEARNED_RULES_ANDROID}
+ *       or {@code ~/.mailmite/learned_rules_android.json}</li>
+ * </ul>
  *
- * <p>This class is thread-safe for single-process use only. Concurrent processes
- * writing simultaneously could clobber entries; the failure mode is "rule
- * not persisted", never corruption thanks to atomic-rename on save.
+ * <p>On load of the iOS file, rules missing {@code platform} are migrated to {@code IOS}.
  */
 public final class LearnedRulesStore {
 
@@ -38,27 +40,59 @@ public final class LearnedRulesStore {
 
     private final Path file;
     private final Path lockFile;
+    private final PackagePlatform storePlatform;
     private final List<StoredRule> rules = new ArrayList<>();
 
     public LearnedRulesStore() {
-        this(defaultPath());
+        this(PackagePlatform.IOS);
+    }
+
+    public LearnedRulesStore(PackagePlatform platform) {
+        this(defaultPath(platform), platform);
     }
 
     public LearnedRulesStore(Path file) {
-        this.file     = file;
+        this(file, PackagePlatform.IOS);
+    }
+
+    public LearnedRulesStore(Path file, PackagePlatform platform) {
+        this.file = file;
         this.lockFile = file.resolveSibling(file.getFileName() + ".lock");
+        this.storePlatform = platform == null ? PackagePlatform.IOS : platform;
         load();
     }
 
-    /** Resolves the configured storage path. */
+    public static LearnedRulesStore forPlatform(PackagePlatform platform) {
+        return new LearnedRulesStore(platform == null ? PackagePlatform.IOS : platform);
+    }
+
+    /** Resolves iOS path (legacy default). */
     public static Path defaultPath() {
-        String env = System.getenv("MAILMITE_LEARNED_RULES");
-        if (env != null && !env.isBlank()) return Path.of(env);
+        return defaultPath(PackagePlatform.IOS);
+    }
+
+    public static Path defaultPath(PackagePlatform platform) {
+        if (platform == PackagePlatform.ANDROID) {
+            String env = System.getenv("MAILMITE_LEARNED_RULES_ANDROID");
+            if (env != null && !env.isBlank()) return Path.of(env);
+            String home = System.getProperty("user.home", "/tmp");
+            return Path.of(home, ".mailmite", "learned_rules_android.json");
+        }
+        String iosEnv = System.getenv("MAILMITE_LEARNED_RULES_IOS");
+        if (iosEnv != null && !iosEnv.isBlank()) return Path.of(iosEnv);
+        String legacy = System.getenv("MAILMITE_LEARNED_RULES");
+        if (legacy != null && !legacy.isBlank()) return Path.of(legacy);
         String home = System.getProperty("user.home", "/tmp");
         return Path.of(home, ".mailmite", "learned_rules.json");
     }
 
-    // ── load / save ───────────────────────────────────────────────────────────
+    public PackagePlatform storePlatform() {
+        return storePlatform;
+    }
+
+    public Path file() {
+        return file;
+    }
 
     private synchronized void load() {
         rules.clear();
@@ -66,6 +100,7 @@ public final class LearnedRulesStore {
             log.info("LearnedRulesStore: no existing file at {}", file);
             return;
         }
+        boolean needsMigration = false;
         try {
             String json = Files.readString(file);
             JsonObject root = JsonParser.parseString(json).getAsJsonObject();
@@ -73,12 +108,23 @@ public final class LearnedRulesStore {
             for (var el : arr) {
                 try {
                     StoredRule r = GSON.fromJson(el, StoredRule.class);
-                    if (r != null && r.id != null && r.regex != null) rules.add(r);
+                    if (r == null || r.id == null || r.regex == null) continue;
+                    if (r.platform == null || r.platform.isBlank()) {
+                        r.platform = storePlatform.name();
+                        needsMigration = true;
+                    }
+                    rules.add(r);
                 } catch (Exception ex) {
                     log.warn("Skipping malformed learned rule: {}", ex.getMessage());
                 }
             }
-            log.info("LearnedRulesStore: loaded {} rule(s) from {}", rules.size(), file);
+            log.info("LearnedRulesStore: loaded {} rule(s) from {} (platform={})",
+                    rules.size(), file, storePlatform);
+            if (needsMigration && storePlatform == PackagePlatform.IOS) {
+                save();
+                log.info("LearnedRulesStore: migrated {} rule(s) to platform=IOS in {}",
+                        rules.size(), file);
+            }
         } catch (IOException e) {
             log.warn("LearnedRulesStore: could not read {}: {}", file, e.getMessage());
         }
@@ -99,22 +145,22 @@ public final class LearnedRulesStore {
         }
     }
 
-    // ── public API ────────────────────────────────────────────────────────────
-
-    /**
-     * Returns all stored rules as compiled {@link VulnerabilityRule} objects,
-     * skipping any whose regex no longer compiles.
-     */
     public synchronized List<VulnerabilityRule> asVulnerabilityRules() {
         List<VulnerabilityRule> out = new ArrayList<>();
         for (StoredRule r : rules) {
+            if (!isUsableDetectionRegex(r.regex)) {
+                log.warn("Stored rule {} has unusable/placeholder regex, skipping: {}",
+                        r.id, abbreviate(r.regex, 60));
+                continue;
+            }
             try {
                 Pattern p = Pattern.compile(r.regex);
+                VulnerabilityRule.Platform plat = parsePlatform(r.platform);
                 out.add(new VulnerabilityRule(
                         r.id, r.title, r.category, r.severity, r.cvssScore,
                         r.cwe, r.description, r.remediation, r.referenceUrl,
                         VulnerabilityRule.Target.valueOf(r.target),
-                        p, r.pocTemplate));
+                        p, r.pocTemplate, plat));
             } catch (PatternSyntaxException ex) {
                 log.warn("Stored rule {} regex no longer compiles, skipping: {}", r.id, ex.getMessage());
             } catch (IllegalArgumentException ex) {
@@ -125,45 +171,87 @@ public final class LearnedRulesStore {
     }
 
     /**
-     * Adds a new rule; deduped by {@code (scope, normalizedRegex)} so that
-     * regexes that differ only in whitespace or {@code [\s\S]}/{@code [\S\s]}
-     * ordering are treated as identical.
-     *
-     * <p>This method holds an exclusive cross-process file lock during the
-     * read-modify-write cycle, so concurrent Mailmite invocations against the
-     * same {@code learned_rules.json} cannot lose each other's writes.
-     *
-     * @return the resolved rule ID (existing or newly minted), or {@code null}
-     *         if the regex was invalid.
+     * Rejects blank, ellipsis placeholders ({@code ...}), and other regexes that would
+     * match almost any decompiled body (e.g. three dots → any three characters).
      */
+    public static boolean isUsableDetectionRegex(String regex) {
+        if (regex == null) return false;
+        String t = regex.trim();
+        if (t.isEmpty() || t.length() < 6) return false;
+        if (isPlaceholderText(t)) return false;
+        // Only wildcards / dots / trivial quantifiers — too greedy for learning.
+        if (t.matches("^[.\\s*+?|()\\[\\]{}^$\\\\sSdDwW]+$")) return false;
+        return true;
+    }
+
+    /** True for LLM filler like {@code ...}, {@code …}, or {@code 1. ...\n2. ...}. */
+    public static boolean isPlaceholderText(String s) {
+        if (s == null) return true;
+        String t = s.trim();
+        if (t.isEmpty()) return true;
+        if (t.matches("^[.\\u2026\\s]+$")) return true;
+        if (t.equalsIgnoreCase("todo") || t.equalsIgnoreCase("tbd")
+                || t.equalsIgnoreCase("n/a") || t.equalsIgnoreCase("none")
+                || t.equalsIgnoreCase("placeholder")) {
+            return true;
+        }
+        // Numbered stub lists: "1. ...\n2. ...\n3. ..."
+        return t.matches("(?s)(\\d+\\.\\s*[.\\u2026]+\\s*)+");
+    }
+
+    private static String abbreviate(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max) + "…";
+    }
+
+    private static VulnerabilityRule.Platform parsePlatform(String p) {
+        if (p == null || p.isBlank()) return VulnerabilityRule.Platform.IOS;
+        try {
+            return VulnerabilityRule.Platform.valueOf(p.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return VulnerabilityRule.Platform.IOS;
+        }
+    }
+
     public synchronized String addRule(String scope, String title, String category,
                                         String severity, double cvssScore, String cwe,
                                         String description, String remediation,
                                         String target, String regex, String pocTemplate,
                                         String referenceUrl) {
-        // Validate regex first — cheap rejection before taking the lock.
+        return addRule(scope, title, category, severity, cvssScore, cwe,
+                description, remediation, target, regex, pocTemplate, referenceUrl,
+                storePlatform.name());
+    }
+
+    public synchronized String addRule(String scope, String title, String category,
+                                        String severity, double cvssScore, String cwe,
+                                        String description, String remediation,
+                                        String target, String regex, String pocTemplate,
+                                        String referenceUrl, String platform) {
+        if (!isUsableDetectionRegex(regex)) {
+            log.warn("Rejected rule with unusable/placeholder regex (scope={}): {}",
+                    scope, abbreviate(regex, 80));
+            return null;
+        }
         try { Pattern.compile(regex); }
         catch (PatternSyntaxException ex) {
             log.warn("Rejected rule with invalid regex (scope={}): {}", scope, ex.getMessage());
             return null;
         }
         String normalized = normalizeRegex(regex);
+        String plat = (platform == null || platform.isBlank()) ? storePlatform.name() : platform;
 
         try {
             Files.createDirectories(lockFile.getParent());
         } catch (IOException ex) {
             log.warn("Could not create dir for lock file {}: {}", lockFile, ex.getMessage());
-            // Fall through — addRule will still proceed in-memory.
         }
 
         try (FileChannel ch = FileChannel.open(lockFile, CREATE, WRITE);
-             FileLock    lk = ch.lock()) {
+             FileLock lk = ch.lock()) {
 
-            // Re-read current state inside the lock: another process may have
-            // written rules since we constructed this store.
             reload();
 
-            // Dedup on the normalized regex for the same scope
             for (StoredRule r : rules) {
                 if (scope.equalsIgnoreCase(r.scope)
                         && normalized.equals(normalizeRegex(r.regex))) {
@@ -172,30 +260,16 @@ public final class LearnedRulesStore {
             }
 
             String id = nextIdFor(scope);
-            StoredRule r = new StoredRule();
-            r.id           = id;
-            r.scope        = scope;
-            r.title        = title;
-            r.category     = category;
-            r.severity     = severity;
-            r.cvssScore    = cvssScore;
-            r.cwe          = cwe;
-            r.description  = description;
-            r.remediation  = remediation;
-            r.referenceUrl = referenceUrl;
-            r.target       = target;
-            r.regex        = regex;
-            r.pocTemplate  = pocTemplate;
-            r.createdAt    = System.currentTimeMillis();
+            StoredRule r = newStored(id, scope, title, category, severity, cvssScore, cwe,
+                    description, remediation, referenceUrl, target, regex, pocTemplate, plat);
             rules.add(r);
             save();
-            log.info("LearnedRulesStore: added rule {} ({})", id, title);
+            log.info("LearnedRulesStore: added rule {} ({}) platform={}", id, title, plat);
             return id;
 
         } catch (IOException ex) {
             log.warn("Could not acquire learned-rules lock {}: {} — falling back to in-memory append",
                     lockFile, ex.getMessage());
-            // Best-effort fallback: in-memory dedup only, no cross-process safety
             for (StoredRule r : rules) {
                 if (scope.equalsIgnoreCase(r.scope)
                         && normalized.equals(normalizeRegex(r.regex))) {
@@ -203,51 +277,39 @@ public final class LearnedRulesStore {
                 }
             }
             String id = nextIdFor(scope);
-            StoredRule r = new StoredRule();
-            r.id = id; r.scope = scope; r.title = title; r.category = category;
-            r.severity = severity; r.cvssScore = cvssScore; r.cwe = cwe;
-            r.description = description; r.remediation = remediation;
-            r.referenceUrl = referenceUrl; r.target = target; r.regex = regex;
-            r.pocTemplate = pocTemplate; r.createdAt = System.currentTimeMillis();
-            rules.add(r);
+            rules.add(newStored(id, scope, title, category, severity, cvssScore, cwe,
+                    description, remediation, referenceUrl, target, regex, pocTemplate, plat));
             save();
             return id;
         }
     }
 
-    /** Re-read the JSON file from disk. Public so tests can simulate "another process wrote". */
+    private static StoredRule newStored(String id, String scope, String title, String category,
+                                        String severity, double cvssScore, String cwe,
+                                        String description, String remediation, String referenceUrl,
+                                        String target, String regex, String pocTemplate, String platform) {
+        StoredRule r = new StoredRule();
+        r.id = id; r.scope = scope; r.title = title; r.category = category;
+        r.severity = severity; r.cvssScore = cvssScore; r.cwe = cwe;
+        r.description = description; r.remediation = remediation;
+        r.referenceUrl = referenceUrl; r.target = target; r.regex = regex;
+        r.pocTemplate = pocTemplate; r.createdAt = System.currentTimeMillis();
+        r.platform = platform;
+        return r;
+    }
+
     public synchronized void reload() {
         load();
     }
 
-    // ── regex normalization ───────────────────────────────────────────────────
-
-    /**
-     * Returns a canonical form of a regex string for dedup-equality comparison.
-     * Two regexes that differ only in cosmetic whitespace (outside character
-     * classes) or in {@code [\s\S]} vs {@code [\S\s]} ordering will produce
-     * the same normalized output.
-     *
-     * <p>Conservative: never aliases tokens that could change matching behaviour
-     * (so {@code \d} is not collapsed to {@code [0-9]}, and lazy/greedy
-     * quantifiers stay distinct).
-     */
     static String normalizeRegex(String regex) {
         if (regex == null || regex.isEmpty()) return "";
-
-        // Step 1: canonicalise common "match any char" forms.
-        // [\S\s] is semantically identical to [\s\S]; both differ from "." only
-        // when DOTALL is off, but for our dedup we treat all three as one token.
         String s = regex
                 .replace("[\\S\\s]", "[\\s\\S]")
-                .replace("[^]",       "[\\s\\S]");
-
-        // Step 2: strip whitespace OUTSIDE character classes and OUTSIDE escapes.
-        // Whitespace inside [...] can be significant (it really matches a space),
-        // so we preserve it there. Escapes like \\  \(  \s are passed through.
+                .replace("[^]", "[\\s\\S]");
         StringBuilder out = new StringBuilder(s.length());
         boolean inCharClass = false;
-        boolean escape      = false;
+        boolean escape = false;
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
             if (escape) {
@@ -280,7 +342,6 @@ public final class LearnedRulesStore {
         return rules.size();
     }
 
-    /** Compute next sequential ID like LLM-XSS-001, LLM-XSS-002 within a scope. */
     private String nextIdFor(String scope) {
         String prefix = "LLM-" + scope.toUpperCase() + "-";
         int max = 0;
@@ -293,8 +354,6 @@ public final class LearnedRulesStore {
         return prefix + String.format("%03d", max + 1);
     }
 
-    // ── on-disk representation ────────────────────────────────────────────────
-
     public static class StoredRule {
         public String  id;
         public String  scope;
@@ -306,9 +365,11 @@ public final class LearnedRulesStore {
         public String  description;
         public String  remediation;
         public String  referenceUrl;
-        public String  target;        // STRINGS|FUNCTION_NAMES|DECOMPILED|RESOURCES|ABSENCE
+        public String  target;
         public String  regex;
         public String  pocTemplate;
         public long    createdAt;
+        /** IOS or ANDROID — missing values migrate to IOS on iOS store load. */
+        public String  platform;
     }
 }
