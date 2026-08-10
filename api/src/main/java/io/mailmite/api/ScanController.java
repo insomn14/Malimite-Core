@@ -16,12 +16,13 @@ public class ScanController {
         ctx.json(svc.listScans());
     }
 
-    /** POST /api/v1/scans — multipart 'file' (IPA). */
+    /** POST /api/v1/scans — multipart 'file' (IPA or APK). */
     public void createScan(Context ctx) {
         UploadedFile up = ctx.uploadedFile("file");
         if (up == null) { ctx.status(400).json(Map.of("error", "missing 'file' field")); return; }
-        if (!up.filename().toLowerCase().endsWith(".ipa")) {
-            ctx.status(415).json(Map.of("error", "only .ipa accepted"));
+        String name = up.filename().toLowerCase();
+        if (!name.endsWith(".ipa") && !name.endsWith(".apk")) {
+            ctx.status(415).json(Map.of("error", "only .ipa or .apk accepted"));
             return;
         }
         String scanId = svc.enqueue(up.filename(), up.size(), up.content());

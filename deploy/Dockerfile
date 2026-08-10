@@ -30,6 +30,16 @@ RUN curl -fL -o /tmp/ghidra.zip "$GHIDRA_URL" && \
 ENV GHIDRA_HOME=/opt/ghidra
 ENV PATH=$GHIDRA_HOME/support:$PATH
 
+# JADX for Android APK decompilation (phase-1 static analysis)
+ARG JADX_VERSION=1.5.1
+ARG JADX_URL=https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/jadx-${JADX_VERSION}.zip
+RUN curl -fL -o /tmp/jadx.zip "$JADX_URL" && \
+    unzip -q /tmp/jadx.zip -d /opt/jadx && \
+    rm /tmp/jadx.zip && \
+    chmod +x /opt/jadx/bin/jadx /opt/jadx/bin/jadx-gui || true
+ENV JADX_HOME=/opt/jadx
+ENV PATH=$JADX_HOME/bin:$PATH
+
 WORKDIR /app
 COPY --from=build /src/cli/target/mailmite-cli.jar     /app/cli.jar
 COPY --from=build /src/api/target/mailmite-api.jar     /app/api.jar

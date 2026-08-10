@@ -52,11 +52,12 @@ public class TelegramBot {
                 JsonNode doc = msg.path("document");
                 if (doc.isMissingNode()) continue;
                 String name = doc.path("file_name").asText("");
-                if (!name.toLowerCase().endsWith(".ipa")) continue;
+                String lowerName = name.toLowerCase();
+                if (!lowerName.endsWith(".ipa") && !lowerName.endsWith(".apk")) continue;
 
                 long chatId = msg.path("chat").path("id").asLong();
                 try {
-                    Path ipa = downloadFile(token, doc.path("file_id").asText());
+                    Path ipa = downloadFile(token, doc.path("file_id").asText(), name);
                     String scanId = uploadToApi(api, apiKey, ipa, name);
                     sendMessage(token, chatId,
                         "✅ Queued. scan_id=" + scanId + "\nCheck " + api + "/api/v1/scans/" + scanId);
@@ -68,12 +69,13 @@ public class TelegramBot {
         }
     }
 
-    private static Path downloadFile(String token, String fileId) throws Exception {
+    private static Path downloadFile(String token, String fileId, String filename) throws Exception {
         String meta = http.send(HttpRequest.newBuilder(URI.create(
                 "https://api.telegram.org/bot" + token + "/getFile?file_id=" + fileId)).build(),
                 HttpResponse.BodyHandlers.ofString()).body();
         String path = M.readTree(meta).path("result").path("file_path").asText();
-        Path out = Files.createTempFile("tg-", ".ipa");
+        String suffix = filename != null && filename.toLowerCase().endsWith(".apk") ? ".apk" : ".ipa";
+        Path out = Files.createTempFile("tg-", suffix);
         try (var in = URI.create("https://api.telegram.org/file/bot" + token + "/" + path)
                 .toURL().openStream()) {
             Files.copy(in, out, java.nio.file.StandardCopyOption.REPLACE_EXISTING);

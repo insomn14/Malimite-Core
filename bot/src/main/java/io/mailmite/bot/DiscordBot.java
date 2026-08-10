@@ -178,12 +178,13 @@ public class DiscordBot implements Runnable {
 
         for (JsonNode att : attachments) {
             String filename = att.path("filename").asText("");
-            if (!filename.toLowerCase().endsWith(".ipa")) continue;
+            String lower = filename.toLowerCase();
+            if (!lower.endsWith(".ipa") && !lower.endsWith(".apk")) continue;
             String downloadUrl = att.path("url").asText();
 
             CompletableFuture.runAsync(() -> {
                 try {
-                    Path   ipa    = downloadFile(downloadUrl);
+                    Path   ipa    = downloadFile(downloadUrl, filename);
                     String scanId = uploadToMailmite(ipa, filename);
                     sendChannelMessage(channelId,
                             "✅ Queued. `scan_id=" + scanId + "`\nCheck: " + apiUrl + "/api/v1/scans/" + scanId);
@@ -237,8 +238,9 @@ public class DiscordBot implements Runnable {
         }
     }
 
-    private Path downloadFile(String url) throws Exception {
-        Path tmp = Files.createTempFile("discord-", ".ipa");
+    private Path downloadFile(String url, String filename) throws Exception {
+        String suffix = filename != null && filename.toLowerCase().endsWith(".apk") ? ".apk" : ".ipa";
+        Path tmp = Files.createTempFile("discord-", suffix);
         http.send(
                 HttpRequest.newBuilder(URI.create(url))
                         .header("Authorization", "Bot " + token).build(),

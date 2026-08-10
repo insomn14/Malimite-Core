@@ -41,6 +41,7 @@ services:
       MINIO_SECRET: minioadmin
       MINIO_BUCKET: mailmite-ipa
       GHIDRA_HOME: /opt/ghidra
+      JADX_HOME: /opt/jadx
       REPORT_DIR: /var/mailmite/reports
       # LLM enrichment (Phase 4) — all optional, defaults to disabled
       LLM_ENABLED:       "${LLM_ENABLED:-false}"
@@ -67,6 +68,7 @@ services:
       INCOMING_DIR: /var/mailmite/incoming
       REPORT_DIR: /var/mailmite/reports
       GHIDRA_HOME: /opt/ghidra
+      JADX_HOME: /opt/jadx
     volumes:
       - ./incoming:/var/mailmite/incoming
       - reports:/var/mailmite/reports

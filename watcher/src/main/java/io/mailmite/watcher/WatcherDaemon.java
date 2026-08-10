@@ -10,7 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Watches a folder for new *.ipa files. When a file appears AND finishes
+ * Watches a folder for new *.ipa / *.apk files. When a file appears AND finishes
  * being written (size stable for 2s), kicks off an analysis.
  */
 public class WatcherDaemon {
@@ -21,6 +21,8 @@ public class WatcherDaemon {
         Path incoming = Path.of(env("INCOMING_DIR", "/var/mailmite/incoming"));
         Path reports  = Path.of(env("REPORT_DIR",   "/var/mailmite/reports"));
         Path ghidra   = Path.of(env("GHIDRA_HOME",  "/opt/ghidra"));
+        String jadxEnv = System.getenv("JADX_HOME");
+        Path jadx     = (jadxEnv == null || jadxEnv.isBlank()) ? null : Path.of(jadxEnv);
         Files.createDirectories(incoming);
         Files.createDirectories(reports);
 
@@ -36,24 +38,29 @@ public class WatcherDaemon {
                 WatchKey k = ws.take();
                 for (WatchEvent<?> ev : k.pollEvents()) {
                     Path p = incoming.resolve((Path) ev.context());
-                    if (!p.toString().toLowerCase().endsWith(".ipa")) continue;
-                    pool.submit(() -> handle(analyzer, p, ghidra, reports));
+                    String lower = p.toString().toLowerCase();
+                    if (!lower.endsWith(".ipa") && !lower.endsWith(".apk")) continue;
+                    pool.submit(() -> handle(analyzer, p, ghidra, jadx, reports));
                 }
                 k.reset();
             }
         }
     }
 
-    private static void handle(MailmiteAnalyzer a, Path ipa, Path ghidra, Path reports) {
+    private static void handle(MailmiteAnalyzer a, Path pkg, Path ghidra, Path jadx, Path reports) {
         try {
-            waitStable(ipa);
+            waitStable(pkg);
+            String stem = pkg.getFileName().toString()
+                    .replaceAll("(?i)\\.(ipa|apk)$", "");
             var r = a.analyze(AnalyzeOptions.builder()
-                    .ipaPath(ipa).ghidraHome(ghidra)
-                    .outputDir(reports.resolve(ipa.getFileName().toString().replace(".ipa", "")))
+                    .packagePath(pkg)
+                    .ghidraHome(ghidra)
+                    .jadxHome(jadx)
+                    .outputDir(reports.resolve(stem))
                     .build());
-            log.info("done {} → {}", ipa.getFileName(), r.reportDir());
+            log.info("done {} → {}", pkg.getFileName(), r.reportDir());
         } catch (Exception ex) {
-            log.error("failed {}", ipa, ex);
+            log.error("failed {}", pkg, ex);
         }
     }
 

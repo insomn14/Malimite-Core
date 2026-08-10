@@ -39,6 +39,8 @@ public class Worker {
                 .build();
         String bucket   = env("MINIO_BUCKET", "mailmite-ipa");
         Path ghidraHome = Path.of(env("GHIDRA_HOME", "/opt/ghidra"));
+        String jadxEnv  = System.getenv("JADX_HOME");
+        Path jadxHome   = (jadxEnv == null || jadxEnv.isBlank()) ? null : Path.of(jadxEnv);
         Path outBase    = Path.of(env("REPORT_DIR", "/var/mailmite/reports"));
         Files.createDirectories(outBase);
 
@@ -83,14 +85,16 @@ public class Worker {
                         redis.hset("mailmite:status:" + scanId, Map.of(
                                 "state", "running",
                                 "started_at", java.time.Instant.now().toString()));
-                        Path local = Files.createTempFile("mailmite-", ".ipa");
+                        String suffix = (key != null && key.toLowerCase().endsWith(".apk")) ? ".apk" : ".ipa";
+                        Path local = Files.createTempFile("mailmite-", suffix);
                         minio.downloadObject(DownloadObjectArgs.builder()
                                 .bucket(bucket).object(key)
                                 .filename(local.toString()).overwrite(true).build());
 
                         AnalysisResult r = analyzer.analyze(AnalyzeOptions.builder()
-                                .ipaPath(local)
+                                .packagePath(local)
                                 .ghidraHome(ghidraHome)
+                                .jadxHome(jadxHome)
                                 .outputDir(outBase.resolve(scanId))
                                 .llmEnabled(llmEnabled)
                                 .llmMode(llmMode)
@@ -103,7 +107,12 @@ public class Worker {
                             LlmProvider provider = LlmProviderFactory.create(llmCfg);
                             if (provider != null) {
                                 try (SqliteStore store = new SqliteStore(r.dbPath().toString())) {
-                                    new LlmEnricher(provider, llmMode, llmCache, false)
+                                    PackagePlatform plat = PackagePlatform.IOS;
+                                    try {
+                                        plat = PackagePlatform.detect(local);
+                                    } catch (Exception ignored) {}
+                                    boolean isSwift = plat == PackagePlatform.IOS && readIsSwift(r);
+                                    new LlmEnricher(provider, llmMode, llmCache, isSwift, plat)
                                             .enrich(store, extractExecName(r));
                                 }
                             }
@@ -175,9 +184,22 @@ public class Worker {
         try {
             com.fasterxml.jackson.databind.JsonNode meta =
                     JSON.readTree(r.reportDir().resolve("scan.json").toFile());
-            return meta.path("bundleExecutable").asText();
+            String exec = meta.path("bundleExecutable").asText();
+            if (exec == null || exec.isBlank())
+                exec = meta.path("applicationId").asText();
+            return exec == null ? "" : exec;
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    private static boolean readIsSwift(AnalysisResult r) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode meta =
+                    JSON.readTree(r.reportDir().resolve("scan.json").toFile());
+            return meta.path("isSwift").asBoolean(false);
+        } catch (Exception e) {
+            return false;
         }
     }
 

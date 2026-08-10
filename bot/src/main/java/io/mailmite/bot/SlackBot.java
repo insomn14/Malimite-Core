@@ -173,11 +173,12 @@ public class SlackBot implements Runnable {
         for (JsonNode file : files) {
             String filename    = file.path("name").asText("");
             String downloadUrl = file.path("url_private_download").asText("");
-            if (!filename.toLowerCase().endsWith(".ipa") || downloadUrl.isBlank()) continue;
+            String lower = filename.toLowerCase();
+            if ((!lower.endsWith(".ipa") && !lower.endsWith(".apk")) || downloadUrl.isBlank()) continue;
 
             CompletableFuture.runAsync(() -> {
                 try {
-                    Path   ipa    = downloadSlackFile(downloadUrl);
+                    Path   ipa    = downloadSlackFile(downloadUrl, filename);
                     String scanId = uploadToMailmite(ipa, filename);
                     postMessage(channelId, threadTs,
                             "✅ Queued. `scan_id=" + scanId + "`\nCheck: " + apiUrl + "/api/v1/scans/" + scanId);
@@ -191,8 +192,9 @@ public class SlackBot implements Runnable {
 
     // ── REST helpers ──────────────────────────────────────────────────────────
 
-    private Path downloadSlackFile(String url) throws Exception {
-        Path tmp = Files.createTempFile("slack-", ".ipa");
+    private Path downloadSlackFile(String url, String filename) throws Exception {
+        String suffix = filename != null && filename.toLowerCase().endsWith(".apk") ? ".apk" : ".ipa";
+        Path tmp = Files.createTempFile("slack-", suffix);
         http.send(
                 HttpRequest.newBuilder(URI.create(url))
                         .header("Authorization", "Bearer " + botToken).build(),

@@ -119,7 +119,7 @@ def help_message() -> list[dict]:
         {"type": "header", "text": {"type": "plain_text", "text": "Mailmite Slack Bot"}},
         {"type": "section", "text": {"type": "mrkdwn",
             "text": "*How to use:*\n"
-                    "• Send (or DM) any `.ipa` file to start a scan.\n"
+                    "• Send (or DM) any `.ipa` or `.apk` file to start a scan.\n"
                     "• I'll reply in this thread when the analysis is complete.\n"
                     "• HTML report and SARIF will be attached to the result message.\n\n"
                     "*Commands:*\n"

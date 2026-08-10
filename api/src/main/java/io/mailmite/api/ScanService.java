@@ -65,7 +65,13 @@ public class ScanService {
 
     public String enqueue(String filename, long size, InputStream content) {
         String scanId = UUID.randomUUID().toString();
-        String objectKey = "incoming/" + scanId + ".ipa";
+        String ext = ".ipa";
+        if (filename != null) {
+            String lower = filename.toLowerCase();
+            if (lower.endsWith(".apk")) ext = ".apk";
+            else if (lower.endsWith(".ipa")) ext = ".ipa";
+        }
+        String objectKey = "incoming/" + scanId + ext;
         try {
             minio.putObject(PutObjectArgs.builder()
                     .bucket(bucket).object(objectKey)
@@ -120,11 +126,12 @@ public class ScanService {
         Path dir = reportDir(scanId, st);
 
         String bundleId = null, bundleExe = null, dbPath = null, ipaPath = null;
-        String teamId = null, profile = null, expiry = null;
+        String teamId = null, profile = null, expiry = null, platform = null;
         Boolean isSwift = null, isUniversal = null;
         List<String> archs = null;
         Integer classCount = null, fnCount = null, strCount = null;
         Integer epCount = null, llmCount = null;
+        Integer minSdk = null, targetSdk = null;
         Map<String, Integer> vulnCounts = null;
 
         Path scanJson = dir.resolve("scan.json");
@@ -133,11 +140,15 @@ public class ScanService {
                 JsonNode n = JSON.readTree(scanJson.toFile());
                 bundleId   = textOrNull(n, "bundleIdentifier");
                 bundleExe  = textOrNull(n, "bundleExecutable");
+                platform   = textOrNull(n, "platform");
                 dbPath     = textOrNull(n, "dbPath");
                 ipaPath    = textOrNull(n, "ipaPath");
+                if (ipaPath == null) ipaPath = textOrNull(n, "packagePath");
                 teamId     = textOrNull(n, "bundleTeamId");
                 profile    = textOrNull(n, "provisioningProfile");
                 expiry     = textOrNull(n, "provisioningExpiry");
+                if (n.has("minSdk") && !n.get("minSdk").isNull()) minSdk = n.get("minSdk").asInt();
+                if (n.has("targetSdk") && !n.get("targetSdk").isNull()) targetSdk = n.get("targetSdk").asInt();
                 if (n.has("isSwift") && !n.get("isSwift").isNull()) isSwift = n.get("isSwift").asBoolean();
                 if (n.has("isUniversal") && !n.get("isUniversal").isNull()) isUniversal = n.get("isUniversal").asBoolean();
                 if (n.has("architectures") && n.get("architectures").isArray()) {
@@ -154,6 +165,7 @@ public class ScanService {
                 JsonNode n = JSON.readTree(resultJson);
                 if (bundleId == null) bundleId = textOrNull(n, "bundleIdentifier");
                 if (bundleExe == null) bundleExe = textOrNull(n, "bundleExecutable");
+                if (platform == null) platform = textOrNull(n, "platform");
                 classCount = n.path("classCount").asInt(0);
                 fnCount    = n.path("functionCount").asInt(0);
                 strCount   = n.path("stringCount").asInt(0);
@@ -181,8 +193,8 @@ public class ScanService {
                 meta.getOrDefault("llm_provider", "none"),
                 meta.getOrDefault("llm_mode", "summarize"),
                 meta.getOrDefault("llm_model", ""),
-                bundleId, bundleExe, isSwift, isUniversal, archs,
-                dbPath, ipaPath, teamId, profile, expiry,
+                bundleId, bundleExe, platform, isSwift, isUniversal, archs,
+                dbPath, ipaPath, teamId, profile, expiry, minSdk, targetSdk,
                 classCount, fnCount, strCount, epCount, llmCount, vulnCounts,
                 Files.exists(dir.resolve("findings.sarif")),
                 Files.exists(dir.resolve("report.html")),
