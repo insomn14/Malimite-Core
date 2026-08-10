@@ -14,15 +14,19 @@ import java.util.concurrent.Callable;
 @Command(name = "mailmite",
          mixinStandardHelpOptions = true,
          version = "mailmite 0.1.0",
-         description = "Headless IPA analyzer (Ghidra-backed).")
+         description = "Headless IPA/APK analyzer (Ghidra for iOS, JADX for Android).")
 public class Main implements Callable<Integer> {
 
-    @Parameters(index = "0", description = "IPA file to analyze")
+    @Parameters(index = "0", description = "IPA or APK file to analyze")
     private Path ipa;
 
-    @Option(names = {"-g", "--ghidra"}, description = "Ghidra install dir",
+    @Option(names = {"-g", "--ghidra"}, description = "Ghidra install dir (required for .ipa)",
             defaultValue = "${env:GHIDRA_HOME}")
     private Path ghidraHome;
+
+    @Option(names = {"-j", "--jadx"}, description = "JADX install dir or binary (or env JADX_HOME / JADX_PATH)",
+            defaultValue = "${env:JADX_HOME}")
+    private Path jadxHome;
 
     @Option(names = {"-o", "--out"}, description = "Output directory",
             defaultValue = "./mailmite-out")
@@ -47,6 +51,13 @@ public class Main implements Callable<Integer> {
             defaultValue = "${env:LLM_MODEL:-}")
     private String llmModel;
 
+    // picocli 4.7.6: negatable booleans need fallbackValue so --assessment sets true
+    // (defaultValue alone inverts: --assessment→false, --no-assessment→true).
+    @Option(names = "--assessment", negatable = true,
+            description = "Run security-controls Assessment inventory (default: true)",
+            fallbackValue = "true")
+    private boolean assessment = true;
+
     // Reporting options (Phase 5)
     @Option(names = "--sarif", description = "Write SARIF 2.1 to <out>/findings.sarif",
             defaultValue = "false")
@@ -67,12 +78,14 @@ public class Main implements Callable<Integer> {
 
         Map<String, String> llmCfg = buildLlmConfig();
         AnalyzeOptions opts = AnalyzeOptions.builder()
-                .ipaPath(ipa)
+                .packagePath(ipa)
                 .ghidraHome(ghidraHome)
+                .jadxHome(jadxHome)
                 .outputDir(out)
                 .llmEnabled(llm)
                 .llmMode(mode)
                 .llmConfig(llmCfg)
+                .assessmentEnabled(assessment)
                 .build();
 
         AnalysisResult r = new MailmiteAnalyzer().analyze(opts);
