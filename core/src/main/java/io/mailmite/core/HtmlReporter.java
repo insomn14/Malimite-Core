@@ -3,28 +3,44 @@ package io.mailmite.core;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Generates a self-contained, vulnerability-centric HTML report from an
  * {@link AnalysisReport}. Output file: {@code outputDir/report.html}
+ *
+ * <p>Findings are grouped by {@code rule_id} (same issue, many assets) to match
+ * the web UI vulnerabilities tab: one card per unique issue with a deduplicated
+ * list of affected assets. Severity summary counts unique open/active issues.
  *
  * <p>Layout (top to bottom):
  * <ol>
  *   <li>Header — bundle id, executable, scan id, generation timestamp</li>
  *   <li>Risk dashboard — severity stat tiles + counts per MASTG category</li>
  *   <li>Bundle &amp; signing — Team ID, Swift flag, architectures, provisioning</li>
- *   <li><b>Vulnerabilities</b> — every finding rendered as a full card with
- *       description, affected, evidence, PoC, remediation, reference</li>
- *   <li>LLM raw findings (collapsible) — only when LLM was enabled</li>
+ *   <li><b>Vulnerabilities</b> — one card per unique issue with
+ *       description, affected assets, evidence, PoC, remediation, reference</li>
  *   <li>Code surface (collapsible) — entry points + class index, summary only</li>
  *   <li>Sample strings (collapsible) — small sample, not full dump</li>
  * </ol>
  */
 public final class HtmlReporter {
+
+    /**
+     * Bump when the HTML layout changes in a way that requires regenerating
+     * on-disk {@code report.html} files (e.g. grouping / card structure).
+     * Embedded as {@code <meta name="mailmite-report-template" content="…">}
+     * so the web service can detect stale reports and re-render via
+     * {@link ReportRenderer}.
+     */
+    public static final String TEMPLATE_VERSION = "4";
 
     private static final int MAX_STRINGS_DISPLAY = 30;
     private static final int MAX_CLASSES_DISPLAY = 25;
@@ -44,19 +60,19 @@ public final class HtmlReporter {
         // 3. bundle / signing
         h.append(bundleCard(r));
 
-        // 4. VULNERABILITIES (the centrepiece)
+        // 4. Security controls assessment (inventory — not vuln severity)
+        h.append(assessmentSection(r));
+
+        // 5. VULNERABILITIES (the centrepiece)
         h.append(vulnerabilitiesSection(r));
 
-        // 4b. Suppressed findings (false-positives / fixed) — for audit trail
+        // 5b. Suppressed findings (false-positives / fixed) — for audit trail
         h.append(suppressedSection(r));
 
-        // 5. LLM raw findings (only if any with severity)
-        h.append(llmRawSection(r));
-
-        // 6. code surface (collapsible, compact)
+        // 5. code surface (collapsible, compact)
         h.append(codeSurfaceSection(r));
 
-        // 7. sample strings (collapsible)
+        // 6. sample strings (collapsible)
         h.append(stringsSampleSection(r));
 
         // footer
@@ -81,6 +97,7 @@ public final class HtmlReporter {
             <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width,initial-scale=1">
+            <meta name="mailmite-report-template" content=\"""" + TEMPLATE_VERSION + "\">\n" + """
             <title>Mailmite Security Report — """ + esc(r.bundleIdentifier() == null ? r.bundleExecutable() : r.bundleIdentifier()) + """
             </title>
             <style>
@@ -114,7 +131,7 @@ public final class HtmlReporter {
             .hero-meta{margin-top:.5rem;font-size:.78rem;opacity:.85}
 
             /* severity dashboard */
-            .sev-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:.6rem}
+            .sev-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:.6rem}
             @media(max-width:680px){.sev-grid{grid-template-columns:repeat(2,1fr)}}
             .sev-tile{border-radius:6px;padding:.65rem .85rem;text-align:left;border:1px solid transparent}
             .sev-tile .v{font-size:1.7rem;font-weight:800;line-height:1}
@@ -123,6 +140,7 @@ public final class HtmlReporter {
             .sev-high{background:var(--high-bg);color:var(--high);border-color:#fecaca}
             .sev-medium{background:var(--med-bg);color:var(--med);border-color:#fde68a}
             .sev-low{background:var(--low-bg);color:var(--low);border-color:#bfdbfe}
+            .sev-info{background:var(--info-bg);color:var(--info);border-color:#e5e7eb}
             .sev-total{background:#eef2ff;color:#3730a3;border-color:#c7d2fe}
             .sev-zero{background:var(--green-bg);color:var(--green);border-color:#bbf7d0}
 
@@ -145,6 +163,16 @@ public final class HtmlReporter {
             .badge-info{background:var(--info-bg);color:var(--info)}
             .badge-mastg,.badge-mstg{background:#eef2ff;color:#4338ca}
             .badge-llm{background:#fef3c7;color:#92400e}
+            .badge-present{background:var(--green-bg);color:var(--green)}
+            .badge-partial{background:var(--med-bg);color:var(--med)}
+            .badge-absent{background:var(--high-bg);color:var(--high)}
+            .badge-unknown{background:var(--info-bg);color:var(--info)}
+            .assess-row{display:flex;gap:.75rem;align-items:flex-start;padding:.65rem 0;border-bottom:1px solid var(--border)}
+            .assess-row:last-child{border-bottom:none}
+            .assess-body{flex:1;min-width:0}
+            .assess-title{font-weight:600;font-size:.9rem}
+            .assess-detail{font-size:.78rem;color:var(--muted);margin-top:.15rem}
+            .assess-ev{font-size:.72rem;font-family:ui-monospace,monospace;color:var(--muted);margin-top:.25rem;word-break:break-word}
 
             /* vuln cards */
             .vuln{background:var(--surface);border:1px solid var(--border);border-left:4px solid;border-radius:6px;padding:1rem 1.2rem;margin-bottom:.75rem;box-shadow:0 1px 2px rgba(0,0,0,.03)}
@@ -162,6 +190,11 @@ public final class HtmlReporter {
             .vuln-section p{font-size:.85rem;line-height:1.55}
             .vuln-grid{display:grid;grid-template-columns:1fr 1fr;gap:.85rem}
             @media(max-width:720px){.vuln-grid{grid-template-columns:1fr}}
+            .vuln-loc-count{font-size:.72rem;font-weight:600;color:var(--muted);background:var(--info-bg);padding:.1rem .45rem;border-radius:4px;white-space:nowrap}
+            .affected-list{display:flex;flex-direction:column;gap:.45rem}
+            .affected-item{font-size:.8rem;padding:.45rem .6rem;background:var(--bg);border:1px solid var(--border);border-radius:6px}
+            .affected-item .aff-name{font-family:ui-monospace,monospace;font-weight:600;word-break:break-all}
+            .affected-item .aff-meta{font-size:.72rem;color:var(--muted);margin-top:.15rem;word-break:break-all}
             pre.code{background:#111;color:#e2e8f0;padding:.6rem .8rem;border-radius:5px;font-family:ui-monospace,monospace;font-size:.72rem;white-space:pre-wrap;word-break:break-word;max-height:240px;overflow-y:auto}
             pre.poc{background:#0c1a2b;color:#bcd9ff}
 
@@ -218,8 +251,8 @@ public final class HtmlReporter {
     // ── risk dashboard ────────────────────────────────────────────────────────
 
     private static String riskDashboard(AnalysisReport r) {
-        // Exclude suppressed findings from the report's risk posture
-        List<AnalysisReport.VulnerabilityRecord> vulns = activeVulns(r);
+        // Unique open/active issues (grouped by rule_id), matching the web UI
+        List<VulnGroup> groups = groupActiveFindings(r);
 
         Map<String, Integer> sevCounts = new HashMap<>();
         Map<String, Integer> catCounts = new LinkedHashMap<>();
@@ -231,7 +264,10 @@ public final class HtmlReporter {
         catCounts.put("CODE", 0);
         catCounts.put("RESILIENCE", 0);
         int mastgCount = 0, llmCount = 0;
-        for (var v : vulns) {
+        int occurrenceCount = 0;
+        for (var g : groups) {
+            var v = g.representative();
+            occurrenceCount += g.occurrenceCount();
             String s = v.effectiveSeverity() == null ? "INFO" : v.effectiveSeverity().toUpperCase();
             sevCounts.merge(s, 1, Integer::sum);
             String c = v.category() == null ? "OTHER" : v.category().toUpperCase();
@@ -239,21 +275,30 @@ public final class HtmlReporter {
             if (v.ruleId() != null && v.ruleId().startsWith("LLM-")) llmCount++;
             else mastgCount++;
         }
-        int total = vulns.size();
+        int total = groups.size();
         int crit = sevCounts.getOrDefault("CRITICAL", 0);
         int high = sevCounts.getOrDefault("HIGH", 0);
         int med  = sevCounts.getOrDefault("MEDIUM", 0);
         int low  = sevCounts.getOrDefault("LOW", 0);
+        int info = sevCounts.getOrDefault("INFO", 0);
 
         StringBuilder h = new StringBuilder();
         h.append("<div class='card'>");
         h.append("<div class='card-meta'>Risk Posture</div>");
         h.append("<h2>").append(total).append(" finding").append(total == 1 ? "" : "s").append(" detected</h2>");
+        if (occurrenceCount > total) {
+            h.append("<p style='font-size:.75rem;color:var(--muted);margin:-.35rem 0 .85rem'>")
+             .append(total).append(" unique issue").append(total == 1 ? "" : "s")
+             .append(" &middot; ").append(occurrenceCount).append(" occurrence")
+             .append(occurrenceCount == 1 ? "" : "s")
+             .append(" &middot; summary counts unique open/active issues</p>");
+        }
         h.append("<div class='sev-grid'>");
         h.append(sevTile(crit, "Critical", crit > 0 ? "sev-critical" : "sev-zero"));
         h.append(sevTile(high, "High",     high > 0 ? "sev-high"     : "sev-zero"));
         h.append(sevTile(med,  "Medium",   med  > 0 ? "sev-medium"   : "sev-zero"));
         h.append(sevTile(low,  "Low",      low  > 0 ? "sev-low"      : "sev-zero"));
+        h.append(sevTile(info, "Info",     info > 0 ? "sev-info"     : "sev-zero"));
         h.append(sevTile(total, "Total",   "sev-total"));
         h.append("</div>");
 
@@ -276,6 +321,17 @@ public final class HtmlReporter {
         return "<div class='sev-tile " + cls + "'><div class='v'>" + n + "</div><div class='l'>" + label + "</div></div>";
     }
 
+    private static String platformLabel(AnalysisReport r) {
+        String plat = r.platform() == null ? "IOS" : r.platform().trim().toUpperCase();
+        return "ANDROID".equals(plat) ? "Android" : "iOS";
+    }
+
+    private static String languageLabel(AnalysisReport r) {
+        String plat = r.platform() == null ? "IOS" : r.platform().trim().toUpperCase();
+        if ("ANDROID".equals(plat)) return "Java/Kotlin (DEX)";
+        return r.isSwift() ? "Swift" : "Objective-C";
+    }
+
     // ── bundle / signing card ─────────────────────────────────────────────────
 
     private static String bundleCard(AnalysisReport r) {
@@ -285,7 +341,8 @@ public final class HtmlReporter {
         h.append("<div class='kv'>");
         kv(h, "Bundle ID",    r.bundleIdentifier());
         kv(h, "Executable",   r.bundleExecutable());
-        kv(h, "Language",     r.isSwift() ? "Swift" : "Objective-C");
+        kv(h, "Platform",     platformLabel(r));
+        kv(h, "Language",     languageLabel(r));
         kv(h, "Universal",    r.isUniversal() ? "Yes" : "No");
         kv(h, "Architectures",r.architectures() == null ? "" : String.join(", ", r.architectures()));
         kv(h, "Team ID",      r.bundleTeamId());
@@ -304,6 +361,79 @@ public final class HtmlReporter {
         h.append("<span class='kv-val'>").append(esc(v)).append("</span>");
     }
 
+    // ── SECURITY CONTROLS ASSESSMENT ─────────────────────────────────────────
+
+    private static String assessmentSection(AnalysisReport r) {
+        List<AnalysisReport.AssessmentRecord> items =
+                r.assessments() == null ? List.of() : r.assessments();
+        StringBuilder h = new StringBuilder();
+        h.append("<div class='card'>");
+        h.append("<div class='card-meta'>Security Controls Assessment</div>");
+        if (items.isEmpty()) {
+            h.append("<p style='color:var(--muted);font-size:.85rem'>")
+             .append("Assessment was not run for this scan (or produced no controls).")
+             .append("</p></div>");
+            return h.toString();
+        }
+        int present = 0, partial = 0, absent = 0, unknown = 0;
+        for (var a : items) {
+            switch (a.status() == null ? "" : a.status().toUpperCase()) {
+                case "PRESENT" -> present++;
+                case "PARTIAL" -> partial++;
+                case "ABSENT" -> absent++;
+                default -> unknown++;
+            }
+        }
+        h.append("<div class='sev-grid' style='grid-template-columns:repeat(4,1fr);margin-bottom:.85rem'>");
+        h.append("<div class='sev-tile sev-zero'><div class='v'>").append(present)
+         .append("</div><div class='l'>Present</div></div>");
+        h.append("<div class='sev-tile sev-medium'><div class='v'>").append(partial)
+         .append("</div><div class='l'>Partial</div></div>");
+        h.append("<div class='sev-tile sev-high'><div class='v'>").append(absent)
+         .append("</div><div class='l'>Absent</div></div>");
+        h.append("<div class='sev-tile sev-info'><div class='v'>").append(unknown)
+         .append("</div><div class='l'>Unknown</div></div>");
+        h.append("</div>");
+        h.append("<p style='font-size:.78rem;color:var(--muted);margin-bottom:.75rem'>")
+         .append("Static best-effort inventory of implemented protections. ")
+         .append("Absence of signals does not prove a control is missing on heavily packed apps. ")
+         .append("These rows are not counted in Risk Posture vulnerability totals.")
+         .append("</p>");
+
+        Map<String, List<AnalysisReport.AssessmentRecord>> byCat = new LinkedHashMap<>();
+        for (var a : items)
+            byCat.computeIfAbsent(a.category() == null ? "OTHER" : a.category(), k -> new ArrayList<>()).add(a);
+
+        for (var e : byCat.entrySet()) {
+            h.append("<details open><summary>").append(esc(e.getKey()))
+             .append("<span class='secondary'>").append(e.getValue().size())
+             .append(" controls</span></summary><div style='padding:.25rem 1.2rem 1rem'>");
+            for (var a : e.getValue()) {
+                String st = a.status() == null ? "UNKNOWN" : a.status().toUpperCase();
+                String badgeClass = switch (st) {
+                    case "PRESENT" -> "badge-present";
+                    case "PARTIAL" -> "badge-partial";
+                    case "ABSENT" -> "badge-absent";
+                    default -> "badge-unknown";
+                };
+                h.append("<div class='assess-row'>");
+                h.append("<span class='badge ").append(badgeClass).append("'>").append(esc(st)).append("</span>");
+                h.append("<div class='assess-body'>");
+                h.append("<div class='assess-title'>").append(esc(a.title())).append("</div>");
+                if (a.detail() != null && !a.detail().isBlank())
+                    h.append("<div class='assess-detail'>").append(esc(a.detail())).append("</div>");
+                if (a.evidence() != null && !a.evidence().isBlank())
+                    h.append("<div class='assess-ev'>").append(esc(a.evidence())).append("</div>");
+                h.append("<div class='assess-detail'><code>").append(esc(a.controlId()))
+                 .append("</code> · confidence ").append(esc(a.confidence())).append("</div>");
+                h.append("</div></div>");
+            }
+            h.append("</div></details>");
+        }
+        h.append("</div>");
+        return h.toString();
+    }
+
     // ── VULNERABILITIES (the centrepiece) ─────────────────────────────────────
 
     private static String vulnerabilitiesSection(AnalysisReport r) {
@@ -312,8 +442,8 @@ public final class HtmlReporter {
          .append("Vulnerabilities</div>");
 
         // Active findings only — false_positive / fixed are listed separately further down
-        var vulns = activeVulns(r);
-        if (vulns == null || vulns.isEmpty()) {
+        var groups = groupActiveFindings(r);
+        if (groups.isEmpty()) {
             h.append("<div class='card'><div class='empty empty-good'>")
              .append("✓ No vulnerabilities detected by static rules</div>")
              .append("<p style='text-align:center;color:var(--muted);font-size:.8rem;margin-top:.5rem'>")
@@ -323,17 +453,19 @@ public final class HtmlReporter {
         }
 
         // sort: effective severity (CRITICAL → LOW) then effective CVSS desc, then rule id
-        var sorted = new java.util.ArrayList<>(vulns);
+        var sorted = new ArrayList<>(groups);
         sorted.sort((a, b) -> {
-            int sa = sevRank(a.effectiveSeverity());
-            int sb = sevRank(b.effectiveSeverity());
+            var va = a.representative();
+            var vb = b.representative();
+            int sa = sevRank(va.effectiveSeverity());
+            int sb = sevRank(vb.effectiveSeverity());
             if (sa != sb) return Integer.compare(sa, sb);
-            int cvss = Double.compare(b.effectiveCvssScore(), a.effectiveCvssScore());
+            int cvss = Double.compare(vb.effectiveCvssScore(), va.effectiveCvssScore());
             if (cvss != 0) return cvss;
-            return String.valueOf(a.ruleId()).compareTo(String.valueOf(b.ruleId()));
+            return String.valueOf(va.ruleId()).compareTo(String.valueOf(vb.ruleId()));
         });
 
-        for (var v : sorted) h.append(vulnCard(v));
+        for (var g : sorted) h.append(vulnCard(g));
         return h.toString();
     }
 
@@ -355,7 +487,109 @@ public final class HtmlReporter {
         return r.vulnerabilities().stream().filter(v -> !v.isSuppressed()).toList();
     }
 
-    private static String vulnCard(AnalysisReport.VulnerabilityRecord v) {
+    /** Group active findings by rule_id (UI parity). */
+    private static List<VulnGroup> groupActiveFindings(AnalysisReport r) {
+        return groupFindingsByRule(activeVulns(r));
+    }
+
+    /**
+     * Groups raw vulnerability rows by {@code rule_id} (fallback: per-row id),
+     * picks a representative (prefer open/active triage, then higher severity,
+     * then lower id), and deduplicates affected assets.
+     */
+    static List<VulnGroup> groupFindingsByRule(List<AnalysisReport.VulnerabilityRecord> findings) {
+        if (findings == null || findings.isEmpty()) return List.of();
+        Map<String, List<AnalysisReport.VulnerabilityRecord>> byRule = new LinkedHashMap<>();
+        for (var f : findings) {
+            String key = (f.ruleId() != null && !f.ruleId().isBlank())
+                    ? f.ruleId()
+                    : "__id_" + f.id();
+            byRule.computeIfAbsent(key, k -> new ArrayList<>()).add(f);
+        }
+        List<VulnGroup> groups = new ArrayList<>();
+        for (var occurrences : byRule.values()) {
+            groups.add(new VulnGroup(
+                    pickRepresentative(occurrences),
+                    uniqueAffectedAssets(occurrences),
+                    occurrences.size()));
+        }
+        return groups;
+    }
+
+    private static AnalysisReport.VulnerabilityRecord pickRepresentative(
+            List<AnalysisReport.VulnerabilityRecord> occurrences) {
+        AnalysisReport.VulnerabilityRecord best = occurrences.get(0);
+        for (int i = 1; i < occurrences.size(); i++) {
+            var f = occurrences.get(i);
+            int stA = statusPref(f.status());
+            int stB = statusPref(best.status());
+            int sevA = sevStrength(f.effectiveSeverity());
+            int sevB = sevStrength(best.effectiveSeverity());
+            if (stA < stB || (stA == stB && (sevA > sevB || (sevA == sevB && f.id() < best.id())))) {
+                best = f;
+            }
+        }
+        return best;
+    }
+
+    private static int statusPref(String status) {
+        if (status == null) return 0;
+        return switch (status.toLowerCase(Locale.ROOT)) {
+            case "open" -> 0;
+            case "accepted_risk" -> 1;
+            case "fixed" -> 2;
+            case "false_positive" -> 3;
+            default -> 9;
+        };
+    }
+
+    /** Higher = more severe (for representative selection). */
+    private static int sevStrength(String s) {
+        if (s == null) return 0;
+        return switch (s.toUpperCase(Locale.ROOT)) {
+            case "CRITICAL" -> 5;
+            case "HIGH" -> 4;
+            case "MEDIUM" -> 3;
+            case "LOW" -> 2;
+            case "INFO" -> 1;
+            default -> 0;
+        };
+    }
+
+    static List<AnalysisReport.VulnerabilityRecord> uniqueAffectedAssets(
+            List<AnalysisReport.VulnerabilityRecord> occurrences) {
+        Set<String> seen = new HashSet<>();
+        List<AnalysisReport.VulnerabilityRecord> out = new ArrayList<>();
+        for (var f : occurrences) {
+            String key = assetDedupeKey(f);
+            if (!seen.add(key)) continue;
+            out.add(f);
+        }
+        return out;
+    }
+
+    private static String assetDedupeKey(AnalysisReport.VulnerabilityRecord f) {
+        return trimLower(f.affectedType()) + '\0'
+                + trimLower(f.affectedName()) + '\0'
+                + trimLower(f.evidenceLocation());
+    }
+
+    private static String trimLower(String s) {
+        return s == null ? "" : s.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /** One unique issue with its deduplicated affected assets. */
+    record VulnGroup(
+            AnalysisReport.VulnerabilityRecord representative,
+            List<AnalysisReport.VulnerabilityRecord> assets,
+            int occurrenceCount
+    ) {}
+
+    private static String vulnCard(VulnGroup group) {
+        var v = group.representative();
+        var assets = group.assets();
+        int locCount = assets.size();
+        int occCount = group.occurrenceCount();
         String sev = v.effectiveSeverity() == null ? "INFO" : v.effectiveSeverity().toUpperCase();
         String sevCls = sev.toLowerCase();
         boolean isLlm = v.ruleId() != null && v.ruleId().startsWith("LLM-");
@@ -368,8 +602,17 @@ public final class HtmlReporter {
         // head
         h.append("<div class='vuln-head'>");
         h.append("<span class='badge badge-").append(sevCls).append("'>").append(sev).append("</span>");
-        h.append("<span class='vuln-cvss'>CVSS ").append(String.format("%.1f", v.effectiveCvssScore())).append("</span>");
+        h.append("<span class='vuln-cvss'>CVSS ")
+                .append(String.format(Locale.US, "%.1f", v.effectiveCvssScore()))
+                .append("</span>");
         h.append("<div class='vuln-title'>").append(esc(v.title() == null ? "" : v.title())).append("</div>");
+        if (locCount > 1) {
+            h.append("<span class='vuln-loc-count' title='").append(occCount)
+             .append(" occurrence").append(occCount == 1 ? "" : "s").append("'>")
+             .append(locCount).append(" locations</span>");
+        } else if (occCount > 1) {
+            h.append("<span class='vuln-loc-count'>").append(occCount).append(" hits</span>");
+        }
         h.append("</div>");
         if (overridden) {
             h.append("<div style='font-size:.72rem;color:var(--muted);margin-bottom:.5rem;font-style:italic'>")
@@ -397,15 +640,13 @@ public final class HtmlReporter {
             h.append("</div>");
         }
 
-        // affected + evidence side-by-side
+        // affected assets + evidence side-by-side
         h.append("<div class='vuln-grid'>");
         h.append("<div class='vuln-section'>");
-        h.append("<div class='vuln-section-title'>Affected</div>");
-        h.append("<div class='kv'>");
-        kv(h, "Type",     v.affectedType());
-        kv(h, "Name",     v.affectedName());
-        kv(h, "Location", v.evidenceLocation());
-        h.append("</div></div>");
+        h.append("<div class='vuln-section-title'>Affected (")
+         .append(locCount).append(" unique)</div>");
+        h.append(renderAffectedAssetsList(assets));
+        h.append("</div>");
 
         h.append("<div class='vuln-section'>");
         h.append("<div class='vuln-section-title'>Evidence</div>");
@@ -447,6 +688,32 @@ public final class HtmlReporter {
         return h.toString();
     }
 
+    private static String renderAffectedAssetsList(List<AnalysisReport.VulnerabilityRecord> assets) {
+        if (assets == null || assets.isEmpty()) {
+            return "<div class='kv'>"
+                    + "<span class='kv-key'>Type</span><span class='kv-val'>—</span>"
+                    + "<span class='kv-key'>Name</span><span class='kv-val'>—</span>"
+                    + "<span class='kv-key'>Location</span><span class='kv-val'>—</span>"
+                    + "</div>";
+        }
+        StringBuilder h = new StringBuilder();
+        h.append("<div class='affected-list'>");
+        for (var a : assets) {
+            h.append("<div class='affected-item'>");
+            h.append("<div class='aff-name'>")
+             .append(esc(notBlank(a.affectedName()) ? a.affectedName() : "—"))
+             .append("</div>");
+            h.append("<div class='aff-meta'>");
+            h.append(esc(notBlank(a.affectedType()) ? a.affectedType() : "asset"));
+            if (notBlank(a.evidenceLocation())) {
+                h.append(" &middot; ").append(esc(a.evidenceLocation()));
+            }
+            h.append("</div></div>");
+        }
+        h.append("</div>");
+        return h.toString();
+    }
+
     // ── Suppressed findings (audit trail) ─────────────────────────────────────
 
     private static String suppressedSection(AnalysisReport r) {
@@ -454,16 +721,20 @@ public final class HtmlReporter {
         var suppressed = r.vulnerabilities().stream().filter(v -> v.isSuppressed()).toList();
         if (suppressed.isEmpty()) return "";
 
+        // Group by rule_id so the audit trail matches unique-issue counting
+        var groups = groupFindingsByRule(suppressed);
+
         StringBuilder h = new StringBuilder();
         h.append("<details>");
         h.append("<summary>Suppressed Findings <span class='secondary'>(")
-         .append(suppressed.size()).append(" finding")
-         .append(suppressed.size() == 1 ? "" : "s")
+         .append(groups.size()).append(" unique issue")
+         .append(groups.size() == 1 ? "" : "s")
          .append(" marked as false positive or fixed — excluded from risk posture)</span></summary>");
         h.append("<div class='details-body'>");
         h.append("<table>");
-        h.append("<tr><th>Status</th><th>Rule</th><th>Title</th><th>Original Severity</th><th>Reviewer Note</th></tr>");
-        for (var v : suppressed) {
+        h.append("<tr><th>Status</th><th>Rule</th><th>Title</th><th>Assets</th><th>Original Severity</th><th>Reviewer Note</th></tr>");
+        for (var g : groups) {
+            var v = g.representative();
             String statusLabel = "false_positive".equalsIgnoreCase(v.status()) ? "False Positive"
                                : "fixed".equalsIgnoreCase(v.status())          ? "Fixed"
                                : v.status();
@@ -471,38 +742,10 @@ public final class HtmlReporter {
             h.append("<td><span class='badge badge-info'>").append(esc(statusLabel)).append("</span></td>");
             h.append("<td class='mono'>").append(esc(v.ruleId())).append("</td>");
             h.append("<td>").append(esc(v.title())).append("</td>");
+            h.append("<td>").append(g.assets().size()).append("</td>");
             h.append("<td>").append(esc(v.severity())).append("</td>");
             h.append("<td>").append(esc(v.overrideNote() == null ? "" : v.overrideNote())).append("</td>");
             h.append("</tr>");
-        }
-        h.append("</table></div></details>");
-        return h.toString();
-    }
-
-    // ── LLM raw findings (only when notable) ──────────────────────────────────
-
-    private static String llmRawSection(AnalysisReport r) {
-        if (r.llmFindings() == null || r.llmFindings().isEmpty()) return "";
-        // Filter to ones that actually mention a severity tag — others are noise (NONE / per-fn summaries).
-        var withSeverity = r.llmFindings().stream()
-                .filter(f -> f.finding() != null && hasSeverityKeyword(f.finding()))
-                .toList();
-        if (withSeverity.isEmpty()) return "";
-
-        StringBuilder h = new StringBuilder();
-        h.append("<details>");
-        h.append("<summary>Raw LLM Findings <span class='secondary'>(")
-         .append(withSeverity.size()).append(" function").append(withSeverity.size() == 1 ? "" : "s")
-         .append(" flagged — vulnerabilities above are already distilled from these)</span></summary>");
-        h.append("<div class='details-body'><table>");
-        h.append("<tr><th>Class</th><th>Function</th><th>Mode</th><th>Finding (truncated)</th></tr>");
-        for (var f : withSeverity) {
-            String snippet = f.finding();
-            if (snippet.length() > 400) snippet = snippet.substring(0, 400) + "…";
-            h.append("<tr><td class='mono'>").append(esc(f.className()))
-             .append("</td><td class='mono'>").append(esc(f.functionName()))
-             .append("</td><td>").append(esc(f.mode()))
-             .append("</td><td><pre class='code'>").append(esc(snippet)).append("</pre></td></tr>");
         }
         h.append("</table></div></details>");
         return h.toString();
@@ -577,12 +820,6 @@ public final class HtmlReporter {
     // ── utils ─────────────────────────────────────────────────────────────────
 
     private static boolean notBlank(String s) { return s != null && !s.isBlank(); }
-
-    private static boolean hasSeverityKeyword(String s) {
-        if (s == null) return false;
-        String u = s.toUpperCase();
-        return u.contains("HIGH") || u.contains("MEDIUM") || u.contains("CRITICAL") || u.contains("LOW");
-    }
 
     private static String esc(String s) {
         if (s == null) return "";

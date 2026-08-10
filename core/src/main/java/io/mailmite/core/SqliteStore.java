@@ -153,6 +153,22 @@ public class SqliteStore implements AutoCloseable {
             addColumnIfMissing(s, "Vulnerabilities", "OverrideCvssScore", "REAL");
             addColumnIfMissing(s, "Vulnerabilities", "OverrideNote",      "TEXT");
             addColumnIfMissing(s, "Vulnerabilities", "UpdatedAt",         "INTEGER");
+            // Decompiler origin: JADX (Android Java) vs GHIDRA (iOS Mach-O / Android .so)
+            addColumnIfMissing(s, "Functions", "Origin", "TEXT DEFAULT 'GHIDRA'");
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS Assessments (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ControlId      TEXT,
+                    Title          TEXT,
+                    Category       TEXT,
+                    Status         TEXT,
+                    Confidence     TEXT,
+                    Evidence       TEXT,
+                    Detail         TEXT,
+                    Platform       TEXT,
+                    ExecutableName TEXT,
+                    CreatedAt      INTEGER
+                )""");
             conn.commit();
         }
     }
@@ -192,18 +208,33 @@ public class SqliteStore implements AutoCloseable {
         }
     }
 
+    /**
+     * @param origin {@code JADX} or {@code GHIDRA}; null/blank defaults to {@code GHIDRA}
+     */
     public record DecompilationResult(
             String functionName,
             String className,
             String decompiledCode,
-            String executableName) {}
+            String executableName,
+            String origin) {
+        public DecompilationResult(String functionName, String className,
+                                   String decompiledCode, String executableName) {
+            this(functionName, className, decompiledCode, executableName, "GHIDRA");
+        }
+
+        public String resolvedOrigin() {
+            if (origin == null || origin.isBlank()) return "GHIDRA";
+            return origin.trim().toUpperCase();
+        }
+    }
 
     public void insertFunctionDecompilations(List<DecompilationResult> results) {
         String sql = """
-                INSERT INTO Functions(FunctionName, ParentClass, DecompilationCode, ExecutableName)
-                VALUES(?,?,?,?)
+                INSERT INTO Functions(FunctionName, ParentClass, DecompilationCode, ExecutableName, Origin)
+                VALUES(?,?,?,?,?)
                 ON CONFLICT(FunctionName, ParentClass, ExecutableName)
-                DO UPDATE SET DecompilationCode=excluded.DecompilationCode
+                DO UPDATE SET DecompilationCode=excluded.DecompilationCode,
+                              Origin=excluded.Origin
                 """;
         try (PreparedStatement p = conn.prepareStatement(sql)) {
             for (DecompilationResult r : results) {
@@ -211,6 +242,7 @@ public class SqliteStore implements AutoCloseable {
                 p.setString(2, r.className());
                 p.setString(3, r.decompiledCode());
                 p.setString(4, r.executableName());
+                p.setString(5, r.resolvedOrigin());
                 p.addBatch();
             }
             p.executeBatch();
@@ -432,16 +464,19 @@ public class SqliteStore implements AutoCloseable {
 
     public List<DecompilationResult> getAllDecompiledFunctions(String executableName) {
         List<DecompilationResult> out = new ArrayList<>();
-        String sql = "SELECT FunctionName, ParentClass, DecompilationCode FROM Functions WHERE ExecutableName=?";
+        String sql = "SELECT FunctionName, ParentClass, DecompilationCode, Origin FROM Functions WHERE ExecutableName=?";
         try (PreparedStatement p = conn.prepareStatement(sql)) {
             p.setString(1, executableName);
             try (ResultSet rs = p.executeQuery()) {
-                while (rs.next())
+                while (rs.next()) {
+                    String origin = rs.getString("Origin");
                     out.add(new DecompilationResult(
                             rs.getString("FunctionName"),
                             rs.getString("ParentClass"),
                             rs.getString("DecompilationCode"),
-                            executableName));
+                            executableName,
+                            origin == null || origin.isBlank() ? "GHIDRA" : origin));
+                }
             }
         } catch (SQLException e) {
             log.error("getAllDecompiledFunctions failed", e);
@@ -686,6 +721,76 @@ public class SqliteStore implements AutoCloseable {
             log.error("updateVulnerabilityTriage failed", e);
             return false;
         }
+    }
+
+    // ── assessments (security controls inventory) ─────────────────────────────
+
+    public void clearAssessments(String executableName) {
+        try (PreparedStatement p = conn.prepareStatement(
+                "DELETE FROM Assessments WHERE ExecutableName=?")) {
+            p.setString(1, executableName);
+            p.executeUpdate();
+            conn.commit();
+        } catch (SQLException e) {
+            log.error("clearAssessments failed", e);
+        }
+    }
+
+    public void insertAssessment(AssessmentResult a, String executableName) {
+        String sql = """
+                INSERT INTO Assessments(
+                    ControlId, Title, Category, Status, Confidence,
+                    Evidence, Detail, Platform, ExecutableName, CreatedAt)
+                VALUES(?,?,?,?,?,?,?,?,?,?)
+                """;
+        try (PreparedStatement p = conn.prepareStatement(sql)) {
+            p.setString(1, a.controlId());
+            p.setString(2, a.title());
+            p.setString(3, a.category());
+            p.setString(4, a.status().name());
+            p.setString(5, a.confidence());
+            p.setString(6, a.evidenceJoined());
+            p.setString(7, a.detailJoined());
+            p.setString(8, a.platform());
+            p.setString(9, executableName);
+            p.setLong(10, System.currentTimeMillis());
+            p.executeUpdate();
+            conn.commit();
+        } catch (SQLException e) {
+            log.error("insertAssessment failed", e);
+        }
+    }
+
+    public List<Map<String, Object>> getAssessments(String executableName) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        String sql = """
+                SELECT id, ControlId, Title, Category, Status, Confidence,
+                       Evidence, Detail, Platform, CreatedAt
+                FROM Assessments WHERE ExecutableName=?
+                ORDER BY Category, ControlId
+                """;
+        try (PreparedStatement p = conn.prepareStatement(sql)) {
+            p.setString(1, executableName);
+            try (ResultSet rs = p.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> row = new HashMap<>();
+                    row.put("id", rs.getLong("id"));
+                    row.put("control_id", rs.getString("ControlId"));
+                    row.put("title", rs.getString("Title"));
+                    row.put("category", rs.getString("Category"));
+                    row.put("status", rs.getString("Status"));
+                    row.put("confidence", rs.getString("Confidence"));
+                    row.put("evidence", rs.getString("Evidence"));
+                    row.put("detail", rs.getString("Detail"));
+                    row.put("platform", rs.getString("Platform"));
+                    row.put("created_at", rs.getLong("CreatedAt"));
+                    out.add(row);
+                }
+            }
+        } catch (SQLException e) {
+            log.error("getAssessments failed", e);
+        }
+        return out;
     }
 
     // ── lifecycle ─────────────────────────────────────────────────────────────
