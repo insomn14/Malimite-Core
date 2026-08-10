@@ -1,17 +1,17 @@
-# Mailmite — Slack Bot (standalone)
+# Malimite — Slack Bot (standalone)
 
-Run Mailmite from Slack with **no web service required**.
+Run Malimite from Slack with **no web service required**.
 
 - Listens via **Socket Mode** — bot connects outbound to Slack over WebSocket, so you don't need a public HTTPS endpoint, ngrok, or a reverse proxy.
 - Uploads an `.ipa` in DM or a channel where the bot is invited → bot replies in a thread with a severity-sorted summary, top findings, plus the full HTML report and SARIF as attachments.
-- No FastAPI, no Redis, no MinIO. One Python process + the existing Mailmite CLI JAR.
+- No FastAPI, no Redis, no MinIO. One Python process + the existing Malimite CLI JAR.
 
 ---
 
 ## 1. Create the Slack App (one-time, ~3 minutes)
 
 1. Go to https://api.slack.com/apps → **Create New App** → *From scratch*.
-   Give it a name like "Mailmite" and pick your workspace.
+   Give it a name like "Malimite" and pick your workspace.
 
 2. **Enable Socket Mode**
    *Sidebar → Socket Mode* → toggle **Enable Socket Mode** ON.
@@ -24,7 +24,7 @@ Run Mailmite from Slack with **no web service required**.
    - `files:write` — upload report.html / findings.sarif back to Slack
    - `channels:history` *(optional, for channel uploads)*
    - `im:history` *(for DM uploads)*
-   - `app_mentions:read` *(so users can `@mailmite help`)*
+   - `app_mentions:read` *(so users can `@malimite help`)*
 
 4. **Subscribe to events**
    *Sidebar → Event Subscriptions* → toggle ON.
@@ -43,7 +43,7 @@ Run Mailmite from Slack with **no web service required**.
 ## 2. Configure the bot host
 
 ```bash
-cd /home/vagrant/Tools/RE/Mailmite-Core/bot/python
+cd /home/vagrant/Tools/RE/Malimite-Core/bot/python
 cp .env.example .env
 $EDITOR .env       # paste xapp- and xoxb- tokens, set Ghidra path
 ```
@@ -52,7 +52,7 @@ Required:
 - `SLACK_APP_TOKEN` = the `xapp-…` from step 2
 - `SLACK_BOT_TOKEN` = the `xoxb-…` from step 5
 - `GHIDRA_HOME` = where Ghidra is installed (default `/usr/share/ghidra`)
-- `MAILMITE_CLI_JAR` = path to the built fat JAR (default `../../cli/target/mailmite-cli.jar`)
+- `MALIMITE_CLI_JAR` = path to the built fat JAR (default `../../cli/target/malimite-cli.jar`)
 
 Optional LLM enrichment:
 - `LLM_PROVIDER=deepseek` + `DEEPSEEK_API_KEY=sk-…` (models: `deepseek-v4-flash`, `deepseek-v4-pro`, `deepseek-chat`, `deepseek-reasoner`)
@@ -65,9 +65,9 @@ Optional LLM enrichment:
 ## 3. Build the CLI JAR (if you haven't yet)
 
 ```bash
-cd /home/vagrant/Tools/RE/Mailmite-Core
+cd /home/vagrant/Tools/RE/Malimite-Core
 mvn package -DskipTests -pl core,cli
-# Produces cli/target/mailmite-cli.jar
+# Produces cli/target/malimite-cli.jar
 ```
 
 ---
@@ -81,7 +81,7 @@ cd bot/python
 
 You should see:
 ```
-INFO mailmite.slack: Mailmite Slack bot starting (Socket Mode) — CLI=…/mailmite-cli.jar
+INFO malimite.slack: Malimite Slack bot starting (Socket Mode) — CLI=…/malimite-cli.jar
 INFO slack_bolt.AsyncApp: A new session has been established
 ```
 
@@ -94,9 +94,9 @@ In any DM with the bot, or in a channel where you've invited it:
 | What you do | What the bot does |
 |---|---|
 | Drop an `.ipa` file | :hourglass_flowing_sand: queues + scans + replies in thread |
-| `mailmite help` | shows usage |
-| `mailmite version` | shows CLI/Ghidra/LLM config |
-| `@mailmite` mention | shows help |
+| `malimite help` | shows usage |
+| `malimite version` | shows CLI/Ghidra/LLM config |
+| `@malimite` mention | shows help |
 
 The bot replies in a **thread** off the original upload, so the channel stays clean.
 
@@ -105,17 +105,17 @@ The bot replies in a **thread** off the original upload, so the channel stays cl
 ## 6. As a systemd service (optional)
 
 ```ini
-# /etc/systemd/system/mailmite-slack.service
+# /etc/systemd/system/malimite-slack.service
 [Unit]
-Description=Mailmite Slack Bot
+Description=Malimite Slack Bot
 After=network-online.target
 
 [Service]
 Type=simple
-User=mailmite
-WorkingDirectory=/opt/mailmite/bot/python
-EnvironmentFile=/opt/mailmite/bot/python/.env
-ExecStart=/usr/bin/python3 /opt/mailmite/bot/python/slack_bot.py
+User=malimite
+WorkingDirectory=/opt/malimite/bot/python
+EnvironmentFile=/opt/malimite/bot/python/.env
+ExecStart=/usr/bin/python3 /opt/malimite/bot/python/slack_bot.py
 Restart=on-failure
 RestartSec=5
 
@@ -125,8 +125,8 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now mailmite-slack
-sudo journalctl -fu mailmite-slack
+sudo systemctl enable --now malimite-slack
+sudo journalctl -fu malimite-slack
 ```
 
 ---
@@ -141,7 +141,7 @@ sudo journalctl -fu mailmite-slack
                                              │ subprocess
                                              ▼
                                           ┌────────────────────┐
-                                          │ mailmite-cli.jar   │
+                                          │ malimite-cli.jar   │
                                           │  → analyzeHeadless │
                                           │  → MSTG scanner    │
                                           │  → optional LLM    │
@@ -162,7 +162,7 @@ sudo journalctl -fu mailmite-slack
 |---|---|
 | `"socket_mode_request_failed"` on startup | `SLACK_APP_TOKEN` wrong scope — must have `connections:write` |
 | Bot sees file but never starts a scan | `file_shared` event not subscribed, or bot not in the channel |
-| `not_in_channel` when uploading reports | Bot needs to be invited to the channel (`/invite @mailmite`) |
+| `not_in_channel` when uploading reports | Bot needs to be invited to the channel (`/invite @malimite`) |
 | `file_upload_failed` | Missing `files:write` bot scope |
 | Scan hangs > 10 min | Check `analysis.log` under `SCAN_ROOT/<scan_id>/` — usually Ghidra issue |
 | LLM ignored | `LLM_PROVIDER` is `none`, or API key env var missing |

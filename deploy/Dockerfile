@@ -41,16 +41,16 @@ ENV JADX_HOME=/opt/jadx
 ENV PATH=$JADX_HOME/bin:$PATH
 
 WORKDIR /app
-COPY --from=build /src/cli/target/mailmite-cli.jar     /app/cli.jar
-COPY --from=build /src/api/target/mailmite-api.jar     /app/api.jar
-COPY --from=build /src/worker/target/mailmite-worker.jar /app/worker.jar
-COPY --from=build /src/watcher/target/mailmite-watcher.jar /app/watcher.jar
-COPY --from=build /src/bot/target/mailmite-bot.jar     /app/bot.jar
+COPY --from=build /src/cli/target/malimite-cli.jar     /app/cli.jar
+COPY --from=build /src/api/target/malimite-api.jar     /app/api.jar
+COPY --from=build /src/worker/target/malimite-worker.jar /app/worker.jar
+COPY --from=build /src/watcher/target/malimite-watcher.jar /app/watcher.jar
+COPY --from=build /src/bot/target/malimite-bot.jar     /app/bot.jar
 COPY web/ /web/
 
-# Convenience wrapper: `mailmite <args>` from CLI image.
-RUN printf '#!/bin/sh\nexec java -jar /app/cli.jar "$@"\n' > /usr/local/bin/mailmite && \
-    chmod +x /usr/local/bin/mailmite
+# Convenience wrapper: `malimite <args>` from CLI image.
+RUN printf '#!/bin/sh\nexec java -jar /app/cli.jar "$@"\n' > /usr/local/bin/malimite && \
+    chmod +x /usr/local/bin/malimite
 
 # Default = API. Override CMD to run worker/watcher/bot.
 EXPOSE 8080

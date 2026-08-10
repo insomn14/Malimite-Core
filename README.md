@@ -1,8 +1,8 @@
-# Mailmite-Core
+# Malimite-Core
 
 **Headless iOS & Android static analysis platform** — decompile `.ipa` (Ghidra) and `.apk` (JADX for DEX, optional Ghidra for arm64 `.so`), scan against OWASP MASTG/MSTG rules, optionally enrich with LLM, and deliver findings through a web UI, REST API, Slack bot, or CI/CD pipeline.
 
-> Inspired by and ported from [**Malimite**](https://github.com/LaurieWired/Malimite) by [@LaurieWired](https://github.com/LaurieWired) — the excellent interactive iOS/macOS decompiler. Mailmite-Core takes the same Ghidra-backed analysis pipeline and refactors it for **automation, team workflows, and continuous security scanning** instead of desktop GUI use.
+> Inspired by and ported from [**Malimite**](https://github.com/LaurieWired/Malimite) by [@LaurieWired](https://github.com/LaurieWired) — the excellent interactive iOS/macOS decompiler. Malimite-Core takes the same Ghidra-backed analysis pipeline and refactors it for **automation, team workflows, and continuous security scanning** instead of desktop GUI use.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17+-orange.svg)](https://openjdk.org/)
@@ -21,8 +21,8 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 
 ## Table of contents
 
-- [Why Mailmite?](#why-mailmite)
-- [Malimite vs Mailmite-Core](#malimite-vs-mailmite-core)
+- [Why Malimite?](#why-malimite)
+- [Malimite vs Malimite-Core](#malimite-vs-malimite-core)
 - [Features](#features)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
@@ -40,11 +40,11 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 
 ---
 
-## Why Mailmite?
+## Why Malimite?
 
 [Malimite](https://github.com/LaurieWired/Malimite) is built for researchers who want a rich desktop experience: drag an IPA, browse decompiled Swift/Objective-C, and translate methods with built-in LLM support. That workflow is ideal for interactive reverse engineering.
 
-**Mailmite-Core** targets a different problem (and adds Android APK analysis via JADX alongside the iOS Ghidra path):
+**Malimite-Core** targets a different problem (and adds Android APK analysis via JADX alongside the iOS Ghidra path):
 
 - Run scans in **CI/CD** on every release build
 - Let security teams **triage findings** (false positive, accepted risk, severity override)
@@ -56,9 +56,9 @@ Same Ghidra decompilation DNA. Different deployment model.
 
 ---
 
-## Malimite vs Mailmite-Core
+## Malimite vs Malimite-Core
 
-| | [Malimite](https://github.com/LaurieWired/Malimite) | Mailmite-Core |
+| | [Malimite](https://github.com/LaurieWired/Malimite) | Malimite-Core |
 |---|---|---|
 | **Interface** | Desktop GUI (Swing) | Headless CLI + Web SPA + Slack |
 | **Primary use** | Interactive RE | Automation & AppSec pipelines |
@@ -69,7 +69,7 @@ Same Ghidra decompilation DNA. Different deployment model.
 | **LLM providers** | OpenAI (upstream) | OpenAI, Claude, **DeepSeek**, Ollama |
 | **License** | Apache 2.0 | Apache 2.0 |
 
-Mailmite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `SyntaxParser`, `DemangleSwift`, `DumpClassData.java`, SQLite schema, LLM enrichment patterns) into a modular Maven monorepo with no Swing/AWT dependencies.
+Malimite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `SyntaxParser`, `DemangleSwift`, `DumpClassData.java`, SQLite schema, LLM enrichment patterns) into a modular Maven monorepo with no Swing/AWT dependencies.
 
 ---
 
@@ -100,8 +100,8 @@ Mailmite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
                                           │
                                           ▼
               ┌───────────────────────────────────────────────────────┐
-              │              mailmite-cli.jar  (fat JAR)              │
-              │  MailmiteAnalyzer: validate → extract → decompile     │
+              │              malimite-cli.jar  (fat JAR)              │
+              │  MalimiteAnalyzer: validate → extract → decompile     │
               │       → vuln scan + optional Assessment + LLM         │
               └─────────────────────┬─────────────────────────────────┘
                      │              │              │              │
@@ -152,10 +152,10 @@ export JADX_HOME=/opt/jadx   # directory containing bin/jadx
 ### 1. Build
 
 ```bash
-git clone https://github.com/insomn14/Mailmite-Core.git
-cd Mailmite-Core
+git clone https://github.com/insomn14/Malimite-Core.git
+cd Malimite-Core
 mvn -DskipTests package -pl core,cli
-# → cli/target/mailmite-cli.jar
+# → cli/target/malimite-cli.jar
 ```
 
 ### 2. Scan an IPA or APK (CLI)
@@ -164,15 +164,15 @@ mvn -DskipTests package -pl core,cli
 export GHIDRA_HOME=/usr/share/ghidra
 export JADX_HOME=/opt/jadx
 
-java -jar cli/target/mailmite-cli.jar path/to/MyApp.ipa \
+java -jar cli/target/malimite-cli.jar path/to/MyApp.ipa \
      --ghidra "$GHIDRA_HOME" \
-     --out /tmp/mailmite-scan \
+     --out /tmp/malimite-scan \
      --sarif --html
 
-java -jar cli/target/mailmite-cli.jar path/to/MyApp.apk \
+java -jar cli/target/malimite-cli.jar path/to/MyApp.apk \
      --jadx "$JADX_HOME" \
      --ghidra "$GHIDRA_HOME" \
-     --out /tmp/mailmite-apk-scan \
+     --out /tmp/malimite-apk-scan \
      --sarif --html
 # JADX decompiles DEX; Ghidra decompiles lib/arm64-v8a/*.so when present
 ```
@@ -191,14 +191,14 @@ java -jar cli/target/mailmite-cli.jar path/to/MyApp.apk \
 ```bash
 # DeepSeek
 DEEPSEEK_API_KEY=sk-... \
-  java -jar cli/target/mailmite-cli.jar MyApp.ipa \
+  java -jar cli/target/malimite-cli.jar MyApp.ipa \
        --ghidra "$GHIDRA_HOME" --out /tmp/scan --sarif --html \
        --llm --llm-provider deepseek --llm-model deepseek-v4-flash \
        --llm-mode find_vulns --fail-on HIGH
 
 # Claude
 ANTHROPIC_API_KEY=sk-ant-... \
-  java -jar cli/target/mailmite-cli.jar MyApp.ipa \
+  java -jar cli/target/malimite-cli.jar MyApp.ipa \
        --ghidra "$GHIDRA_HOME" --out /tmp/scan --sarif --html \
        --llm --llm-provider claude --llm-mode find_vulns
 ```
@@ -252,7 +252,7 @@ Ready-to-use templates:
 | Platform | File |
 |----------|------|
 | GitHub Actions | [`.github/workflows/ipa-scan.yml`](.github/workflows/ipa-scan.yml) |
-| GitLab CI | [`.gitlab/mailmite.yml`](.gitlab/mailmite.yml) |
+| GitLab CI | [`.gitlab/malimite.yml`](.gitlab/malimite.yml) |
 | Bitbucket Pipelines | [`bitbucket-pipelines.yml`](bitbucket-pipelines.yml) |
 
 GitHub Actions uploads SARIF to the **Security → Code scanning** tab automatically. Stock templates target `.ipa` + Ghidra; for APK scans set `JADX_HOME` (Docker image includes JADX at `/opt/jadx`) alongside `GHIDRA_HOME`. Optional secrets: `LLM_PROVIDER`, `DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`.
@@ -284,7 +284,7 @@ Each finding includes rule ID, severity, CVSS, CWE, evidence, PoC steps, remedia
 
 ### Security Assessment
 
-Enable (default) with `--assessment` or the web **Security Assessment** checkbox. Mailmite inventories implemented protections — obfuscation (R8 vs commercial vendors), root/jailbreak & Frida detection, SSL pinning style, FLAG_SECURE, native ELF hardening, and more — as `PRESENT` / `PARTIAL` / `ABSENT` / `UNKNOWN`. Results appear in the **Assessment** tab and the HTML report section *Security Controls Assessment*, and are **not** mixed into vulnerability severity counts.
+Enable (default) with `--assessment` or the web **Security Assessment** checkbox. Malimite inventories implemented protections — obfuscation (R8 vs commercial vendors), root/jailbreak & Frida detection, SSL pinning style, FLAG_SECURE, native ELF hardening, and more — as `PRESENT` / `PARTIAL` / `ABSENT` / `UNKNOWN`. Results appear in the **Assessment** tab and the HTML report section *Security Controls Assessment*, and are **not** mixed into vulnerability severity counts.
 
 ### LLM enrichment
 
@@ -292,7 +292,7 @@ Supported providers: **OpenAI**, **Anthropic Claude**, **DeepSeek**, **Ollama**.
 
 Modes: `summarize` · `find_vulns` · `auto_fix`
 
-When LLM finds a vulnerability, it returns a `detection_regex`. Regexes that self-validate against the source function are saved per platform — `~/.mailmite/learned_rules.json` (iOS) or `learned_rules_android.json` (Android) — and reused on future scans **without further LLM calls**. Hollow placeholders such as `...` are rejected.
+When LLM finds a vulnerability, it returns a `detection_regex`. Regexes that self-validate against the source function are saved per platform — `~/.malimite/learned_rules.json` (iOS) or `learned_rules_android.json` (Android) — and reused on future scans **without further LLM calls**. Hollow placeholders such as `...` are rejected.
 
 ### DeepSeek models
 
@@ -325,7 +325,7 @@ Reports (`report.html`, `findings.sarif`) regenerate automatically after each tr
 ### CLI flags
 
 ```
-mailmite [OPTIONS] <ipa|apk>
+malimite [OPTIONS] <ipa|apk>
   -o, --out=<dir>          Output directory
   -g, --ghidra=<dir>       Ghidra install (or env GHIDRA_HOME) — iOS Mach-O + Android arm64 .so
   -j, --jadx=<dir>         JADX install (or env JADX_HOME) — Android DEX/Java
@@ -346,8 +346,8 @@ mailmite [OPTIONS] <ipa|apk>
 |----------|---------|
 | `GHIDRA_HOME` | Ghidra install (iOS Mach-O; Android `lib/arm64-v8a/*.so`) |
 | `JADX_HOME` / `JADX_PATH` | JADX install root or binary path (Android DEX) |
-| `MAILMITE_LEARNED_RULES` / `MAILMITE_LEARNED_RULES_IOS` | iOS learned-rules JSON (default `~/.mailmite/learned_rules.json`) |
-| `MAILMITE_LEARNED_RULES_ANDROID` | Android learned-rules JSON (default `~/.mailmite/learned_rules_android.json`) |
+| `MALIMITE_LEARNED_RULES` / `MALIMITE_LEARNED_RULES_IOS` | iOS learned-rules JSON (default `~/.malimite/learned_rules.json`) |
+| `MALIMITE_LEARNED_RULES_ANDROID` | Android learned-rules JSON (default `~/.malimite/learned_rules_android.json`) |
 | `LLM_PROVIDER` | `openai` · `claude` · `deepseek` · `ollama` · `none` |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
@@ -363,9 +363,9 @@ mailmite [OPTIONS] <ipa|apk>
 ## Project structure
 
 ```
-Mailmite-Core/
+Malimite-Core/
 ├── core/           # Analysis engine (Ghidra, JADX, MASTG scanners, Assessment, LLM, SARIF, HTML)
-├── cli/            # mailmite-cli.jar entry point
+├── cli/            # malimite-cli.jar entry point
 ├── web/            # FastAPI + SPA (recommended deployment)
 ├── bot/python/     # Slack bot (Socket Mode)
 ├── deploy/         # Dockerfile + docker-compose
@@ -403,12 +403,12 @@ See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 
 ## Credits & license
 
-**Mailmite-Core** is a headless reimplementation inspired by [**Malimite**](https://github.com/LaurieWired/Malimite) by [LaurieWired](https://github.com/LaurieWired). Malimite is an iOS and macOS decompiler built on Ghidra with direct Swift/Objective-C support and built-in LLM method translation — if you need an interactive desktop tool, start there.
+**Malimite-Core** is a headless reimplementation inspired by [**Malimite**](https://github.com/LaurieWired/Malimite) by [LaurieWired](https://github.com/LaurieWired). Malimite is an iOS and macOS decompiler built on Ghidra with direct Swift/Objective-C support and built-in LLM method translation — if you need an interactive desktop tool, start there.
 
 Key upstream concepts ported (with Swing removed):
 
 - `GhidraProject` → `GhidraRunner`
-- `DynamicDecompile` / `FileProcessing` → `MailmiteAnalyzer` / `IpaExtractor`
+- `DynamicDecompile` / `FileProcessing` → `MalimiteAnalyzer` / `IpaExtractor`
 - `AIBackend` → `LlmEnricher` (+ Claude, DeepSeek, Ollama providers)
 - `DecompilerBridge/ghidra/DumpClassData.java` → bundled Ghidra post-script
 - `SQLiteDBHandler` → `SqliteStore`
@@ -422,7 +422,7 @@ Licensed under the **Apache License 2.0**, consistent with upstream Malimite. Se
 Issues and pull requests are welcome. Before opening a PR:
 
 1. Run `mvn test -pl core`
-2. Keep changes focused — Mailmite-Core favors minimal, headless diffs
+2. Keep changes focused — Malimite-Core favors minimal, headless diffs
 3. Credit Malimite when porting additional upstream functionality
 
-**Star [Malimite](https://github.com/LaurieWired/Malimite)** if you find this project useful — and consider starring Mailmite-Core too once it's on GitHub.
+**Star [Malimite](https://github.com/LaurieWired/Malimite)** if you find this project useful — and consider starring Malimite-Core too once it's on GitHub.

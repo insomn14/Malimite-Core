@@ -1,17 +1,17 @@
 """
-Mailmite — standalone Slack bot.
+Malimite — standalone Slack bot.
 
 Listens via Socket Mode (no public endpoint required), accepts .ipa file
-uploads in DM or channels where it's a member, runs Mailmite CLI as a
+uploads in DM or channels where it's a member, runs Malimite CLI as a
 subprocess, then posts results back as Slack messages with the HTML report
 and SARIF file attached.
 
 ENV vars (see .env.example):
   SLACK_APP_TOKEN    xapp-... (Socket Mode token)
   SLACK_BOT_TOKEN    xoxb-... (OAuth bot token)
-  MAILMITE_CLI_JAR   path to mailmite-cli.jar
+  MALIMITE_CLI_JAR   path to malimite-cli.jar
   GHIDRA_HOME        path to Ghidra install (e.g. /usr/share/ghidra)
-  SCAN_ROOT          where to store scan outputs (default: /tmp/mailmite-slack)
+  SCAN_ROOT          where to store scan outputs (default: /tmp/malimite-slack)
   LLM_PROVIDER       none|openai|claude|deepseek|ollama   (default: none)
   LLM_MODE           summarize|find_vulns|auto_fix
   LLM_MODEL          override (optional)
@@ -42,11 +42,11 @@ load_dotenv(Path(__file__).parent / ".env")
 
 SLACK_APP_TOKEN    = os.environ.get("SLACK_APP_TOKEN")
 SLACK_BOT_TOKEN    = os.environ.get("SLACK_BOT_TOKEN")
-MAILMITE_CLI_JAR   = os.environ.get(
-    "MAILMITE_CLI_JAR",
-    str(Path(__file__).resolve().parent.parent.parent / "cli/target/mailmite-cli.jar"))
+MALIMITE_CLI_JAR   = os.environ.get(
+    "MALIMITE_CLI_JAR",
+    str(Path(__file__).resolve().parent.parent.parent / "cli/target/malimite-cli.jar"))
 GHIDRA_HOME        = os.environ.get("GHIDRA_HOME", "/usr/share/ghidra")
-SCAN_ROOT          = os.environ.get("SCAN_ROOT", "/tmp/mailmite-slack")
+SCAN_ROOT          = os.environ.get("SCAN_ROOT", "/tmp/malimite-slack")
 
 LLM_PROVIDER       = os.environ.get("LLM_PROVIDER", "none")
 LLM_MODE           = os.environ.get("LLM_MODE", "summarize")
@@ -63,16 +63,16 @@ TOP_FINDINGS       = int(os.environ.get("TOP_FINDINGS", "5"))
 if not SLACK_APP_TOKEN or not SLACK_BOT_TOKEN:
     print("ERROR: SLACK_APP_TOKEN and SLACK_BOT_TOKEN must be set", file=sys.stderr)
     sys.exit(2)
-if not Path(MAILMITE_CLI_JAR).exists():
-    print(f"ERROR: MAILMITE_CLI_JAR not found: {MAILMITE_CLI_JAR}", file=sys.stderr)
+if not Path(MALIMITE_CLI_JAR).exists():
+    print(f"ERROR: MALIMITE_CLI_JAR not found: {MALIMITE_CLI_JAR}", file=sys.stderr)
     sys.exit(2)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-log = logging.getLogger("mailmite.slack")
+log = logging.getLogger("malimite.slack")
 
 app    = AsyncApp(token=SLACK_BOT_TOKEN)
 runner = ScanRunner(
-    cli_jar=MAILMITE_CLI_JAR,
+    cli_jar=MALIMITE_CLI_JAR,
     ghidra_home=GHIDRA_HOME,
     scan_root=SCAN_ROOT,
     llm_provider=LLM_PROVIDER,
@@ -216,14 +216,14 @@ async def on_file_shared(event, client):
     await _process_ipa(client, channel, thread_ts, f)
 
 
-@app.message(re.compile(r"^mailmite\s+help\b", re.IGNORECASE))
+@app.message(re.compile(r"^malimite\s+help\b", re.IGNORECASE))
 async def on_help(message, say):
     await say(blocks=fmt.help_message(), thread_ts=message.get("ts"))
 
 
-@app.message(re.compile(r"^mailmite\s+version\b", re.IGNORECASE))
+@app.message(re.compile(r"^malimite\s+version\b", re.IGNORECASE))
 async def on_version(message, say):
-    await say(text=f"Mailmite CLI: `{Path(MAILMITE_CLI_JAR).name}` · "
+    await say(text=f"Malimite CLI: `{Path(MALIMITE_CLI_JAR).name}` · "
                    f"LLM provider: `{LLM_PROVIDER}` · Ghidra: `{GHIDRA_HOME}`",
               thread_ts=message.get("ts"))
 
@@ -243,7 +243,7 @@ async def on_mention(event, say, client):
 
 async def main():
     handler = AsyncSocketModeHandler(app, SLACK_APP_TOKEN)
-    log.info("Mailmite Slack bot starting (Socket Mode) — CLI=%s", MAILMITE_CLI_JAR)
+    log.info("Malimite Slack bot starting (Socket Mode) — CLI=%s", MALIMITE_CLI_JAR)
     await handler.start_async()
 
 

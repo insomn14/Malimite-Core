@@ -36,7 +36,7 @@ jobs:
           fi
           file app.ipa
 
-      - name: Mailmite analyze
+      - name: Malimite analyze
         env:
           LLM_PROVIDER:      ${{ secrets.LLM_PROVIDER }}
           OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
@@ -48,8 +48,8 @@ jobs:
             -e LLM_PROVIDER="${LLM_PROVIDER:-none}" \
             -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
             -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
-            ghcr.io/${{ github.repository_owner }}/mailmite:latest \
-            mailmite /work/app.ipa --out /work/report \
+            ghcr.io/${{ github.repository_owner }}/malimite:latest \
+            malimite /work/app.ipa --out /work/report \
               --sarif \
               --llm \
               --llm-mode "${{ inputs.llm_mode || 'find_vulns' }}" \
@@ -65,5 +65,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mailmite-report-${{ github.sha }}
+          name: malimite-report-${{ github.sha }}
           path: report/

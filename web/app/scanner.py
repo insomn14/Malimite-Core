@@ -1,7 +1,9 @@
 """Manages scan lifecycle: create, run CLI JAR, persist state."""
 import asyncio
 import json
+import logging
 import os
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +11,11 @@ from typing import Optional
 
 from .config import settings
 from .models import ScanDetail, ScanMeta
+
+log = logging.getLogger(__name__)
+
+# Pre-rename default (Mailmite → Malimite). Migrated into settings.scan_dir on access.
+_LEGACY_SCAN_DIRS = (Path("/tmp/mailmite-scans"),)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -43,9 +50,52 @@ def _read_scan_json(scan_id: str) -> Optional[dict]:
     return json.loads(p.read_text())
 
 
+def migrate_legacy_scan_dirs() -> int:
+    """Move scan folders from legacy Mailmite paths into settings.scan_dir.
+
+    Returns the number of scan directories migrated. Safe to call repeatedly.
+    """
+    settings.scan_dir.mkdir(parents=True, exist_ok=True)
+    moved = 0
+    try:
+        dest_root = settings.scan_dir.resolve()
+    except OSError:
+        dest_root = settings.scan_dir
+
+    for legacy in _LEGACY_SCAN_DIRS:
+        try:
+            if not legacy.exists() or not legacy.is_dir():
+                continue
+            if legacy.resolve() == dest_root:
+                continue
+        except OSError:
+            continue
+        for child in list(legacy.iterdir()):
+            if not child.is_dir():
+                continue
+            dest = settings.scan_dir / child.name
+            if dest.exists():
+                continue
+            try:
+                shutil.move(str(child), str(dest))
+                moved += 1
+            except OSError as e:
+                log.warning("Failed to migrate scan %s from %s: %s", child.name, legacy, e)
+        # Remove empty legacy root when possible
+        try:
+            if legacy.exists() and not any(legacy.iterdir()):
+                legacy.rmdir()
+        except OSError:
+            pass
+    if moved:
+        log.info("Migrated %d scan(s) from legacy Mailmite scan dirs → %s", moved, settings.scan_dir)
+    return moved
+
+
 # ── public API ────────────────────────────────────────────────────────────────
 
 def list_scans() -> list[ScanMeta]:
+    migrate_legacy_scan_dirs()
     if not settings.scan_dir.exists():
         return []
     result = []
@@ -107,21 +157,21 @@ async def regenerate_report(scan_id: str) -> bool:
     try:
         proc = await asyncio.create_subprocess_exec(
             "java", "-cp", settings.cli_jar,
-            "io.mailmite.core.ReportRenderer", str(d),
+            "io.malimite.core.ReportRenderer", str(d),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
             import logging as _logging
-            _logging.getLogger("mailmite").warning(
+            _logging.getLogger("malimite").warning(
                 "ReportRenderer failed for %s (rc=%s): %s",
                 scan_id, proc.returncode, stderr.decode("utf-8", "replace")[:500])
             return False
         return True
     except Exception as exc:
         import logging as _logging
-        _logging.getLogger("mailmite").warning(
+        _logging.getLogger("malimite").warning(
             "ReportRenderer subprocess error for %s: %s", scan_id, exc)
         return False
 
@@ -136,6 +186,7 @@ async def create_scan(
     llm_api_key: str = "",
     assessment_enabled: bool = True,
 ) -> ScanMeta:
+    migrate_legacy_scan_dirs()
     settings.scan_dir.mkdir(parents=True, exist_ok=True)
     scan_id = str(uuid.uuid4())
     d = _scan_dir(scan_id)

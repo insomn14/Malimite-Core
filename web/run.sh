@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Starts the Mailmite Python web service.
-# Usage: ./run.sh [--port 7070] [--scan-dir /tmp/mailmite-scans]
+# Starts the Malimite Python web service.
+# Usage: ./run.sh [--port 7070] [--scan-dir /tmp/malimite-scans]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

@@ -51,7 +51,7 @@ def summary(filename: str, result: dict) -> list[dict]:
 
     blocks: list[dict] = [
         {"type": "header", "text": {"type": "plain_text",
-            "text": f"Mailmite scan: {filename}"}},
+            "text": f"Malimite scan: {filename}"}},
         {"type": "section", "fields": [
             {"type": "mrkdwn", "text": f"*Bundle ID*\n`{result.get('bundle_id','—')}`"},
             {"type": "mrkdwn", "text": f"*Executable*\n`{result.get('bundle_executable','—')}`"},
@@ -116,15 +116,15 @@ def top_findings(vulnerabilities: list[dict], limit: int = 5) -> list[dict]:
 
 def help_message() -> list[dict]:
     return [
-        {"type": "header", "text": {"type": "plain_text", "text": "Mailmite Slack Bot"}},
+        {"type": "header", "text": {"type": "plain_text", "text": "Malimite Slack Bot"}},
         {"type": "section", "text": {"type": "mrkdwn",
             "text": "*How to use:*\n"
                     "• Send (or DM) any `.ipa` or `.apk` file to start a scan.\n"
                     "• I'll reply in this thread when the analysis is complete.\n"
                     "• HTML report and SARIF will be attached to the result message.\n\n"
                     "*Commands:*\n"
-                    "• `mailmite help` — this help\n"
-                    "• `mailmite version` — bot + CLI version info"}},
+                    "• `malimite help` — this help\n"
+                    "• `malimite version` — bot + CLI version info"}},
         {"type": "context", "elements": [{"type": "mrkdwn",
             "text": "_Scans run locally on the bot host. No data leaves your infrastructure unless LLM enrichment is enabled._"}]},
     ]

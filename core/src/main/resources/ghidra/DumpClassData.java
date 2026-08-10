@@ -26,7 +26,7 @@ public class DumpClassData extends GhidraScript {
     /** Per-function decompile budget (seconds). 0 would use Ghidra's default and can stall for ages. */
     private static final int DECOMPILE_TIMEOUT_SECS = 45;
 
-    /** Log progress every N non-library decompiles so Mailmite/Ghidra logs show the script is alive. */
+    /** Log progress every N non-library decompiles so Malimite/Ghidra logs show the script is alive. */
     private static final int DECOMPILE_PROGRESS_EVERY = 50;
 
     private int port = -1;
@@ -245,7 +245,7 @@ public class DumpClassData extends GhidraScript {
     }
 
     /**
-     * Protocol with Mailmite {@code GhidraRunner.decompile}:
+     * Protocol with Malimite {@code GhidraRunner.decompile}:
      * <ol>
      *   <li>HEARTBEAT on a short-lived connection (handled in {@link #run()})</li>
      *   <li>Second connection: send CONNECTED immediately, then stream blocks as work finishes:

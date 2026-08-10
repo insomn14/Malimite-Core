@@ -1,9 +1,9 @@
-# Mailmite IPA Security Scan — Bitbucket Pipelines
+# Malimite IPA Security Scan — Bitbucket Pipelines
 # Add to your repository root as bitbucket-pipelines.yml or merge the
-# 'mailmite-scan' step into your existing pipeline.
+# 'malimite-scan' step into your existing pipeline.
 #
 # Required repository variables (Repository settings → Pipelines → Repository variables):
-#   MAILMITE_IMAGE     — Docker image (default: ghcr.io/mailmite/mailmite:latest)
+#   MALIMITE_IMAGE     — Docker image (default: ghcr.io/malimite/malimite:latest)
 #   GHIDRA_HOME        — path inside container  (default: /opt/ghidra)
 #   LLM_PROVIDER       — openai | claude | ollama | none
 #   OPENAI_API_KEY     — (secured)
@@ -14,16 +14,16 @@ image: atlassian/default-image:4
 
 definitions:
   steps:
-    - step: &mailmite-scan
-        name: Mailmite IPA Security Scan
+    - step: &malimite-scan
+        name: Malimite IPA Security Scan
         services:
           - docker
         script:
-          - export MAILMITE_IMAGE="${MAILMITE_IMAGE:-ghcr.io/mailmite/mailmite:latest}"
+          - export MALIMITE_IMAGE="${MALIMITE_IMAGE:-ghcr.io/malimite/malimite:latest}"
           - export IPA="${IPA_PATH:-app.ipa}"
           - export FAIL_ON="${FAIL_ON:-HIGH}"
           - export LLM_MODE="${LLM_MODE:-find_vulns}"
-          - mkdir -p mailmite-report
+          - mkdir -p malimite-report
           - |
             docker run --rm \
               -v "$BITBUCKET_CLONE_DIR:/work" \
@@ -32,25 +32,25 @@ definitions:
               -e LLM_MODE="$LLM_MODE" \
               -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
               -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
-              "$MAILMITE_IMAGE" \
-              mailmite "/work/$IPA" \
-                --out /work/mailmite-report \
+              "$MALIMITE_IMAGE" \
+              malimite "/work/$IPA" \
+                --out /work/malimite-report \
                 --sarif \
                 --html \
                 --llm \
                 --llm-mode "$LLM_MODE" \
                 --fail-on "$FAIL_ON"
         artifacts:
-          - mailmite-report/**
+          - malimite-report/**
 
 pipelines:
   default:
-    - step: *mailmite-scan
+    - step: *malimite-scan
 
   branches:
     main:
-      - step: *mailmite-scan
+      - step: *malimite-scan
 
   pull-requests:
     '**':
-      - step: *mailmite-scan
+      - step: *malimite-scan

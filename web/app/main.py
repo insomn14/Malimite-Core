@@ -1,4 +1,4 @@
-"""Mailmite Python web service — wraps all Mailmite-Core functionality."""
+"""Malimite Python web service — wraps all Malimite-Core functionality."""
 import json
 from pathlib import Path
 from typing import Optional
@@ -12,7 +12,7 @@ from . import db, scanner
 from .config import settings
 from .models import ScanDetail, ScanMeta
 
-app = FastAPI(title="Mailmite", version="0.1.0", docs_url="/docs", redoc_url=None)
+app = FastAPI(title="Malimite", version="0.1.0", docs_url="/docs", redoc_url=None)
 
 _WEB = Path(__file__).parent.parent
 
@@ -248,12 +248,31 @@ def _learned_rules_path(platform: str) -> str:
     import os as _os
     home = _os.path.expanduser("~")
     plat = (platform or "IOS").upper()
+
+    def _prefer(new_path: str, old_path: str) -> str:
+        if _os.path.exists(new_path) or not _os.path.exists(old_path):
+            return new_path
+        return old_path
+
     if plat == "ANDROID":
-        return _os.environ.get("MAILMITE_LEARNED_RULES_ANDROID") or \
-               _os.path.join(home, ".mailmite", "learned_rules_android.json")
-    return _os.environ.get("MAILMITE_LEARNED_RULES_IOS") or \
-           _os.environ.get("MAILMITE_LEARNED_RULES") or \
-           _os.path.join(home, ".mailmite", "learned_rules.json")
+        env = (_os.environ.get("MALIMITE_LEARNED_RULES_ANDROID")
+               or _os.environ.get("MAILMITE_LEARNED_RULES_ANDROID"))
+        if env:
+            return env
+        return _prefer(
+            _os.path.join(home, ".malimite", "learned_rules_android.json"),
+            _os.path.join(home, ".mailmite", "learned_rules_android.json"),
+        )
+    env = (_os.environ.get("MALIMITE_LEARNED_RULES_IOS")
+           or _os.environ.get("MAILMITE_LEARNED_RULES_IOS")
+           or _os.environ.get("MALIMITE_LEARNED_RULES")
+           or _os.environ.get("MAILMITE_LEARNED_RULES"))
+    if env:
+        return env
+    return _prefer(
+        _os.path.join(home, ".malimite", "learned_rules.json"),
+        _os.path.join(home, ".mailmite", "learned_rules.json"),
+    )
 
 
 def _load_learned_store(platform: str) -> dict:
@@ -332,7 +351,7 @@ async def get_sarif(request: Request, scan_id: str):
     if not p.exists():
         raise HTTPException(status_code=404, detail="SARIF not generated yet")
     return FileResponse(str(p), media_type="application/json",
-                        filename=f"mailmite-{scan_id[:8]}.sarif")
+                        filename=f"malimite-{scan_id[:8]}.sarif")
 
 
 @app.get("/api/v1/scans/{scan_id}/report", response_class=HTMLResponse)
@@ -352,7 +371,7 @@ async def get_report(request: Request, scan_id: str):
 # Must match HtmlReporter.TEMPLATE_VERSION — bump both when the HTML layout changes.
 _HTML_REPORT_TEMPLATE_VERSION = "4"
 _HTML_REPORT_TEMPLATE_META = (
-    f'<meta name="mailmite-report-template" content="{_HTML_REPORT_TEMPLATE_VERSION}">'
+    f'<meta name="malimite-report-template" content="{_HTML_REPORT_TEMPLATE_VERSION}">'
 )
 
 

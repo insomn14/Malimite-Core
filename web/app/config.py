@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     # some-class IPAs (dyld chained-fixups with null import) fail on BOTH 12.0.4
     # and 12.1 — that is a separate upstream Mach-O parser bug.
     ghidra_home: str = "/usr/share/ghidra"
-    cli_jar: str = str(_ROOT / "cli/target/mailmite-cli.jar")
-    scan_dir: Path = Path("/tmp/mailmite-scans")
+    cli_jar: str = str(_ROOT / "cli/target/malimite-cli.jar")
+    scan_dir: Path = Path("/tmp/malimite-scans")
     host: str = "0.0.0.0"
     port: int = 7070
 

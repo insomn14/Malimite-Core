@@ -1,5 +1,5 @@
 """
-Wraps the Mailmite CLI JAR — runs it as a subprocess against a downloaded
+Wraps the Malimite CLI JAR — runs it as a subprocess against a downloaded
 IPA, then reads findings back from the resulting SQLite database.
 
 Standalone: does not talk to the FastAPI web service.
@@ -21,7 +21,7 @@ class ScanRunner:
         self,
         cli_jar: str,
         ghidra_home: str = "/usr/share/ghidra",
-        scan_root: str = "/tmp/mailmite-slack",
+        scan_root: str = "/tmp/malimite-slack",
         llm_provider: str = "none",
         llm_mode: str = "summarize",
         llm_model: str = "",

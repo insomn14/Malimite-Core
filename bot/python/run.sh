@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the Mailmite Slack bot.
+# Run the Malimite Slack bot.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"

@@ -16,33 +16,33 @@ services:
 
   api:
     build: { context: .., dockerfile: deploy/Dockerfile }
-    image: mailmite:latest
+    image: malimite:latest
     command: ["java","-jar","/app/api.jar"]
     environment:
       REDIS_URL: redis://redis:6379
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS: minioadmin
       MINIO_SECRET: minioadmin
-      MINIO_BUCKET: mailmite-ipa
+      MINIO_BUCKET: malimite-ipa
       MAX_IPA_MB: "4096"
-      MAILMITE_API_KEY: "${MAILMITE_API_KEY:-}"
-      REPORT_DIR: /var/mailmite/reports
+      MALIMITE_API_KEY: "${MALIMITE_API_KEY:-}"
+      REPORT_DIR: /var/malimite/reports
     depends_on: [redis, minio]
     ports: ["8080:8080"]
-    volumes: [ reports:/var/mailmite/reports ]
+    volumes: [ reports:/var/malimite/reports ]
 
   worker:
-    image: mailmite:latest
+    image: malimite:latest
     command: ["java","-jar","/app/worker.jar"]
     environment:
       REDIS_URL: redis://redis:6379
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS: minioadmin
       MINIO_SECRET: minioadmin
-      MINIO_BUCKET: mailmite-ipa
+      MINIO_BUCKET: malimite-ipa
       GHIDRA_HOME: /opt/ghidra
       JADX_HOME: /opt/jadx
-      REPORT_DIR: /var/mailmite/reports
+      REPORT_DIR: /var/malimite/reports
       # LLM enrichment (Phase 4) — all optional, defaults to disabled
       LLM_ENABLED:       "${LLM_ENABLED:-false}"
       LLM_PROVIDER:      "${LLM_PROVIDER:-none}"
@@ -57,28 +57,28 @@ services:
       # Phase 5.7 — optional webhook on scan completion
       WEBHOOK_URL:       "${WEBHOOK_URL:-}"
     depends_on: [redis, minio, api]
-    volumes: [ reports:/var/mailmite/reports ]
+    volumes: [ reports:/var/malimite/reports ]
     deploy:
       replicas: 2     # horizontally scale
 
   watcher:
-    image: mailmite:latest
+    image: malimite:latest
     command: ["java","-jar","/app/watcher.jar"]
     environment:
-      INCOMING_DIR: /var/mailmite/incoming
-      REPORT_DIR: /var/mailmite/reports
+      INCOMING_DIR: /var/malimite/incoming
+      REPORT_DIR: /var/malimite/reports
       GHIDRA_HOME: /opt/ghidra
       JADX_HOME: /opt/jadx
     volumes:
-      - ./incoming:/var/mailmite/incoming
-      - reports:/var/mailmite/reports
+      - ./incoming:/var/malimite/incoming
+      - reports:/var/malimite/reports
 
   bot:
-    image: mailmite:latest
+    image: malimite:latest
     command: ["java","-jar","/app/bot.jar"]
     environment:
-      MAILMITE_API_URL:   http://api:8080
-      MAILMITE_API_KEY:   "${MAILMITE_API_KEY:-}"
+      MALIMITE_API_URL:   http://api:8080
+      MALIMITE_API_KEY:   "${MALIMITE_API_KEY:-}"
       # Enable any combination — each is optional
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       DISCORD_BOT_TOKEN:  "${DISCORD_BOT_TOKEN:-}"

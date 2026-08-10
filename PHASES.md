@@ -1,4 +1,4 @@
-# Mailmite-Core — Development Phases
+# Malimite-Core — Development Phases
 
 > Last updated: 2026-08-10 — reflects actual codebase state, not the original planning baseline.
 
@@ -26,7 +26,7 @@ Unit tests in `core/` cover IPA/APK validation, Android ingest, Assessment, cata
 ## Phase 1 — Core Engine (MVP)
 **Status: ✅ ~95% — one gap remaining**
 
-**Goal:** Real end-to-end IPA analysis — `MailmiteAnalyzer.analyze()` produces actual results.
+**Goal:** Real end-to-end IPA analysis — `MalimiteAnalyzer.analyze()` produces actual results.
 
 ### Tasks
 | # | Task | Status | Notes |
@@ -37,11 +37,11 @@ Unit tests in `core/` cover IPA/APK validation, Android ingest, Assessment, cata
 | 1.4 | `GhidraRunner` | ✅ | Headless `analyzeHeadless` + socket IPC; dynamic port; watchdog |
 | 1.5 | Ghidra script | ✅ | `core/src/main/resources/ghidra/DumpClassData.java` |
 | 1.6 | `CoreConfig` | ✅ | Env vars / system properties; no Swing |
-| 1.7 | `MailmiteAnalyzer` | ✅ | Full pipeline wired; writes `scan.json` (was planned as `project.json`); IPA + APK |
+| 1.7 | `MalimiteAnalyzer` | ✅ | Full pipeline wired; writes `scan.json` (was planned as `project.json`); IPA + APK |
 | 1.8 | Integration test | ❌ | No test feeds a real `.ipa`/`.apk`; requires Ghidra ≥11.1 / JADX on CI |
 
 ### Deliverable
-`java -jar mailmite-cli.jar app.ipa --out /tmp/report` produces a populated SQLite DB and `scan.json`. **Met** — pending automated integration test.
+`java -jar malimite-cli.jar app.ipa --out /tmp/report` produces a populated SQLite DB and `scan.json`. **Met** — pending automated integration test.
 
 ### Dependencies
 - Ghidra installation (≥11.1) on the build/test machine
@@ -70,7 +70,7 @@ Unit tests in `core/` cover IPA/APK validation, Android ingest, Assessment, cata
 |---|---|---|---|
 | 2.1 | `SqliteStore` | ⚠️ | Schema + queries exist; **`getReferences()` not exposed** |
 | 2.2 | `AnalysisReport` record | ✅ | Aggregates classes, functions, strings, metadata, vulns, assessments |
-| 2.3 | JSON serialization | ✅ | Worker stores `AnalysisReport` JSON in `mailmite:result:{scanId}` |
+| 2.3 | JSON serialization | ✅ | Worker stores `AnalysisReport` JSON in `malimite:result:{scanId}` |
 | 2.4 | `GET /api/v1/scans/{id}/result` | ⚠️ | ✅ Legacy Javalin API; **missing in Python `web/`** |
 | 2.5 | Paginated functions endpoint | ✅ | Both Javalin API and Python web (`?class_name=&page=&size=`) |
 | 2.6 | Summary endpoint | ⚠️ | ✅ Legacy Javalin API; **missing in Python `web/`** (UI builds from scan detail) |
@@ -121,7 +121,7 @@ Analysis output includes demangled Swift names, cross-reference graph, and class
 | 4.3b | **DeepSeek provider** | ✅ | `DeepSeekProvider`; models: `deepseek-v4-flash`, `deepseek-v4-pro`, `deepseek-chat`, `deepseek-reasoner` |
 | 4.4 | Ollama provider | ✅ | `http://localhost:11434` default |
 | 4.5 | Three enrichment modes | ✅ | `AUTO_FIX`, `SUMMARIZE`, `FIND_VULNS` |
-| 4.6 | Async enrichment | ⚠️ | Runs **inline** in `MailmiteAnalyzer`; not a background job |
+| 4.6 | Async enrichment | ⚠️ | Runs **inline** in `MalimiteAnalyzer`; not a background job |
 | 4.7 | LLM result cache | ⚠️ | `LlmCache` + `RedisLlmCache` in Worker; **CLI/analyzer uses `NOOP` cache** |
 
 ### Env vars
@@ -133,8 +133,8 @@ DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 OLLAMA_BASE_URL=http://localhost:11434
 LLM_MODEL=        # override default model per provider
-MAILMITE_LEARNED_RULES / MAILMITE_LEARNED_RULES_IOS   # iOS → ~/.mailmite/learned_rules.json
-MAILMITE_LEARNED_RULES_ANDROID                        # → ~/.mailmite/learned_rules_android.json
+MALIMITE_LEARNED_RULES / MALIMITE_LEARNED_RULES_IOS   # iOS → ~/.malimite/learned_rules.json
+MALIMITE_LEARNED_RULES_ANDROID                        # → ~/.malimite/learned_rules_android.json
 ```
 
 ### Deliverable
@@ -159,7 +159,7 @@ MAILMITE_LEARNED_RULES_ANDROID                        # → ~/.mailmite/learned_
 | 5.2 | GitHub Actions SARIF upload | ✅ | `upload-sarif@v3` active in `.github/workflows/ipa-scan.yml` |
 | 5.3 | HTML report | ✅ | `HtmlReporter.java` — vuln-centric layout + Assessment section + unique `rule_id` grouping |
 | 5.4 | Exit code policy | ✅ | CLI `--fail-on=HIGH|MEDIUM|LOW` |
-| 5.5 | GitLab CI template | ✅ | `.gitlab/mailmite.yml` |
+| 5.5 | GitLab CI template | ✅ | `.gitlab/malimite.yml` |
 | 5.6 | Bitbucket Pipelines template | ✅ | `bitbucket-pipelines.yml` |
 | 5.7 | Webhook notification | ✅ | Worker `WEBHOOK_URL` POST on completion |
 
@@ -220,12 +220,12 @@ Grafana dashboard showing live scan throughput, queue depth, and error rate. Ale
 ### Tasks
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 7.1 | JWT / API key scopes | ❌ | Single optional `API_KEY` / `MAILMITE_API_KEY` only |
+| 7.1 | JWT / API key scopes | ❌ | Single optional `API_KEY` / `MALIMITE_API_KEY` only |
 | 7.2 | Rate limiting | ❌ | No Redis sliding-window filter |
 | 7.3 | Zip bomb / path traversal guard | ❌ | `IpaValidator` / `ApkValidator` check size + structure; no compression-ratio guard |
 | 7.4 | Sandbox Ghidra / JADX process | ❌ | No dedicated OS user; no seccomp in Docker |
 | 7.5 | Secrets management | ❌ | No Vault/SSM; no log token masking |
-| 7.6 | Audit log | ❌ | No `mailmite:audit` Redis list |
+| 7.6 | Audit log | ❌ | No `malimite:audit` Redis list |
 | 7.7 | TLS termination | ❌ | No nginx sidecar or `deploy/nginx.conf` |
 
 ### Deliverable
@@ -242,7 +242,7 @@ Penetration-test ready deployment; scoped API keys; decompilers run in restricte
 | # | Task | Status | Notes |
 |---|---|---|---|
 | 8.1 | PostgreSQL store | ❌ | Only `SqliteStore` |
-| 8.2 | Helm chart | ❌ | No `deploy/helm/mailmite/` |
+| 8.2 | Helm chart | ❌ | No `deploy/helm/malimite/` |
 | 8.3 | Horizontal Pod Autoscaler | ❌ | docker-compose `replicas: 2` only |
 | 8.4 | Multi-tenancy | ❌ | Single MinIO bucket / Redis namespace |
 | 8.5 | OIDC / SSO | ❌ | |
@@ -283,7 +283,7 @@ Phases 7–8 depend on Phase 6 being in place for production deployments.
 | P0 | Real-IPA/APK integration test (Ghidra/JADX on CI or `@EnabledIfEnvironmentVariable`) | 1.8 | ~1 day |
 | P1 | `SqliteStore.getReferences()` + `GET .../references` on Python web | 2.1 / 3.3 | ~4h |
 | P1 | Add `GET /api/v1/scans/{id}/result` and `/summary` to `web/app/main.py` | 2.4 / 2.6 | ~2h |
-| P2 | Wire `RedisLlmCache` into `MailmiteAnalyzer` (not just Worker) | 4.7 | ~4h |
+| P2 | Wire `RedisLlmCache` into `MalimiteAnalyzer` (not just Worker) | 4.7 | ~4h |
 | P2 | Background LLM enrichment job (decouple from scan critical path) | 4.6 | ~1 day |
 
 ### 2. Phase 6 — Observability (≈1–2 weeks) — next major milestone
