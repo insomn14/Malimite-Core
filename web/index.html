@@ -545,11 +545,109 @@ route('home', async function() {
 });
 
 /* ── scans list view ── */
+let _scansCache = [];
+/** @type {{key:string, dir:'asc'|'desc'}} */
+let _scansSort = {key: 'started', dir: 'desc'};
+
+/** Workflow severity: error < running < queued < done */
+const SCAN_STATE_RANK = { error: 0, running: 1, queued: 2, done: 3 };
+
+function scanDurationMs(s) {
+  if (!s || !s.started_at || !s.finished_at) return null;
+  const ms = new Date(s.finished_at) - new Date(s.started_at);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function scanSortValue(s, key) {
+  switch (key) {
+    case 'file': return String(s.filename||'').toLowerCase();
+    case 'scan_id': return String(s.scan_id||'').toLowerCase();
+    case 'state': return SCAN_STATE_RANK[String(s.state||'').toLowerCase()] ?? 99;
+    case 'started': return s.created_at ? new Date(s.created_at).getTime() : 0;
+    case 'duration': {
+      const ms = scanDurationMs(s);
+      // Missing/running duration sorts first when asc, last when desc
+      return ms == null ? -1 : ms;
+    }
+    default: return '';
+  }
+}
+
+function sortedScans() {
+  const scans = _scansCache.slice();
+  const {key, dir} = _scansSort;
+  const mul = dir === 'asc' ? 1 : -1;
+  scans.sort((a, b) => {
+    const va = scanSortValue(a, key);
+    const vb = scanSortValue(b, key);
+    let cmp = 0;
+    if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+    else cmp = String(va).localeCompare(String(vb), undefined, {sensitivity:'base'});
+    if (cmp !== 0) return cmp * mul;
+    // Tie-break: newest started first
+    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return tb - ta;
+  });
+  return scans;
+}
+
+function scansSortHeaderHtml(key, label) {
+  const active = _scansSort.key === key;
+  const ind = active ? (_scansSort.dir === 'asc' ? '▲' : '▼') : '▼';
+  return `<th class="th-sort${active?' active':''}" data-sort="${key}"
+      onclick="sortScansColumn('${key}')"
+      title="Sort by ${label}">${label}<span class="sort-ind" aria-hidden="true">${ind}</span></th>`;
+}
+
+function renderScansThead() {
+  return `<tr>
+    ${scansSortHeaderHtml('file','File')}
+    ${scansSortHeaderHtml('scan_id','Scan ID')}
+    ${scansSortHeaderHtml('state','State')}
+    ${scansSortHeaderHtml('started','Started')}
+    ${scansSortHeaderHtml('duration','Duration')}
+    <th></th>
+  </tr>`;
+}
+
+function renderScansRows() {
+  return sortedScans().map(s => `
+    <tr>
+      <td><a href="#/scan/${s.scan_id}">${esc(s.filename)}</a></td>
+      <td class="mono">${s.scan_id.slice(0,8)}</td>
+      <td>${badge(s.state)}</td>
+      <td>${fmt(s.created_at)}</td>
+      <td>${dur(s.started_at, s.finished_at)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteScan('${s.scan_id}',event)">Delete</button></td>
+    </tr>`).join('');
+}
+
+function refreshScansTable() {
+  const tbody = document.getElementById('scans-tbody');
+  const thead = document.getElementById('scans-thead');
+  if (!tbody) return;
+  tbody.innerHTML = renderScansRows();
+  if (thead) thead.innerHTML = renderScansThead();
+}
+
+window.sortScansColumn = function(key) {
+  if (_scansSort.key === key) {
+    _scansSort.dir = _scansSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _scansSort.key = key;
+    // Started/duration default newest/longest first; text/state columns A→Z / severity asc
+    _scansSort.dir = (key === 'started' || key === 'duration') ? 'desc' : 'asc';
+  }
+  refreshScansTable();
+};
+
 route('scans', async function() {
   render('<div class="loading"><div class="spinner"></div></div>');
   try {
     const scans = await api('/scans');
-    if (!scans.length) { render('<div class="empty">No scans yet. <a href="#/">Upload an IPA →</a></div>'); return; }
+    _scansCache = Array.isArray(scans) ? scans : [];
+    if (!_scansCache.length) { render('<div class="empty">No scans yet. <a href="#/">Upload an IPA →</a></div>'); return; }
     render(`
       <div class="card">
         <div class="card-title" style="justify-content:space-between">
@@ -557,17 +655,8 @@ route('scans', async function() {
           <a href="#/" class="btn btn-primary btn-sm">+ New Scan</a>
         </div>
         <table>
-          <thead><tr><th>File</th><th>Scan ID</th><th>State</th><th>Started</th><th>Duration</th><th></th></tr></thead>
-          <tbody>${scans.map(s=>`
-            <tr>
-              <td><a href="#/scan/${s.scan_id}">${esc(s.filename)}</a></td>
-              <td class="mono">${s.scan_id.slice(0,8)}</td>
-              <td>${badge(s.state)}</td>
-              <td>${fmt(s.created_at)}</td>
-              <td>${dur(s.started_at, s.finished_at)}</td>
-              <td><button class="btn btn-danger btn-sm" onclick="deleteScan('${s.scan_id}',event)">Delete</button></td>
-            </tr>`).join('')}
-          </tbody>
+          <thead id="scans-thead">${renderScansThead()}</thead>
+          <tbody id="scans-tbody">${renderScansRows()}</tbody>
         </table>
       </div>`);
   } catch(e) {
