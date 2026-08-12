@@ -40,6 +40,25 @@ class AssessmentScannerTest {
             assertEquals("PRESENT", byId.get("ASSESS-CLEARTEXT-BLOCKED").get("status"));
             assertEquals("PRESENT", byId.get("ASSESS-NATIVE-HARDENING").get("status"));
             assertEquals("ABSENT", byId.get("ASSESS-FRIDA-DETECTION").get("status"));
+            for (var row : byId.values()) {
+                String id = String.valueOf(row.get("control_id"));
+                AssessmentCatalog.Guide g = AssessmentCatalog.lookup(id, "ANDROID",
+                        String.valueOf(row.get("title")));
+                assertFalse(g.summary().isBlank(), id);
+                assertFalse(g.staticChecks().isEmpty(), id);
+                assertFalse(g.dynamicChecks().isEmpty(), id);
+                assertTrue(AssessmentCatalog.controlIds().contains(id), "catalog should cover " + id);
+            }
+            AssessmentCatalog.Guide bio = AssessmentCatalog.lookup("ASSESS-BIOMETRIC", "ANDROID");
+            assertTrue(bio.summary().toLowerCase().contains("biometric"));
+            assertNotEquals(
+                    AssessmentCatalog.lookup("ASSESS-BIOMETRIC", "IOS").summary(),
+                    bio.summary());
+            AssessmentCatalog.Guide unknown = AssessmentCatalog.lookup(
+                    "ASSESS-NOT-A-REAL-CONTROL", "ANDROID", "Custom control");
+            assertTrue(unknown.summary().contains("Custom control"));
+            assertFalse(unknown.staticChecks().isEmpty());
+            assertFalse(unknown.dynamicChecks().isEmpty());
         }
     }
 
@@ -62,6 +81,13 @@ class AssessmentScannerTest {
             assertEquals("PRESENT", byId.get("ASSESS-ANTIDEBUG").get("status"));
             assertEquals("PRESENT", byId.get("ASSESS-SSL-PINNING").get("status"));
             assertEquals("PRESENT", byId.get("ASSESS-PIE").get("status"));
+            for (var row : byId.values()) {
+                String id = String.valueOf(row.get("control_id"));
+                assertTrue(AssessmentCatalog.controlIds().contains(id), "catalog should cover " + id);
+                AssessmentCatalog.Guide g = AssessmentCatalog.lookup(id, "IOS");
+                assertFalse(g.staticChecks().isEmpty(), id);
+                assertFalse(g.dynamicChecks().isEmpty(), id);
+            }
         }
     }
 
