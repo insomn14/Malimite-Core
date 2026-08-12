@@ -23,22 +23,38 @@ nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.
 .nav-logo svg{width:22px;height:22px}
 nav a.nav-link{color:var(--muted);font-size:.875rem;padding:.25rem .5rem;border-radius:4px}
 nav a.nav-link:hover,nav a.nav-link.active{color:var(--text);background:var(--bg)}
-.nav-spacer{flex:1}
-.nav-apikey{display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:var(--muted)}
-.nav-apikey input{padding:.3rem .5rem;border:1px solid var(--border);border-radius:4px;font-size:.8rem;width:160px}
+.nav-spacer{flex:1;min-width:0}
+.nav-apikey{display:flex;align-items:center;gap:.5rem;min-width:0;font-size:.8rem;color:var(--muted)}
+.nav-apikey input{min-width:0;padding:.3rem .5rem;border:1px solid var(--border);border-radius:4px;font-size:.8rem;width:160px;max-width:100%}
+@media(max-width:900px){
+  nav{height:auto;min-height:52px;flex-wrap:wrap;padding:.55rem 1.5rem}
+  .nav-spacer{display:none}
+  .nav-apikey{margin-left:auto}
+}
+@media(max-width:520px){
+  nav{gap:.4rem .75rem;padding:.55rem 1rem}
+  .nav-apikey{width:100%;margin-left:0}
+  .nav-apikey input{flex:1;width:auto}
+}
 
 /* layout */
-main{max-width:1100px;margin:0 auto;padding:1.5rem}
+main{width:100%;max-width:1100px;min-width:0;margin:0 auto;padding:1.5rem}
+main>*,#tab-content{min-width:0;max-width:100%}
 
 /* cards */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.25rem}
+.card{min-width:0;max-width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.25rem}
 .card + .card{margin-top:1rem}
-.card-title{font-weight:600;font-size:.95rem;margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
+.card-title{min-width:0;font-weight:600;font-size:.95rem;margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
 
 /* grid */
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
-.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}
+.grid-2>*,.grid-3>*,.grid-4>*{min-width:0;max-width:100%}
+@media(max-width:900px){
+  .grid-2{grid-template-columns:1fr}
+  .grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 @media(max-width:640px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}}
 
 /* stat tile */
@@ -116,7 +132,7 @@ input[type=file]{display:none}
 .badge-open{background:#dbeafe;color:#1e40af}
 
 /* table */
-.tbl-wrap{overflow-x:auto}
+.tbl-wrap{width:100%;max-width:100%;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse;font-size:.8rem}
 th,td{padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--border)}
 th{font-weight:600;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;background:var(--bg)}
@@ -125,37 +141,91 @@ td.mono{font-family:monospace;font-size:.75rem}
 td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* tabs */
-.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:1.25rem}
-.tab{padding:.5rem 1rem;font-size:.8rem;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .1s}
+.tabs{display:flex;gap:0;width:100%;max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;contain:inline-size;overscroll-behavior-x:contain;border-bottom:2px solid var(--border);margin-bottom:1.25rem;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.tab{flex:0 0 auto;white-space:nowrap;padding:.5rem 1rem;font-size:.8rem;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .1s}
 .tab:hover{color:var(--text)}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 
 /* log */
-.log-box{background:#111;color:#e2e8f0;border-radius:var(--radius);padding:.9rem 1rem;font-family:monospace;font-size:.72rem;max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.log-box{max-width:100%;background:#111;color:#e2e8f0;border-radius:var(--radius);padding:.9rem 1rem;font-family:monospace;font-size:.72rem;max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all}
 
 /* code viewer */
-.fn-code{background:#111;color:#e2e8f0;border-radius:0 0 var(--radius) var(--radius);padding:.75rem;font-family:monospace;font-size:.72rem;max-height:300px;overflow-y:auto;white-space:pre;display:none}
+.fn-code{max-width:100%;background:#111;color:#e2e8f0;border-radius:0 0 var(--radius) var(--radius);padding:.75rem;font-family:monospace;font-size:.72rem;max-height:300px;overflow:auto;white-space:pre;display:none}
 .fn-row td{cursor:pointer;user-select:none}
 .fn-row.open td:first-child::before{content:"▾ "}
 .fn-row:not(.open) td:first-child::before{content:"▸ "}
 
 /* search bar */
 .search-bar{display:flex;gap:.5rem;margin-bottom:1rem}
-.search-bar input,.search-bar select{padding:.4rem .7rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.8rem;flex:1}
+.search-bar input,.search-bar select{min-width:0;padding:.4rem .7rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.8rem;flex:1}
 .search-bar select{flex:0 0 auto;max-width:280px}
 
 /* pagination */
-.pagination{display:flex;align-items:center;gap:.5rem;margin-top:.75rem;font-size:.8rem;color:var(--muted)}
+.pagination{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;min-width:0;max-width:100%;margin-top:.75rem;font-size:.8rem;color:var(--muted)}
 .pagination .page-btn{padding:.3rem .65rem;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--surface)}
 .pagination .page-btn:hover{background:var(--bg)}
 .pagination .page-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pagination .page-btn:disabled{cursor:not-allowed;opacity:.45;background:var(--surface)}
+.strings-table{min-width:700px}
+.strings-pagination{justify-content:space-between}
+.strings-pagination-actions{display:flex;align-items:center;gap:.5rem}
+.llm-table{min-width:700px}
+.llm-pagination{justify-content:space-between}
+.llm-pagination-actions{display:flex;align-items:center;gap:.5rem}
 
 /* scan list row */
-.scan-row{display:flex;align-items:center;gap:1rem;padding:.75rem 1rem;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.scan-row{display:flex;align-items:center;gap:1rem;min-width:0;padding:.75rem 1rem;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.scan-row>:first-child{min-width:0}
 .scan-row:hover{background:var(--bg)}
-.scan-name{font-weight:600;font-size:.875rem}
+.scan-name{font-weight:600;font-size:.875rem;overflow-wrap:anywhere}
 .scan-meta{font-size:.75rem;color:var(--muted)}
 .scan-meta span+span::before{content:" · "}
+
+/* all scans */
+.scans-card{overflow:hidden}
+.scans-card-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:1rem}
+.scans-card-head .card-title{margin:0}
+.scans-table{table-layout:fixed}
+.scans-table th:nth-child(1){width:34%}
+.scans-table th:nth-child(2){width:12%}
+.scans-table th:nth-child(3){width:11%}
+.scans-table th:nth-child(4){width:22%}
+.scans-table th:nth-child(5){width:11%}
+.scans-table th:nth-child(6){width:10%}
+.scans-table td{vertical-align:middle}
+.scans-table td:nth-child(2),.scans-table td:nth-child(4),.scans-table td:nth-child(5){white-space:nowrap}
+.scans-table td:last-child{text-align:right}
+.scans-file-link{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.scan-sort-button{display:inline-flex;align-items:center;gap:.2rem;border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}
+.scan-sort-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+.scans-mobile-toolbar,.scans-card-list{display:none}
+.scans-mobile-toolbar{align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem}
+.scans-mobile-toolbar label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.scans-mobile-toolbar select{min-width:0;flex:1;padding:.4rem .6rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font:inherit}
+.scans-direction{flex-shrink:0;justify-content:center;min-width:6.5rem}
+.scans-card-list{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.scans-list-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.8rem 1rem;padding:1rem;background:var(--surface);border-bottom:1px solid var(--border)}
+.scans-list-item:last-child{border-bottom:0}
+.scans-list-main{min-width:0}
+.scans-list-name{display:block;font-weight:650;font-size:.9rem;line-height:1.4;overflow-wrap:anywhere;word-break:break-word}
+.scans-list-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem 1rem;margin-top:.75rem}
+.scans-meta-item{min-width:0}
+.scans-meta-label{display:block;margin-bottom:.1rem;color:var(--muted);font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.scans-meta-value{display:block;min-width:0;font-size:.78rem;overflow-wrap:anywhere}
+.scans-list-actions{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:.75rem}
+@media(max-width:900px){
+  .scans-desktop{display:none}
+  .scans-mobile-toolbar,.scans-card-list{display:flex}
+  .scans-card-list{flex-direction:column}
+}
+@media(max-width:520px){
+  main{padding:1rem}
+  .card{padding:1rem}
+  .scans-card-head{align-items:stretch}
+  .scans-card-head .card-title{flex:1 1 8rem}
+  .scans-list-item{gap:.75rem;padding:.85rem}
+  .scans-list-meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 
 /* progress */
 progress{width:100%;height:6px;border-radius:3px;appearance:none;margin-top:.75rem}
@@ -169,15 +239,25 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 .alert-warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
 
 /* detail header */
-.detail-header{display:flex;align-items:flex-start;gap:1rem;margin-bottom:1.25rem}
-.detail-title{font-size:1.1rem;font-weight:700}
-.detail-sub{font-size:.8rem;color:var(--muted);margin-top:.2rem}
+.detail-header{display:flex;align-items:flex-start;gap:1rem;min-width:0;max-width:100%;margin-bottom:1.25rem}
+.detail-header>:first-child{min-width:0}
+.detail-title{font-size:1.1rem;font-weight:700;overflow-wrap:anywhere}
+.detail-sub{font-size:.8rem;color:var(--muted);margin-top:.2rem;overflow-wrap:anywhere}
 .detail-actions{margin-left:auto;display:flex;gap:.5rem}
 
 /* kv list */
-.kv{display:grid;grid-template-columns:160px 1fr;gap:.35rem .75rem;font-size:.82rem}
-.kv-key{color:var(--muted);font-weight:500}
-.kv-val{font-family:monospace;overflow-wrap:anywhere;word-break:break-word}
+.kv{display:grid;grid-template-columns:minmax(6rem,160px) minmax(0,1fr);gap:.35rem .75rem;font-size:.82rem}
+.kv-key{min-width:0;color:var(--muted);font-weight:500}
+.kv-val{min-width:0;font-family:monospace;overflow-wrap:anywhere;word-break:normal}
+@media(max-width:900px){
+  .detail-header{flex-wrap:wrap}
+  .detail-header>:first-child{flex:1 1 28rem}
+  .detail-actions{flex-wrap:wrap;justify-content:flex-end}
+}
+@media(max-width:640px){
+  .detail-actions{width:100%;margin-left:0;justify-content:flex-start}
+  .kv{grid-template-columns:minmax(5.5rem,7rem) minmax(0,1fr)}
+}
 
 /* entry-point lists (summary mini + full tab) */
 .ep-list{list-style:none;margin:0;padding:0}
@@ -188,8 +268,16 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 .ep-type-service{background:#dcfce7;color:#166534}
 .ep-type-receiver{background:#fef3c7;color:#92400e}
 .ep-type-provider{background:#e0e7ff;color:#3730a3}
+.ep-type-native{background:#f3e8ff;color:#6b21a8}
 .ep-name{font-weight:600;color:var(--text);flex-shrink:0}
 .ep-class{font-family:monospace;color:var(--muted);overflow-wrap:anywhere;word-break:break-word;min-width:0}
+#ep-mini .ep-item{overflow:hidden}
+#ep-mini .ep-name,#ep-mini .ep-class{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#ep-mini .ep-name{flex-shrink:1}
+.ep-summary-footer{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-top:.75rem;padding-top:.65rem;border-top:1px solid var(--border);font-size:.75rem}
+.ep-summary-count{color:var(--muted)}
+.ep-pagination{justify-content:space-between;flex-wrap:wrap}
+.ep-pagination-actions{display:flex;align-items:center;gap:.5rem}
 
 /* loading / empty */
 .loading{text-align:center;padding:3rem;color:var(--muted)}
@@ -216,8 +304,8 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 .th-sort.active .sort-ind{opacity:1;color:var(--accent)}
 .llm-drawer-backdrop{position:fixed;inset:0;background:rgba(26,29,35,.28);z-index:200;opacity:0;pointer-events:none;transition:opacity .2s}
 .llm-drawer-backdrop.open{opacity:1;pointer-events:auto}
-.llm-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:-8px 0 24px rgba(0,0,0,.08);z-index:210;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .22s ease;outline:none}
-.llm-drawer.open{transform:translateX(0)}
+.llm-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);max-width:100%;visibility:hidden;background:var(--surface);border-left:1px solid var(--border);box-shadow:-8px 0 24px rgba(0,0,0,.08);z-index:210;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .22s ease,visibility 0s linear .22s;outline:none}
+.llm-drawer.open{visibility:visible;transform:translateX(0);transition-delay:0s}
 .llm-drawer-head{display:flex;align-items:flex-start;gap:.75rem;padding:1rem 1.1rem;border-bottom:1px solid var(--border);flex-shrink:0}
 .llm-drawer-head-main{flex:1;min-width:0}
 .llm-drawer-title{font-weight:700;font-size:.95rem;word-break:break-word}
@@ -232,15 +320,26 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 .llm-vuln-item:last-child{margin-bottom:0}
 .llm-vuln-item-head{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.5rem}
 .llm-vuln-item-title{font-weight:600;font-size:.88rem;flex:1;min-width:0}
-.llm-kv{display:grid;grid-template-columns:100px 1fr;gap:.3rem .6rem;font-size:.8rem;margin:.5rem 0}
+.llm-kv{display:grid;grid-template-columns:minmax(5rem,100px) minmax(0,1fr);gap:.3rem .6rem;font-size:.8rem;margin:.5rem 0}
 .llm-kv .k{color:var(--muted);font-weight:500}
 .llm-kv .v{word-break:break-word}
 .llm-prose{background:#111;color:#e2e8f0;border-radius:var(--radius);padding:.85rem 1rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.75rem;white-space:pre-wrap;word-break:break-word;line-height:1.55}
 .llm-section-label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 .55rem}
 
+/* Assessment list + detail drawer (reuses .llm-drawer* overlay) */
+.assess-row{display:flex;gap:.75rem;padding:.65rem 1.25rem;margin:0 -1.25rem;border:0;border-bottom:1px solid var(--border);align-items:flex-start;cursor:pointer;width:calc(100% + 2.5rem);max-width:none;background:transparent;text-align:left;font:inherit;color:inherit;box-sizing:border-box;appearance:none;-webkit-appearance:none}
+.assess-row:hover{background:#f0f3ff}
+.assess-row.selected{background:#eef2ff;box-shadow:inset 3px 0 0 var(--accent)}
+.assess-row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.assess-row:last-child{border-bottom:0}
+.assess-steps{margin:.15rem 0 0 1.15rem;font-size:.85rem;line-height:1.55;color:var(--text)}
+.assess-steps li{margin:.4rem 0}
+.assess-reason{font-size:.85rem;line-height:1.55;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.7rem .85rem;white-space:pre-wrap;word-break:break-word}
+.assess-reason-meta{font-size:.72rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);margin-top:.45rem;word-break:break-word}
+
 /* Offensive campaign (Mockup C) */
 .off-campaign{display:flex;flex-direction:column;gap:.75rem}
-.off-phases{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
+.off-phases{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem}
 @media(max-width:800px){.off-phases{grid-template-columns:1fr 1fr}}
 .off-phase{border:1px solid var(--border);border-radius:var(--radius);padding:.7rem .85rem;background:var(--surface);cursor:pointer;text-align:left}
 .off-phase:hover{background:var(--bg)}
@@ -248,16 +347,37 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 .off-phase-label{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .off-phase-title{font-weight:600;font-size:.85rem;margin-top:.15rem}
 .off-phase-count{font-size:.75rem;color:var(--muted);margin-top:.2rem}
-.off-split{display:grid;grid-template-columns:minmax(220px,1fr) minmax(280px,1.4fr);gap:.75rem;min-height:360px}
-@media(max-width:800px){.off-split{grid-template-columns:1fr}}
-.off-list,.off-detail{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden;display:flex;flex-direction:column}
+.off-split{display:grid;grid-template-columns:minmax(220px,1fr) minmax(280px,1.4fr);gap:.75rem;align-items:stretch;min-height:360px;min-width:0}
+.off-list,.off-detail{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.off-list{align-self:stretch;height:100%;min-height:0}
+.off-detail{overflow:visible}
 .off-list-head,.off-detail-head{padding:.65rem .85rem;border-bottom:1px solid var(--border);font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.off-list-body,.off-detail-body{flex:1;overflow-y:auto}
-.off-target{padding:.7rem .85rem;border-bottom:1px solid var(--border);cursor:pointer}
+.off-list-head{position:sticky;top:0;background:var(--surface);z-index:1;flex-shrink:0}
+.off-list-body,.off-detail-body{overflow-y:auto;min-width:0}
+.off-detail-body{flex:1 0 auto}
+.off-list-body{flex:1;min-height:0}
+.off-list-foot{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.5rem .65rem;border-top:1px solid var(--border);background:var(--surface);font-size:.72rem;color:var(--muted);min-width:0;flex-shrink:0}
+@media(max-width:800px){
+  .off-split{grid-template-columns:1fr;min-height:0;align-items:start}
+  .off-list{align-self:start;height:auto}
+  .off-list-body{max-height:min(46vh,320px);flex:0 1 auto}
+}
+.off-list-foot .off-list-count{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.off-list-pager{display:flex;align-items:center;gap:.35rem;flex-shrink:0}
+.off-list-pager span{white-space:nowrap}
+.off-list-pager .page-btn{padding:.2rem .5rem;line-height:1;font-size:.8rem}
+.off-target{position:relative;padding:.7rem .85rem .7rem 1rem;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s ease}
+.off-target:last-child{border-bottom:0}
+.off-target::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent;transition:background .12s ease}
 .off-target:hover{background:var(--bg)}
-.off-target.active{background:#eef2ff;box-shadow:inset 3px 0 0 var(--accent)}
-.off-target-title{font-weight:600;font-size:.84rem}
-.off-target-meta{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;margin-top:.3rem;font-size:.72rem;color:var(--muted)}
+.off-target:hover::before{background:var(--border)}
+.off-target:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.off-target.active{background:#eef2ff}
+.off-target.active::before{background:var(--accent)}
+.off-target.active .off-target-title{color:var(--accent-h)}
+.off-target-title{font-weight:600;font-size:.84rem;line-height:1.35;overflow-wrap:anywhere;word-break:break-word}
+.off-target-meta{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin-top:.4rem;font-size:.72rem;color:var(--muted);min-width:0}
+.off-target-cat{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.68rem;font-weight:600;letter-spacing:.02em;color:var(--muted);text-transform:uppercase;overflow-wrap:anywhere;word-break:break-word;min-width:0}
 .off-detail-body{padding:.85rem 1rem 1.1rem}
 .off-detail-title{font-weight:700;font-size:.95rem;margin-bottom:.35rem}
 .off-code{background:#111;color:#e2e8f0;padding:.65rem .85rem;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow-y:auto}
@@ -265,6 +385,9 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 .off-warn{margin-top:.75rem;font-size:.78rem}
 @media(max-width:640px){
   .llm-drawer{width:100vw}
+  .triage-form{grid-template-columns:1fr}
+  .search-bar{flex-wrap:wrap}
+  .search-bar select{flex:1 1 100%;max-width:100%}
 }
 
 /* learned rules */
@@ -397,7 +520,9 @@ function $$(s) { return [...document.querySelectorAll(s)]; }
 
 /* ── utils ── */
 function badge(state) {
-  return `<span class="badge badge-${state}">${state}</span>`;
+  const normalized = String(state||'queued').toLowerCase();
+  const safeState = ['queued','running','done','error'].includes(normalized) ? normalized : 'queued';
+  return `<span class="badge badge-${safeState}">${esc(state||'queued')}</span>`;
 }
 function sevBadge(text='') {
   if (/\bCRITICAL\b/i.test(text)) return '<span class="badge badge-critical">CRITICAL</span>';
@@ -650,9 +775,12 @@ function sortedScans() {
 function scansSortHeaderHtml(key, label) {
   const active = _scansSort.key === key;
   const ind = active ? (_scansSort.dir === 'asc' ? '▲' : '▼') : '▼';
-  return `<th class="th-sort${active?' active':''}" data-sort="${key}"
-      onclick="sortScansColumn('${key}')"
-      title="Sort by ${label}">${label}<span class="sort-ind" aria-hidden="true">${ind}</span></th>`;
+  const ariaSort = active ? (_scansSort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  return `<th class="th-sort${active?' active':''}" data-sort="${key}" aria-sort="${ariaSort}">
+      <button type="button" class="scan-sort-button" onclick="sortScansColumn('${key}')"
+        aria-label="Sort by ${label}${active ? `, currently ${ariaSort}` : ''}">
+        ${label}<span class="sort-ind" aria-hidden="true">${ind}</span>
+      </button></th>`;
 }
 
 function renderScansThead() {
@@ -666,24 +794,79 @@ function renderScansThead() {
   </tr>`;
 }
 
-function renderScansRows() {
-  return sortedScans().map(s => `
+function renderScansRows(scans=sortedScans()) {
+  return scans.map(s => {
+    const id = String(s.scan_id||'');
+    const filename = String(s.filename||'Untitled scan');
+    return `
     <tr>
-      <td><a href="#/scan/${s.scan_id}">${esc(s.filename)}</a></td>
-      <td class="mono">${s.scan_id.slice(0,8)}</td>
+      <td><a class="scans-file-link" href="#/scan/${encodeURIComponent(id)}" title="${escAttr(filename)}">${esc(filename)}</a></td>
+      <td class="mono" title="${escAttr(id)}">${esc(id.slice(0,8))}</td>
       <td>${badge(s.state)}</td>
       <td>${fmt(s.created_at)}</td>
       <td>${dur(s.started_at, s.finished_at)}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteScan('${s.scan_id}',event)">Delete</button></td>
-    </tr>`).join('');
+      <td><button type="button" class="btn btn-danger btn-sm" data-scan-id="${escAttr(id)}"
+        onclick="deleteScan(this.dataset.scanId,event)" aria-label="Delete scan ${escAttr(filename)}">Delete</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderScansCards(scans=sortedScans()) {
+  return scans.map(s => {
+    const id = String(s.scan_id||'');
+    const filename = String(s.filename||'Untitled scan');
+    return `<article class="scans-list-item">
+      <div class="scans-list-main">
+        <a class="scans-list-name" href="#/scan/${encodeURIComponent(id)}" title="${escAttr(filename)}">${esc(filename)}</a>
+        <div class="scans-list-meta">
+          <div class="scans-meta-item">
+            <span class="scans-meta-label">Scan ID</span>
+            <span class="scans-meta-value mono" title="${escAttr(id)}">${esc(id.slice(0,8))}</span>
+          </div>
+          <div class="scans-meta-item">
+            <span class="scans-meta-label">Started</span>
+            <span class="scans-meta-value">${fmt(s.created_at)}</span>
+          </div>
+          <div class="scans-meta-item">
+            <span class="scans-meta-label">Duration</span>
+            <span class="scans-meta-value">${dur(s.started_at, s.finished_at)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="scans-list-actions">
+        ${badge(s.state)}
+        <button type="button" class="btn btn-danger btn-sm" data-scan-id="${escAttr(id)}"
+          onclick="deleteScan(this.dataset.scanId,event)" aria-label="Delete scan ${escAttr(filename)}">Delete</button>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+function renderScansSortControls() {
+  const options = [
+    ['file','File'],['scan_id','Scan ID'],['state','State'],
+    ['started','Started'],['duration','Duration']
+  ].map(([key,label]) => `<option value="${key}"${_scansSort.key===key?' selected':''}>${label}</option>`).join('');
+  const ascending = _scansSort.dir === 'asc';
+  return `<label for="scans-sort-select">Sort by</label>
+    <select id="scans-sort-select" onchange="setScansSort(this.value)" aria-label="Sort scans by">${options}</select>
+    <button type="button" class="btn btn-ghost btn-sm scans-direction" onclick="sortScansColumn(_scansSort.key)"
+      aria-label="Change sort direction; currently ${ascending?'ascending':'descending'}">
+      <span aria-hidden="true">${ascending?'↑':'↓'}</span> ${ascending?'Ascending':'Descending'}
+    </button>`;
 }
 
 function refreshScansTable() {
   const tbody = document.getElementById('scans-tbody');
   const thead = document.getElementById('scans-thead');
-  if (!tbody) return;
-  tbody.innerHTML = renderScansRows();
+  const cards = document.getElementById('scans-card-list');
+  const controls = document.getElementById('scans-mobile-toolbar');
+  if (!tbody && !cards) return;
+  const scans = sortedScans();
+  if (tbody) tbody.innerHTML = renderScansRows(scans);
   if (thead) thead.innerHTML = renderScansThead();
+  if (cards) cards.innerHTML = renderScansCards(scans);
+  if (controls) controls.innerHTML = renderScansSortControls();
 }
 
 window.sortScansColumn = function(key) {
@@ -697,22 +880,36 @@ window.sortScansColumn = function(key) {
   refreshScansTable();
 };
 
+window.setScansSort = function(key) {
+  if (!['file','scan_id','state','started','duration'].includes(key)) return;
+  if (_scansSort.key !== key) {
+    _scansSort.key = key;
+    _scansSort.dir = (key === 'started' || key === 'duration') ? 'desc' : 'asc';
+  }
+  refreshScansTable();
+};
+
 route('scans', async function() {
   render('<div class="loading"><div class="spinner"></div></div>');
   try {
     const scans = await api('/scans');
     _scansCache = Array.isArray(scans) ? scans : [];
     if (!_scansCache.length) { render('<div class="empty">No scans yet. <a href="#/">Upload an IPA →</a></div>'); return; }
+    const sorted = sortedScans();
     render(`
-      <div class="card">
-        <div class="card-title" style="justify-content:space-between">
-          All Scans
+      <div class="card scans-card">
+        <div class="scans-card-head">
+          <div class="card-title">All Scans</div>
           <a href="#/" class="btn btn-primary btn-sm">+ New Scan</a>
         </div>
-        <table>
-          <thead id="scans-thead">${renderScansThead()}</thead>
-          <tbody id="scans-tbody">${renderScansRows()}</tbody>
-        </table>
+        <div id="scans-mobile-toolbar" class="scans-mobile-toolbar">${renderScansSortControls()}</div>
+        <div class="scans-desktop">
+          <table class="scans-table">
+            <thead id="scans-thead">${renderScansThead()}</thead>
+            <tbody id="scans-tbody">${renderScansRows(sorted)}</tbody>
+          </table>
+        </div>
+        <div id="scans-card-list" class="scans-card-list">${renderScansCards(sorted)}</div>
       </div>`);
   } catch(e) {
     render(`<div class="alert alert-error">${esc(e.message)}</div>`);
@@ -720,9 +917,10 @@ route('scans', async function() {
 });
 
 window.deleteScan = async function(id, ev) {
-  ev.stopPropagation();
+  ev?.preventDefault();
+  ev?.stopPropagation();
   if (!confirm('Delete this scan?')) return;
-  await fetch('/api/v1/scans/'+id, {method:'DELETE', headers: headers()});
+  await fetch('/api/v1/scans/'+encodeURIComponent(String(id)), {method:'DELETE', headers: headers()});
   router();
 };
 
@@ -1100,9 +1298,13 @@ async function renderTab(id, tab, detail) {
   const el = document.getElementById('tab-content');
   if (!el) return;
   if (typeof closeLlmDrawer === 'function') closeLlmDrawer();
+  if (typeof closeAssessDrawer === 'function') closeAssessDrawer();
   try {
     switch(tab) {
-      case 'summary':         el.innerHTML = await tabSummary(detail); break;
+      case 'summary':
+        el.innerHTML = await tabSummary(detail);
+        postSummaryHydrate(id);
+        break;
       case 'vulnerabilities': await tabVulnerabilities(el, id, detail); break;
       case 'assessment':      await tabAssessment(el, id, detail); break;
       case 'functions':       await tabFunctions(el, id, detail); break;
@@ -1303,12 +1505,11 @@ async function tabSummary(d) {
     </div>`;
 }
 
-// Populate entry points in summary after render
-document.addEventListener('DOMContentLoaded', ()=>{});
-
-/** Parse Android "name.type:class" entry points; leave other formats as raw. */
+/** Parse Android "name.type:class" and native "native:library/symbol" entry points. */
 function parseEntryPoint(raw) {
   const s = String(raw || '');
+  const native = s.match(/^native:([^/]+)\/(.+)$/);
+  if (native) return { raw: s, name: native[1], type: 'native', cls: native[2], short: native[2] };
   const m = s.match(/^([^.:]+)\.([a-zA-Z]+):(.+)$/);
   if (!m) return { raw: s, name: s, type: '', cls: '', short: s };
   const cls = m[3];
@@ -1319,22 +1520,36 @@ function parseEntryPoint(raw) {
 function renderEntryPointItem(raw) {
   const ep = parseEntryPoint(raw);
   if (!ep.type) {
-    return `<li class="ep-item" title="${esc(ep.raw)}"><span class="ep-class">${esc(ep.raw)}</span></li>`;
+    return `<li class="ep-item" title="${escAttr(ep.raw)}"><span class="ep-class">${esc(ep.raw)}</span></li>`;
   }
-  return `<li class="ep-item" title="${esc(ep.raw)}">
-    <span class="ep-type ep-type-${esc(ep.type)}">${esc(ep.type)}</span>
+  return `<li class="ep-item" title="${escAttr(ep.raw)}">
+    <span class="ep-type ep-type-${escAttr(ep.type)}">${esc(ep.type)}</span>
     <span class="ep-name">${esc(ep.name)}</span>
     <span class="ep-class">${esc(ep.short)}</span>
   </li>`;
 }
 
-function postSummaryHydrate(id) {
+async function postSummaryHydrate(id) {
+  const previewSize = 6;
   const el = document.getElementById('ep-mini');
   if (!el) return;
-  api('/scans/'+id+'/entrypoints').then(eps=>{
+  try {
+    const eps = await api('/scans/'+id+'/entrypoints');
+    // The original element is detached whenever the scan or tab is re-rendered.
+    if (!el.isConnected || el !== document.getElementById('ep-mini')) return;
     if (!eps.length) { el.innerHTML='<div class="empty" style="padding:.5rem">None detected.</div>'; return; }
-    el.innerHTML = '<ul class="ep-list">'+eps.map(renderEntryPointItem).join('')+'</ul>';
-  }).catch(()=>{ el.innerHTML='<span class="muted">—</span>'; });
+    const preview = eps.slice(0, previewSize);
+    const count = eps.length > previewSize
+      ? `<span class="ep-summary-count">Showing ${preview.length} of ${eps.length.toLocaleString()}</span>`
+      : '<span></span>';
+    const href = '#/scan/' + encodeURIComponent(String(id)) + '/entrypoints';
+    el.innerHTML = '<ul class="ep-list">'+preview.map(renderEntryPointItem).join('')+'</ul>'
+      + `<div class="ep-summary-footer">${count}<a href="${escAttr(href)}">View all entry points →</a></div>`;
+  } catch(_) {
+    if (el.isConnected && el === document.getElementById('ep-mini')) {
+      el.innerHTML='<span class="muted">—</span>';
+    }
+  }
 }
 
 /* ── functions tab ── */
@@ -1421,36 +1636,86 @@ function renderFnPagination(id, page, size, total) {
 window.fnPage = function(id, p) { fnState.page=p; loadFunctions(id); };
 
 /* ── strings tab ── */
+let stringsRequestSeq = 0;
+
 async function tabStrings(el, id, detail) {
   if (detail.state !== 'done') { el.innerHTML=`<div class="alert alert-warn">Scan not complete.</div>`; return; }
-  el.innerHTML = `
+  const root = document.createElement('div');
+  root.id = 'strings-root';
+  root.innerHTML = `
     <div class="search-bar">
-      <input id="str-q" type="text" placeholder="Search strings…"/>
-      <button class="btn btn-primary btn-sm" onclick="loadStrings('${id}')">Search</button>
+      <input id="str-q" type="text" placeholder="Search strings…" autocomplete="off"/>
+      <button id="str-search" class="btn btn-primary btn-sm">Search</button>
     </div>
-    <div id="str-table"><div class="empty">Click Search to load strings.</div></div>`;
-  document.getElementById('str-q').addEventListener('keydown', e=>{ if(e.key==='Enter') loadStrings(id); });
+    <div id="str-table"></div>
+    <div id="str-pages" class="pagination strings-pagination"></div>`;
+  el.replaceChildren(root);
+
+  const state = {page:1, size:50, query:''};
+  const search = () => {
+    state.query = root.querySelector('#str-q').value.trim();
+    state.page = 1;
+    loadStrings(root, id, state);
+  };
+  root.querySelector('#str-search').addEventListener('click', search);
+  root.querySelector('#str-q').addEventListener('keydown', event => {
+    if (event.key === 'Enter') search();
+  });
+  await loadStrings(root, id, state);
 }
 
-async function loadStrings(id) {
-  const el = document.getElementById('str-table');
-  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-  const q = document.getElementById('str-q')?.value || '';
+async function loadStrings(root, id, state) {
+  const table = root.querySelector('#str-table');
+  const pager = root.querySelector('#str-pages');
+  if (!table || !pager) return;
+  const requestSeq = ++stringsRequestSeq;
+  table.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  pager.innerHTML = '';
   try {
-    const params = new URLSearchParams({limit:300});
-    if (q) params.set('q', q);
-    const items = await api('/scans/'+id+'/strings?'+params);
-    if (!items.length) { el.innerHTML='<div class="empty">No strings found.</div>'; return; }
-    el.innerHTML = `<div class="tbl-wrap"><table>
-      <thead><tr><th>Address</th><th>Value</th><th>Segment</th><th>Label</th></tr></thead>
-      <tbody>${items.map(s=>`<tr>
-        <td class="mono">${esc(s.address||'')}</td>
-        <td class="truncate" title="${esc(s.value)}">${esc(s.value)}</td>
-        <td>${esc(s.segment||'')}</td>
-        <td>${esc(s.label||'')}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
-  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+    const params = new URLSearchParams({page:state.page, size:state.size});
+    if (state.query) params.set('q', state.query);
+    const data = await api('/scans/'+id+'/strings?'+params);
+    if (requestSeq !== stringsRequestSeq || !root.isConnected
+        || root !== document.getElementById('strings-root')) return;
+
+    const items = Array.isArray(data.items) ? data.items : [];
+    const total = Math.max(0, Number(data.total) || 0);
+    const page = Math.max(1, Number(data.page) || 1);
+    const size = Math.max(1, Number(data.size) || state.size);
+    const pages = Math.max(0, Number(data.pages) || 0);
+    state.page = page;
+
+    table.innerHTML = items.length
+      ? `<div class="tbl-wrap"><table class="strings-table">
+          <thead><tr><th>Address</th><th>Value</th><th>Segment</th><th>Label</th></tr></thead>
+          <tbody>${items.map(s=>`<tr>
+            <td class="mono">${esc(s.address||'')}</td>
+            <td class="truncate" title="${escAttr(s.value||'')}">${esc(s.value||'')}</td>
+            <td>${esc(s.segment||'')}</td>
+            <td>${esc(s.label||'')}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>`
+      : '<div class="empty">No strings found.</div>';
+
+    const first = items.length ? (page - 1) * size + 1 : 0;
+    const last = items.length ? first + items.length - 1 : 0;
+    pager.innerHTML = `<span>Showing ${esc(String(first))}–${esc(String(last))} of ${esc(total.toLocaleString())} · Page ${esc(String(pages ? page : 0))} of ${esc(String(pages))}</span>
+      <span class="strings-pagination-actions">
+        <button class="page-btn" data-page="prev" ${page <= 1 ? 'disabled' : ''}>Previous</button>
+        <button class="page-btn" data-page="next" ${pages === 0 || page >= pages ? 'disabled' : ''}>Next</button>
+      </span>`;
+    pager.querySelector('[data-page="prev"]').onclick = () => {
+      if (state.page > 1) { state.page--; loadStrings(root, id, state); }
+    };
+    pager.querySelector('[data-page="next"]').onclick = () => {
+      if (state.page < pages) { state.page++; loadStrings(root, id, state); }
+    };
+  } catch(e) {
+    if (requestSeq === stringsRequestSeq && root.isConnected
+        && root === document.getElementById('strings-root')) {
+      table.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`;
+    }
+  }
 }
 
 /* ── resources tab ── */
@@ -1473,19 +1738,166 @@ async function tabResources(el, id) {
 /* ── entry points tab ── */
 async function tabEntryPoints(el, id, detail) {
   if (detail.state !== 'done') { el.innerHTML=`<div class="alert alert-warn">Scan not complete.</div>`; return; }
-  el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  const pageSize = 50;
+  const root = document.createElement('div');
+  root.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  el.replaceChildren(root);
   try {
     const eps = await api('/scans/'+id+'/entrypoints');
-    if (!eps.length) { el.innerHTML='<div class="empty">No entry points detected.</div>'; return; }
-    el.innerHTML = `<div class="card">
-      <div class="card-title">Detected Entry Points (${eps.length})</div>
-      <ul class="ep-list" style="font-size:.82rem">${eps.map(renderEntryPointItem).join('')}</ul>
+    if (!root.isConnected || !el.contains(root)) return;
+    if (!eps.length) { root.innerHTML='<div class="empty">No entry points detected.</div>'; return; }
+
+    let page = 0;
+    let query = '';
+    root.innerHTML = `<div class="card">
+      <div class="card-title" id="ep-full-title">Detected Entry Points (${eps.length.toLocaleString()})</div>
+      <div class="search-bar"><input id="ep-filter" type="text" placeholder="Filter entry points…" autocomplete="off"/></div>
+      <div id="ep-full-list"></div>
+      <div id="ep-pages" class="pagination ep-pagination"></div>
     </div>`;
-  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+
+    const renderPage = () => {
+      if (!root.isConnected || !el.contains(root)) return;
+      const filtered = query
+        ? eps.filter(ep => String(ep).toLowerCase().includes(query))
+        : eps;
+      const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      page = Math.min(page, pages - 1);
+      const pageItems = filtered.slice(page * pageSize, (page + 1) * pageSize);
+      const list = root.querySelector('#ep-full-list');
+      const pager = root.querySelector('#ep-pages');
+      const title = root.querySelector('#ep-full-title');
+      title.textContent = `Detected Entry Points (${eps.length.toLocaleString()})`;
+      list.innerHTML = pageItems.length
+        ? `<ul class="ep-list" style="font-size:.82rem">${pageItems.map(renderEntryPointItem).join('')}</ul>`
+        : '<div class="empty">No entry points match this filter.</div>';
+      const totalText = query
+        ? `${filtered.length.toLocaleString()} of ${eps.length.toLocaleString()} matching`
+        : `${eps.length.toLocaleString()} total`;
+      pager.innerHTML = `<span>${totalText} · Page ${page + 1} of ${pages}</span>
+        <span class="ep-pagination-actions">
+          <button class="page-btn" data-page="prev" ${page === 0 ? 'disabled' : ''}>Previous</button>
+          <button class="page-btn" data-page="next" ${page >= pages - 1 ? 'disabled' : ''}>Next</button>
+        </span>`;
+      pager.querySelector('[data-page="prev"]').onclick = () => { if (page > 0) { page--; renderPage(); } };
+      pager.querySelector('[data-page="next"]').onclick = () => { if (page < pages - 1) { page++; renderPage(); } };
+    };
+
+    root.querySelector('#ep-filter').addEventListener('input', event => {
+      query = event.target.value.trim().toLowerCase();
+      page = 0;
+      renderPage();
+    });
+    renderPage();
+  } catch(e) {
+    if (root.isConnected && el.contains(root)) {
+      root.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`;
+    }
+  }
 }
 
 /* ── assessment tab (security controls inventory) ── */
+let _assessRows = [];
+let _assessSelectedIdx = -1;
+let _assessDrawerOpen = false;
+
+function assessStatusBadge(s) {
+  const u = String(s||'UNKNOWN').toUpperCase();
+  const bg = u === 'PRESENT' ? '#dcfce7;color:#16a34a' : u === 'PARTIAL' ? '#fef3c7;color:#d97706'
+    : u === 'ABSENT' ? '#fee2e2;color:#dc2626' : '#f3f4f6;color:#6b7280';
+  return `<span class="badge" style="background:${bg.split(';')[0]};${bg.includes('color')?bg.split(';').slice(1).join(';'):''}">${esc(u)}</span>`;
+}
+
+function assessGuide(a) {
+  const label = a.title || a.control_id || 'this control';
+  const summary = fieldOr(a.summary,
+    `Inventories whether “${label}” appears implemented in this build. Absence of static signals does not prove the control is missing on packed or heavily obfuscated apps.`);
+  const staticChecks = Array.isArray(a.static_checks) && a.static_checks.length ? a.static_checks : [
+    'Search decompiled code (JADX for Android, Ghidra/Hopper for iOS) for APIs and types related to this control.',
+    'Search strings, resources, and the manifest or Info.plist for related flags, permissions, and configuration values.',
+    'Cross-check hits against third-party libraries so SDK noise is not mistaken for app-level enforcement.',
+  ];
+  const dynamicChecks = Array.isArray(a.dynamic_checks) && a.dynamic_checks.length ? a.dynamic_checks : [
+    'On an authorized test device, exercise the related user flow and record whether the protection is actually enforced at runtime.',
+    'Compare behavior on a stock device versus a lab device where the condition this control is meant to detect is present.',
+    'Document observed prompts, errors, or degraded functionality. Do not use this as a bypass or exploit recipe.',
+  ];
+  return {summary, staticChecks, dynamicChecks};
+}
+
+function renderAssessSteps(steps) {
+  return `<ol class="assess-steps">${(steps||[]).map(s => `<li>${esc(s)}</li>`).join('')}</ol>`;
+}
+
+function renderAssessDrawerBody(a) {
+  const g = assessGuide(a);
+  const reason = fieldOr(a.evidence, 'No evidence was recorded for this status.');
+  const detail = fieldOr(a.detail, '');
+  return `
+    <div class="llm-section-label">Summary</div>
+    <p style="font-size:.85rem;line-height:1.55;margin-bottom:1rem">${esc(g.summary)}</p>
+    <div class="llm-section-label">Reason</div>
+    <div class="assess-reason">${esc(reason)}</div>
+    ${detail ? `<div class="assess-reason-meta">${esc(detail)}</div>` : ''}
+    <div class="vuln-section">
+      <div class="vuln-section-title">Static checking</div>
+      ${renderAssessSteps(g.staticChecks)}
+    </div>
+    <div class="vuln-section">
+      <div class="vuln-section-title">Dynamic checking</div>
+      ${renderAssessSteps(g.dynamicChecks)}
+    </div>`;
+}
+
+function closeAssessDrawer() {
+  _assessDrawerOpen = false;
+  _assessSelectedIdx = -1;
+  const drawer = document.getElementById('assess-drawer');
+  const backdrop = document.getElementById('assess-drawer-backdrop');
+  if (drawer) drawer.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+  $$('.assess-row.selected').forEach(r => r.classList.remove('selected'));
+  document.removeEventListener('keydown', onAssessDrawerKeydown);
+}
+
+function onAssessDrawerKeydown(e) {
+  if (e.key === 'Escape') closeAssessDrawer();
+}
+
+window.openAssessDrawer = function(idx) {
+  const a = _assessRows[idx];
+  if (!a) return;
+  const drawer = document.getElementById('assess-drawer');
+  const backdrop = document.getElementById('assess-drawer-backdrop');
+  const title = document.getElementById('assess-drawer-title');
+  const meta = document.getElementById('assess-drawer-meta');
+  const body = document.getElementById('assess-drawer-body');
+  if (!drawer || !body) return;
+
+  _assessSelectedIdx = idx;
+  title.textContent = a.title || a.control_id || 'Assessment';
+  meta.innerHTML = `
+    ${a.category ? `<span class="meta-chip">${esc(a.category)}</span>` : ''}
+    ${assessStatusBadge(a.status)}
+    ${a.confidence ? sevBadgeLevel(a.confidence) : ''}
+    ${a.control_id ? `<span class="meta-chip">${esc(a.control_id)}</span>` : ''}
+  `;
+  body.innerHTML = renderAssessDrawerBody(a);
+
+  $$('.assess-row').forEach(r => r.classList.toggle('selected', Number(r.dataset.idx) === idx));
+  backdrop.classList.add('open');
+  drawer.classList.add('open');
+  _assessDrawerOpen = true;
+  document.removeEventListener('keydown', onAssessDrawerKeydown);
+  document.addEventListener('keydown', onAssessDrawerKeydown);
+  drawer.focus({preventScroll:true});
+};
+
+window.closeAssessDrawer = closeAssessDrawer;
+
 async function tabAssessment(el, id, detail) {
+  closeAssessDrawer();
+  _assessRows = [];
   if (detail.state !== 'done') {
     el.innerHTML = `<div class="alert alert-warn">Scan not complete — assessment appears when analysis finishes.</div>`;
     return;
@@ -1498,6 +1910,7 @@ async function tabAssessment(el, id, detail) {
         <p style="color:var(--muted);font-size:.85rem">Security Assessment was disabled for this scan, or the database predates Assessment mode. Re-scan with the Assessment checkbox enabled.</p></div>`;
       return;
     }
+    _assessRows = rows;
     const counts = { PRESENT: 0, PARTIAL: 0, ABSENT: 0, UNKNOWN: 0 };
     for (const r of rows) {
       const s = String(r.status || 'UNKNOWN').toUpperCase();
@@ -1508,12 +1921,19 @@ async function tabAssessment(el, id, detail) {
       const c = r.category || 'OTHER';
       (byCat[c] ||= []).push(r);
     }
-    const statusBadge = s => {
-      const u = String(s||'UNKNOWN').toUpperCase();
-      const cls = u === 'PRESENT' ? 'sev-info' : u === 'PARTIAL' ? 'sev-medium' : u === 'ABSENT' ? 'sev-high' : 'sev-info';
-      const bg = u === 'PRESENT' ? '#dcfce7;color:#16a34a' : u === 'PARTIAL' ? '#fef3c7;color:#d97706'
-        : u === 'ABSENT' ? '#fee2e2;color:#dc2626' : '#f3f4f6;color:#6b7280';
-      return `<span class="badge" style="background:${bg.split(';')[0]};${bg.includes('color')?bg.split(';').slice(1).join(';'):''}">${esc(u)}</span>`;
+    const rowHtml = (a) => {
+      const i = rows.indexOf(a);
+      return `<button type="button" class="assess-row" data-idx="${i}"
+          aria-label="Open assessment details for ${escAttr(a.title || a.control_id || 'control')}"
+          onclick="openAssessDrawer(${i})">
+        ${assessStatusBadge(a.status)}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600">${esc(a.title||'')}</div>
+          ${a.detail ? `<div style="font-size:.78rem;color:var(--muted);margin-top:.15rem">${esc(a.detail)}</div>` : ''}
+          ${a.evidence ? `<div style="font-size:.72rem;font-family:monospace;color:var(--muted);margin-top:.25rem;word-break:break-word">${esc(a.evidence)}</div>` : ''}
+          <div style="font-size:.72rem;color:var(--muted);margin-top:.2rem"><code>${esc(a.control_id||'')}</code> · ${esc(a.confidence||'')}</div>
+        </div>
+      </button>`;
     };
     el.innerHTML = `
       <div class="sev-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-bottom:1rem">
@@ -1522,21 +1942,23 @@ async function tabAssessment(el, id, detail) {
         <div class="stat"><div class="stat-n" style="color:#dc2626">${counts.ABSENT}</div><div class="stat-l">Absent</div></div>
         <div class="stat"><div class="stat-n" style="color:#6b7280">${counts.UNKNOWN}</div><div class="stat-l">Unknown</div></div>
       </div>
-      <p style="color:var(--muted);font-size:.8rem;margin-bottom:1rem">Static best-effort inventory of implemented protections. Not counted in vulnerability severity totals.</p>
+      <p style="color:var(--muted);font-size:.8rem;margin-bottom:1rem">Static best-effort inventory of implemented protections. Not counted in vulnerability severity totals. Click a control for summary, reason, and static/dynamic checks.</p>
       ${Object.keys(byCat).sort().map(cat => `
         <div class="card" style="margin-bottom:.75rem">
           <div class="card-title">${esc(cat)} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${byCat[cat].length}</span></div>
-          ${byCat[cat].map(a => `
-            <div style="display:flex;gap:.75rem;padding:.65rem 0;border-bottom:1px solid var(--border);align-items:flex-start">
-              ${statusBadge(a.status)}
-              <div style="flex:1;min-width:0">
-                <div style="font-weight:600">${esc(a.title||'')}</div>
-                ${a.detail ? `<div style="font-size:.78rem;color:var(--muted);margin-top:.15rem">${esc(a.detail)}</div>` : ''}
-                ${a.evidence ? `<div style="font-size:.72rem;font-family:monospace;color:var(--muted);margin-top:.25rem;word-break:break-word">${esc(a.evidence)}</div>` : ''}
-                <div style="font-size:.72rem;color:var(--muted);margin-top:.2rem"><code>${esc(a.control_id||'')}</code> · ${esc(a.confidence||'')}</div>
-              </div>
-            </div>`).join('')}
-        </div>`).join('')}`;
+          ${byCat[cat].map(rowHtml).join('')}
+        </div>`).join('')}
+      <div id="assess-drawer-backdrop" class="llm-drawer-backdrop" onclick="closeAssessDrawer()"></div>
+      <aside id="assess-drawer" class="llm-drawer" tabindex="-1" role="dialog" aria-label="Assessment control detail">
+        <div class="llm-drawer-head">
+          <div class="llm-drawer-head-main">
+            <div id="assess-drawer-title" class="llm-drawer-title"></div>
+            <div id="assess-drawer-meta" class="llm-drawer-meta"></div>
+          </div>
+          <button type="button" class="llm-drawer-close" onclick="closeAssessDrawer()" aria-label="Close">×</button>
+        </div>
+        <div id="assess-drawer-body" class="llm-drawer-body"></div>
+      </aside>`;
   } catch (e) {
     el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
@@ -1906,7 +2328,8 @@ const OFF_CAT_PHASE = {
   SSL_PINNING:'TRANSPORT', CRYPTO:'SECRETS',
   BIOMETRIC:'SESSION', OTHER:'SESSION',
 };
-let _offState = {scanId:null, phase:'ENVIRONMENT', targets:[], selected:0};
+const OFF_PAGE_SIZE = 8;
+let _offState = {scanId:null, phase:'ENVIRONMENT', targets:[], selected:0, page:0};
 
 function parseOffensiveTargets(raw='') {
   const text = String(raw||'').trim();
@@ -2003,7 +2426,7 @@ async function tabOffensive(el, id, detail) {
         }
       }
     }
-    _offState = {scanId:id, phase:'ENVIRONMENT', targets, selected:0};
+    _offState = {scanId:id, phase:'ENVIRONMENT', targets, selected:0, page:0};
     if (!targets.length) {
       el.innerHTML = `<div class="card"><div class="card-title">No Offensive targets</div>
         <p style="color:var(--muted);font-size:.85rem">No Frida playbooks were stored for this scan. Re-run with LLM Mode = Offensive.</p>
@@ -2031,6 +2454,13 @@ function renderOffensiveCampaign() {
   const sel = Math.min(Math.max(0, selected), Math.max(0, inPhase.length - 1));
   _offState.selected = sel;
   const t = inPhase[sel];
+  const pageCount = Math.max(1, Math.ceil(inPhase.length / OFF_PAGE_SIZE));
+  const page = Math.min(Math.max(0, _offState.page || 0), pageCount - 1);
+  _offState.page = page;
+  const pageStart = page * OFF_PAGE_SIZE;
+  const pageItems = inPhase.slice(pageStart, pageStart + OFF_PAGE_SIZE);
+  const firstNo = inPhase.length ? pageStart + 1 : 0;
+  const lastNo = pageStart + pageItems.length;
 
   root.innerHTML = `
     <div class="alert alert-warn" style="font-size:.78rem">Authorized testing only — Frida scripts for apps you are permitted to instrument.</div>
@@ -2048,16 +2478,24 @@ function renderOffensiveCampaign() {
     <div class="off-split">
       <div class="off-list">
         <div class="off-list-head">Targets in ${esc(phase.toLowerCase())}</div>
-        <div class="off-list-body">
-          ${inPhase.length ? inPhase.map((x,i) => `
-            <div class="off-target${i===sel?' active':''}" onclick="offSelectTarget(${i})">
+        <div class="off-list-body" role="listbox" aria-label="Targets in ${esc(phase.toLowerCase())}">
+          ${inPhase.length ? pageItems.map((x,j) => { const i = pageStart + j; return `
+            <div class="off-target${i===sel?' active':''}" role="option" tabindex="0" aria-selected="${i===sel?'true':'false'}" onclick="offSelectTarget(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();offSelectTarget(${i})}">
               <div class="off-target-title">${esc(x.title||'Untitled')}</div>
               <div class="off-target-meta">
                 ${sevBadgeLevel(String(x.priority||'MEDIUM').toUpperCase())}
-                <span>${esc(x.category||'')}</span>
+                ${x.category ? `<span class="off-target-cat">${esc(x.category)}</span>` : ''}
               </div>
-            </div>`).join('') : '<div class="empty" style="padding:1rem">No targets in this phase.</div>'}
+            </div>`; }).join('') : '<div class="empty" style="padding:1rem">No targets in this phase.</div>'}
         </div>
+        ${inPhase.length ? `<div class="off-list-foot">
+          <span class="off-list-count">${firstNo}–${lastNo} of ${inPhase.length}</span>
+          ${pageCount > 1 ? `<span class="off-list-pager">
+            <button type="button" class="page-btn" aria-label="Previous page" onclick="offSetPage(${page-1})" ${page===0?'disabled':''}>‹ Prev</button>
+            <span>${page+1} / ${pageCount}</span>
+            <button type="button" class="page-btn" aria-label="Next page" onclick="offSetPage(${page+1})" ${page>=pageCount-1?'disabled':''}>Next ›</button>
+          </span>` : ''}
+        </div>` : ''}
       </div>
       <div class="off-detail">
         <div class="off-detail-head">Playbook detail</div>
@@ -2123,10 +2561,17 @@ function renderOffensiveDetail(t) {
 window.offSelectPhase = function(phase) {
   _offState.phase = phase;
   _offState.selected = 0;
+  _offState.page = 0;
   renderOffensiveCampaign();
 };
 window.offSelectTarget = function(i) {
   _offState.selected = i;
+  renderOffensiveCampaign();
+};
+window.offSetPage = function(p) {
+  const inPhase = _offState.targets.filter(t => t.phase === _offState.phase);
+  const pageCount = Math.max(1, Math.ceil(inPhase.length / OFF_PAGE_SIZE));
+  _offState.page = Math.min(Math.max(0, p), pageCount - 1);
   renderOffensiveCampaign();
 };
 
@@ -2167,11 +2612,15 @@ window.offCopyAllScripts = async function() {
 };
 
 /* ── llm tab ── */
+let llmRequestSeq = 0;
 let _llmFindings = [];
 let _llmDrawerOpen = false;
 /** @type {{key:string, dir:'asc'|'desc'}} */
 let _llmSort = {key:'status', dir:'desc'};
 let _llmSelectedIdx = -1;
+/** @type {{root:HTMLElement, id:string, state:{page:number, size:number, query:string}}|null} */
+let _llmLoad = null;
+const LLM_SERVER_SORT = {function:1, class:1, mode:1};
 
 const LLM_STATUS_RANK = {
   CRITICAL: 7, HIGH: 6, MEDIUM: 5, LOW: 4, INFO: 3, UNPARSED: 2, CLEAN: 1
@@ -2364,6 +2813,11 @@ window.sortLlmColumn = function(key) {
     // Status defaults to severity-desc; text columns default A→Z
     _llmSort.dir = key === 'status' ? 'desc' : 'asc';
   }
+  if (LLM_SERVER_SORT[key] && _llmLoad) {
+    _llmLoad.state.page = 1;
+    loadLlmFindings(_llmLoad.root, _llmLoad.id, _llmLoad.state);
+    return;
+  }
   applyLlmSort();
   if (selected) {
     _llmSelectedIdx = _llmFindings.indexOf(selected);
@@ -2460,40 +2914,105 @@ async function tabLlm(el, id, detail) {
   _llmFindings = [];
   _llmSelectedIdx = -1;
   _llmSort = {key:'status', dir:'desc'};
+  _llmLoad = null;
   if (!detail.llm_enabled) {
     el.innerHTML=`<div class="alert alert-info">LLM enrichment was not enabled for this scan.
       Re-run with LLM enabled to see findings.</div>`; return;
   }
   if (detail.state !== 'done') { el.innerHTML=`<div class="alert alert-warn">Scan not complete.</div>`; return; }
-  el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try {
-    const findings = await api('/scans/'+id+'/llm');
-    if (!findings.length) { el.innerHTML='<div class="empty">No LLM findings.</div>'; return; }
-    _llmFindings = findings;
-    applyLlmSort(); // default: severity desc, then function name
-    el.innerHTML = `
-      <div class="tbl-wrap"><table>
-        <thead id="llm-findings-thead"><tr>
-          ${llmSortHeaderHtml('status','Status')}
-          ${llmSortHeaderHtml('function','Function')}
-          ${llmSortHeaderHtml('class','Class')}
-          ${llmSortHeaderHtml('mode','Mode')}
-          ${llmSortHeaderHtml('preview','Preview')}
-        </tr></thead>
-        <tbody id="llm-findings-tbody">${renderLlmTableRows()}</tbody>
-      </table></div>
-      <div id="llm-drawer-backdrop" class="llm-drawer-backdrop" onclick="closeLlmDrawer()"></div>
-      <aside id="llm-drawer" class="llm-drawer" tabindex="-1" role="dialog" aria-label="LLM finding detail">
-        <div class="llm-drawer-head">
-          <div class="llm-drawer-head-main">
-            <div id="llm-drawer-title" class="llm-drawer-title"></div>
-            <div id="llm-drawer-meta" class="llm-drawer-meta"></div>
-          </div>
-          <button type="button" class="llm-drawer-close" onclick="closeLlmDrawer()" aria-label="Close">×</button>
+
+  const root = document.createElement('div');
+  root.id = 'llm-root';
+  root.innerHTML = `
+    <div class="search-bar">
+      <input id="llm-q" type="text" placeholder="Search findings…" autocomplete="off"/>
+      <button id="llm-search" class="btn btn-primary btn-sm">Search</button>
+    </div>
+    <div id="llm-table"><div class="loading"><div class="spinner"></div></div></div>
+    <div id="llm-pages" class="pagination llm-pagination"></div>
+    <div id="llm-drawer-backdrop" class="llm-drawer-backdrop" onclick="closeLlmDrawer()"></div>
+    <aside id="llm-drawer" class="llm-drawer" tabindex="-1" role="dialog" aria-label="LLM finding detail">
+      <div class="llm-drawer-head">
+        <div class="llm-drawer-head-main">
+          <div id="llm-drawer-title" class="llm-drawer-title"></div>
+          <div id="llm-drawer-meta" class="llm-drawer-meta"></div>
         </div>
-        <div id="llm-drawer-body" class="llm-drawer-body"></div>
-      </aside>`;
-  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+        <button type="button" class="llm-drawer-close" onclick="closeLlmDrawer()" aria-label="Close">×</button>
+      </div>
+      <div id="llm-drawer-body" class="llm-drawer-body"></div>
+    </aside>`;
+  el.replaceChildren(root);
+
+  const state = {page:1, size:50, query:''};
+  _llmLoad = {root, id, state};
+  const search = () => {
+    state.query = root.querySelector('#llm-q').value.trim();
+    state.page = 1;
+    loadLlmFindings(root, id, state);
+  };
+  root.querySelector('#llm-search').addEventListener('click', search);
+  root.querySelector('#llm-q').addEventListener('keydown', event => {
+    if (event.key === 'Enter') search();
+  });
+  await loadLlmFindings(root, id, state);
+}
+
+async function loadLlmFindings(root, id, state) {
+  const table = root.querySelector('#llm-table');
+  const pager = root.querySelector('#llm-pages');
+  if (!table || !pager) return;
+  closeLlmDrawer();
+  _llmSelectedIdx = -1;
+  const requestSeq = ++llmRequestSeq;
+  table.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  pager.innerHTML = '';
+  try {
+    const params = new URLSearchParams({page:String(state.page), size:String(state.size)});
+    if (state.query) params.set('q', state.query);
+    if (LLM_SERVER_SORT[_llmSort.key]) {
+      params.set('sort', _llmSort.key);
+      params.set('dir', _llmSort.dir);
+    }
+    const data = await api('/scans/'+id+'/llm?'+params);
+    if (requestSeq !== llmRequestSeq || !root.isConnected
+        || root !== document.getElementById('llm-root')) return;
+
+    const items = Array.isArray(data.items) ? data.items : [];
+    const total = Math.max(0, Number(data.total) || 0);
+    const page = Math.max(1, Number(data.page) || 1);
+    const size = Math.max(1, Number(data.size) || state.size);
+    const pages = Math.max(0, Number(data.pages) || 0);
+    state.page = page;
+    _llmFindings = items;
+    applyLlmSort();
+
+    table.innerHTML = items.length
+      ? `<div class="tbl-wrap"><table class="llm-table">
+          <thead id="llm-findings-thead"></thead>
+          <tbody id="llm-findings-tbody"></tbody>
+        </table></div>`
+      : `<div class="empty">${state.query ? 'No LLM findings match this search.' : 'No LLM findings.'}</div>`;
+    if (items.length) refreshLlmTable();
+
+    const first = items.length ? (page - 1) * size + 1 : 0;
+    const last = items.length ? first + items.length - 1 : 0;
+    pager.innerHTML = `<span>Showing ${esc(String(first))}–${esc(String(last))} of ${esc(total.toLocaleString())} · Page ${esc(String(pages ? page : 0))} of ${esc(String(pages))}</span>
+      <span class="llm-pagination-actions">
+        <button class="page-btn" data-page="prev" ${page <= 1 ? 'disabled' : ''}>Previous</button>
+        <button class="page-btn" data-page="next" ${pages === 0 || page >= pages ? 'disabled' : ''}>Next</button>
+      </span>`;
+    pager.querySelector('[data-page="prev"]').onclick = () => {
+      if (state.page > 1) { state.page--; loadLlmFindings(root, id, state); }
+    };
+    pager.querySelector('[data-page="next"]').onclick = () => {
+      if (state.page < pages) { state.page++; loadLlmFindings(root, id, state); }
+    };
+  } catch(e) {
+    if (requestSeq === llmRequestSeq && root.isConnected
+        && root === document.getElementById('llm-root')) {
+      table.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`;
+    }
+  }
 }
 
 /* ── log tab ── */
@@ -2541,13 +3060,6 @@ function tabDownloads(id, detail) {
 
 /* ── init ── */
 router();
-
-// Hydrate entry points mini-widget after summary renders
-const _origRoute = routes['scan'];
-routes['scan'] = async function(id, tab='summary') {
-  await _origRoute(id, tab);
-  if (tab==='summary') setTimeout(()=>postSummaryHydrate(id), 200);
-};
 </script>
 </body>
 </html>
