@@ -290,9 +290,18 @@ Enable (default) with `--assessment` or the web **Security Assessment** checkbox
 
 Supported providers: **OpenAI**, **Anthropic Claude**, **DeepSeek**, **Ollama**.
 
-Modes: `summarize` · `find_vulns` · `auto_fix`
+Modes: `summarize` · `find_vulns` · `auto_fix` · `offensive`
 
-When LLM finds a vulnerability, it returns a `detection_regex`. Regexes that self-validate against the source function are saved per platform — `~/.malimite/learned_rules.json` (iOS) or `learned_rules_android.json` (Android) — and reused on future scans **without further LLM calls**. Hollow placeholders such as `...` are rejected.
+| Mode | Purpose |
+|------|---------|
+| `summarize` | Plain-English function summaries |
+| `find_vulns` | Structured vulnerabilities (+ learned rules when regex self-validates) |
+| `auto_fix` | Idiomatic reconstruct of decompiled code |
+| `offensive` | Frida bypass/intercept playbooks (requires `--llm`) |
+
+**Offensive** mode is for authorized mobile penetration testing only. It stores structured `offensive_targets` JSON in `LlmFindings` (not promoted into Vulnerabilities or learned rules). The web UI shows a dedicated **Offensive** campaign tab (kill-chain phases + Frida kit export).
+
+When LLM finds a vulnerability (`find_vulns`), it returns a `detection_regex`. Regexes that self-validate against the source function are saved per platform — `~/.malimite/learned_rules.json` (iOS) or `learned_rules_android.json` (Android) — and reused on future scans **without further LLM calls**. Hollow placeholders such as `...` are rejected.
 
 ### DeepSeek models
 
@@ -333,7 +342,8 @@ malimite [OPTIONS] <ipa|apk>
       --html               Write report.html
       --llm                Enable LLM enrichment
       --llm-provider=<x>   openai | claude | deepseek | ollama
-      --llm-mode=<x>       summarize | find_vulns | auto_fix
+      --llm-mode=<x>       summarize | find_vulns | auto_fix | offensive
+                           (offensive requires --llm)
       --llm-model=<x>      Override default model per provider
       --assessment / --no-assessment
                            Security-controls Assessment (default: on)

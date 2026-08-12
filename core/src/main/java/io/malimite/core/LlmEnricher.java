@@ -11,6 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * Iterates over all decompiled functions in a SqliteStore, calls an LLM provider
@@ -25,6 +27,9 @@ import java.util.List;
  *       enrichment will detect the same pattern statically.</li>
  * </ul>
  *
+ * <p>In OFFENSIVE mode the LLM returns Frida bypass/intercept playbooks stored only in
+ * {@code LlmFindings} (not promoted to Vulnerabilities or learned rules).
+ *
  * <p>System prompts and user envelopes are selected by {@link PackagePlatform} and
  * decompiler origin ({@code JADX} vs {@code GHIDRA}) so Android APK analysis is not
  * treated as iOS/ObjC.
@@ -34,7 +39,12 @@ public class LlmEnricher {
     private static final Logger log = LoggerFactory.getLogger(LlmEnricher.class);
 
     /** Bump when system prompts or envelope format change — invalidates LLM cache. */
-    static final String PROMPT_VERSION = "v6";
+    static final String PROMPT_VERSION = "v7";
+
+    private static final Set<String> OFFENSIVE_PHASES =
+            Set.of("ENVIRONMENT", "TRANSPORT", "SECRETS", "SESSION");
+    private static final Set<String> OFFENSIVE_CATEGORIES = Set.of(
+            "ROOT_DETECTION", "JAILBREAK", "SSL_PINNING", "CRYPTO", "BIOMETRIC", "OTHER");
 
     private static final String JSON_RESPONSE_FORMAT =
             "RESPONSE FORMAT (mandatory):\n" +
@@ -98,6 +108,68 @@ public class LlmEnricher {
             "7. Escape regex metacharacters in literal strings: . ( ) [ ] * + ? { } | ^ $ \\\\\n" +
             "8. Aim 40-300 chars; specific enough to avoid false positives, generic enough to fire on similar code.\n\n" +
             "If no real vulnerabilities, output exactly: {\"vulnerabilities\": []}";
+
+    private static final String OFFENSIVE_JSON_FORMAT =
+            "RESPONSE FORMAT (mandatory):\n" +
+            "- Your ENTIRE response MUST be a single JSON object. The first character MUST be '{'.\n" +
+            "- Do NOT write chain-of-thought, preamble, markdown fences, or trailing commentary.\n" +
+            "- If this function is not a high-value offensive target, return {\"offensive_targets\": []}.\n\n" +
+            "Schema:\n" +
+            "{\n" +
+            "  \"offensive_targets\": [\n" +
+            "    {\n" +
+            "      \"phase\": \"ENVIRONMENT|TRANSPORT|SECRETS|SESSION\",\n" +
+            "      \"category\": \"ROOT_DETECTION|JAILBREAK|SSL_PINNING|CRYPTO|BIOMETRIC|OTHER\",\n" +
+            "      \"title\": \"Short label under 80 chars\",\n" +
+            "      \"priority\": \"CRITICAL|HIGH|MEDIUM\",\n" +
+            "      \"target_symbols\": [\"Class.method\"],\n" +
+            "      \"why_critical\": \"why this control matters for offensive testing\",\n" +
+            "      \"bypass_strategy\": \"concrete bypass / intercept approach\",\n" +
+            "      \"frida_script\": \"complete Frida JavaScript (Java.perform or ObjC.perform)\",\n" +
+            "      \"script_notes\": \"how to load and what to watch\",\n" +
+            "      \"mitm_notes\": \"optional Burp/mitmproxy CA notes for pinning bypass\",\n" +
+            "      \"confidence\": \"HIGH|MEDIUM|LOW\",\n" +
+            "      \"evidence\": \"short decompiled snippet under 300 chars\"\n" +
+            "    }\n" +
+            "  ]\n" +
+            "}\n\n" +
+            "Phase mapping: ROOT_DETECTION/JAILBREAK→ENVIRONMENT; SSL_PINNING→TRANSPORT; " +
+            "CRYPTO→SECRETS; BIOMETRIC→SESSION; OTHER→SESSION.\n" +
+            "Never use ellipsis placeholders (\"...\", \"…\") in any field. " +
+            "frida_script must be runnable Frida JS with comments — no TODO stubs.\n\n";
+
+    private static final String IOS_OFFENSIVE =
+            "You are an expert iOS offensive security engineer analysing ONE Ghidra-decompiled function " +
+            "for authorized mobile penetration testing.\n\n" +
+            "Objective: identify critical defensive or secret-handling logic and produce Frida playbooks:\n" +
+            "- Root/jailbreak / Frida / debugger detection → bypass hooks\n" +
+            "- Crypto encrypt/decrypt → intercept plaintext, IV, keys\n" +
+            "- SSL / certificate pinning (NSURLSession, TrustKit, etc.) → bypass or inject user MITM CA\n" +
+            "- Biometric / session token hardening → instrumentation hooks\n" +
+            "Skip unrelated UI helpers. Prefer ObjC.perform / Interceptor patterns suitable for iOS.\n\n" +
+            OFFENSIVE_JSON_FORMAT +
+            "If no offensive target here, output exactly: {\"offensive_targets\": []}";
+
+    private static final String ANDROID_JAVA_OFFENSIVE =
+            "You are an expert Android offensive security engineer analysing ONE JADX-decompiled " +
+            "Java method/class for authorized mobile penetration testing.\n\n" +
+            "Objective: identify critical defensive or secret-handling logic and produce Frida playbooks:\n" +
+            "- Root / Magisk / Frida / emulator detection → bypass hooks (Java.perform)\n" +
+            "- Crypto (Cipher, Mac, Keystore) → intercept plaintext, IV, secret/key material\n" +
+            "- SSL pinning (OkHttp CertificatePinner, TrustManager, Network Security Config in code) " +
+            "→ bypass or trust user Burp/mitmproxy CA\n" +
+            "- BiometricPrompt / token storage → instrumentation hooks\n" +
+            "Do NOT treat this as iOS. Prefer Java.perform / Java.use patterns.\n\n" +
+            OFFENSIVE_JSON_FORMAT +
+            "If no offensive target here, output exactly: {\"offensive_targets\": []}";
+
+    private static final String ANDROID_NATIVE_OFFENSIVE =
+            "You are an expert Android native offensive engineer analysing ONE Ghidra-decompiled " +
+            "function from an APK .so for authorized testing.\n\n" +
+            "Objective: Frida Interceptor playbooks for root/anti-tamper, crypto, SSL/TLS verify, " +
+            "or JNI trust boundaries. Prefer Interceptor.attach / Module.findExportByName patterns.\n\n" +
+            OFFENSIVE_JSON_FORMAT +
+            "If no offensive target here, output exactly: {\"offensive_targets\": []}";
 
     // ── Android JADX (Java) prompts ──────────────────────────────────────────
 
@@ -196,7 +268,7 @@ public class LlmEnricher {
         log.info("LLM enrichment: mode={} platform={} provider={} functions={}",
                 mode, platform, provider.getClass().getSimpleName(), fns.size());
 
-        int cached = 0, called = 0, errors = 0, totalVulns = 0, newRules = 0;
+        int cached = 0, called = 0, errors = 0, totalVulns = 0, newRules = 0, totalTargets = 0;
 
         for (SqliteStore.DecompilationResult fn : fns) {
             if (fn.decompiledCode() == null || fn.decompiledCode().isBlank()) continue;
@@ -221,8 +293,15 @@ public class LlmEnricher {
                 }
             }
 
+            String storedFinding = finding;
+            if (mode == LlmMode.OFFENSIVE) {
+                String cleaned = processOffensiveJson(finding, fn);
+                storedFinding = cleaned != null ? cleaned : "{\"offensive_targets\":[]}";
+                totalTargets += countOffensiveTargets(storedFinding);
+            }
+
             store.insertLlmFinding(fn.functionName(), fn.className(), executableName,
-                    mode.name(), finding, hash);
+                    mode.name(), storedFinding, hash);
 
             if (mode == LlmMode.FIND_VULNS) {
                 int[] counts = processVulnsJson(finding, fn, store, executableName);
@@ -230,8 +309,13 @@ public class LlmEnricher {
                 newRules   += counts[1];
             }
         }
-        log.info("LLM enrichment done: cached={} api_calls={} errors={} vulnerabilities={} new_learned_rules={}",
-                cached, called, errors, totalVulns, newRules);
+        if (mode == LlmMode.OFFENSIVE) {
+            log.info("LLM enrichment done: cached={} api_calls={} errors={} offensive_targets={}",
+                    cached, called, errors, totalTargets);
+        } else {
+            log.info("LLM enrichment done: cached={} api_calls={} errors={} vulnerabilities={} new_learned_rules={}",
+                    cached, called, errors, totalVulns, newRules);
+        }
     }
 
     // ── JSON parsing → Vulnerabilities + learned rules ───────────────────────
@@ -327,6 +411,157 @@ public class LlmEnricher {
         return new int[]{vulnsInserted, rulesAdded};
     }
 
+    // ── OFFENSIVE JSON → cleaned LlmFindings only (no Vulnerabilities / rules) ─
+
+    /**
+     * Parses LLM offensive playbook JSON, applies quality gates, normalizes phase /
+     * priority / confidence, and returns a re-serialized {@code {"offensive_targets":[...]}}
+     * string suitable for {@code LlmFindings}. Does not promote into Vulnerabilities.
+     */
+    static String processOffensiveJson(String raw, SqliteStore.DecompilationResult fn) {
+        JsonObject root = extractOffensiveJson(raw);
+        if (root == null) {
+            if (fn != null) {
+                log.debug("LLM did not return recoverable offensive JSON for {}.{}",
+                        fn.className(), fn.functionName());
+            }
+            return "{\"offensive_targets\":[]}";
+        }
+
+        JsonArray arr;
+        try { arr = root.getAsJsonArray("offensive_targets"); }
+        catch (Exception e) { return "{\"offensive_targets\":[]}"; }
+
+        JsonArray cleaned = new JsonArray();
+        for (JsonElement el : arr) {
+            JsonObject t;
+            try { t = el.getAsJsonObject(); } catch (Exception ex) { continue; }
+
+            String title = sanitizeLlmText(optString(t, "title", ""));
+            String frida = sanitizeLlmText(optString(t, "frida_script", ""));
+            if (title.isBlank() || LearnedRulesStore.isPlaceholderText(title)) {
+                log.info("Skipping incomplete offensive target (empty/placeholder title) for {}.{}",
+                        fn != null ? fn.className() : "?", fn != null ? fn.functionName() : "?");
+                continue;
+            }
+            if (frida.isBlank() || LearnedRulesStore.isPlaceholderText(frida)
+                    || isHollowFridaScript(frida)) {
+                log.info("Skipping incomplete offensive target (empty/hollow frida_script) for {}.{}: {}",
+                        fn != null ? fn.className() : "?", fn != null ? fn.functionName() : "?", title);
+                continue;
+            }
+
+            String category = normalizeOffensiveCategory(optString(t, "category", "OTHER"));
+            String phase = normalizeOffensivePhase(optString(t, "phase", ""), category);
+            String priority = normalizeOffensivePriority(optString(t, "priority", "MEDIUM"));
+            String confidence = normalizeOffensiveConfidence(optString(t, "confidence", "MEDIUM"));
+
+            JsonObject out = new JsonObject();
+            out.addProperty("phase", phase);
+            out.addProperty("category", category);
+            out.addProperty("title", truncate(title, 80));
+            out.addProperty("priority", priority);
+            out.add("target_symbols", normalizeStringArray(t.get("target_symbols")));
+            out.addProperty("why_critical", sanitizeLlmText(optString(t, "why_critical", "")));
+            out.addProperty("bypass_strategy", sanitizeLlmText(optString(t, "bypass_strategy", "")));
+            out.addProperty("frida_script", frida);
+            out.addProperty("script_notes", sanitizeLlmText(optString(t, "script_notes", "")));
+            out.addProperty("mitm_notes", sanitizeLlmText(optString(t, "mitm_notes", "")));
+            out.addProperty("confidence", confidence);
+            out.addProperty("evidence", truncate(
+                    sanitizeLlmText(optString(t, "evidence", "")), 300));
+            cleaned.add(out);
+        }
+
+        JsonObject result = new JsonObject();
+        result.add("offensive_targets", cleaned);
+        return result.toString();
+    }
+
+    private static int countOffensiveTargets(String json) {
+        try {
+            JsonObject o = JsonParser.parseString(json).getAsJsonObject();
+            return o.getAsJsonArray("offensive_targets").size();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** Reject stub scripts that are only comments / ellipsis / TODO. */
+    static boolean isHollowFridaScript(String script) {
+        if (script == null) return true;
+        String t = script.trim();
+        if (t.isEmpty()) return true;
+        if (LearnedRulesStore.isPlaceholderText(t)) return true;
+        // Strip line comments and whitespace; if nothing substantive remains, hollow.
+        String stripped = t.replaceAll("(?m)^\\s*//.*$", "")
+                .replaceAll("/\\*[\\s\\S]*?\\*/", "")
+                .replace("...", "")
+                .replace("…", "")
+                .trim();
+        if (stripped.isEmpty()) return true;
+        String lower = stripped.toLowerCase(Locale.ROOT);
+        if (lower.contains("todo") && stripped.length() < 80) return true;
+        // Must look like Frida JS (hook entry or Interceptor)
+        return !(lower.contains("java.perform")
+                || lower.contains("objc.perform")
+                || lower.contains("interceptor.")
+                || lower.contains("java.use")
+                || lower.contains("module."));
+    }
+
+    static String normalizeOffensiveCategory(String raw) {
+        String c = raw == null ? "OTHER" : raw.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+        return OFFENSIVE_CATEGORIES.contains(c) ? c : "OTHER";
+    }
+
+    static String normalizeOffensivePhase(String phase, String category) {
+        String p = phase == null ? "" : phase.trim().toUpperCase(Locale.ROOT);
+        if (OFFENSIVE_PHASES.contains(p)) return p;
+        return switch (normalizeOffensiveCategory(category)) {
+            case "ROOT_DETECTION", "JAILBREAK" -> "ENVIRONMENT";
+            case "SSL_PINNING" -> "TRANSPORT";
+            case "CRYPTO" -> "SECRETS";
+            default -> "SESSION"; // BIOMETRIC, OTHER
+        };
+    }
+
+    static String normalizeOffensivePriority(String raw) {
+        String p = raw == null ? "" : raw.trim().toUpperCase(Locale.ROOT);
+        return switch (p) {
+            case "CRITICAL", "HIGH", "MEDIUM" -> p;
+            case "LOW", "INFO" -> "MEDIUM";
+            default -> "MEDIUM";
+        };
+    }
+
+    static String normalizeOffensiveConfidence(String raw) {
+        String c = raw == null ? "" : raw.trim().toUpperCase(Locale.ROOT);
+        return switch (c) {
+            case "HIGH", "MEDIUM", "LOW" -> c;
+            default -> "MEDIUM";
+        };
+    }
+
+    private static JsonArray normalizeStringArray(JsonElement el) {
+        JsonArray out = new JsonArray();
+        if (el == null || el.isJsonNull()) return out;
+        if (el.isJsonArray()) {
+            for (JsonElement e : el.getAsJsonArray()) {
+                try {
+                    String s = e.getAsString().trim();
+                    if (!s.isEmpty() && !LearnedRulesStore.isPlaceholderText(s)) out.add(s);
+                } catch (Exception ignored) { /* skip */ }
+            }
+        } else {
+            try {
+                String s = el.getAsString().trim();
+                if (!s.isEmpty() && !LearnedRulesStore.isPlaceholderText(s)) out.add(s);
+            } catch (Exception ignored) { /* skip */ }
+        }
+        return out;
+    }
+
     private static String optString(JsonObject o, String key, String def) {
         if (!o.has(key) || o.get(key).isJsonNull()) return def;
         try { return o.get(key).getAsString(); } catch (Exception e) { return def; }
@@ -415,6 +650,43 @@ public class LlmEnricher {
         return o == null ? null : o.toString();
     }
 
+    static JsonObject extractOffensiveJson(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+
+        String text = raw.trim();
+
+        JsonObject direct = tryParseOffensiveObject(stripCodeFences(text));
+        if (direct != null) return direct;
+
+        int searchFrom = 0;
+        while (true) {
+            int fence = indexOfIgnoreCase(text, "```", searchFrom);
+            if (fence < 0) break;
+            int afterOpen = fence + 3;
+            int nl = text.indexOf('\n', afterOpen);
+            if (nl < 0) break;
+            int close = text.indexOf("```", nl + 1);
+            if (close < 0) break;
+            JsonObject fromFence = tryParseOffensiveObject(text.substring(nl + 1, close).trim());
+            if (fromFence != null) return fromFence;
+            searchFrom = close + 3;
+        }
+
+        int idx = lastIndexOfKeyedObject(text, "\"offensive_targets\"");
+        if (idx >= 0) {
+            String candidate = extractBalancedOrRepairOffensive(text, idx);
+            JsonObject embedded = tryParseOffensiveObject(candidate);
+            if (embedded != null) return embedded;
+        }
+
+        return null;
+    }
+
+    static String extractOffensiveJsonString(String raw) {
+        JsonObject o = extractOffensiveJson(raw);
+        return o == null ? null : o.toString();
+    }
+
     private static JsonObject tryParseVulnsObject(String json) {
         if (json == null || json.isBlank()) return null;
         String t = json.trim();
@@ -428,11 +700,28 @@ public class LlmEnricher {
         }
     }
 
+    private static JsonObject tryParseOffensiveObject(String json) {
+        if (json == null || json.isBlank()) return null;
+        String t = json.trim();
+        if (!t.startsWith("{")) return null;
+        try {
+            JsonObject root = JsonParser.parseString(t).getAsJsonObject();
+            if (!root.has("offensive_targets") || !root.get("offensive_targets").isJsonArray()) return null;
+            return root;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static int lastIndexOfVulnsObject(String text) {
+        return lastIndexOfKeyedObject(text, "\"vulnerabilities\"");
+    }
+
+    private static int lastIndexOfKeyedObject(String text, String keyLiteral) {
         int best = -1;
         int from = 0;
         while (from < text.length()) {
-            int key = text.indexOf("\"vulnerabilities\"", from);
+            int key = text.indexOf(keyLiteral, from);
             if (key < 0) break;
             int i = key - 1;
             while (i >= 0 && Character.isWhitespace(text.charAt(i))) i--;
@@ -449,6 +738,15 @@ public class LlmEnricher {
         if (balanced != null) return balanced;
 
         return repairTruncatedJson(text.substring(start));
+    }
+
+    private static String extractBalancedOrRepairOffensive(String text, int start) {
+        if (start < 0 || start >= text.length() || text.charAt(start) != '{') return null;
+
+        String balanced = extractBalanced(text, start);
+        if (balanced != null) return balanced;
+
+        return repairTruncatedOffensiveJson(text.substring(start));
     }
 
     private static String extractBalanced(String text, int start) {
@@ -474,11 +772,19 @@ public class LlmEnricher {
     }
 
     static String repairTruncatedJson(String fragment) {
+        return repairTruncatedKeyedArray(fragment, "\"vulnerabilities\"", "vulnerabilities");
+    }
+
+    static String repairTruncatedOffensiveJson(String fragment) {
+        return repairTruncatedKeyedArray(fragment, "\"offensive_targets\"", "offensive_targets");
+    }
+
+    private static String repairTruncatedKeyedArray(String fragment, String keyLiteral, String keyName) {
         if (fragment == null || fragment.isBlank()) return null;
-        int key = fragment.indexOf("\"vulnerabilities\"");
+        int key = fragment.indexOf(keyLiteral);
         if (key < 0) return null;
         int arrStart = fragment.indexOf('[', key);
-        if (arrStart < 0) return "{\"vulnerabilities\":[]}";
+        if (arrStart < 0) return "{\"" + keyName + "\":[]}";
 
         StringBuilder entries = new StringBuilder();
         int i = arrStart + 1;
@@ -495,7 +801,7 @@ public class LlmEnricher {
             entries.append(obj);
             i += obj.length();
         }
-        return "{\"vulnerabilities\":[" + entries + "]}";
+        return "{\"" + keyName + "\":[" + entries + "]}";
     }
 
     private static String stripCodeFences(String s) {
@@ -540,6 +846,7 @@ public class LlmEnricher {
                 case AUTO_FIX -> String.format(IOS_AUTO_FIX, isSwift ? "Swift" : "Objective-C");
                 case SUMMARIZE -> IOS_SUMMARIZE;
                 case FIND_VULNS -> IOS_FIND_VULNS;
+                case OFFENSIVE -> IOS_OFFENSIVE;
             };
         }
         if (nativeElf) {
@@ -547,12 +854,14 @@ public class LlmEnricher {
                 case AUTO_FIX -> ANDROID_NATIVE_AUTO_FIX;
                 case SUMMARIZE -> ANDROID_NATIVE_SUMMARIZE;
                 case FIND_VULNS -> ANDROID_NATIVE_FIND_VULNS;
+                case OFFENSIVE -> ANDROID_NATIVE_OFFENSIVE;
             };
         }
         return switch (mode) {
             case AUTO_FIX -> ANDROID_JAVA_AUTO_FIX;
             case SUMMARIZE -> ANDROID_JAVA_SUMMARIZE;
             case FIND_VULNS -> ANDROID_JAVA_FIND_VULNS;
+            case OFFENSIVE -> ANDROID_JAVA_OFFENSIVE;
         };
     }
 

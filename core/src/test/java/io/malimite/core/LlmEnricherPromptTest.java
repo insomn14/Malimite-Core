@@ -67,6 +67,26 @@ class LlmEnricherPromptTest {
         assertFalse(p.contains("PTR_s_"));
     }
 
+    @Test void offensivePromptsArePlatformAware() {
+        var ios = new LlmEnricher(null, LlmMode.OFFENSIVE, null, true, PackagePlatform.IOS);
+        String iosP = ios.buildSystemPrompt("GHIDRA");
+        assertTrue(iosP.contains("iOS"));
+        assertTrue(iosP.contains("offensive_targets"));
+        assertTrue(iosP.contains("ObjC.perform") || iosP.contains("Frida"));
+
+        var jadx = new LlmEnricher(null, LlmMode.OFFENSIVE, null, false, PackagePlatform.ANDROID);
+        String j = jadx.buildSystemPrompt("JADX");
+        assertTrue(j.contains("Android"));
+        assertTrue(j.contains("Java.perform"));
+        assertTrue(j.contains("offensive_targets"));
+        assertFalse(j.contains("Keychain") || j.contains("kSecAttrAccessible"));
+
+        var nativeE = new LlmEnricher(null, LlmMode.OFFENSIVE, null, false, PackagePlatform.ANDROID);
+        String n = nativeE.buildSystemPrompt("GHIDRA");
+        assertTrue(n.contains("Interceptor") || n.contains("native"));
+        assertTrue(n.contains("offensive_targets"));
+    }
+
     @Test void userEnvelopeIncludesMetadata() {
         var e = new LlmEnricher(null, LlmMode.SUMMARIZE, null, false, PackagePlatform.ANDROID);
         var fn = new SqliteStore.DecompilationResult(
@@ -111,6 +131,6 @@ class LlmEnricherPromptTest {
                 "public void foo() { Log.d(\"t\", secret); }",
                 LlmMode.SUMMARIZE, PackagePlatform.ANDROID, "JADX");
         assertEquals(expected, cache.keys.get(0));
-        assertTrue(LlmEnricher.PROMPT_VERSION.equals("v6"));
+        assertTrue(LlmEnricher.PROMPT_VERSION.equals("v7"));
     }
 }

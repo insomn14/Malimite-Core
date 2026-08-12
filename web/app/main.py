@@ -1,16 +1,35 @@
 """Malimite Python web service — wraps all Malimite-Core functionality."""
+import io
 import json
+import re
+import zipfile
 from pathlib import Path
 from typing import Optional
 
 import aiofiles
 from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import db, scanner
 from .config import settings
 from .models import ScanDetail, ScanMeta
+
+_OFFENSIVE_MODE_ALIASES = frozenset({"offensive", "offense", "frida", "bypass"})
+_PHASE_DIRS = {
+    "ENVIRONMENT": "01_environment",
+    "TRANSPORT": "02_transport",
+    "SECRETS": "03_secrets",
+    "SESSION": "04_session",
+}
+_CAT_TO_PHASE = {
+    "ROOT_DETECTION": "ENVIRONMENT",
+    "JAILBREAK": "ENVIRONMENT",
+    "SSL_PINNING": "TRANSPORT",
+    "CRYPTO": "SECRETS",
+    "BIOMETRIC": "SESSION",
+    "OTHER": "SESSION",
+}
 
 app = FastAPI(title="Malimite", version="0.1.0", docs_url="/docs", redoc_url=None)
 
@@ -80,6 +99,14 @@ async def create_scan(
             detail=f"{provider_label} is required when using provider '{llm_provider}'. "
                    f"Pass it in the llm_api_key field or set {provider_label} in the server .env.",
         )
+    mode_norm = (llm_mode or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if mode_norm in _OFFENSIVE_MODE_ALIASES:
+        if not llm_enabled or llm_provider in ("none", ""):
+            raise HTTPException(
+                status_code=422,
+                detail="Offensive mode requires LLM Enrichment (select a provider).",
+            )
+        llm_mode = "offensive"
     return await scanner.create_scan(
         data, file.filename,
         llm_enabled, llm_provider, llm_mode, llm_model, llm_api_key,
@@ -176,6 +203,144 @@ async def get_llm_findings(request: Request, scan_id: str):
     _check_auth(request)
     db_path, exe = _require_db(scan_id)
     return await db.get_llm_findings(db_path, exe)
+
+
+def _parse_offensive_targets(finding_text: str) -> list[dict]:
+    """Best-effort parse of cleaned/raw offensive_targets JSON from an LlmFindings row."""
+    if not finding_text or not finding_text.strip():
+        return []
+    text = finding_text.strip()
+    candidates: list[str] = [text]
+    m = re.search(r"```(?:json)?\s*([\s\S]*?)```", text, re.I)
+    if m:
+        candidates.insert(0, m.group(1).strip())
+    # Prefer last embedded {"offensive_targets":
+    key = '"offensive_targets"'
+    best = -1
+    from_idx = 0
+    while True:
+        ki = text.find(key, from_idx)
+        if ki < 0:
+            break
+        i = ki - 1
+        while i >= 0 and text[i].isspace():
+            i -= 1
+        if i >= 0 and text[i] == "{":
+            best = i
+        from_idx = ki + 1
+    if best >= 0:
+        depth = 0
+        in_str = False
+        esc = False
+        end = -1
+        for i, c in enumerate(text[best:], start=best):
+            if in_str:
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+            else:
+                if c == '"':
+                    in_str = True
+                elif c == "{":
+                    depth += 1
+                elif c == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+        if end > best:
+            candidates.insert(0, text[best:end])
+
+    for cand in candidates:
+        try:
+            obj = json.loads(cand)
+        except Exception:
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("offensive_targets"), list):
+            return [t for t in obj["offensive_targets"] if isinstance(t, dict)]
+    return []
+
+
+def _normalize_phase(target: dict) -> str:
+    phase = str(target.get("phase") or "").strip().upper()
+    if phase in _PHASE_DIRS:
+        return phase
+    cat = str(target.get("category") or "OTHER").strip().upper().replace("-", "_")
+    return _CAT_TO_PHASE.get(cat, "SESSION")
+
+
+def _slug(s: str, fallback: str = "target") -> str:
+    t = re.sub(r"[^a-zA-Z0-9._-]+", "_", (s or "").strip())[:60].strip("_")
+    return t or fallback
+
+
+@app.get("/api/v1/scans/{scan_id}/offensive/kit")
+async def export_offensive_frida_kit(request: Request, scan_id: str):
+    """Zip Frida kit: 01_environment/ … 04_session/ + README (authorized testing)."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    findings = await db.get_llm_findings(db_path, exe)
+    targets: list[dict] = []
+    for f in findings:
+        mode = str(getattr(f, "mode", "") or "").upper()
+        if mode and mode != "OFFENSIVE":
+            continue
+        for t in _parse_offensive_targets(getattr(f, "finding", "") or ""):
+            row = dict(t)
+            row["_phase"] = _normalize_phase(row)
+            row["_fn"] = getattr(f, "function_name", "") or ""
+            row["_cls"] = getattr(f, "class_name", "") or ""
+            targets.append(row)
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        readme = (
+            "Malimite Offensive Frida kit\n"
+            "============================\n\n"
+            "AUTHORIZED TESTING ONLY. Use these scripts only on apps you are\n"
+            "permitted to instrument.\n\n"
+            "Suggested load order:\n"
+            "  1. 01_environment/  — root / jailbreak / anti-Frida bypass\n"
+            "  2. 02_transport/    — SSL pinning / MITM helpers\n"
+            "  3. 03_secrets/      — crypto plaintext / key intercept\n"
+            "  4. 04_session/      — biometric / token hooks\n\n"
+            "Example:\n"
+            "  frida -U -f <package> -l 01_environment/01_bypass.js --no-pause\n"
+        )
+        zf.writestr("README.md", readme)
+        for folder in _PHASE_DIRS.values():
+            zf.writestr(f"{folder}/.keep", "")
+        counters = {p: 0 for p in _PHASE_DIRS}
+        for t in targets:
+            phase = t.get("_phase") or "SESSION"
+            folder = _PHASE_DIRS.get(phase, "04_session")
+            counters[phase] = counters.get(phase, 0) + 1
+            n = counters[phase]
+            script = (t.get("frida_script") or "").strip()
+            if not script:
+                continue
+            title = _slug(str(t.get("title") or "target"), f"target_{n}")
+            name = f"{n:02d}_{title}.js"
+            header = (
+                f"// Malimite Offensive — {t.get('title') or title}\n"
+                f"// phase={phase} category={t.get('category') or ''} "
+                f"priority={t.get('priority') or ''}\n"
+                f"// from={t.get('_cls') or ''}.{t.get('_fn') or ''}\n"
+                f"// {t.get('script_notes') or ''}\n\n"
+            )
+            zf.writestr(f"{folder}/{name}", header + script)
+    data = buf.getvalue()
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="malimite-offensive-kit-{scan_id[:8]}.zip"'
+        },
+    )
 
 
 @app.get("/api/v1/scans/{scan_id}/vulnerabilities")

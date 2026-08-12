@@ -16,5 +16,10 @@ class LlmModeTest {
         assertEquals(LlmMode.AUTO_FIX,   LlmMode.fromString("AUTO_FIX"));
         assertEquals(LlmMode.SUMMARIZE,  LlmMode.fromString("summarize"));
         assertEquals(LlmMode.SUMMARIZE,  LlmMode.fromString("unknown"));
+        assertEquals(LlmMode.OFFENSIVE,  LlmMode.fromString("offensive"));
+        assertEquals(LlmMode.OFFENSIVE,  LlmMode.fromString("offense"));
+        assertEquals(LlmMode.OFFENSIVE,  LlmMode.fromString("frida"));
+        assertEquals(LlmMode.OFFENSIVE,  LlmMode.fromString("bypass"));
+        assertEquals(LlmMode.OFFENSIVE,  LlmMode.fromString("OFFENSIVE"));
     }
 }

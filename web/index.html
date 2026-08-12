@@ -237,6 +237,32 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 .llm-kv .v{word-break:break-word}
 .llm-prose{background:#111;color:#e2e8f0;border-radius:var(--radius);padding:.85rem 1rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.75rem;white-space:pre-wrap;word-break:break-word;line-height:1.55}
 .llm-section-label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 .55rem}
+
+/* Offensive campaign (Mockup C) */
+.off-campaign{display:flex;flex-direction:column;gap:.75rem}
+.off-phases{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
+@media(max-width:800px){.off-phases{grid-template-columns:1fr 1fr}}
+.off-phase{border:1px solid var(--border);border-radius:var(--radius);padding:.7rem .85rem;background:var(--surface);cursor:pointer;text-align:left}
+.off-phase:hover{background:var(--bg)}
+.off-phase.active{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent);background:#eef2ff}
+.off-phase-label{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.off-phase-title{font-weight:600;font-size:.85rem;margin-top:.15rem}
+.off-phase-count{font-size:.75rem;color:var(--muted);margin-top:.2rem}
+.off-split{display:grid;grid-template-columns:minmax(220px,1fr) minmax(280px,1.4fr);gap:.75rem;min-height:360px}
+@media(max-width:800px){.off-split{grid-template-columns:1fr}}
+.off-list,.off-detail{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden;display:flex;flex-direction:column}
+.off-list-head,.off-detail-head{padding:.65rem .85rem;border-bottom:1px solid var(--border);font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.off-list-body,.off-detail-body{flex:1;overflow-y:auto}
+.off-target{padding:.7rem .85rem;border-bottom:1px solid var(--border);cursor:pointer}
+.off-target:hover{background:var(--bg)}
+.off-target.active{background:#eef2ff;box-shadow:inset 3px 0 0 var(--accent)}
+.off-target-title{font-weight:600;font-size:.84rem}
+.off-target-meta{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;margin-top:.3rem;font-size:.72rem;color:var(--muted)}
+.off-detail-body{padding:.85rem 1rem 1.1rem}
+.off-detail-title{font-weight:700;font-size:.95rem;margin-bottom:.35rem}
+.off-code{background:#111;color:#e2e8f0;padding:.65rem .85rem;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow-y:auto}
+.off-toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.75rem 0 0;border-top:1px solid var(--border);margin-top:.25rem}
+.off-warn{margin-top:.75rem;font-size:.78rem}
 @media(max-width:640px){
   .llm-drawer{width:100vw}
 }
@@ -313,6 +339,19 @@ window.clearKeyError = function() {
   const keyError = document.getElementById('llm-key-error');
   if (keyInput) keyInput.style.borderColor = '';
   if (keyError) keyError.hidden = true;
+};
+
+window.onLlmModeChange = function() {
+  const mode = document.getElementById('llm-mode')?.value || '';
+  const warn = document.getElementById('offensive-warn');
+  if (warn) warn.hidden = mode !== 'offensive';
+  if (mode === 'offensive') {
+    const provider = document.getElementById('llm-provider');
+    if (provider && (provider.value === 'none' || !provider.value)) {
+      provider.value = 'deepseek';
+      onProviderChange();
+    }
+  }
 };
 
 /* ── config ── */
@@ -433,10 +472,11 @@ route('home', async function() {
         </label>
         <label style="display:flex;flex-direction:column;gap:.3rem">
           LLM Mode
-          <select id="llm-mode">
+          <select id="llm-mode" onchange="onLlmModeChange()">
             <option value="summarize">Summarize</option>
             <option value="find_vulns">Find Vulns</option>
             <option value="auto_fix">Auto Fix</option>
+            <option value="offensive">Offensive</option>
           </select>
         </label>
         <label style="display:flex;flex-direction:column;gap:.3rem">
@@ -458,6 +498,10 @@ route('home', async function() {
           <span id="llm-key-error" hidden style="color:var(--red);font-weight:600">API key is required to use this provider.</span>
           <span style="color:var(--muted);font-size:.72rem">Sent only to this server to authenticate with the LLM provider. Never stored.</span>
         </label>
+      </div>
+      <div id="offensive-warn" class="alert alert-warn off-warn" hidden>
+        Offensive mode generates Frida bypass/intercept scripts for <strong>authorized testing only</strong>.
+        Selecting it enables LLM Enrichment.
       </div>
       <label style="display:flex;align-items:center;gap:.5rem;margin-top:.85rem;font-size:.8rem;cursor:pointer">
         <input type="checkbox" id="assessment-enabled" checked/>
@@ -488,7 +532,18 @@ route('home', async function() {
     if (!n.endsWith('.ipa') && !n.endsWith('.apk')) { alert('Only .ipa or .apk files accepted'); return; }
 
     // Validate: API key required when provider needs one
-    const provider = $('#llm-provider').value;
+    let provider = $('#llm-provider').value;
+    const mode = $('#llm-mode').value;
+    if (mode === 'offensive' && (provider === 'none' || !provider)) {
+      provider = 'deepseek';
+      const pEl = $('#llm-provider');
+      if (pEl) pEl.value = provider;
+      onProviderChange();
+    }
+    if (mode === 'offensive' && provider === 'none') {
+      alert('Offensive mode requires LLM Enrichment — select a provider.');
+      return;
+    }
     const needsKey = provider === 'openai' || provider === 'claude' || provider === 'deepseek';
     const apiKeyVal = ($('#llm-api-key')?.value || '').trim();
     if (needsKey && !apiKeyVal) {
@@ -504,7 +559,7 @@ route('home', async function() {
     fd.append('file', file);
     fd.append('llm_enabled', provider !== 'none');
     fd.append('llm_provider', provider);
-    fd.append('llm_mode', $('#llm-mode').value);
+    fd.append('llm_mode', mode);
     fd.append('llm_model', ($('#llm-model-select') && !$('#llm-model-select').hidden)
       ? $('#llm-model-select').value : $('#llm-model').value);
     fd.append('llm_api_key', apiKeyVal);
@@ -977,14 +1032,30 @@ route('learned', async function() {
 /* ── scan detail view ── */
 const TABS = ['summary','vulnerabilities','assessment','functions','strings','resources','entrypoints','llm','log','downloads'];
 
+function tabsForDetail(detail) {
+  const mode = String(detail?.llm_mode || '').toLowerCase().replace(/-/g, '_');
+  const showOff = mode === 'offensive' || mode === 'offense' || mode === 'frida' || mode === 'bypass';
+  if (!showOff) return TABS.slice();
+  const tabs = TABS.slice();
+  const i = tabs.indexOf('llm');
+  tabs.splice(i >= 0 ? i : tabs.length, 0, 'offensive');
+  return tabs;
+}
+
+function tabLabel(t) {
+  return t === 'llm' ? 'Llm' : t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 route('scan', async function(id, tab='summary') {
   render('<div class="loading"><div class="spinner"></div></div>');
   let detail;
   try { detail = await api('/scans/'+id); }
   catch(e) { render(`<div class="alert alert-error">${esc(e.message)}</div>`); return; }
 
-  const tabsHtml = TABS.map(t=>
-    `<div class="tab${t===tab?' active':''}" onclick="goTab('${id}','${t}')">${t.charAt(0).toUpperCase()+t.slice(1)}</div>`
+  const tabs = tabsForDetail(detail);
+  if (tab === 'offensive' && !tabs.includes('offensive')) tab = 'summary';
+  const tabsHtml = tabs.map(t=>
+    `<div class="tab${t===tab?' active':''}" onclick="goTab('${id}','${t}')">${tabLabel(t)}</div>`
   ).join('');
 
   render(`
@@ -1038,6 +1109,7 @@ async function renderTab(id, tab, detail) {
       case 'strings':     await tabStrings(el, id, detail); break;
       case 'resources':   await tabResources(el, id); break;
       case 'entrypoints': await tabEntryPoints(el, id, detail); break;
+      case 'offensive':   await tabOffensive(el, id, detail); break;
       case 'llm':         await tabLlm(el, id, detail); break;
       case 'log':         await tabLog(el, id); break;
       case 'downloads':   el.innerHTML = tabDownloads(id, detail); break;
@@ -1820,6 +1892,278 @@ window.toggleVuln = function(i) {
   if (!body) return;
   body.hidden = !body.hidden;
   if (chev) chev.textContent = body.hidden ? '▾' : '▴';
+};
+
+/* ── Offensive tab (Mockup C) ── */
+const OFF_PHASES = [
+  {id:'ENVIRONMENT', n:1, title:'Environment', blurb:'Root/JB hooks'},
+  {id:'TRANSPORT',   n:2, title:'Transport',   blurb:'SSL pinning bypass'},
+  {id:'SECRETS',     n:3, title:'Secrets',     blurb:'Crypto intercept'},
+  {id:'SESSION',     n:4, title:'Session',     blurb:'Biometric / token hooks'},
+];
+const OFF_CAT_PHASE = {
+  ROOT_DETECTION:'ENVIRONMENT', JAILBREAK:'ENVIRONMENT',
+  SSL_PINNING:'TRANSPORT', CRYPTO:'SECRETS',
+  BIOMETRIC:'SESSION', OTHER:'SESSION',
+};
+let _offState = {scanId:null, phase:'ENVIRONMENT', targets:[], selected:0};
+
+function parseOffensiveTargets(raw='') {
+  const text = String(raw||'').trim();
+  if (!text) return [];
+  const tryObj = (s) => {
+    try {
+      const o = JSON.parse(s);
+      if (o && Array.isArray(o.offensive_targets)) return o.offensive_targets;
+    } catch(_) {}
+    return null;
+  };
+  let candidate = text;
+  const whole = candidate.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
+  if (whole) candidate = whole[1].trim();
+  let arr = tryObj(candidate);
+  if (arr) return arr;
+  const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let m;
+  while ((m = fenceRe.exec(text)) !== null) {
+    arr = tryObj(m[1].trim());
+    if (arr) return arr;
+  }
+  const key = '"offensive_targets"';
+  let from = 0, best = -1;
+  while (true) {
+    const ki = text.indexOf(key, from);
+    if (ki < 0) break;
+    let i = ki - 1;
+    while (i >= 0 && /\s/.test(text[i])) i--;
+    if (i >= 0 && text[i] === '{') best = i;
+    from = ki + 1;
+  }
+  if (best >= 0) {
+    let depth = 0, inStr = false, esc = false, end = -1;
+    for (let i = best; i < text.length; i++) {
+      const c = text[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === '\\') esc = true;
+        else if (c === '"') inStr = false;
+      } else {
+        if (c === '"') inStr = true;
+        else if (c === '{') depth++;
+        else if (c === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+      }
+    }
+    if (end > best) {
+      arr = tryObj(text.slice(best, end));
+      if (arr) return arr;
+    }
+  }
+  return [];
+}
+
+function offPhaseOf(t) {
+  const p = String(t.phase||'').toUpperCase();
+  if (OFF_PHASES.some(x => x.id === p)) return p;
+  const c = String(t.category||'OTHER').toUpperCase().replace(/-/g,'_');
+  return OFF_CAT_PHASE[c] || 'SESSION';
+}
+
+function collectOffensiveTargets(findings) {
+  const out = [];
+  for (const f of findings || []) {
+    if (String(f.mode||'').toUpperCase() !== 'OFFENSIVE') continue;
+    for (const t of parseOffensiveTargets(f.finding)) {
+      if (!t || typeof t !== 'object') continue;
+      out.push({
+        ...t,
+        phase: offPhaseOf(t),
+        _fn: f.function_name || '',
+        _cls: f.class_name || '',
+      });
+    }
+  }
+  return out;
+}
+
+async function tabOffensive(el, id, detail) {
+  if (detail.state !== 'done') {
+    el.innerHTML = `<div class="alert alert-warn">Scan not complete — Offensive playbooks appear when analysis finishes.</div>`;
+    return;
+  }
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const findings = await api('/scans/'+id+'/llm');
+    const targets = collectOffensiveTargets(findings);
+    // Also surface if llm_mode is offensive but Mode field missing on older rows
+    if (!targets.length && String(detail.llm_mode||'').toLowerCase() === 'offensive') {
+      for (const f of findings) {
+        for (const t of parseOffensiveTargets(f.finding)) {
+          if (!t || typeof t !== 'object') continue;
+          targets.push({...t, phase: offPhaseOf(t), _fn: f.function_name||'', _cls: f.class_name||''});
+        }
+      }
+    }
+    _offState = {scanId:id, phase:'ENVIRONMENT', targets, selected:0};
+    if (!targets.length) {
+      el.innerHTML = `<div class="card"><div class="card-title">No Offensive targets</div>
+        <p style="color:var(--muted);font-size:.85rem">No Frida playbooks were stored for this scan. Re-run with LLM Mode = Offensive.</p>
+        <p style="margin-top:.75rem"><button class="btn btn-ghost btn-sm" onclick="goTab('${id}','assessment')">Open Assessment →</button></p>
+      </div>`;
+      return;
+    }
+    // Prefer first phase that has targets
+    for (const p of OFF_PHASES) {
+      if (targets.some(t => t.phase === p.id)) { _offState.phase = p.id; break; }
+    }
+    el.innerHTML = `<div class="off-campaign" id="off-root"></div>`;
+    renderOffensiveCampaign();
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+  }
+}
+
+function renderOffensiveCampaign() {
+  const root = document.getElementById('off-root');
+  if (!root) return;
+  const {phase, targets, selected, scanId} = _offState;
+  const counts = Object.fromEntries(OFF_PHASES.map(p => [p.id, targets.filter(t => t.phase === p.id).length]));
+  const inPhase = targets.filter(t => t.phase === phase);
+  const sel = Math.min(Math.max(0, selected), Math.max(0, inPhase.length - 1));
+  _offState.selected = sel;
+  const t = inPhase[sel];
+
+  root.innerHTML = `
+    <div class="alert alert-warn" style="font-size:.78rem">Authorized testing only — Frida scripts for apps you are permitted to instrument.</div>
+    <div class="card" style="padding:1rem">
+      <div class="card-title" style="margin-bottom:.85rem">Offensive campaign</div>
+      <div class="off-phases">
+        ${OFF_PHASES.map(p => `
+          <button type="button" class="off-phase${p.id===phase?' active':''}" onclick="offSelectPhase('${p.id}')">
+            <div class="off-phase-label">Phase ${p.n}</div>
+            <div class="off-phase-title">${esc(p.title)}</div>
+            <div class="off-phase-count">${counts[p.id]||0} · ${esc(p.blurb)}</div>
+          </button>`).join('')}
+      </div>
+    </div>
+    <div class="off-split">
+      <div class="off-list">
+        <div class="off-list-head">Targets in ${esc(phase.toLowerCase())}</div>
+        <div class="off-list-body">
+          ${inPhase.length ? inPhase.map((x,i) => `
+            <div class="off-target${i===sel?' active':''}" onclick="offSelectTarget(${i})">
+              <div class="off-target-title">${esc(x.title||'Untitled')}</div>
+              <div class="off-target-meta">
+                ${sevBadgeLevel(String(x.priority||'MEDIUM').toUpperCase())}
+                <span>${esc(x.category||'')}</span>
+              </div>
+            </div>`).join('') : '<div class="empty" style="padding:1rem">No targets in this phase.</div>'}
+        </div>
+      </div>
+      <div class="off-detail">
+        <div class="off-detail-head">Playbook detail</div>
+        <div class="off-detail-body" id="off-detail-body">
+          ${t ? renderOffensiveDetail(t) : '<div class="empty">Select a target.</div>'}
+        </div>
+      </div>
+    </div>
+    <div class="off-toolbar">
+      <a class="btn btn-primary btn-sm" href="/api/v1/scans/${scanId}/offensive/kit" id="off-kit-link">Export Frida kit</a>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="offCopyAllScripts()">Copy all scripts</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="goTab('${scanId}','assessment')">Open Assessment →</button>
+    </div>`;
+
+  const kit = document.getElementById('off-kit-link');
+  if (kit) {
+    kit.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      try {
+        const r = await fetch(`/api/v1/scans/${scanId}/offensive/kit`, {headers: headers()});
+        if (!r.ok) throw new Error(await r.text());
+        const blob = await r.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `malimite-offensive-kit-${scanId.slice(0,8)}.zip`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch (e) { alert('Kit export failed: ' + (e.message||e)); }
+    });
+  }
+}
+
+function renderOffensiveDetail(t) {
+  const pri = String(t.priority||'MEDIUM').toUpperCase();
+  const conf = String(t.confidence||'MEDIUM').toUpperCase();
+  const syms = Array.isArray(t.target_symbols) ? t.target_symbols.join(', ') : (t.target_symbols||'');
+  const script = t.frida_script || '';
+  return `
+    <div class="off-detail-title">${esc(t.title||'Untitled')}</div>
+    <div class="off-target-meta" style="margin-bottom:.75rem">
+      ${sevBadgeLevel(pri)}
+      <span>confidence ${esc(conf)}</span>
+      <span>· ${esc(t.category||'')}</span>
+    </div>
+    ${syms ? `<div class="llm-section-label">Symbols</div><div style="font-size:.8rem;font-family:monospace;margin-bottom:.75rem;word-break:break-word">${esc(syms)}</div>` : ''}
+    <div class="llm-section-label">Strategy</div>
+    <p style="font-size:.85rem;margin-bottom:.85rem">${esc(fieldOr(t.bypass_strategy || t.why_critical, '—'))}</p>
+    <div class="llm-section-label" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Frida</span>
+      <span>
+        <button type="button" class="btn-link" onclick="offCopyScript()">Copy</button>
+        <button type="button" class="btn-link" onclick="offSaveScript()">Save</button>
+      </span>
+    </div>
+    <pre class="off-code" id="off-frida-script">${esc(script || '(no script)')}</pre>
+    <div class="llm-section-label" style="margin-top:.85rem">Evidence (decompiled)</div>
+    <pre class="off-code">${esc(fieldOr(t.evidence, '(no evidence)'))}</pre>
+    <div class="llm-section-label" style="margin-top:.85rem">MITM / script notes</div>
+    <p style="font-size:.8rem;color:var(--muted);white-space:pre-wrap">${esc([t.mitm_notes, t.script_notes].filter(Boolean).join('\n\n') || '—')}</p>
+    <p style="font-size:.72rem;color:var(--muted);margin-top:.75rem">from <code>${esc((t._cls?t._cls+'.':'')+(t._fn||''))}</code></p>`;
+}
+
+window.offSelectPhase = function(phase) {
+  _offState.phase = phase;
+  _offState.selected = 0;
+  renderOffensiveCampaign();
+};
+window.offSelectTarget = function(i) {
+  _offState.selected = i;
+  renderOffensiveCampaign();
+};
+
+function _offCurrentTarget() {
+  const inPhase = _offState.targets.filter(t => t.phase === _offState.phase);
+  return inPhase[_offState.selected] || null;
+}
+
+window.offCopyScript = async function() {
+  const t = _offCurrentTarget();
+  if (!t?.frida_script) return;
+  try {
+    await navigator.clipboard.writeText(t.frida_script);
+  } catch(_) {
+    prompt('Copy script:', t.frida_script);
+  }
+};
+window.offSaveScript = function() {
+  const t = _offCurrentTarget();
+  if (!t?.frida_script) return;
+  const slug = String(t.title||'script').replace(/[^a-zA-Z0-9._-]+/g,'_').slice(0,50);
+  const blob = new Blob([t.frida_script], {type:'text/javascript'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = slug + '.js';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+window.offCopyAllScripts = async function() {
+  const phase = _offState.phase;
+  const list = _offState.targets.filter(t => t.phase === phase && t.frida_script);
+  const all = _offState.targets.filter(t => t.frida_script);
+  const use = list.length ? list : all;
+  const text = use.map(t => `// === ${t.title||'target'} (${t.phase||''}) ===\n${t.frida_script}`).join('\n\n');
+  if (!text) { alert('No scripts to copy'); return; }
+  try { await navigator.clipboard.writeText(text); }
+  catch(_) { prompt('Copy scripts:', text); }
 };
 
 /* ── llm tab ── */

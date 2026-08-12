@@ -42,7 +42,7 @@ public class Main implements Callable<Integer> {
     private String llmProvider;
 
     @Option(names = "--llm-mode",
-            description = "Enrichment mode: summarize|auto_fix|find_vulns  (default: summarize)",
+            description = "Enrichment mode: summarize|auto_fix|find_vulns|offensive  (default: summarize)",
             defaultValue = "${env:LLM_MODE:-summarize}")
     private String llmModeStr;
 
@@ -75,6 +75,10 @@ public class Main implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         LlmMode mode = LlmMode.fromString(llmModeStr);
+        if (mode == LlmMode.OFFENSIVE && !llm) {
+            System.err.println("error: --llm-mode offensive requires --llm (LLM enrichment is mandatory for Offensive mode)");
+            return 2;
+        }
 
         Map<String, String> llmCfg = buildLlmConfig();
         AnalyzeOptions opts = AnalyzeOptions.builder()

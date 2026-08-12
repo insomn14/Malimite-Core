@@ -226,6 +226,80 @@ class LlmEnricherJsonTest {
         }
     }
 
+    private static final String SAMPLE_OFFENSIVE_JSON = """
+        {
+          "offensive_targets": [
+            {
+              "category": "SSL_PINNING",
+              "title": "Bypass OkHttp CertificatePinner",
+              "priority": "HIGH",
+              "target_symbols": ["okhttp3.CertificatePinner.check"],
+              "why_critical": "Blocks MITM with user CA",
+              "bypass_strategy": "Hook check() and return early",
+              "frida_script": "Java.perform(function() {\\n  var C = Java.use('okhttp3.CertificatePinner');\\n  C.check.overload('java.lang.String', 'java.util.List').implementation = function(a,b){ console.log('bypass '+a); };\\n});",
+              "script_notes": "frida -U -f app -l pin.js",
+              "mitm_notes": "Install Burp CA on device",
+              "confidence": "HIGH",
+              "evidence": "CertificatePinner.check(hostname, peerCertificates)"
+            },
+            {
+              "category": "CRYPTO",
+              "title": "...",
+              "priority": "CRITICAL",
+              "frida_script": "...",
+              "confidence": "LOW"
+            }
+          ]
+        }
+        """;
+
+    @Test void offensiveStoresCleanedJsonWithoutPromotingVulns(@TempDir Path tmp) throws Exception {
+        Path dbPath = tmp.resolve("test.sqlite");
+        Path rulesPath = tmp.resolve("learned_rules.json");
+        try (SqliteStore store = new SqliteStore(dbPath.toString())) {
+            store.insertFunctionDecompilations(List.of(new SqliteStore.DecompilationResult(
+                    "check", "okhttp3.CertificatePinner",
+                    "void check(String host, List peers) { this.pins.check(host); }",
+                    "App", "JADX")));
+            LearnedRulesStore rs = new LearnedRulesStore(rulesPath);
+
+            new LlmEnricher(new FakeProvider(SAMPLE_OFFENSIVE_JSON), LlmMode.OFFENSIVE,
+                    new MemoryCache(), false, PackagePlatform.ANDROID, rs)
+                    .enrich(store, "App");
+
+            assertEquals(0, store.getVulnerabilities("App").size(),
+                    "OFFENSIVE must not promote into Vulnerabilities");
+            assertEquals(0, rs.size(), "OFFENSIVE must not persist learned rules");
+
+            var findings = store.getLlmFindings("App");
+            assertEquals(1, findings.size());
+            assertEquals("OFFENSIVE", findings.get(0).get("mode").toString());
+            String text = findings.get(0).get("finding").toString();
+            assertTrue(text.contains("offensive_targets"));
+            assertTrue(text.contains("Bypass OkHttp CertificatePinner"));
+            assertTrue(text.contains("\"phase\":\"TRANSPORT\"") || text.contains("\"phase\": \"TRANSPORT\""),
+                    "SSL_PINNING should map to TRANSPORT phase: " + text);
+            assertFalse(text.contains("\"title\":\"...\""), "placeholder title must be dropped");
+        }
+    }
+
+    @Test void offensivePhaseMappingAndEnums() {
+        assertEquals("ENVIRONMENT", LlmEnricher.normalizeOffensivePhase("", "ROOT_DETECTION"));
+        assertEquals("ENVIRONMENT", LlmEnricher.normalizeOffensivePhase("", "JAILBREAK"));
+        assertEquals("TRANSPORT", LlmEnricher.normalizeOffensivePhase("", "SSL_PINNING"));
+        assertEquals("SECRETS", LlmEnricher.normalizeOffensivePhase("", "CRYPTO"));
+        assertEquals("SESSION", LlmEnricher.normalizeOffensivePhase("", "BIOMETRIC"));
+        assertEquals("SESSION", LlmEnricher.normalizeOffensivePhase("", "OTHER"));
+        assertEquals("SECRETS", LlmEnricher.normalizeOffensivePhase("SECRETS", "SSL_PINNING"));
+        assertEquals("HIGH", LlmEnricher.normalizeOffensivePriority("high"));
+        assertEquals("MEDIUM", LlmEnricher.normalizeOffensivePriority("LOW"));
+        assertEquals("LOW", LlmEnricher.normalizeOffensiveConfidence("low"));
+        assertTrue(LlmEnricher.isHollowFridaScript("..."));
+        assertTrue(LlmEnricher.isHollowFridaScript("// TODO implement"));
+        assertFalse(LlmEnricher.isHollowFridaScript(
+                "Java.perform(function(){ Java.use('x').y.implementation=function(){}; });"));
+    }
+
     @Test void scannerPicksUpLearnedRules(@TempDir Path tmp) throws Exception {
         Path dbPath = tmp.resolve("test.sqlite");
         Path rulesPath = tmp.resolve("learned_rules.json");

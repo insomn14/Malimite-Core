@@ -2,6 +2,7 @@ package io.malimite.core;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -117,6 +118,79 @@ class LlmEnricherExtractTest {
     @Test void returnsNullForBlank() {
         assertNull(LlmEnricher.extractVulnsJson(null));
         assertNull(LlmEnricher.extractVulnsJson("   "));
+    }
+
+    private static final String ONE_OFFENSIVE = """
+        {
+          "offensive_targets": [
+            {
+              "phase": "TRANSPORT",
+              "category": "SSL_PINNING",
+              "title": "Bypass CertificatePinner",
+              "priority": "HIGH",
+              "target_symbols": ["okhttp3.CertificatePinner.check"],
+              "why_critical": "Blocks MITM",
+              "bypass_strategy": "Hook check",
+              "frida_script": "Java.perform(function(){ var C=Java.use('okhttp3.CertificatePinner'); C.check.implementation=function(){}; });",
+              "script_notes": "load with frida -l",
+              "mitm_notes": "Burp CA",
+              "confidence": "HIGH",
+              "evidence": "CertificatePinner.check"
+            }
+          ]
+        }
+        """;
+
+    @Test void extractsOffensiveCleanJson() {
+        JsonObject o = LlmEnricher.extractOffensiveJson(ONE_OFFENSIVE);
+        assertNotNull(o);
+        assertEquals(1, o.getAsJsonArray("offensive_targets").size());
+    }
+
+    @Test void extractsOffensiveFencedAndEmbedded() {
+        String fenced = "```json\n" + ONE_OFFENSIVE.trim() + "\n```";
+        assertNotNull(LlmEnricher.extractOffensiveJson(fenced));
+        String prose = "Here is the playbook.\n\n" + ONE_OFFENSIVE.trim();
+        JsonObject o = LlmEnricher.extractOffensiveJson(prose);
+        assertNotNull(o);
+        assertEquals("SSL_PINNING", o.getAsJsonArray("offensive_targets").get(0)
+                .getAsJsonObject().get("category").getAsString());
+    }
+
+    @Test void processOffensiveJsonQualityGates() {
+        String messy = """
+            Thinking...
+            {
+              "offensive_targets": [
+                {
+                  "category": "ROOT_DETECTION",
+                  "title": "Bypass RootBeer",
+                  "priority": "CRITICAL",
+                  "frida_script": "Java.perform(function(){ Java.use('com.scottyab.rootbeer.RootBeer').isRooted.implementation=function(){return false;}; });",
+                  "confidence": "HIGH",
+                  "evidence": "isRooted()"
+                },
+                {
+                  "category": "CRYPTO",
+                  "title": "...",
+                  "frida_script": "Java.perform(function(){});",
+                  "priority": "HIGH"
+                },
+                {
+                  "category": "SSL_PINNING",
+                  "title": "Empty script",
+                  "frida_script": "...",
+                  "priority": "HIGH"
+                }
+              ]
+            }
+            """;
+        String cleaned = LlmEnricher.processOffensiveJson(messy, null);
+        JsonObject o = JsonParser.parseString(cleaned).getAsJsonObject();
+        JsonArray arr = o.getAsJsonArray("offensive_targets");
+        assertEquals(1, arr.size(), "only complete Frida playbook should survive");
+        assertEquals("ENVIRONMENT", arr.get(0).getAsJsonObject().get("phase").getAsString());
+        assertEquals("Bypass RootBeer", arr.get(0).getAsJsonObject().get("title").getAsString());
     }
 
     @Test void promotesEmbeddedJsonIntoVulnerabilitiesTable(@TempDir Path tmp) throws Exception {
