@@ -489,6 +489,11 @@ public class GhidraRunner {
     /**
      * DumpClassData.java imports {@code org.json.*}. Ghidra's script classpath does not
      * include Malimite's shaded deps, so we place a thin {@code json.jar} next to the script.
+     *
+     * <p>Prefer the embedded {@code /ghidra/json.jar} resource (pristine {@code org.json}
+     * package). The CLI fat jar relocates {@code org.json} → {@code io.malimite.shaded.org.json}
+     * to avoid NoClassDefFoundError / classpath clashes, so extracting {@code org/json/} from
+     * the running fat jar is only a last-resort fallback (and may find nothing after relocate).
      */
     static void bundleOrgJsonForScript(Path scriptDir) throws IOException {
         Path out = scriptDir.resolve("json.jar");
@@ -512,11 +517,21 @@ public class GhidraRunner {
                 return;
             }
             if (Files.isRegularFile(loc)) {
+                // Fat-jar fallback: may be relocated (io/malimite/shaded/org/json/) — try both.
                 extractPackageToJar(loc, "org/json/", out);
                 if (Files.size(out) > 0) {
                     log.info("Extracted org.json package from {} into {}", loc.getFileName(), out.getFileName());
                     return;
                 }
+                Path relocatedOut = scriptDir.resolve("json-relocated-tmp.jar");
+                extractPackageToJar(loc, "io/malimite/shaded/org/json/", relocatedOut);
+                if (Files.size(relocatedOut) > 0) {
+                    // Cannot rewrite package names here; embedded json.jar is required for Ghidra.
+                    Files.deleteIfExists(relocatedOut);
+                    log.warn("Classpath only has relocated org.json — embed /ghidra/json.jar for DumpClassData");
+                    return;
+                }
+                Files.deleteIfExists(relocatedOut);
             }
         } catch (Exception e) {
             log.warn("Failed to bundle org.json for Ghidra script: {}", e.getMessage());

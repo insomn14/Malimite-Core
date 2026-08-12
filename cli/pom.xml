@@ -11,6 +11,8 @@
 
   <dependencies>
     <dependency><groupId>io.malimite</groupId><artifactId>malimite-core</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
+    <!-- Explicit so the fat jar always ships a complete org.json (incl. JSONString). -->
+    <dependency><groupId>org.json</groupId><artifactId>json</artifactId><version>20231013</version></dependency>
     <dependency><groupId>info.picocli</groupId><artifactId>picocli</artifactId></dependency>
     <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-simple</artifactId></dependency>
   </dependencies>
@@ -32,6 +34,17 @@
                   <mainClass>io.malimite.cli.Main</mainClass>
                 </transformer>
               </transformers>
+              <!--
+                Relocate org.json so the CLI never shares the package with Ghidra's
+                (or any other) incomplete org.json on a polluted classpath.
+                DumpClassData still uses pristine org.json via embedded ghidra/json.jar.
+              -->
+              <relocations>
+                <relocation>
+                  <pattern>org.json</pattern>
+                  <shadedPattern>io.malimite.shaded.org.json</shadedPattern>
+                </relocation>
+              </relocations>
               <filters>
                 <filter><artifact>*:*</artifact><excludes>
                   <exclude>META-INF/*.SF</exclude>

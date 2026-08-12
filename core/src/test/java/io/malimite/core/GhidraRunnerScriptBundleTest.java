@@ -29,6 +29,8 @@ class GhidraRunnerScriptBundleTest {
         try (JarFile jf = new JarFile(jar.toFile())) {
             assertTrue(jf.stream().anyMatch(e -> e.getName().equals("org/json/JSONObject.class")),
                     "json.jar must contain org.json.JSONObject");
+            assertTrue(jf.stream().anyMatch(e -> e.getName().equals("org/json/JSONString.class")),
+                    "json.jar must contain org.json.JSONString (JSONObject.toString needs it)");
         }
     }
 

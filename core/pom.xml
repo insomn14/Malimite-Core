@@ -22,6 +22,34 @@
 
   <build>
     <plugins>
+      <!--
+        Embed a pristine org.json jar for DumpClassData (Ghidra script classpath).
+        Needed because the CLI fat jar relocates org.json → io.malimite.shaded.org.json,
+        so extracting org/json/ from the running jar would miss the original package.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.6.1</version>
+        <executions>
+          <execution>
+            <id>embed-org-json-for-ghidra</id>
+            <phase>process-resources</phase>
+            <goals><goal>copy</goal></goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>org.json</groupId>
+                  <artifactId>json</artifactId>
+                  <version>20231013</version>
+                  <outputDirectory>${project.build.outputDirectory}/ghidra</outputDirectory>
+                  <destFileName>json.jar</destFileName>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
