@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 import aiofiles
-from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -177,10 +177,15 @@ async def get_strings(
     request: Request,
     scan_id: str,
     q: Optional[str] = None,
-    limit: int = 200,
+    limit: int = Query(default=200, ge=0, le=2000),
+    page: Optional[int] = Query(default=None, ge=1),
+    size: int = Query(default=50, ge=10, le=200),
 ):
     _check_auth(request)
     db_path, exe = _require_db(scan_id)
+    # Keep the original list response for callers that do not opt into pagination.
+    if page is not None:
+        return await db.get_strings_page(db_path, exe, q, page, size)
     return await db.get_strings(db_path, exe, q, limit)
 
 
@@ -199,9 +204,23 @@ async def get_entry_points(request: Request, scan_id: str):
 
 
 @app.get("/api/v1/scans/{scan_id}/llm")
-async def get_llm_findings(request: Request, scan_id: str):
+async def get_llm_findings(
+    request: Request,
+    scan_id: str,
+    q: Optional[str] = None,
+    page: Optional[int] = Query(default=None, ge=1),
+    size: int = Query(default=50, ge=10, le=200),
+    sort: Optional[str] = Query(default=None),
+    sort_dir: Optional[str] = Query(default=None, alias="dir"),
+):
     _check_auth(request)
     db_path, exe = _require_db(scan_id)
+    # Keep the original list response for callers that do not opt into pagination
+    # (Offensive tab, Frida kit export, and other in-repo consumers).
+    if page is not None:
+        return await db.get_llm_findings_page(
+            db_path, exe, q, page, size, sort, sort_dir
+        )
     return await db.get_llm_findings(db_path, exe)
 
 

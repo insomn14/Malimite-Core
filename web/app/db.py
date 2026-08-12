@@ -3,7 +3,16 @@ import aiosqlite
 from pathlib import Path
 from typing import Optional
 
-from .models import FunctionItem, FunctionPage, LlmFinding, ResourceItem, StringItem
+from .assessment_catalog import enrich_assessment
+from .models import (
+    FunctionItem,
+    FunctionPage,
+    LlmFinding,
+    LlmFindingPage,
+    ResourceItem,
+    StringItem,
+    StringPage,
+)
 
 
 async def _open(db_path: str):
@@ -159,6 +168,59 @@ async def get_strings(
     return [StringItem(address=r[0], value=r[1], segment=r[2], label=r[3]) for r in rows]
 
 
+async def get_strings_page(
+    db_path: str,
+    executable: str,
+    query: Optional[str],
+    page: int,
+    size: int,
+) -> StringPage:
+    """Return one stable, one-based page of strings and its filtered count."""
+    page = max(page, 1)
+    size = max(10, min(size, 200))
+    offset = (page - 1) * size
+    normalized_query = (query or "").strip()
+
+    if normalized_query:
+        count_sql = """SELECT COUNT(*) FROM MachoStrings
+                       WHERE ExecutableName=? AND value LIKE ?"""
+        fetch_sql = """SELECT address, value, segment, label FROM MachoStrings
+                       WHERE ExecutableName=? AND value LIKE ?
+                       ORDER BY rowid LIMIT ? OFFSET ?"""
+        where_params = (executable, f"%{normalized_query}%")
+    else:
+        count_sql = """SELECT COUNT(*) FROM MachoStrings
+                       WHERE ExecutableName=?"""
+        fetch_sql = """SELECT address, value, segment, label FROM MachoStrings
+                       WHERE ExecutableName=?
+                       ORDER BY rowid LIMIT ? OFFSET ?"""
+        where_params = (executable,)
+
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute(count_sql, where_params) as cur:
+            row = await cur.fetchone()
+            total = row[0] if row else 0
+
+        async with db.execute(
+            fetch_sql,
+            (*where_params, size, offset),
+        ) as cur:
+            rows = await cur.fetchall()
+
+    items = [
+        StringItem(address=r[0], value=r[1], segment=r[2], label=r[3])
+        for r in rows
+    ]
+    pages = (total + size - 1) // size
+    return StringPage(
+        items=items,
+        total=total,
+        page=page,
+        size=size,
+        pages=pages,
+    )
+
+
 # ── resources ─────────────────────────────────────────────────────────────────
 
 async def get_resources(db_path: str, limit: int) -> list[ResourceItem]:
@@ -203,18 +265,20 @@ async def get_assessments(db_path: str, executable: str) -> list[dict]:
         ) as cur:
             rows = await cur.fetchall()
     return [
-        {
-            "id": r[0],
-            "control_id": r[1],
-            "title": r[2],
-            "category": r[3],
-            "status": r[4],
-            "confidence": r[5],
-            "evidence": r[6],
-            "detail": r[7],
-            "platform": r[8],
-            "created_at": r[9],
-        }
+        enrich_assessment(
+            {
+                "id": r[0],
+                "control_id": r[1],
+                "title": r[2],
+                "category": r[3],
+                "status": r[4],
+                "confidence": r[5],
+                "evidence": r[6],
+                "detail": r[7],
+                "platform": r[8],
+                "created_at": r[9],
+            }
+        )
         for r in rows
     ]
 
@@ -395,3 +459,80 @@ async def get_llm_findings(db_path: str, executable: str) -> list[LlmFinding]:
             rows = await cur.fetchall()
     return [LlmFinding(function_name=r[0], class_name=r[1], mode=r[2], finding=r[3])
             for r in rows]
+
+
+_LLM_SORT_COLUMNS = {
+    "function": "FunctionName",
+    "class": "ClassName",
+    "mode": "Mode",
+}
+
+
+def _llm_order_sql(sort: Optional[str], direction: Optional[str]) -> str:
+    """Whitelist ORDER BY for LLM pages. Status/preview stay client-side."""
+    column = _LLM_SORT_COLUMNS.get((sort or "").strip().lower())
+    if not column:
+        return "rowid"
+    order = "DESC" if (direction or "").strip().lower() == "desc" else "ASC"
+    return f"{column} COLLATE NOCASE {order}, rowid"
+
+
+async def get_llm_findings_page(
+    db_path: str,
+    executable: str,
+    query: Optional[str],
+    page: int,
+    size: int,
+    sort: Optional[str] = None,
+    direction: Optional[str] = None,
+) -> LlmFindingPage:
+    """Return one stable, one-based page of LLM findings and its filtered count."""
+    page = max(page, 1)
+    size = max(10, min(size, 200))
+    offset = (page - 1) * size
+    normalized_query = (query or "").strip()
+    order_sql = _llm_order_sql(sort, direction)
+
+    if normalized_query:
+        like = f"%{normalized_query}%"
+        count_sql = """SELECT COUNT(*) FROM LlmFindings
+                       WHERE ExecutableName=? AND (
+                         FunctionName LIKE ? OR IFNULL(ClassName,'') LIKE ?
+                         OR Mode LIKE ? OR Finding LIKE ?)"""
+        fetch_sql = f"""SELECT FunctionName, ClassName, Mode, Finding FROM LlmFindings
+                        WHERE ExecutableName=? AND (
+                          FunctionName LIKE ? OR IFNULL(ClassName,'') LIKE ?
+                          OR Mode LIKE ? OR Finding LIKE ?)
+                        ORDER BY {order_sql} LIMIT ? OFFSET ?"""
+        where_params = (executable, like, like, like, like)
+    else:
+        count_sql = """SELECT COUNT(*) FROM LlmFindings
+                       WHERE ExecutableName=?"""
+        fetch_sql = f"""SELECT FunctionName, ClassName, Mode, Finding FROM LlmFindings
+                        WHERE ExecutableName=?
+                        ORDER BY {order_sql} LIMIT ? OFFSET ?"""
+        where_params = (executable,)
+
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute(count_sql, where_params) as cur:
+            row = await cur.fetchone()
+            total = row[0] if row else 0
+
+        async with db.execute(
+            fetch_sql,
+            (*where_params, size, offset),
+        ) as cur:
+            rows = await cur.fetchall()
+
+    items = [
+        LlmFinding(function_name=r[0], class_name=r[1], mode=r[2], finding=r[3])
+        for r in rows
+    ]
+    pages = (total + size - 1) // size if size else 0
+    return LlmFindingPage(
+        items=items,
+        total=total,
+        page=page,
+        size=size,
+        pages=pages,
+    )

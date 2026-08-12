@@ -63,6 +63,14 @@ class StringItem(BaseModel):
     label: Optional[str]
 
 
+class StringPage(BaseModel):
+    items: list[StringItem]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
 class ResourceItem(BaseModel):
     resource_id: str
     value: str
@@ -74,3 +82,11 @@ class LlmFinding(BaseModel):
     class_name: Optional[str]
     mode: str
     finding: str
+
+
+class LlmFindingPage(BaseModel):
+    items: list[LlmFinding]
+    total: int
+    page: int
+    size: int
+    pages: int
