@@ -75,9 +75,10 @@ class ScanRunner:
             "--out", str(scan_dir),
             "--sarif",
             "--html",
+            "--llm-mode", self.llm_mode or "summarize",
         ]
         if self.llm_provider != "none":
-            cmd += ["--llm", "--llm-provider", self.llm_provider, "--llm-mode", self.llm_mode]
+            cmd += ["--llm", "--llm-provider", self.llm_provider]
             if self.llm_model:
                 cmd += ["--llm-model", self.llm_model]
 

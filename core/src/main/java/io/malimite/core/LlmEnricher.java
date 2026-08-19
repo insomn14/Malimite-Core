@@ -15,8 +15,12 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Iterates over all decompiled functions in a SqliteStore, calls an LLM provider
- * for each one (respecting a cache), and writes findings to the LlmFindings table.
+ * Iterates over decompiled functions in a SqliteStore, calls an LLM provider
+ * for each in-scope one (respecting a cache), and writes findings to the LlmFindings table.
+ *
+ * <p>Pass {@link ScanScopeFilter} to {@link #enrich(SqliteStore, String, ScanScopeFilter)}
+ * so Fast Scan / Offensive / Auto Fix skip third-party bodies. Default overload
+ * keeps ALL (used by unit tests).
  *
  * <p>In FIND_VULNS mode the LLM is asked to return structured JSON. Any vulnerabilities
  * it returns are <em>also</em>:
@@ -264,14 +268,24 @@ public class LlmEnricher {
     }
 
     public void enrich(SqliteStore store, String executableName) {
+        enrich(store, executableName, ScanScopeFilter.all());
+    }
+
+    public void enrich(SqliteStore store, String executableName, ScanScopeFilter scope) {
         List<SqliteStore.DecompilationResult> fns = store.getAllDecompiledFunctions(executableName);
-        log.info("LLM enrichment: mode={} platform={} provider={} functions={}",
-                mode, platform, provider.getClass().getSimpleName(), fns.size());
+        ScanScopeFilter filter = scope == null ? ScanScopeFilter.all() : scope;
+        log.info("LLM enrichment: mode={} platform={} provider={} functions={} scope={}",
+                mode, platform, provider.getClass().getSimpleName(), fns.size(), filter.scope());
 
         int cached = 0, called = 0, errors = 0, totalVulns = 0, newRules = 0, totalTargets = 0;
+        int skippedScope = 0;
 
         for (SqliteStore.DecompilationResult fn : fns) {
             if (fn.decompiledCode() == null || fn.decompiledCode().isBlank()) continue;
+            if (!filter.includeFunction(fn)) {
+                skippedScope++;
+                continue;
+            }
 
             String origin = resolveOrigin(fn);
             String systemPrompt = buildSystemPrompt(origin);
@@ -310,11 +324,11 @@ public class LlmEnricher {
             }
         }
         if (mode == LlmMode.OFFENSIVE) {
-            log.info("LLM enrichment done: cached={} api_calls={} errors={} offensive_targets={}",
-                    cached, called, errors, totalTargets);
+            log.info("LLM enrichment done: cached={} api_calls={} errors={} offensive_targets={} skipped_scope={}",
+                    cached, called, errors, totalTargets, skippedScope);
         } else {
-            log.info("LLM enrichment done: cached={} api_calls={} errors={} vulnerabilities={} new_learned_rules={}",
-                    cached, called, errors, totalVulns, newRules);
+            log.info("LLM enrichment done: cached={} api_calls={} errors={} vulnerabilities={} new_learned_rules={} skipped_scope={}",
+                    cached, called, errors, totalVulns, newRules, skippedScope);
         }
     }
 

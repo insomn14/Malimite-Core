@@ -1,6 +1,7 @@
 package io.malimite.core;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 public record AnalyzeOptions(
@@ -11,7 +12,16 @@ public record AnalyzeOptions(
         LlmMode llmMode,
         Map<String, String> llmConfig,
         Path jadxHome,
-        boolean assessmentEnabled) {
+        boolean assessmentEnabled,
+        List<String> extraPackagePrefixes) {
+
+    public AnalyzeOptions {
+        if (llmMode == null) llmMode = LlmMode.SUMMARIZE;
+        if (llmConfig == null) llmConfig = Map.of();
+        extraPackagePrefixes = extraPackagePrefixes == null
+                ? List.of()
+                : List.copyOf(extraPackagePrefixes);
+    }
 
     /** Alias for the uploaded package path (.ipa or .apk). */
     public Path packagePath() {
@@ -26,6 +36,7 @@ public record AnalyzeOptions(
         private LlmMode llmMode = LlmMode.SUMMARIZE;
         private Map<String, String> llmConfig = Map.of();
         private boolean assessmentEnabled = true;
+        private List<String> extraPackagePrefixes = List.of();
 
         public Builder ipaPath(Path p)      { this.ipaPath = p; return this; }
         /** Preferred alias — same as {@link #ipaPath(Path)}. */
@@ -37,12 +48,16 @@ public record AnalyzeOptions(
         public Builder llmMode(LlmMode m)   { this.llmMode = m; return this; }
         public Builder llmConfig(Map<String, String> c) { this.llmConfig = c; return this; }
         public Builder assessmentEnabled(boolean b) { this.assessmentEnabled = b; return this; }
+        public Builder extraPackagePrefixes(List<String> p) {
+            this.extraPackagePrefixes = p;
+            return this;
+        }
 
         public AnalyzeOptions build() {
             if (ipaPath == null || outputDir == null)
                 throw new IllegalArgumentException("packagePath and outputDir required");
             return new AnalyzeOptions(ipaPath, ghidraHome, outputDir, llmEnabled, llmMode, llmConfig,
-                    jadxHome, assessmentEnabled);
+                    jadxHome, assessmentEnabled, extraPackagePrefixes);
         }
     }
 }

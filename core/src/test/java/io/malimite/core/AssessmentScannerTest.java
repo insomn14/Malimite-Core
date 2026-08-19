@@ -109,6 +109,24 @@ class AssessmentScannerTest {
         }
     }
 
+    @Test void thirdPartyRootBeerStillPresentInAssessment() throws Exception {
+        Path db = tmp.resolve("rb.sqlite");
+        try (SqliteStore store = new SqliteStore(db.toString())) {
+            store.insertClass("com.scottyab.rootbeer.RootBeer", "[\"isRooted\"]", "com.example.app");
+            store.insertFunctionDecompilations(List.of(
+                    new SqliteStore.DecompilationResult(
+                            "isRooted", "com.scottyab.rootbeer.RootBeer",
+                            "public boolean isRooted() { return checkForSuBinary() || detectRootManagementApps(); }",
+                            "com.example.app", "JADX")));
+            store.insertMachoString("jadx:1", "RootBeer", "__JADX", "RootBeer", "com.example.app");
+
+            new AssessmentScanner().scan(store, "com.example.app", PackagePlatform.ANDROID);
+            Map<String, Map<String, Object>> byId = index(store.getAssessments("com.example.app"));
+            assertEquals("PRESENT", byId.get("ASSESS-ROOT-DETECTION").get("status"));
+            assertEquals("PRESENT", byId.get("ASSESS-SECURITY-SDK").get("status"));
+        }
+    }
+
     private static Map<String, Map<String, Object>> index(List<Map<String, Object>> rows) {
         Map<String, Map<String, Object>> m = new java.util.HashMap<>();
         for (var r : rows) m.put(String.valueOf(r.get("control_id")), r);

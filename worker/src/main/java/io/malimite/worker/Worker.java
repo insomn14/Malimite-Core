@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -44,9 +45,14 @@ public class Worker {
         Path outBase    = Path.of(env("REPORT_DIR", "/var/malimite/reports"));
         Files.createDirectories(outBase);
 
-        // LLM config from env
+        // LLM / scan-scope config from env (LLM_MODE selects Fast/Full even when LLM is off)
         boolean llmEnabled = Boolean.parseBoolean(env("LLM_ENABLED", "false"));
         LlmMode llmMode    = LlmMode.fromString(env("LLM_MODE", "summarize"));
+        if (llmMode == LlmMode.OFFENSIVE && !llmEnabled) {
+            log.error("LLM_MODE=offensive requires LLM_ENABLED=true");
+            System.exit(2);
+        }
+        List<String> extraPrefixes = parseIncludePackages(env("INCLUDE_PACKAGE", ""));
         Map<String, String> llmCfg = Map.of(
                 "LLM_PROVIDER",      env("LLM_PROVIDER", "none"),
                 "OPENAI_API_KEY",    env("OPENAI_API_KEY", ""),
@@ -63,7 +69,8 @@ public class Worker {
         catch (Exception ignored) {}
 
         String consumer = "worker-" + java.util.UUID.randomUUID();
-        log.info("worker {} ready (llm={} mode={})", consumer, llmEnabled, llmMode);
+        log.info("worker {} ready (llm={} mode={} scope={} extraPackages={})",
+                consumer, llmEnabled, llmMode, llmMode.scanScope(), extraPrefixes);
 
         // LLM cache backed by Redis
         LlmCache llmCache = new RedisLlmCache(redis);
@@ -99,6 +106,7 @@ public class Worker {
                                 .llmEnabled(llmEnabled)
                                 .llmMode(llmMode)
                                 .llmConfig(llmCfg)
+                                .extraPackagePrefixes(extraPrefixes)
                                 .build());
 
                         // Phase 4: Redis-cached LLM enrichment if not yet run inside analyzer
@@ -112,8 +120,11 @@ public class Worker {
                                         plat = PackagePlatform.detect(local);
                                     } catch (Exception ignored) {}
                                     boolean isSwift = plat == PackagePlatform.IOS && readIsSwift(r);
+                                    String appId = extractApplicationId(r);
+                                    ScanScopeFilter scope = ScanScopeFilter.from(
+                                            llmMode, appId, plat, extraPrefixes);
                                     new LlmEnricher(provider, llmMode, llmCache, isSwift, plat)
-                                            .enrich(store, extractExecName(r));
+                                            .enrich(store, extractExecName(r), scope);
                                 }
                             }
                         }
@@ -193,6 +204,19 @@ public class Worker {
         }
     }
 
+    private static String extractApplicationId(AnalysisResult r) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode meta =
+                    JSON.readTree(r.reportDir().resolve("scan.json").toFile());
+            String id = meta.path("bundleIdentifier").asText();
+            if (id == null || id.isBlank())
+                id = meta.path("applicationId").asText();
+            return id == null ? "" : id;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     private static boolean readIsSwift(AnalysisResult r) {
         try {
             com.fasterxml.jackson.databind.JsonNode meta =
@@ -201,6 +225,18 @@ public class Worker {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private static List<String> parseIncludePackages(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+        List<String> out = new ArrayList<>();
+        for (String part : raw.split("[,;\\s]+")) {
+            String n = ScanScopeFilter.sanitizePackagePrefix(part);
+            if (n != null) out.add(n);
+            else if (!part.isBlank())
+                log.warn("Ignoring invalid INCLUDE_PACKAGE value: {}", part);
+        }
+        return List.copyOf(out);
     }
 
     private static String env(String k, String def) {

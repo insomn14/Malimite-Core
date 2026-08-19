@@ -77,8 +77,13 @@ public class MalimiteAnalyzer {
                     macho.hasPie() ? "MH_PIE=1" : "MH_PIE=0",
                     "macho-flags");
 
+            ScanScopeFilter scope = ScanScopeFilter.from(opts, info.getBundleIdentifier(), PackagePlatform.IOS);
+            log.info("scanScope={} securitySdks={} bundleId={}",
+                    scope.scope(), scope.includeSecuritySdks(), info.getBundleIdentifier());
+
             try {
-                int vulnCount = new VulnerabilityScanner().scan(store, execName, PackagePlatform.IOS);
+                int vulnCount = new VulnerabilityScanner().scan(store, execName, PackagePlatform.IOS,
+                        LearnedRulesStore.forPlatform(PackagePlatform.IOS), scope);
                 log.info("VulnerabilityScanner found {} finding(s)", vulnCount);
             } catch (StackOverflowError e) {
                 log.error("VulnerabilityScanner StackOverflowError — skipping rule scan");
@@ -87,7 +92,7 @@ public class MalimiteAnalyzer {
             }
 
             runAssessmentIfEnabled(opts, store, execName, PackagePlatform.IOS);
-            runLlmIfEnabled(opts, store, execName, macho.isSwift(), PackagePlatform.IOS);
+            runLlmIfEnabled(opts, store, execName, macho.isSwift(), PackagePlatform.IOS, scope);
         }
 
         saveScanJsonIos(opts.outputDir().resolve("scan.json"), scanId, info, macho, opts, dbPath, provision);
@@ -116,7 +121,11 @@ public class MalimiteAnalyzer {
         List<String> abis = ApkExtractor.detectAbis(extraction.nativeLibs());
         List<Path> arm64Libs = ApkExtractor.preferArm64NativeLibs(extraction.nativeLibs());
         List<String> nativeDecompiled = new java.util.ArrayList<>();
+        List<String> nativeSkippedScope = new java.util.ArrayList<>();
         String nativeSkippedReason = null;
+        ScanScopeFilter scope = ScanScopeFilter.from(opts, execName, PackagePlatform.ANDROID);
+        log.info("scanScope={} securitySdks={} applicationId={}",
+                scope.scope(), scope.includeSecuritySdks(), execName);
 
         try (SqliteStore store = new SqliteStore(dbPath.toString())) {
             JadxRunner jadx = new JadxRunner(opts.jadxHome());
@@ -151,6 +160,12 @@ public class MalimiteAnalyzer {
                     CoreConfig config = CoreConfig.fromEnv(opts.ghidraHome());
                     for (Path so : arm64Libs) {
                         String libName = so.getFileName().toString();
+                        if (!scope.includeNativeLib(libName)) {
+                            nativeSkippedScope.add(libName);
+                            log.info("Skipping Ghidra for out-of-scope native lib {} (scanScope={})",
+                                    libName, scope.scope());
+                            continue;
+                        }
                         try {
                             Path projDir = opts.outputDir().resolve("ghidra-native-" + scanId + "-" + libName);
                             Files.createDirectories(projDir);
@@ -170,7 +185,8 @@ public class MalimiteAnalyzer {
             }
 
             try {
-                int vulnCount = new VulnerabilityScanner().scan(store, execName, PackagePlatform.ANDROID);
+                int vulnCount = new VulnerabilityScanner().scan(store, execName, PackagePlatform.ANDROID,
+                        LearnedRulesStore.forPlatform(PackagePlatform.ANDROID), scope);
                 log.info("VulnerabilityScanner found {} finding(s)", vulnCount);
             } catch (StackOverflowError e) {
                 log.error("VulnerabilityScanner StackOverflowError — skipping rule scan");
@@ -179,11 +195,11 @@ public class MalimiteAnalyzer {
             }
 
             runAssessmentIfEnabled(opts, store, execName, PackagePlatform.ANDROID);
-            runLlmIfEnabled(opts, store, execName, false, PackagePlatform.ANDROID);
+            runLlmIfEnabled(opts, store, execName, false, PackagePlatform.ANDROID, scope);
         }
 
         saveScanJsonAndroid(opts.outputDir().resolve("scan.json"), scanId, manifest, opts, dbPath,
-                extraction, abis, nativeDecompiled, nativeSkippedReason);
+                extraction, abis, nativeDecompiled, nativeSkippedReason, nativeSkippedScope);
 
         long dt = System.currentTimeMillis() - t0;
         log.info("scan={} done in {}ms  db={}", scanId, dt, dbPath);
@@ -202,13 +218,13 @@ public class MalimiteAnalyzer {
     }
 
     private void runLlmIfEnabled(AnalyzeOptions opts, SqliteStore store, String execName,
-                                 boolean isSwift, PackagePlatform platform) {
+                                 boolean isSwift, PackagePlatform platform, ScanScopeFilter scope) {
         if (!opts.llmEnabled()) return;
         try {
             LlmProvider llmProvider = LlmProviderFactory.create(opts.llmConfig());
             if (llmProvider != null) {
                 new LlmEnricher(llmProvider, opts.llmMode(), LlmCache.NOOP, isSwift, platform)
-                        .enrich(store, execName);
+                        .enrich(store, execName, scope);
             } else {
                 log.warn("llmEnabled=true but LLM_PROVIDER=none — skipping enrichment");
             }
@@ -270,6 +286,7 @@ public class MalimiteAnalyzer {
             meta.put("dbPath", dbPath.toString());
             meta.put("ipaPath", opts.packagePath().toString());
             meta.put("packagePath", opts.packagePath().toString());
+            putScopeMeta(meta, opts);
             if (provision != null) {
                 meta.put("bundleTeamId", provision.teamId());
                 meta.put("provisioningProfile", provision.profileName());
@@ -287,7 +304,8 @@ public class MalimiteAnalyzer {
                                      ApkExtractor.ExtractionResult extraction,
                                      List<String> abis,
                                      List<String> nativeDecompiled,
-                                     String nativeSkippedReason) {
+                                     String nativeSkippedReason,
+                                     List<String> nativeSkippedScope) {
         try {
             var meta = new java.util.LinkedHashMap<String, Object>();
             meta.put("scanId", scanId);
@@ -311,14 +329,27 @@ public class MalimiteAnalyzer {
             meta.put("nativeLibsDecompiled", nativeDecompiled);
             if (nativeSkippedReason != null)
                 meta.put("nativeSkippedReason", nativeSkippedReason);
+            if (nativeSkippedScope != null && !nativeSkippedScope.isEmpty())
+                meta.put("nativeLibsSkippedScope", nativeSkippedScope);
             meta.put("dexCount", extraction.dexFiles().size());
             meta.put("dbPath", dbPath.toString());
             meta.put("ipaPath", opts.packagePath().toString());
             meta.put("packagePath", opts.packagePath().toString());
+            putScopeMeta(meta, opts);
             writeJson(target, meta);
         } catch (Exception e) {
             log.warn("Could not write scan.json", e);
         }
+    }
+
+    private static void putScopeMeta(java.util.Map<String, Object> meta, AnalyzeOptions opts) {
+        LlmMode mode = opts.llmMode() == null ? LlmMode.SUMMARIZE : opts.llmMode();
+        meta.put("llmMode", mode.name());
+        meta.put("llmModeLabel", mode.displayLabel());
+        meta.put("scanScope", mode.scanScope().name());
+        meta.put("scanScopeSecuritySdks", mode.includeSecuritySdks());
+        if (opts.extraPackagePrefixes() != null && !opts.extraPackagePrefixes().isEmpty())
+            meta.put("extraPackagePrefixes", opts.extraPackagePrefixes());
     }
 
     private void writeJson(Path target, java.util.Map<String, Object> meta) throws IOException {
