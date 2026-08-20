@@ -25,6 +25,12 @@
                   <mainClass>io.malimite.cli.Main</mainClass>
                 </transformer>
               </transformers>
+              <relocations>
+                <relocation>
+                  <pattern>org.json</pattern>
+                  <shadedPattern>io.malimite.shaded.org.json</shadedPattern>
+                </relocation>
+              </relocations>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>

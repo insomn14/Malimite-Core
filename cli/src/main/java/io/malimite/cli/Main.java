@@ -3,6 +3,7 @@ package io.malimite.cli;
 import io.malimite.core.*;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.IVersionProvider;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
@@ -13,9 +14,25 @@ import java.util.concurrent.Callable;
 
 @Command(name = "malimite",
          mixinStandardHelpOptions = true,
-         version = "malimite 0.1.0",
+         versionProvider = Main.ManifestVersionProvider.class,
          description = "Headless IPA/APK analyzer (Ghidra for iOS, JADX for Android).")
 public class Main implements Callable<Integer> {
+
+    public static final class ManifestVersionProvider implements IVersionProvider {
+        private static final String DEVELOPMENT_VERSION = "malimite (development build)";
+
+        @Override
+        public String[] getVersion() {
+            return new String[]{versionLine(Main.class.getPackage().getImplementationVersion())};
+        }
+
+        static String versionLine(String implementationVersion) {
+            if (implementationVersion == null || implementationVersion.isBlank()) {
+                return DEVELOPMENT_VERSION;
+            }
+            return "malimite " + implementationVersion;
+        }
+    }
 
     @Parameters(index = "0", description = "IPA or APK file to analyze")
     private Path ipa;
