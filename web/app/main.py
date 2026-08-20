@@ -16,6 +16,9 @@ from .config import settings
 from .models import ScanDetail, ScanMeta
 
 _OFFENSIVE_MODE_ALIASES = frozenset({"offensive", "offense", "frida", "bypass"})
+_FAST_MODE_ALIASES = frozenset({"summarize", "summary", "fast", "fast_scan", "fastscan"})
+_FULL_MODE_ALIASES = frozenset({"find_vulns", "vulns", "vuln", "full", "full_scan", "fullscan"})
+_AUTO_FIX_MODE_ALIASES = frozenset({"auto_fix", "autofix", "fix"})
 _PHASE_DIRS = {
     "ENVIRONMENT": "01_environment",
     "TRANSPORT": "02_transport",
@@ -107,6 +110,12 @@ async def create_scan(
                 detail="Offensive mode requires LLM Enrichment (select a provider).",
             )
         llm_mode = "offensive"
+    elif mode_norm in _FAST_MODE_ALIASES:
+        llm_mode = "summarize"
+    elif mode_norm in _FULL_MODE_ALIASES:
+        llm_mode = "find_vulns"
+    elif mode_norm in _AUTO_FIX_MODE_ALIASES:
+        llm_mode = "auto_fix"
     return await scanner.create_scan(
         data, file.filename,
         llm_enabled, llm_provider, llm_mode, llm_model, llm_api_key,

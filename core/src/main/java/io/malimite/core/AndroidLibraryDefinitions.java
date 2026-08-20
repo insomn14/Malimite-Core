@@ -3,7 +3,13 @@ package io.malimite.core;
 import java.util.List;
 import java.util.Locale;
 
-/** Android / Kotlin / Google SDK package prefixes skipped during JADX ingest. */
+/**
+ * Android / Kotlin / Google SDK package prefixes skipped during JADX ingest.
+ *
+ * <p>Matching is prefix-only ({@code startsWith}), not a substring search, so
+ * first-party packages such as {@code com.example.foo.staging} are not treated
+ * as the Android framework.
+ */
 public final class AndroidLibraryDefinitions {
 
     private AndroidLibraryDefinitions() {}
@@ -39,11 +45,13 @@ public final class AndroidLibraryDefinitions {
     public static boolean shouldSkip(String fqcnOrPath) {
         if (fqcnOrPath == null || fqcnOrPath.isBlank()) return true;
         String n = fqcnOrPath.replace('/', '.').replace('\\', '.');
-        // strip leading "sources." or file suffix
         if (n.endsWith(".java")) n = n.substring(0, n.length() - 5);
+        while (n.startsWith(".")) n = n.substring(1);
         String lower = n.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("sources."))
+            lower = lower.substring("sources.".length());
         for (String p : SKIP_PREFIXES) {
-            if (lower.startsWith(p) || lower.contains("." + p)) return true;
+            if (lower.startsWith(p)) return true;
         }
         // R.java / BuildConfig noise
         if (lower.endsWith(".r") || lower.endsWith(".buildconfig")) return true;

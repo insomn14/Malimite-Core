@@ -197,6 +197,14 @@ java -jar cli/target/malimite-cli.jar path/to/MyApp.apk \
      --out /tmp/malimite-apk-scan \
      --sarif --html
 # JADX decompiles DEX; Ghidra decompiles lib/arm64-v8a/*.so when present
+
+# Fast Scan (default): first-party packages/native only. Works without --llm.
+java -jar cli/target/malimite-cli.jar path/to/MyApp.apk \
+     --jadx "$JADX_HOME" --out /tmp/fast --llm-mode fast
+
+# Full Scan: include third-party Java/native. --llm-mode selects scope even without --llm.
+java -jar cli/target/malimite-cli.jar path/to/MyApp.apk \
+     --jadx "$JADX_HOME" --out /tmp/full --llm-mode full
 ```
 
 **Outputs:**
@@ -312,18 +320,25 @@ Enable (default) with `--assessment` or the web **Security Assessment** checkbox
 
 Supported providers: **OpenAI**, **Anthropic Claude**, **DeepSeek**, **Ollama**.
 
-Modes: `summarize` · `find_vulns` · `auto_fix` · `offensive`
+Modes: `summarize` (Fast Scan) · `find_vulns` (Full Scan) · `auto_fix` · `offensive`
 
-| Mode | Purpose |
-|------|---------|
-| `summarize` | Plain-English function summaries |
-| `find_vulns` | Structured vulnerabilities (+ learned rules when regex self-validates) |
-| `auto_fix` | Idiomatic reconstruct of decompiled code |
-| `offensive` | Frida bypass/intercept playbooks (requires `--llm`) |
+| Mode | Aliases | Scope | Purpose |
+|------|---------|-------|---------|
+| **Fast Scan** | `summarize`, `fast`, `fast_scan` | First-party app packages + first-party native libs | Cheap MSTG + optional summarize-style LLM on in-scope code only |
+| **Full Scan** | `find_vulns`, `vulns`, `full`, `full_scan` | All ingested targets including 3rd-party Java/native | Structured vulnerabilities (+ learned rules when regex self-validates) |
+| **Auto Fix** | `auto_fix`, `autofix`, `fix` | First-party (same as Fast Scan) | Idiomatic reconstruct of decompiled code |
+| **Offensive** | `offensive`, `frida`, `bypass` | First-party **union** a narrow security-SDK allowlist (root/JB/Frida/RASP/pinning) | Frida bypass/intercept playbooks (requires `--llm`) |
+
+**Scope notes**
+
+- First-party Java/Kotlin prefixes are derived from **each scan's** `applicationId` / bundle id (not a hardcoded app list). Example: `com.example.foo.staging` → exact id plus parent `com.example.foo.` (siblings such as `com.example.foo.sdk` are included). Matching is `equals` or `startsWith(prefix + ".")`, so `com.example.foox` is not in-scope. Extra prefixes: `--include-package`.
+- First-party native: `.so` names that contain the last meaningful id segments (length ≥ 4, skipping `com`/`android`/`staging`/…) or generic app JNI (`libnative-lib.so`, weak heuristic). Vendor libs (ObjectBox, Bugsnag, Avif, Conscrypt, …) are skipped in Fast/Auto Fix. Offensive re-includes a small security-lib name list (`toolChecker`, Talsec, AppGuard, Promon, Conscrypt, …) but still skips generic third-party.
+- Manifest / NSC / Info.plist / exported components stay in-scope for every mode. Assessment still sees 3rd-party SDK markers (RootBeer, pinning, RASP) even when Fast Scan skips those packages for MSTG/LLM/Ghidra.
+- Out-of-scope `.so` files are skipped **before** Ghidra. LLM enrichment and function-level MSTG hits honor the same scope.
 
 **Offensive** mode is for authorized mobile penetration testing only. It stores structured `offensive_targets` JSON in `LlmFindings` (not promoted into Vulnerabilities or learned rules). The web UI shows a dedicated **Offensive** campaign tab (kill-chain phases + Frida kit export).
 
-When LLM finds a vulnerability (`find_vulns`), it returns a `detection_regex`. Regexes that self-validate against the source function are saved per platform — `~/.malimite/learned_rules.json` (iOS) or `learned_rules_android.json` (Android) — and reused on future scans **without further LLM calls**. Hollow placeholders such as `...` are rejected.
+When LLM finds a vulnerability (`find_vulns` / Full Scan), it returns a `detection_regex`. Regexes that self-validate against the source function are saved per platform — `~/.malimite/learned_rules.json` (iOS) or `learned_rules_android.json` (Android) — and reused on future scans **without further LLM calls**. Hollow placeholders such as `...` are rejected.
 
 ### DeepSeek models
 
@@ -364,8 +379,11 @@ malimite [OPTIONS] <ipa|apk>
       --html               Write report.html
       --llm                Enable LLM enrichment
       --llm-provider=<x>   openai | claude | deepseek | ollama
-      --llm-mode=<x>       summarize | find_vulns | auto_fix | offensive
-                           (offensive requires --llm)
+      --llm-mode=<x>       fast | summarize | fast_scan   (Fast Scan, first-party)
+                           full | find_vulns | full_scan  (Full Scan, includes 3rd-party)
+                           auto_fix                       (first-party reconstruct)
+                           offensive                      (first-party + security SDKs; requires --llm)
+      --include-package=<p> Extra first-party Java package prefix (repeatable)
       --llm-model=<x>      Override default model per provider
       --assessment / --no-assessment
                            Security-controls Assessment (default: on)

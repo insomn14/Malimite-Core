@@ -12,6 +12,9 @@ import java.util.regex.Pattern;
 /**
  * Static security-controls inventory. Answers "what protections appear implemented?"
  * separately from {@link VulnerabilityScanner} weakness findings.
+ *
+ * <p>Does <em>not</em> honor {@link ScanScope}: third-party SDK markers (RootBeer,
+ * pinning libraries, RASP) must remain visible for PRESENT/ABSENT inventory.
  */
 public final class AssessmentScanner {
 

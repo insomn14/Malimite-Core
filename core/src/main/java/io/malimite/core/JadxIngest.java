@@ -18,6 +18,11 @@ import java.util.regex.Pattern;
 /**
  * Ingests JADX Java sources into the existing {@link SqliteStore} schema
  * (Classes / Functions / MachoStrings / EntryPoints / ResourceStrings).
+ *
+ * <p>Does not apply {@link ScanScope}: third-party app dependencies (RootBeer,
+ * RASP, pinning SDKs, ObjectBox, …) stay in the store so {@link AssessmentScanner}
+ * can inventory them. First-party filtering happens later in
+ * {@link VulnerabilityScanner}, {@link LlmEnricher}, and native Ghidra.
  */
 public final class JadxIngest {
 

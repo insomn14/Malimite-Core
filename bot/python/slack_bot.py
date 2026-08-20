@@ -13,7 +13,8 @@ ENV vars (see .env.example):
   GHIDRA_HOME        path to Ghidra install (e.g. /usr/share/ghidra)
   SCAN_ROOT          where to store scan outputs (default: /tmp/malimite-slack)
   LLM_PROVIDER       none|openai|claude|deepseek|ollama   (default: none)
-  LLM_MODE           summarize|find_vulns|auto_fix
+  LLM_MODE           fast|summarize|fast_scan|full|find_vulns|full_scan|auto_fix|offensive
+                     (selects scan scope even when LLM_PROVIDER=none)
   LLM_MODEL          override (optional)
   OPENAI_API_KEY     (if LLM_PROVIDER=openai)
   ANTHROPIC_API_KEY  (if LLM_PROVIDER=claude)

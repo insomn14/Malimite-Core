@@ -467,7 +467,16 @@ window.clearKeyError = function() {
 window.onLlmModeChange = function() {
   const mode = document.getElementById('llm-mode')?.value || '';
   const warn = document.getElementById('offensive-warn');
+  const help = document.getElementById('llm-mode-help');
   if (warn) warn.hidden = mode !== 'offensive';
+  if (help) {
+    help.textContent = ({
+      summarize: 'Fast Scan = first-party app code and native libs only. Cheaper MSTG + optional LLM.',
+      find_vulns: 'Full Scan = includes third-party Java/native. MSTG on everything ingested; optional LLM FIND_VULNS.',
+      auto_fix: 'Auto Fix = reconstruct decompiled code. First-party scope (same as Fast Scan).',
+      offensive: 'Offensive = first-party Frida playbooks plus a small security-SDK allowlist. Requires LLM on.'
+    })[mode] || '';
+  }
   if (mode === 'offensive') {
     const provider = document.getElementById('llm-provider');
     if (provider && (provider.value === 'none' || !provider.value)) {
@@ -558,6 +567,14 @@ function escAttr(s='') {
 }
 function num(n) { return n==null?'—':n.toLocaleString(); }
 
+function scanModeLabel(mode='') {
+  const m = String(mode||'').toLowerCase().replace(/-/g, '_');
+  if (['find_vulns','vulns','vuln','full','full_scan','fullscan'].includes(m)) return 'Full Scan';
+  if (['auto_fix','autofix','fix'].includes(m)) return 'Auto Fix';
+  if (['offensive','offense','frida','bypass'].includes(m)) return 'Offensive';
+  return 'Fast Scan';
+}
+
 /** True for blank or LLM filler like "...", "…", "1. ...\n2. ...". */
 function isEmptyField(s) {
   if (s == null) return true;
@@ -596,13 +613,14 @@ route('home', async function() {
           </select>
         </label>
         <label style="display:flex;flex-direction:column;gap:.3rem">
-          LLM Mode
+          Scan Mode
           <select id="llm-mode" onchange="onLlmModeChange()">
-            <option value="summarize">Summarize</option>
-            <option value="find_vulns">Find Vulns</option>
+            <option value="summarize">Fast Scan</option>
+            <option value="find_vulns">Full Scan</option>
             <option value="auto_fix">Auto Fix</option>
             <option value="offensive">Offensive</option>
           </select>
+          <span id="llm-mode-help" style="color:var(--muted);font-size:.72rem;max-width:22rem">Fast Scan = first-party app code and native libs only. Cheaper MSTG + optional LLM.</span>
         </label>
         <label style="display:flex;flex-direction:column;gap:.3rem">
           Model override
@@ -1097,8 +1115,8 @@ function applyLearnedFilters() {
     if (!shown) {
       emptyEl.hidden = false;
       if (q) emptyEl.textContent = 'No rules match this filter.';
-      else if (plat === 'ANDROID') emptyEl.textContent = 'No Android learned rules yet. Run an APK scan with LLM enrichment in Find Vulns mode.';
-      else if (plat === 'IOS') emptyEl.textContent = 'No iOS learned rules yet. Run an IPA scan with LLM enrichment in Find Vulns mode.';
+      else if (plat === 'ANDROID') emptyEl.textContent = 'No Android learned rules yet. Run an APK scan with LLM enrichment in Full Scan mode.';
+      else if (plat === 'IOS') emptyEl.textContent = 'No iOS learned rules yet. Run an IPA scan with LLM enrichment in Full Scan mode.';
       else emptyEl.textContent = 'No learned rules yet.';
     } else {
       emptyEl.hidden = true;
@@ -1160,7 +1178,7 @@ function renderLearnedTable(data, platFilter) {
         <div class="card-title">Learned Rules</div>
         <p style="color:var(--muted);font-size:.875rem;margin-bottom:.75rem">
           No learned rules yet. Run a scan with <strong>LLM enrichment</strong> in
-          <em>Find Vulns</em> mode — vulnerabilities the LLM discovers will be
+          <em>Full Scan</em> mode — vulnerabilities the LLM discovers will be
           distilled into reusable detection rules, stored separately per platform.
         </p>
         ${pathsHtml}
@@ -1493,7 +1511,8 @@ async function tabSummary(d) {
         <div class="kv">
           <span class="kv-key">Scan ID</span><span class="kv-val">${esc(d.scan_id)}</span>
           <span class="kv-key">File</span><span class="kv-val">${esc(d.filename)}</span>
-          <span class="kv-key">LLM</span><span class="kv-val">${d.llm_enabled?esc(d.llm_provider)+' / '+esc(d.llm_mode):'disabled'}</span>
+          <span class="kv-key">Scan mode</span><span class="kv-val">${esc(scanModeLabel(d.llm_mode))}</span>
+          <span class="kv-key">LLM</span><span class="kv-val">${d.llm_enabled?esc(d.llm_provider):'disabled'}</span>
           <span class="kv-key">Started</span><span class="kv-val">${fmt(d.started_at)}</span>
           <span class="kv-key">Duration</span><span class="kv-val">${dur(d.started_at, d.finished_at)}</span>
         </div>
@@ -2429,7 +2448,7 @@ async function tabOffensive(el, id, detail) {
     _offState = {scanId:id, phase:'ENVIRONMENT', targets, selected:0, page:0};
     if (!targets.length) {
       el.innerHTML = `<div class="card"><div class="card-title">No Offensive targets</div>
-        <p style="color:var(--muted);font-size:.85rem">No Frida playbooks were stored for this scan. Re-run with LLM Mode = Offensive.</p>
+        <p style="color:var(--muted);font-size:.85rem">No Frida playbooks were stored for this scan. Re-run with Scan Mode = Offensive.</p>
         <p style="margin-top:.75rem"><button class="btn btn-ghost btn-sm" onclick="goTab('${id}','assessment')">Open Assessment →</button></p>
       </div>`;
       return;

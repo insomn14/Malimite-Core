@@ -43,11 +43,84 @@ def _write_meta(scan_id: str, meta: dict) -> None:
     _meta_path(scan_id).write_text(json.dumps(meta, indent=2))
 
 
+_PATH_KEYS = ("dbPath", "ipaPath", "packagePath")
+
+
+def _is_under(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _remap_legacy_path(raw: str, scan_dir: Path) -> Optional[str]:
+    """Map a pre-rename /tmp/mailmite-scans path onto the current scan dir.
+
+    Returns the remapped path only when it stays inside the scan directory and
+    the target file exists. Existing valid paths are returned unchanged.
+    """
+    if not raw:
+        return None
+    path = Path(raw)
+    if path.exists() and _is_under(path, scan_dir):
+        return str(path)
+    for legacy in _LEGACY_SCAN_DIRS:
+        try:
+            rel = path.resolve(strict=False).relative_to(legacy.resolve())
+        except (OSError, ValueError):
+            continue
+        mapped = (settings.scan_dir / rel).resolve()
+        if mapped.exists() and _is_under(mapped, scan_dir):
+            return str(mapped)
+    return str(path) if path.exists() and _is_under(path, scan_dir) else None
+
+
+def _discover_sqlite(scan_dir: Path) -> Optional[str]:
+    matches = sorted(
+        p for p in scan_dir.glob("*.sqlite")
+        if p.is_file() and not p.name.endswith(("-wal", "-shm"))
+    )
+    if len(matches) == 1 and _is_under(matches[0], scan_dir):
+        return str(matches[0])
+    return None
+
+
+def _rewrite_legacy_scan_json(scan_id: str, data: dict) -> dict:
+    """Rewrite stale Mailmite paths in scan.json and persist when they change."""
+    scan_dir = _scan_dir(scan_id)
+    changed = False
+    for key in _PATH_KEYS:
+        raw = data.get(key)
+        if not isinstance(raw, str) or not raw:
+            continue
+        mapped = _remap_legacy_path(raw, scan_dir)
+        if mapped and mapped != raw:
+            data[key] = mapped
+            changed = True
+    if not data.get("dbPath") or not Path(str(data.get("dbPath"))).exists():
+        found = _discover_sqlite(scan_dir)
+        if found and data.get("dbPath") != found:
+            data["dbPath"] = found
+            changed = True
+    if changed:
+        p = scan_dir / "scan.json"
+        try:
+            p.write_text(json.dumps(data, indent=2) + "\n")
+            log.info("Rewrote legacy scan paths in %s", p)
+        except OSError as e:
+            log.warning("Could not persist rewritten scan.json for %s: %s", scan_id, e)
+    return data
+
+
 def _read_scan_json(scan_id: str) -> Optional[dict]:
     p = _scan_dir(scan_id) / "scan.json"
     if not p.exists():
         return None
-    return json.loads(p.read_text())
+    data = json.loads(p.read_text())
+    if isinstance(data, dict):
+        return _rewrite_legacy_scan_json(scan_id, data)
+    return data
 
 
 def migrate_legacy_scan_dirs() -> int:
@@ -89,6 +162,19 @@ def migrate_legacy_scan_dirs() -> int:
             pass
     if moved:
         log.info("Migrated %d scan(s) from legacy Mailmite scan dirs → %s", moved, settings.scan_dir)
+    rewritten = 0
+    if settings.scan_dir.exists():
+        for child in settings.scan_dir.iterdir():
+            if child.is_dir() and (child / "scan.json").exists():
+                before = (child / "scan.json").read_text()
+                _read_scan_json(child.name)
+                try:
+                    if (child / "scan.json").read_text() != before:
+                        rewritten += 1
+                except OSError:
+                    pass
+    if rewritten:
+        log.info("Rewrote legacy db/ipa paths in %d scan.json file(s)", rewritten)
     return moved
 
 
@@ -217,13 +303,11 @@ async def create_scan(
     return ScanMeta(**{k: v for k, v in meta.items() if not k.startswith("_")})
 
 
-# ── background runner ─────────────────────────────────────────────────────────
+# ── CLI argv ──────────────────────────────────────────────────────────────────
 
-async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
-    meta["state"] = "running"
-    meta["started_at"] = _now()
-    _write_meta(scan_id, meta)
-
+def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
+    """Build malimite-cli argv. Scan scope comes from --llm-mode even when LLM is off."""
+    mode = (meta.get("llm_mode") or "summarize").strip() or "summarize"
     cmd = [
         "java", "-jar", settings.cli_jar,
         str(ipa_path),
@@ -231,17 +315,27 @@ async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
         "--out", str(out_dir),
         "--sarif",
         "--html",
+        "--llm-mode", mode,
     ]
-    if meta["llm_enabled"] and meta["llm_provider"] not in ("none", ""):
-        cmd += ["--llm",
-                "--llm-provider", meta["llm_provider"],
-                "--llm-mode", meta["llm_mode"]]
-        if meta["llm_model"]:
+    if meta.get("llm_enabled") and meta.get("llm_provider") not in ("none", "", None):
+        cmd += ["--llm", "--llm-provider", meta["llm_provider"]]
+        if meta.get("llm_model"):
             cmd += ["--llm-model", meta["llm_model"]]
     # Default CLI assessment=true; omit the flag when enabled so older picocli
     # jars with inverted --assessment polarity cannot disable the scan.
     if not meta.get("assessment_enabled", True):
         cmd += ["--no-assessment"]
+    return cmd
+
+
+# ── background runner ─────────────────────────────────────────────────────────
+
+async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
+    meta["state"] = "running"
+    meta["started_at"] = _now()
+    _write_meta(scan_id, meta)
+
+    cmd = _cli_cmd(ipa_path, out_dir, meta)
 
     env = dict(os.environ)
     # Per-request key takes priority over the .env/settings key

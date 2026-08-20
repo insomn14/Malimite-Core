@@ -8,7 +8,9 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
@@ -59,9 +61,17 @@ public class Main implements Callable<Integer> {
     private String llmProvider;
 
     @Option(names = "--llm-mode",
-            description = "Enrichment mode: summarize|auto_fix|find_vulns|offensive  (default: summarize)",
+            description = "Scan mode: fast|summarize|fast_scan (Fast Scan, first-party) | "
+                    + "full|find_vulns|full_scan (Full Scan, includes 3rd-party) | "
+                    + "auto_fix (first-party) | offensive (first-party + security-SDK allowlist, requires --llm). "
+                    + "Default: summarize (Fast Scan)",
             defaultValue = "${env:LLM_MODE:-summarize}")
     private String llmModeStr;
+
+    @Option(names = "--include-package",
+            description = "Extra first-party Java/Kotlin package prefix (repeatable). "
+                    + "Used in Fast Scan / Auto Fix / Offensive. Example: com.example.shared")
+    private List<String> includePackages;
 
     @Option(names = "--llm-model",
             description = "Override model id per provider  (env: LLM_MODEL)",
@@ -98,6 +108,13 @@ public class Main implements Callable<Integer> {
         }
 
         Map<String, String> llmCfg = buildLlmConfig();
+        List<String> extraPrefixes;
+        try {
+            extraPrefixes = sanitizeIncludePackages(includePackages);
+        } catch (IllegalArgumentException e) {
+            System.err.println("error: " + e.getMessage());
+            return 2;
+        }
         AnalyzeOptions opts = AnalyzeOptions.builder()
                 .packagePath(ipa)
                 .ghidraHome(ghidraHome)
@@ -107,6 +124,7 @@ public class Main implements Callable<Integer> {
                 .llmMode(mode)
                 .llmConfig(llmCfg)
                 .assessmentEnabled(assessment)
+                .extraPackagePrefixes(extraPrefixes)
                 .build();
 
         AnalysisResult r = new MalimiteAnalyzer().analyze(opts);
@@ -168,6 +186,22 @@ public class Main implements Callable<Integer> {
         cfg.put("DEEPSEEK_BASE_URL",   envOr("DEEPSEEK_BASE_URL", "https://api.deepseek.com"));
         cfg.put("OLLAMA_BASE_URL",     envOr("OLLAMA_BASE_URL", "http://localhost:11434"));
         return cfg;
+    }
+
+    private static List<String> sanitizeIncludePackages(List<String> raw) {
+        if (raw == null || raw.isEmpty()) return List.of();
+        List<String> out = new ArrayList<>();
+        for (String s : raw) {
+            String n = ScanScopeFilter.sanitizePackagePrefix(s);
+            if (n == null) {
+                String shown = s == null ? "" : (s.length() > 80 ? s.substring(0, 80) + "…" : s);
+                throw new IllegalArgumentException(
+                        "invalid --include-package (expected a Java package prefix like com.example.sdk): "
+                                + shown);
+            }
+            out.add(n);
+        }
+        return List.copyOf(out);
     }
 
     private static String envOr(String key, String def) {
