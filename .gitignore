@@ -1,4 +1,6 @@
 target/
+# Maven shade re-generates this artifact on every build; never commit it.
+dependency-reduced-pom.xml
 *.class
 *.iml
 .idea/
