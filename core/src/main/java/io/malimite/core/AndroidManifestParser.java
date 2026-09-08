@@ -10,11 +10,15 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
 import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.Locale;
 
 /**
@@ -52,9 +56,85 @@ public final class AndroidManifestParser {
     /** Parse from the original APK path (preferred — apk-parser reads binary AXML). */
     public static ManifestInfo parse(Path apkPath) throws Exception {
         try (ApkFile apk = new ApkFile(apkPath.toFile())) {
-            ApkMeta meta = apk.getApkMeta();
-            String xml = apk.getManifestXml();
+            ApkMeta meta = null;
+            String xml = null;
+            Exception err = null;
+            try {
+                meta = apk.getApkMeta();
+            } catch (Exception e) {
+                err = e;
+                log.warn("apk-parser getApkMeta failed ({}); falling back to manifest XML / aapt2", e.getMessage());
+            }
+            try {
+                xml = apk.getManifestXml();
+            } catch (Exception e) {
+                if (err == null) err = e;
+                log.warn("apk-parser getManifestXml failed: {}", e.getMessage());
+            }
+            if (xml == null || xml.isBlank()) {
+                // net.dongliu:apk-parser 2.6.10 chokes on some resource tables
+                // ("java.lang.IllegalArgumentException: newPosition > limit").
+                // Fall back to aapt2 (bundled with dAsstLLM), which is robust.
+                log.warn("apk-parser manifest unavailable ({}); using aapt2 dump badging",
+                        err != null ? err.getMessage() : "n/a");
+                return parseViaAapt2(apkPath);
+            }
             return fromMetaAndXml(meta, xml);
+        }
+    }
+
+    private static String exec(String... argv) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(argv);
+        pb.redirectErrorStream(true);
+        Process p = pb.start();
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line).append('\n');
+        }
+        int code = p.waitFor();
+        if (code != 0) throw new IllegalStateException("command failed (" + code + "): " + argv[0]);
+        return sb.toString();
+    }
+
+    /** Minimal manifest info via `aapt2 dump badging` when apk-parser cannot read the APK. */
+    private static ManifestInfo parseViaAapt2(Path apkPath) {
+        try {
+            String badging = exec("aapt2", "dump", "badging", apkPath.toString());
+            String pkg = match(badging, "package: name='([^']+)'");
+            String versionName = match(badging, "versionName='([^']+)'");
+            String versionCode = match(badging, "versionCode='([^']+)'");
+            Integer minSdk = parseIntOrNull(match(badging, "sdkVersion:'([^']+)'"));
+            Integer targetSdk = parseIntOrNull(match(badging, "targetSdkVersion:'([^']+)'"));
+            boolean debuggable = badging.contains("application-debuggable");
+            List<String> perms = new ArrayList<>();
+            Matcher pm = Pattern.compile("(?m)^uses-permission: name='([^']+)'").matcher(badging);
+            while (pm.find()) perms.add(pm.group(1));
+            log.info("Manifest (aapt2): package={} minSdk={} targetSdk={} perms={}",
+                    pkg, minSdk, targetSdk, perms.size());
+            return new ManifestInfo(
+                    pkg, versionName, parseLongOrNull(versionCode), minSdk, targetSdk,
+                    debuggable, null, null, null,
+                    List.copyOf(perms), new ArrayList<>(), new ArrayList<>());
+        } catch (Exception e) {
+            log.warn("aapt2 fallback failed: {}", e.getMessage());
+            return new ManifestInfo(
+                    null, null, null, null, null,
+                    false, null, null, null, List.of(), new ArrayList<>(), new ArrayList<>());
+        }
+    }
+
+    private static String match(String text, String re) {
+        Matcher m = Pattern.compile(re).matcher(text);
+        return m.find() ? m.group(1) : null;
+    }
+
+    private static Long parseLongOrNull(String s) {
+        if (s == null) return null;
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            try { return Long.parseLong(s.replaceAll("[^0-9]", "")); } catch (NumberFormatException e2) { return null; }
         }
     }
 
@@ -80,6 +160,24 @@ public final class AndroidManifestParser {
             Document doc = DocumentBuilderFactory.newInstance()
                     .newDocumentBuilder()
                     .parse(new ByteArrayInputStream(manifestXml.getBytes(StandardCharsets.UTF_8)));
+            // When apk-parser's Resources step failed (getApkMeta threw) meta is
+            // null; recover the identity fields that live in the AXML itself.
+            if (packageName == null) {
+                String p = doc.getDocumentElement().getAttribute("package");
+                if (p != null && !p.isBlank()) packageName = p;
+            }
+            if (versionName == null) versionName = attr(doc.getDocumentElement(), "versionName");
+            if (versionCode == null) {
+                String vc = attr(doc.getDocumentElement(), "versionCode");
+                if (vc != null) versionCode = parseLongOrNull(vc);
+            }
+            NodeList sdk = doc.getElementsByTagName("uses-sdk");
+            if (minSdk == null && sdk.getLength() > 0 && sdk.item(0) instanceof Element sdkEl) {
+                minSdk = parseIntOrNull(attr(sdkEl, "minSdkVersion"));
+            }
+            if (targetSdk == null && sdk.getLength() > 0 && sdk.item(0) instanceof Element sdkEl) {
+                targetSdk = parseIntOrNull(attr(sdkEl, "targetSdkVersion"));
+            }
             Element app = firstChildElement(doc.getDocumentElement(), "application");
             if (app != null) {
                 debuggable = boolAttr(app, "debuggable", false);
