@@ -43,6 +43,9 @@ services:
       GHIDRA_HOME: /opt/ghidra
       JADX_HOME: /opt/jadx
       REPORT_DIR: /var/malimite/reports
+      # Learned rules (seeded from ./rules, mounted read-only below)
+      MALIMITE_LEARNED_RULES_IOS:     /var/malimite/rules/learned_rules_ios.json
+      MALIMITE_LEARNED_RULES_ANDROID: /var/malimite/rules/learned_rules_android.json
       # LLM enrichment (Phase 4) — all optional, defaults to disabled
       LLM_ENABLED:       "${LLM_ENABLED:-false}"
       LLM_PROVIDER:      "${LLM_PROVIDER:-none}"
@@ -57,7 +60,9 @@ services:
       # Phase 5.7 — optional webhook on scan completion
       WEBHOOK_URL:       "${WEBHOOK_URL:-}"
     depends_on: [redis, minio, api]
-    volumes: [ reports:/var/malimite/reports ]
+    volumes:
+      - ./rules:/var/malimite/rules:ro
+      - reports:/var/malimite/reports
     deploy:
       replicas: 2     # horizontally scale
 
