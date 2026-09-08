@@ -1,0 +1,47 @@
+# Malimite-Core — Web service (FastAPI). Isolated from the legacy API/worker
+# stack in docker-compose.yml so ports do not collide.
+#
+# Usage:
+#   docker compose -f deploy/web-compose.yml up --build
+#   → http://localhost:7070
+version: "3.9"
+
+services:
+  malimite-web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    image: malimite-web:latest
+    container_name: malimite-web
+    ports:
+      # host:container — 7070 free, already verified not to collide.
+      - "7070:7070"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "7070"
+      SCAN_DIR: "/var/malimite/scans"
+      GHIDRA_HOME: "/opt/ghidra"
+      JADX_HOME: "/opt/jadx"
+      CLI_JAR: "/app/cli.jar"
+      # Learned rules (seeded from ./rules, mounted read-only below)
+      MALIMITE_LEARNED_RULES_IOS:     "/var/malimite/rules/learned_rules_ios.json"
+      MALIMITE_LEARNED_RULES_ANDROID: "/var/malimite/rules/learned_rules_android.json"
+      # Optional auth / LLM defaults (copy values from web/.env.example as needed)
+      API_KEY: "${API_KEY:-}"
+      LLM_PROVIDER: "${LLM_PROVIDER:-none}"
+      LLM_MODE: "${LLM_MODE:-summarize}"
+      LLM_MODEL: "${LLM_MODEL:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      DEEPSEEK_BASE_URL: "${DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://localhost:11434}"
+    volumes:
+      # Persist scan outputs (SQLite, report.html, findings.sarif, scan.json)
+      - malimite-scans:/var/malimite/scans
+      # Learned rules seed (read-only)
+      - ./rules:/var/malimite/rules:ro
+    restart: unless-stopped
+
+volumes:
+  malimite-scans:
