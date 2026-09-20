@@ -9,10 +9,18 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * Iterates over decompiled functions in a SqliteStore, calls an LLM provider
@@ -242,6 +250,9 @@ public class LlmEnricher {
     private final boolean     isSwift;
     private final LearnedRulesStore rulesStore;
     private final PackagePlatform platform;
+    private int maxFunctions = 0;
+
+    public LlmEnricher maxFunctions(int n) { this.maxFunctions = Math.max(0, n); return this; }
 
     public LlmEnricher(LlmProvider provider, LlmMode mode, LlmCache cache, boolean isSwift) {
         this(provider, mode, cache, isSwift, PackagePlatform.IOS);
@@ -272,65 +283,168 @@ public class LlmEnricher {
     }
 
     public void enrich(SqliteStore store, String executableName, ScanScopeFilter scope) {
-        List<SqliteStore.DecompilationResult> fns = store.getAllDecompiledFunctions(executableName);
+        List<SqliteStore.DecompilationResult> fns = new ArrayList<>(store.getAllDecompiledFunctions(executableName));
         ScanScopeFilter filter = scope == null ? ScanScopeFilter.all() : scope;
+
+        // Cap: for very large apps, bound the number of functions the LLM sees by
+        // picking the largest (most code) in-scope functions first.
+        int total = fns.size();
+        if (maxFunctions > 0 && fns.size() > maxFunctions) {
+            fns = fns.stream()
+                    .filter(fn -> fn.decompiledCode() != null && !fn.decompiledCode().isBlank() && filter.includeFunction(fn))
+                    .sorted(Comparator.comparingInt((SqliteStore.DecompilationResult fn) ->
+                            fn.decompiledCode() == null ? 0 : fn.decompiledCode().length()).reversed())
+                    .limit(maxFunctions)
+                    .collect(Collectors.toList());
+            log.info("LLM enrichment capped: {} -> {} functions (max-enrich-functions)", total, fns.size());
+        }
+
         log.info("LLM enrichment: mode={} platform={} provider={} functions={} scope={}",
                 mode, platform, provider.getClass().getSimpleName(), fns.size(), filter.scope());
 
-        int cached = 0, called = 0, errors = 0, totalVulns = 0, newRules = 0, totalTargets = 0;
-        int skippedScope = 0;
+        AtomicInteger cached = new AtomicInteger();
+        AtomicInteger called = new AtomicInteger();
+        AtomicInteger errors = new AtomicInteger();
+        AtomicInteger totalVulns = new AtomicInteger();
+        AtomicInteger newRules = new AtomicInteger();
+        AtomicInteger totalTargets = new AtomicInteger();
+        AtomicInteger skippedScope = new AtomicInteger();
 
-        for (SqliteStore.DecompilationResult fn : fns) {
-            if (fn.decompiledCode() == null || fn.decompiledCode().isBlank()) continue;
-            if (!filter.includeFunction(fn)) {
-                skippedScope++;
-                continue;
+        // Concurrency: the slow part (LLM network call + JSON parse) runs in
+        // parallel; DB writes stay on the main thread so SqliteStore's single
+        // connection is never used concurrently.
+        int cores = Runtime.getRuntime().availableProcessors();
+        int concurrency = Math.max(1, Math.min(8, cores));
+        ExecutorService pool = Executors.newFixedThreadPool(concurrency);
+        try {
+            List<Future<FunctionResult>> futures = new ArrayList<>();
+            for (SqliteStore.DecompilationResult fn : fns) {
+                futures.add(pool.submit(() -> callFunction(fn, filter)));
             }
-
-            String origin = resolveOrigin(fn);
-            String systemPrompt = buildSystemPrompt(origin);
-            String userMessage = buildUserMessage(fn, origin);
-            String hash = cacheKey(fn.decompiledCode(), mode, platform, origin);
-
-            String finding = cache.get(hash).orElse(null);
-            if (finding != null) {
-                cached++;
-            } else {
+            for (Future<FunctionResult> f : futures) {
+                FunctionResult r;
                 try {
-                    finding = provider.complete(systemPrompt, userMessage);
-                    cache.put(hash, finding);
-                    called++;
-                } catch (LlmProvider.LlmException e) {
-                    log.warn("LLM call failed for {}.{}: {}", fn.className(), fn.functionName(), e.getMessage());
-                    errors++;
+                    r = f.get();
+                } catch (Exception e) {
+                    log.warn("LlmEnricher task failed: {}", e.getMessage());
                     continue;
                 }
+                if (r == null) { skippedScope.incrementAndGet(); continue; }
+                if (r.error) { errors.incrementAndGet(); continue; }
+                if (r.cached) cached.incrementAndGet(); else called.incrementAndGet();
+                writeResult(store, executableName, r, totalVulns, newRules, totalTargets);
             }
-
-            String storedFinding = finding;
-            if (mode == LlmMode.OFFENSIVE) {
-                String cleaned = processOffensiveJson(finding, fn);
-                storedFinding = cleaned != null ? cleaned : "{\"offensive_targets\":[]}";
-                totalTargets += countOffensiveTargets(storedFinding);
-            }
-
-            store.insertLlmFinding(fn.functionName(), fn.className(), executableName,
-                    mode.name(), storedFinding, hash);
-
-            if (mode == LlmMode.FIND_VULNS) {
-                int[] counts = processVulnsJson(finding, fn, store, executableName);
-                totalVulns += counts[0];
-                newRules   += counts[1];
-            }
+        } finally {
+            pool.shutdown();
         }
+
+        // OFFENSIVE: additionally assess the concrete vulnerability findings for
+        // exploitability (bounded by the same cap) and record the verdict.
+        if (mode == LlmMode.OFFENSIVE) {
+            assessExploitability(store, executableName);
+        }
+
         if (mode == LlmMode.OFFENSIVE) {
             log.info("LLM enrichment done: cached={} api_calls={} errors={} offensive_targets={} skipped_scope={}",
-                    cached, called, errors, totalTargets, skippedScope);
+                    cached.get(), called.get(), errors.get(), totalTargets.get(), skippedScope.get());
         } else {
             log.info("LLM enrichment done: cached={} api_calls={} errors={} vulnerabilities={} new_learned_rules={} skipped_scope={}",
-                    cached, called, errors, totalVulns, newRules, skippedScope);
+                    cached.get(), called.get(), errors.get(), totalVulns.get(), newRules.get(), skippedScope.get());
         }
     }
+
+    /** Parallel-safe LLM+parse step; returns what to write (or null to skip). */
+    private FunctionResult callFunction(SqliteStore.DecompilationResult fn, ScanScopeFilter filter) {
+        if (fn.decompiledCode() == null || fn.decompiledCode().isBlank()) return null;
+        if (!filter.includeFunction(fn)) return null;
+        String origin = resolveOrigin(fn);
+        String systemPrompt = buildSystemPrompt(origin);
+        String userMessage = buildUserMessage(fn, origin);
+        String hash = cacheKey(fn.decompiledCode(), mode, platform, origin);
+        String finding = cache.get(hash).orElse(null);
+        FunctionResult r = new FunctionResult(fn, hash, finding, false, false);
+        if (finding != null) { r.cached = true; return r; }
+        try {
+            r.finding = provider.complete(systemPrompt, userMessage);
+            cache.put(hash, r.finding);
+            r.called = true;
+        } catch (LlmProvider.LlmException e) {
+            log.warn("LLM call failed for {}.{}: {}", fn.className(), fn.functionName(), e.getMessage());
+            r.error = true;
+        }
+        return r;
+    }
+
+    /** Sequential DB writes from a completed function result. */
+    private void writeResult(SqliteStore store, String executableName, FunctionResult r,
+                             AtomicInteger totalVulns, AtomicInteger newRules, AtomicInteger totalTargets) {
+        String storedFinding = r.finding;
+        if (mode == LlmMode.OFFENSIVE) {
+            String cleaned = processOffensiveJson(r.finding, r.fn);
+            storedFinding = cleaned != null ? cleaned : "{\"offensive_targets\":[]}";
+            totalTargets.addAndGet(countOffensiveTargets(storedFinding));
+        }
+        store.insertLlmFinding(r.fn.functionName(), r.fn.className(), executableName,
+                mode.name(), storedFinding, r.hash);
+        if (mode == LlmMode.FIND_VULNS) {
+            int[] counts = processVulnsJson(r.finding, r.fn, store, executableName);
+            totalVulns.addAndGet(counts[0]);
+            newRules.addAndGet(counts[1]);
+        }
+    }
+
+    private static final class FunctionResult {
+        final SqliteStore.DecompilationResult fn;
+        final String hash;
+        String finding;
+        boolean cached;
+        boolean called;
+        boolean error;
+        FunctionResult(SqliteStore.DecompilationResult fn, String hash, String finding, boolean cached, boolean error) {
+            this.fn = fn; this.hash = hash; this.finding = finding; this.cached = cached; this.error = error;
+        }
+    }
+
+    /** OFFENSIVE: ask the LLM whether each concrete vulnerability finding is exploitable. */
+    private void assessExploitability(SqliteStore store, String executableName) {
+        List<Map<String, Object>> vulns = store.getVulnerabilities(executableName);
+        if (vulns == null || vulns.isEmpty()) return;
+        int count = Math.min(maxFunctions > 0 ? maxFunctions : vulns.size(), vulns.size());
+        log.info("Exploitability assessment: {} finding(s) (mode=OFFENSIVE)", count);
+        int done = 0, failed = 0;
+        for (int i = 0; i < count; i++) {
+            Map<String, Object> v = vulns.get(i);
+            try {
+                String verdict = provider.complete(EXPLOIT_PROMPT, exploitPromptFor(v));
+                store.updateVulnerabilityExploitability(executableName,
+                        ((Number) v.get("id")).longValue(), verdict);
+                done++;
+            } catch (LlmProvider.LlmException e) {
+                log.warn("exploitability failed for {} ({}): {}",
+                        v.get("rule_id"), v.get("title"), e.getMessage());
+                failed++;
+            }
+        }
+        log.info("Exploitability assessment done: {} success, {} failed", done, failed);
+    }
+
+    static final String EXPLOIT_PROMPT =
+            "You are an Android security expert. For a concrete vulnerability finding, "
+            + "assess practical exploitability for a black-box/white-box penetration test. "
+            + "Reply with ONLY a JSON object (no prose): "
+            + "{\"exploitable\":true|false,\"requires_root\":true|false,\"requires_auth\":true|false,"
+            + "\"exploit_notes\":\"<2-4 sentences>\",\"confidence\":\"high|medium|low\"}";
+
+    private static String exploitPromptFor(Map<String, Object> v) {
+        return "Vulnerability: " + v.get("rule_id") + " — " + v.get("title")
+                + "\nSeverity: " + v.get("severity") + " (CVSS " + v.get("cvss_score") + ")"
+                + "\nDescription: " + nvl(v.get("description"))
+                + "\nAffected: " + nvl(v.get("affected_name"))
+                + "\nEvidence: " + nvl(v.get("evidence"))
+                + "\n\nAssess whether this finding is exploitable.";
+    }
+
+    private static String nvl(Object o) { return o == null ? "" : String.valueOf(o); }
 
     // ── JSON parsing → Vulnerabilities + learned rules ───────────────────────
 

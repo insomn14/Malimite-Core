@@ -153,6 +153,8 @@ public class SqliteStore implements AutoCloseable {
             addColumnIfMissing(s, "Vulnerabilities", "OverrideCvssScore", "REAL");
             addColumnIfMissing(s, "Vulnerabilities", "OverrideNote",      "TEXT");
             addColumnIfMissing(s, "Vulnerabilities", "UpdatedAt",         "INTEGER");
+            // OFFENSIVE mode LLM exploitability verdict (JSON) per finding.
+            addColumnIfMissing(s, "Vulnerabilities", "LlmExploitability", "TEXT");
             // Decompiler origin: JADX (Android Java) vs GHIDRA (iOS Mach-O / Android .so)
             addColumnIfMissing(s, "Functions", "Origin", "TEXT DEFAULT 'GHIDRA'");
             s.execute("""
@@ -686,6 +688,19 @@ public class SqliteStore implements AutoCloseable {
             log.error("getVulnerabilities failed", e);
         }
         return out;
+    }
+
+    /** Store the OFFENSIVE-mode LLM exploitability verdict (JSON) for a finding. */
+    public void updateVulnerabilityExploitability(String executableName, long id, String verdict) {
+        String sql = "UPDATE Vulnerabilities SET LlmExploitability=? WHERE id=? AND ExecutableName=?";
+        try (PreparedStatement p = conn.prepareStatement(sql)) {
+            p.setString(1, verdict);
+            p.setLong(2, id);
+            p.setString(3, executableName);
+            p.executeUpdate();
+        } catch (SQLException e) {
+            log.error("updateVulnerabilityExploitability failed", e);
+        }
     }
 
     /**
