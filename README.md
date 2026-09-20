@@ -26,6 +26,7 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 - [Features](#features)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
+- [Download pre-built CLI](#download-pre-built-cli)
 - [Quick start](#quick-start)
 - [Web UI & REST API](#web-ui--rest-api)
 - [Slack bot](#slack-bot)
@@ -147,9 +148,30 @@ export JADX_HOME=/opt/jadx   # directory containing bin/jadx
 
 ---
 
+## Download pre-built CLI
+
+Pre-built fat JARs are published on the
+[GitHub Releases page](https://github.com/insomn14/Malimite-Core/releases).
+Only Java 17 or newer is required to launch the CLI; Ghidra and/or JADX are
+still required for the package types described in [Prerequisites](#prerequisites).
+
+```bash
+VERSION=0.1.0
+curl -fLO "https://github.com/insomn14/Malimite-Core/releases/download/v${VERSION}/malimite-cli-${VERSION}.jar"
+curl -fLO "https://github.com/insomn14/Malimite-Core/releases/download/v${VERSION}/malimite-cli-${VERSION}.jar.sha256"
+sha256sum --check "malimite-cli-${VERSION}.jar.sha256"
+java -jar "malimite-cli-${VERSION}.jar" --version
+```
+
+Each pushed semantic-version tag such as `v0.1.0` is built and tested by
+GitHub Actions before the JAR and its SHA-256 checksum are attached to the
+release.
+
+---
+
 ## Quick start
 
-### 1. Build
+### 1. Build from source (alternative)
 
 ```bash
 git clone https://github.com/insomn14/Malimite-Core.git
