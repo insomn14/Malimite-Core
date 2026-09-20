@@ -64,6 +64,29 @@ public class Main implements Callable<Integer> {
             defaultValue = "${env:MAX_ENRICH_FUNCTIONS:-0}")
     private int maxEnrichFunctions;
 
+    @Option(names = "--decompiler",
+            description = "Decompiler backend: 'jadx' (default) or 'asc' (Droid ASC — "
+                    + "on-demand, zero-preprocessing). (env: MALIMITE_DECOMPILER)",
+            defaultValue = "${env:MALIMITE_DECOMPILER:-jadx}")
+    private String decompiler;
+
+    @Option(names = "--asc-home",
+            description = "Droid ASC checkout directory (runs `python -m droidasc`). "
+                    + "Falls back to ASC_HOME, then a `droidasc` script on PATH.",
+            defaultValue = "${env:ASC_HOME:-}")
+    private String ascHome;
+
+    @Option(names = "--max-asc-classes",
+            description = "Cap how many classes the ASC backend decompiles (0 = no cap). "
+                    + "(env: MAX_ASC_CLASSES)",
+            defaultValue = "${env:MAX_ASC_CLASSES:-0}")
+    private int maxAscClasses;
+
+    @Option(names = "--decompile-threads",
+            description = "Parallel ASC getclass workers (env: DECOMPILE_THREADS)",
+            defaultValue = "${env:DECOMPILE_THREADS:-8}")
+    private int decompileThreads;
+
     @Option(names = "--llm-model",
             description = "Override model id per provider  (env: LLM_MODEL)",
             defaultValue = "${env:LLM_MODEL:-}")
@@ -117,6 +140,10 @@ public class Main implements Callable<Integer> {
                 .assessmentEnabled(assessment)
                 .extraPackagePrefixes(extraPrefixes)
                 .maxEnrichFunctions(maxEnrichFunctions)
+                .decompiler(decompiler)
+                .ascHome(ascHome == null || ascHome.isBlank() ? null : Path.of(ascHome))
+                .maxAscClasses(maxAscClasses)
+                .decompileThreads(decompileThreads)
                 .build();
 
         AnalysisResult r = new MalimiteAnalyzer().analyze(opts);
