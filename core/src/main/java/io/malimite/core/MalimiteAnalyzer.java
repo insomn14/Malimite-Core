@@ -111,7 +111,18 @@ public class MalimiteAnalyzer {
 
         Path workDir = Files.createTempDirectory("malimite-apk-" + scanId + "-");
         ApkExtractor.ExtractionResult extraction = ApkExtractor.extract(opts.packagePath(), workDir);
-        AndroidManifestParser.ManifestInfo manifest = AndroidManifestParser.parse(opts.packagePath());
+
+        // Optional Droid ASC backend (on-demand, zero-preprocessing decompiler).
+        AscRunner asc = null;
+        if (opts.useAsc()) {
+            try {
+                asc = new AscRunner(opts.ascHome());
+            } catch (Exception e) {
+                log.warn("ASC unavailable ({}); falling back to JADX", e.getMessage());
+            }
+        }
+        AndroidManifestParser.ManifestInfo manifest = manifestFor(opts, asc);
+        log.info("Decompiler backend: {}", asc != null ? "asc" : "jadx");
 
         String execName = manifest.applicationId();
         Files.createDirectories(opts.outputDir());
@@ -128,8 +139,15 @@ public class MalimiteAnalyzer {
                 scope.scope(), scope.includeSecuritySdks(), execName);
 
         try (SqliteStore store = new SqliteStore(dbPath.toString())) {
-            JadxRunner jadx = new JadxRunner(opts.jadxHome());
-            Path sources = jadx.decompile(opts.packagePath(), jadxOut);
+            Path sources;
+            if (asc != null) {
+                Path ascOut = opts.outputDir().resolve("asc-" + scanId);
+                sources = asc.decompileToTree(opts.packagePath(), ascOut,
+                        opts.maxAscClasses(), opts.decompileThreads());
+            } else {
+                JadxRunner jadx = new JadxRunner(opts.jadxHome());
+                sources = jadx.decompile(opts.packagePath(), jadxOut);
+            }
             try {
                 JadxIngest.ingest(sources, store, execName, manifest, extraction);
             } catch (StackOverflowError e) {
@@ -204,6 +222,26 @@ public class MalimiteAnalyzer {
         long dt = System.currentTimeMillis() - t0;
         log.info("scan={} done in {}ms  db={}", scanId, dt, dbPath);
         return new AnalysisResult(scanId, opts.outputDir(), dt, dbPath);
+    }
+
+    /**
+     * Manifest info, preferring Droid ASC's {@code getmanifest} when that backend
+     * is active (it decodes the binary AXML without apk-parser's fragile resource
+     * resolution), with the apk-parser/aapt2 path as fallback.
+     */
+    private AndroidManifestParser.ManifestInfo manifestFor(AnalyzeOptions opts, AscRunner asc) throws Exception {
+        if (asc != null) {
+            try {
+                String xml = asc.manifest(opts.packagePath());
+                if (xml != null && !xml.isBlank()) {
+                    log.info("Manifest via Droid ASC getmanifest");
+                    return AndroidManifestParser.parseXml(xml);
+                }
+            } catch (Exception e) {
+                log.warn("ASC getmanifest failed ({}); falling back to apk-parser", e.getMessage());
+            }
+        }
+        return AndroidManifestParser.parse(opts.packagePath());
     }
 
     private void runAssessmentIfEnabled(AnalyzeOptions opts, SqliteStore store, String execName,

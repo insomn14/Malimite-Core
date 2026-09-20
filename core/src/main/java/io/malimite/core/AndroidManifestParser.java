@@ -83,6 +83,15 @@ public final class AndroidManifestParser {
         }
     }
 
+    /**
+     * Parse a manifest that has already been decoded to XML — e.g. by Droid ASC
+     * ({@code droidasc getmanifest}), which decodes the binary AXML without the
+     * resource-resolution step that trips {@code net.dongliu:apk-parser}.
+     */
+    public static ManifestInfo parseXml(String manifestXml) throws Exception {
+        return fromMetaAndXml(null, manifestXml);
+    }
+
     private static String exec(String... argv) throws Exception {
         ProcessBuilder pb = new ProcessBuilder(argv);
         pb.redirectErrorStream(true);
