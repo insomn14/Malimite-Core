@@ -56,6 +56,14 @@ public class Main implements Callable<Integer> {
                     + "Used in Fast Scan / Auto Fix / Offensive. Example: com.example.shared")
     private List<String> includePackages;
 
+    @Option(names = "--max-enrich-functions",
+            description = "Cap the number of functions the LLM enricher inspects "
+                    + "(0 = no cap). Large apps can otherwise make tens of thousands "
+                    + "of LLM calls; cap it for a bounded, faster run. "
+                    + "(env: MAX_ENRICH_FUNCTIONS)",
+            defaultValue = "${env:MAX_ENRICH_FUNCTIONS:-0}")
+    private int maxEnrichFunctions;
+
     @Option(names = "--llm-model",
             description = "Override model id per provider  (env: LLM_MODEL)",
             defaultValue = "${env:LLM_MODEL:-}")
@@ -108,6 +116,7 @@ public class Main implements Callable<Integer> {
                 .llmConfig(llmCfg)
                 .assessmentEnabled(assessment)
                 .extraPackagePrefixes(extraPrefixes)
+                .maxEnrichFunctions(maxEnrichFunctions)
                 .build();
 
         AnalysisResult r = new MalimiteAnalyzer().analyze(opts);

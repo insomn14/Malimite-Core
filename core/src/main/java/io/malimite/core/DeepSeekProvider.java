@@ -48,26 +48,64 @@ public class DeepSeekProvider implements LlmProvider {
                 .put("messages", new JSONArray()
                         .put(new JSONObject().put("role", "system").put("content", systemPrompt))
                         .put(new JSONObject().put("role", "user").put("content", userMessage)));
-        try {
-            HttpRequest req = HttpRequest.newBuilder(URI.create(completionsUrl))
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8))
-                    .timeout(Duration.ofMinutes(DeepSeekModels.isReasoningModel(model) ? 10 : 3))
-                    .build();
-            String raw = http.send(req, HttpResponse.BodyHandlers.ofString()).body();
-            JSONObject resp = new JSONObject(raw);
-            if (resp.has("error"))
-                throw new LlmException("DeepSeek error: " + resp.getJSONObject("error").optString("message"));
-            JSONObject message = resp.getJSONArray("choices")
-                    .getJSONObject(0)
-                    .getJSONObject("message");
-            return extractContent(message);
-        } catch (LlmException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new LlmException("DeepSeek request failed", e);
+        // Retry transient failures (network, 429/5xx, timeout) with backoff; the
+        // caller (LlmEnricher) runs calls concurrently, so the provider must stay
+        // stateless + thread-safe (it is: a single java.net.http.HttpClient).
+        int attempts = 3;
+        long backoffMs = 500;
+        LlmException last = null;
+        for (int i = 0; i < attempts; i++) {
+            if (i > 0) sleep(backoffMs << (i - 1));
+            try {
+                HttpRequest req = HttpRequest.newBuilder(URI.create(completionsUrl))
+                        .header("Authorization", "Bearer " + apiKey)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8))
+                        .timeout(Duration.ofMinutes(DeepSeekModels.isReasoningModel(model) ? 10 : 3))
+                        .build();
+                HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+                int status = resp.statusCode();
+                String raw = resp.body();
+                if (status >= 500 || status == 429) {
+                    // retryable
+                    last = new LlmException("DeepSeek HTTP " + status + ": " + abbreviate(raw));
+                    continue;
+                }
+                if (status >= 400) {
+                    throw new LlmException("DeepSeek error " + status + ": " + abbreviate(raw));
+                }
+                JSONObject parsed = new JSONObject(raw);
+                if (parsed.has("error")) {
+                    String msg = parsed.getJSONObject("error").optString("message");
+                    // 429/'insufficient_quota' are retryable; others are not.
+                    boolean retryable = parsed.getJSONObject("error").optString("code", "")
+                            .contains("rate") || status == 429;
+                    last = new LlmException("DeepSeek error: " + msg);
+                    if (!retryable) throw last;
+                    continue;
+                }
+                JSONObject message = parsed.getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message");
+                return extractContent(message);
+            } catch (java.io.IOException e) {
+                last = new LlmException("DeepSeek request failed", e);
+            } catch (LlmException e) {
+                throw e;
+            } catch (Exception e) {
+                last = new LlmException("DeepSeek request failed", e);
+            }
         }
+        throw last != null ? last : new LlmException("DeepSeek request failed after retries");
+    }
+
+    private static void sleep(long ms) {
+        try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+
+    private static String abbreviate(String s) {
+        if (s == null) return "";
+        return s.length() > 300 ? s.substring(0, 300) : s;
     }
 
     /** Reasoning models may return {@code content} and/or {@code reasoning_content}. */

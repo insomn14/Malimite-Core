@@ -13,7 +13,8 @@ public record AnalyzeOptions(
         Map<String, String> llmConfig,
         Path jadxHome,
         boolean assessmentEnabled,
-        List<String> extraPackagePrefixes) {
+        List<String> extraPackagePrefixes,
+        int maxEnrichFunctions) {
 
     public AnalyzeOptions {
         if (llmMode == null) llmMode = LlmMode.SUMMARIZE;
@@ -37,6 +38,7 @@ public record AnalyzeOptions(
         private Map<String, String> llmConfig = Map.of();
         private boolean assessmentEnabled = true;
         private List<String> extraPackagePrefixes = List.of();
+        private int maxEnrichFunctions = 0;
 
         public Builder ipaPath(Path p)      { this.ipaPath = p; return this; }
         /** Preferred alias — same as {@link #ipaPath(Path)}. */
@@ -52,12 +54,14 @@ public record AnalyzeOptions(
             this.extraPackagePrefixes = p;
             return this;
         }
+        /** Cap the number of functions the LLM enricher inspects (0 = no cap). */
+        public Builder maxEnrichFunctions(int n) { this.maxEnrichFunctions = n; return this; }
 
         public AnalyzeOptions build() {
             if (ipaPath == null || outputDir == null)
                 throw new IllegalArgumentException("packagePath and outputDir required");
             return new AnalyzeOptions(ipaPath, ghidraHome, outputDir, llmEnabled, llmMode, llmConfig,
-                    jadxHome, assessmentEnabled, extraPackagePrefixes);
+                    jadxHome, assessmentEnabled, extraPackagePrefixes, maxEnrichFunctions);
         }
     }
 }

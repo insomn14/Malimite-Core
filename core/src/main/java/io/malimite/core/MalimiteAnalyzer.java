@@ -224,6 +224,7 @@ public class MalimiteAnalyzer {
             LlmProvider llmProvider = LlmProviderFactory.create(opts.llmConfig());
             if (llmProvider != null) {
                 new LlmEnricher(llmProvider, opts.llmMode(), LlmCache.NOOP, isSwift, platform)
+                        .maxFunctions(opts.maxEnrichFunctions())
                         .enrich(store, execName, scope);
             } else {
                 log.warn("llmEnabled=true but LLM_PROVIDER=none — skipping enrichment");
