@@ -17,6 +17,7 @@ CREATE TABLE EntryPoints(FunctionName TEXT, ClassName TEXT, ExecutableName TEXT)
 CREATE TABLE LlmFindings(id INTEGER PRIMARY KEY, ExecutableName TEXT);
 CREATE TABLE FunctionReferences(sourceFunction TEXT, sourceClass TEXT, targetFunction TEXT,
                                 targetClass TEXT, lineNumber INTEGER, ExecutableName TEXT);
+CREATE TABLE ResourceStrings(id INTEGER PRIMARY KEY, resourceId TEXT, value TEXT, type TEXT);
 CREATE TABLE Vulnerabilities(id INTEGER PRIMARY KEY, RuleId TEXT, Title TEXT, Category TEXT, Severity TEXT,
   CvssScore REAL, Cwe TEXT, Description TEXT, AffectedType TEXT, AffectedName TEXT, Evidence TEXT,
   EvidenceLocation TEXT, PocSteps TEXT, Remediation TEXT, ReferenceUrl TEXT, ExecutableName TEXT);
@@ -190,6 +191,156 @@ class ToolTests(unittest.IsolatedAsyncioTestCase):
             async with db._ro(self.path) as c:
                 await c.execute("DELETE FROM Functions")
                 await c.commit()
+
+
+
+
+class AssessmentAndManifestToolTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        h = tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False)
+        h.close()
+        self.path = h.name
+        self.c = sqlite3.connect(self.path)
+        self.c.executescript(SCHEMA)
+
+    def tearDown(self):
+        self.c.close()
+        Path(self.path).unlink(missing_ok=True)
+
+    def ctx(self, platform="android", meta=None):
+        self.c.commit()
+        return Ctx("s", self.path, "app", platform, Path("/tmp"), meta or {})
+
+    def add_assessments(self, rows):
+        self.c.execute("""CREATE TABLE Assessments(id INTEGER PRIMARY KEY, ControlId TEXT, Title TEXT, Category TEXT,
+                          Status TEXT, Confidence TEXT, Evidence TEXT, Detail TEXT, Platform TEXT, CreatedAt INTEGER,
+                          ExecutableName TEXT)""")
+        self.c.executemany("INSERT INTO Assessments(ControlId,Title,Category,Status,Confidence,Evidence,Detail,ExecutableName) "
+                           "VALUES (?,?,?,?,?,?,?,'app')", rows)
+
+    @staticmethod
+    def body(out):
+        return json.loads(out.split("\n", 1)[1].rsplit("\n", 1)[0])
+
+    # ── get_assessments ───────────────────────────────────────────────────────
+
+    async def test_assessments_are_ordered_filtered_and_counted(self):
+        self.add_assessments([
+            ("ASSESS-A", "Anti-debug", "DETECTION", "ABSENT", "MEDIUM", "No matching signals", ""),
+            ("ASSESS-B", "PIE", "HARDENING", "PRESENT", "HIGH", "MH_PIE=1", ""),
+            ("ASSESS-C", "Jailbreak", "DETECTION", "UNKNOWN", "LOW", "x" * 500, "signal=jb"),
+        ])
+        ok, out = await tools.run_tool(self.ctx("ios"), "get_assessments", {})
+        d = self.body(out)
+        self.assertTrue(ok)
+        self.assertEqual(d["counts_all_controls"], {"ABSENT": 1, "PRESENT": 1, "UNKNOWN": 1})
+        self.assertEqual([c["status"] for c in d["controls"]], ["PRESENT", "ABSENT", "UNKNOWN"])
+        self.assertEqual(len(d["controls"][2]["evidence"]), 300, "evidence is capped")
+        self.assertEqual(d["controls"][2]["detail"], "signal=jb")
+        self.assertTrue(any("UNKNOWN" in n for n in d["notes"]), "the model is told UNKNOWN is not 'absent'")
+        d = self.body((await tools.run_tool(self.ctx(), "get_assessments", {"status": "unknown"}))[1])
+        self.assertEqual([c["id"] for c in d["controls"]], ["ASSESS-C"])
+        self.assertEqual(sum(d["counts_all_controls"].values()), 3, "counts describe the whole inventory, not the filter")
+        d = self.body((await tools.run_tool(self.ctx(), "get_assessments", {"category": "hardening"}))[1])
+        self.assertEqual([c["id"] for c in d["controls"]], ["ASSESS-B"])
+
+    async def test_vm_obfuscation_note_warns_against_calling_hidden_checks_absent(self):
+        self.add_assessments([("ASSESS-VM-OBFUSCATION", "Bytecode VM", "OBFUSCATION", "PRESENT", "MEDIUM", "43 fns", "")])
+        d = self.body((await tools.run_tool(self.ctx("ios"), "get_assessments", {}))[1])
+        self.assertTrue(any("bytecode interpreter" in n for n in d["notes"]))
+
+    async def test_scan_without_assessment_says_so_instead_of_returning_an_empty_inventory(self):
+        ok, out = await tools.run_tool(self.ctx(), "get_assessments", {})   # no Assessments table at all
+        self.assertTrue(ok)
+        self.assertIn("no Security Assessment", out)
+        self.assertIn("Do not conclude", out)
+
+    async def test_assessments_never_touch_the_scan_db(self):
+        self.add_assessments([("A", "t", "c", "ABSENT", "LOW", "e", "")])
+        before = self.c.execute("PRAGMA schema_version").fetchone()
+        self.c.commit()
+        await tools.run_tool(self.ctx(), "get_assessments", {})
+        self.assertEqual(before, self.c.execute("PRAGMA schema_version").fetchone())
+
+    # ── get_manifest ──────────────────────────────────────────────────────────
+
+    def add_android(self):
+        rows = [("PackageName", "PackageName=com.x.app", "manifest"), ("Debuggable", "Debuggable=false", "manifest"),
+                ("AllowBackup", "AllowBackup=true", "manifest"),
+                ("Permission", "Permission=android.permission.CAMERA", "manifest-permission"),
+                ("Permission", "Permission=android.permission.READ_CONTACTS", "manifest-permission")]
+        rows += [("Component", f"activity com.x.A{i} exported={'true' if i == 3 else 'false'}", "manifest-component") for i in range(40)]
+        rows += [("DeepLink", "DeepLink scheme=https host=x.example path=/a component=com.x.A3", "manifest-deeplink")]
+        self.c.executemany("INSERT INTO ResourceStrings(resourceId,value,type) VALUES (?,?,?)", rows)
+        self.c.execute("INSERT INTO EntryPoints VALUES ('activity:com.x.A3','com.x.A3','app')")
+
+    async def test_android_overview_lists_sections_metadata_and_entry_points_without_paths(self):
+        self.add_android()
+        meta = {"platform": "ANDROID", "versionName": "1.2", "minSdk": 24, "dbPath": "/var/malimite/secret.sqlite",
+                "packagePath": "/var/malimite/upload.apk", "isSwift": False, "bundleTeamId": None}
+        ok, out = await tools.run_tool(self.ctx("android", meta), "get_manifest", {})
+        d = self.body(out)
+        self.assertEqual(d["metadata"], {"platform": "ANDROID", "versionName": "1.2", "minSdk": 24, "isSwift": False})
+        self.assertNotIn("/var/malimite", out, "server paths must not reach the model")
+        self.assertIn("AllowBackup=true", d["config"])
+        self.assertEqual(d["sections"]["permissions"]["rows"], 2)
+        self.assertEqual(d["sections"]["components"]["rows"], 40)
+        self.assertEqual(d["entry_points"], ["activity:com.x.A3"], "not 'com.x.A3.activity:com.x.A3'")
+
+    async def test_section_rows_are_readable_and_paged(self):
+        self.add_android()
+        d = self.body((await tools.run_tool(self.ctx(), "get_manifest", {"section": "components", "limit": 15}))[1])
+        self.assertEqual((d["total_matching"], len(d["rows"]), d["next_offset"]), (40, 15, 15))
+        self.assertTrue(d["rows"][0].startswith("activity com.x.A0 exported="), "the constant 'Component' label is dropped")
+        last = self.body((await tools.run_tool(self.ctx(), "get_manifest",
+                                               {"section": "components", "limit": 15, "offset": 30}))[1])
+        self.assertEqual((len(last["rows"]), "next_offset" in last), (10, False))
+
+    async def test_query_filters_and_escapes_like_wildcards(self):
+        self.add_android()
+        d = self.body((await tools.run_tool(self.ctx(), "get_manifest", {"section": "components", "query": "exported=true"}))[1])
+        self.assertEqual(d["rows"], ["activity com.x.A3 exported=true"])
+        d = self.body((await tools.run_tool(self.ctx(), "get_manifest", {"section": "permissions", "query": "%"}))[1])
+        self.assertEqual(d["total_matching"], 0, "'%' is a literal, not a wildcard")
+
+    async def test_unknown_section_lists_the_valid_ones_for_that_platform(self):
+        ok, out = await tools.run_tool(self.ctx("android"), "get_manifest", {"section": "entitlements"})
+        self.assertIn("unknown section 'entitlements'", out)
+        self.assertIn("permissions", out)
+        self.assertNotIn("info_plist", out)
+
+    async def test_ios_sections_use_ios_data_and_shorten_plist_paths(self):
+        self.c.executemany("INSERT INTO ResourceStrings(resourceId,value,type) VALUES (?,?,?)", [
+            ("/tmp/x/Payload/App.app/Info.plist", "<key>UIMainStoryboardFile</key>", "plist"),
+            ("/tmp/x/Payload/App.app/embedded.mobileprovision", "<key>get-task-allow</key>", "mobileprovision"),
+            ("MachOSecurityFlags", "MH_PIE=1", "macho-flags")])
+        ov = self.body((await tools.run_tool(self.ctx("ios", {"platform": "IOS", "bundleTeamId": "T1"}), "get_manifest", {}))[1])
+        self.assertEqual(set(ov["sections"]), {"info_plist", "entitlements", "macho_flags", "nibs"})
+        self.assertEqual(ov["metadata"]["bundleTeamId"], "T1")
+        d = self.body((await tools.run_tool(self.ctx("ios"), "get_manifest", {"section": "info_plist"}))[1])
+        self.assertEqual(d["rows"], ["App.app/Info.plist: <key>UIMainStoryboardFile</key>"])
+        d = self.body((await tools.run_tool(self.ctx("ios"), "get_manifest", {"section": "entitlements", "query": "get-task-allow"}))[1])
+        self.assertEqual(d["total_matching"], 1)
+        d = self.body((await tools.run_tool(self.ctx("ios"), "get_manifest", {"section": "macho_flags"}))[1])
+        self.assertEqual(d["rows"], ["MachOSecurityFlags=MH_PIE=1"])
+
+    async def test_ios_entry_points_keep_class_and_selector(self):
+        self.c.execute("INSERT INTO EntryPoints VALUES ('application:didFinishLaunchingWithOptions:','AppDelegate','app')")
+        d = self.body((await tools.run_tool(self.ctx("ios"), "get_manifest", {}))[1])
+        self.assertEqual(d["entry_points"], ["AppDelegate.application:didFinishLaunchingWithOptions:"])
+
+    def test_system_prompt_sends_control_and_config_questions_to_the_new_tools(self):
+        from web.app.agent import loop
+        self.assertIn("get_assessments", loop.SYSTEM)
+        self.assertIn("get_manifest", loop.SYSTEM)
+        self.assertIn("UNKNOWN as unknown", loop.SYSTEM)
+
+    def test_both_tools_are_registered_with_valid_schemas(self):
+        names = {t["name"] for t in tools.TOOLS}
+        self.assertTrue({"get_assessments", "get_manifest"} <= names)
+        for t in tools.TOOLS:
+            self.assertEqual(t["schema"]["type"], "object", t["name"])
+        self.assertIn("UNKNOWN", next(t for t in tools.TOOLS if t["name"] == "get_assessments")["description"])
 
 
 if __name__ == "__main__":

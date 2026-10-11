@@ -268,6 +268,8 @@ After a scan finishes, the web UI shows an **AI Assistant** tab: a chat with an 
 | Tool | What it does |
 |---|---|
 | `scan_overview`, `list_classes`, `search_code`, `get_source`, `search_strings`, `get_vulnerabilities`, `get_references` | Read-only queries over the scan's SQLite (stored decompiled code, strings, findings, call graph when present) |
+| `get_assessments` | The Security Assessment inventory (root/jailbreak, Frida, anti-debug, pinning, FLAG_SECURE, obfuscation, ...). Reports `UNKNOWN` as unknown and warns when a bytecode VM may hide checks; says so when a scan has no Assessment |
+| `get_manifest` | App configuration: Android package/SDK/debuggable/backup, permissions, components (with `exported`), deep links, native libs; iOS bundle/team/provisioning, Info.plist, entitlements, Mach-O flags. Overview first, then paged sections with a substring filter. Server paths are never exposed |
 | `decompile` | Fresh single-class decompile: `asc` (Android, fast), `jadx` (Android), `ghidra` (iOS Mach-O, or Android `.so` via `lib`). Results are cached |
 
 - **Config:** uses the scan's LLM provider/model by default (overridable per chat). The API key comes from the **server's** `web/.env` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`, or `OLLAMA_BASE_URL`), never from a per-upload key. Optional: `CHAT_MAX_TURNS`, `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_CONTINUATIONS`, `CHAT_TOOL_CAP`, `HEAVY_CONCURRENCY`, `GHIDRA_ONDEMAND_TIMEOUT`. An answer cut off by the output limit is continued automatically and shown (and saved) as one message (default 5400).
