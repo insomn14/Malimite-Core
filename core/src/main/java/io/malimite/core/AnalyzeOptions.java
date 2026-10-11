@@ -39,9 +39,16 @@ public record AnalyzeOptions(
         return "asc".equalsIgnoreCase(decompiler);
     }
 
-    /** Alias for the uploaded package path (.ipa or .apk). */
+    /** Alias for the uploaded package path (.ipa, .apk or .xapk). */
     public Path packagePath() {
         return ipaPath;
+    }
+
+    /** Same options pointing at a different package (e.g. the APK a split-APK bundle was merged into). */
+    public AnalyzeOptions withPackagePath(Path p) {
+        return new AnalyzeOptions(p, ghidraHome, outputDir, llmEnabled, llmMode, llmConfig, jadxHome,
+                assessmentEnabled, extraPackagePrefixes, maxEnrichFunctions, decompiler, ascHome, maxAscClasses,
+                decompileThreads);
     }
 
     public static Builder builder() { return new Builder(); }

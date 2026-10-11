@@ -72,6 +72,9 @@ public final class AndroidManifestParser {
                 log.warn("apk-parser getManifestXml failed: {}", e.getMessage());
             }
             if (xml == null || xml.isBlank()) {
+                // The failure is usually in resources.arsc, which the manifest does not need: read the manifest alone.
+                ManifestInfo alone = parseManifestWithoutResources(apkPath);
+                if (alone != null) return alone;
                 // net.dongliu:apk-parser 2.6.10 chokes on some resource tables
                 // ("java.lang.IllegalArgumentException: newPosition > limit").
                 // Fall back to aapt2 (bundled with dAsstLLM), which is robust.
@@ -104,6 +107,37 @@ public final class AndroidManifestParser {
         int code = p.waitFor();
         if (code != 0) throw new IllegalStateException("command failed (" + code + "): " + argv[0]);
         return sb.toString();
+    }
+
+    /**
+     * Parses AndroidManifest.xml with an empty resource table. apk-parser reads resources.arsc first and fails on
+     * some (large) tables ("newPosition &gt; limit"); package, version and SDK levels do not depend on it, only
+     * {@code @resource} references (labels) stay unresolved. Returns null if the manifest itself cannot be read.
+     */
+    static ManifestInfo parseManifestWithoutResources(Path apkPath) {
+        try {
+            byte[] data;
+            try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(apkPath.toFile())) {
+                var e = zf.getEntry("AndroidManifest.xml");
+                if (e == null) return null;
+                data = zf.getInputStream(e).readAllBytes();
+            }
+            var table = new net.dongliu.apk.parser.struct.resource.ResourceTable();
+            var xml = new net.dongliu.apk.parser.parser.XmlTranslator();
+            var meta = new net.dongliu.apk.parser.parser.ApkMetaTranslator(table, java.util.Locale.getDefault());
+            var parser = new net.dongliu.apk.parser.parser.BinaryXmlParser(
+                    java.nio.ByteBuffer.wrap(data).order(java.nio.ByteOrder.LITTLE_ENDIAN), table);
+            parser.setXmlStreamer(new net.dongliu.apk.parser.parser.CompositeXmlStreamer(meta, xml));
+            parser.parse();
+            ManifestInfo info = fromMetaAndXml(meta.getApkMeta(), xml.getXml());
+            if (info == null || info.applicationId() == null || info.applicationId().isBlank()
+                    || "unknown".equals(info.applicationId())) return null;
+            log.info("Manifest read without the resource table (resources.arsc could not be parsed): {}", info.applicationId());
+            return info;
+        } catch (Exception | LinkageError e) {
+            log.debug("manifest-only parse failed: {}", e.toString());
+            return null;
+        }
     }
 
     /** Minimal manifest info via `aapt2 dump badging` when apk-parser cannot read the APK. */
