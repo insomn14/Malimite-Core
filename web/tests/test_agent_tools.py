@@ -120,10 +120,16 @@ class ToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("offset=", out)
 
     async def test_vulnerabilities_read_never_alters_scan_db(self):
-        before = sqlite3.connect(self.path).execute("PRAGMA table_info(Vulnerabilities)").fetchall()
+        def cols():
+            c = sqlite3.connect(self.path)
+            try:
+                return c.execute("PRAGMA table_info(Vulnerabilities)").fetchall()
+            finally:
+                c.close()
+        before = cols()
         await tools.run_tool(self.ctx, "get_vulnerabilities", {})
         await tools.run_tool(self.ctx, "scan_overview", {})
-        after = sqlite3.connect(self.path).execute("PRAGMA table_info(Vulnerabilities)").fetchall()
+        after = cols()
         self.assertEqual(before, after, "assistant must not add triage columns to the scan DB")
 
     async def test_ro_open_handles_odd_paths(self):

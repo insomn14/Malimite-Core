@@ -7,7 +7,7 @@ import anyio
 
 from ..config import settings
 from . import store
-from .llm import LlmCfg, LlmError, chat_step
+from .llm import TRUNCATED, LlmCfg, LlmError, chat_step
 from .tools import TOOLS, Ctx, run_tool
 
 SYSTEM = """You are the reverse-engineering assistant of Malimite-Core, a static analysis platform for iOS (.ipa) \
@@ -36,6 +36,9 @@ FINAL ROUND: you have used all tool rounds for this message and may NOT call too
 what you already gathered: summarize concrete findings (class/function names, short evidence), say clearly what you \
 did NOT get to verify, and suggest what to look at next so the user can reply "lanjutkan" to continue."""
 
+CONTINUE = ("Your previous reply was cut off by the output length limit. Continue exactly from the last character "
+            "you wrote: do not repeat anything, do not add an introduction or apology, and keep the same format "
+            "(finish any open sentence, table row or code block).")
 HISTORY_BUDGET = 160_000  # chars of tool_result content kept verbatim (~40k tokens)
 PREVIEW = 2000
 PING_EVERY = 15
@@ -69,27 +72,45 @@ async def run_chat(
     msgs.append({"role": "user", "content": user})
 
     turns = settings.chat_max_turns
-    for turn in range(turns):
+    turn = 0
+    carry, conts = "", 0   # text of an answer that hit the output limit and is being continued (persisted once, whole)
+    while turn < turns:
         last = turn == turns - 1   # forced wrap-up: a visible answer beats a "max rounds" error
         text, tool_uses, results = "", [], []
+        stop, defer = "", False
         task = None
         try:
             try:
                 extra = {"allow_tools": False} if last else {}
-                async for ev in step(cfg, SYSTEM + (FINAL_ROUND if last else ""), clip(msgs), TOOLS, **extra):
+                sent = clip(msgs)
+                if carry:   # not persisted: the model just needs to see its own cut-off text and a nudge
+                    sent += [{"role": "assistant", "content": [{"type": "text", "text": carry}]},
+                             {"role": "user", "content": [{"type": "text", "text": CONTINUE}]}]
+                async for ev in step(cfg, SYSTEM + (FINAL_ROUND if last else ""), sent, TOOLS, **extra):
                     if ev["type"] == "text":
                         text += ev["text"]
                         yield {"type": "token", "text": ev["text"]}
+                    elif ev["type"] == "stop":
+                        stop = ev.get("reason") or ""
                     elif ev["type"] == "tool_use" and not last:   # a model that ignores tool_choice=none is not executed
                         tool_uses.append({"type": "tool_use", "id": ev["id"], "name": ev["name"],
                                           "input": ev["input"]})
             except LlmError as e:
                 yield {"type": "error", "message": str(e)}
                 return
-            if last and not text.strip():
+            if last and not (carry + text).strip():
                 text = ("Batas putaran tool tercapai sebelum jawaban akhir tersusun. Balas \"lanjutkan\" dan saya "
                         "teruskan dari data yang sudah dikumpulkan.")
                 yield {"type": "token", "text": text}
+
+            if stop in TRUNCATED and not tool_uses and text.strip():
+                if conts < settings.chat_max_continuations:
+                    carry, conts, defer = carry + text, conts + 1, True   # keep going; one message gets saved at the end
+                    yield {"type": "continue", "n": conts}
+                    continue
+                note = ("\n\n[Jawaban terpotong oleh batas panjang output. Balas \"lanjutkan\" untuk meneruskan.]")
+                text += note
+                yield {"type": "token", "text": note}
 
             for tu in tool_uses:
                 yield {"type": "tool_call", "id": tu["id"], "name": tu["name"], "args": tu["input"]}
@@ -113,19 +134,24 @@ async def run_chat(
         finally:
             if task is not None and not task.done():
                 task.cancel()
-            with anyio.CancelScope(shield=True):
-                blocks = ([{"type": "text", "text": text}] if text else []) + tool_uses
-                if blocks:
-                    await store.append(chat_db, sid, "assistant", blocks)
-                    msgs.append({"role": "assistant", "content": blocks})
-                if tool_uses:
-                    have = {r["tool_use_id"] for r in results}
-                    results += [{"type": "tool_result", "tool_use_id": t["id"], "is_error": True,
-                                 "content": "<tool_data>cancelled</tool_data>"}
-                                for t in tool_uses if t["id"] not in have]
-                    await store.append(chat_db, sid, "user", results)
-                    msgs.append({"role": "user", "content": results})
+            if not defer:
+                with anyio.CancelScope(shield=True):
+                    full = carry + text
+                    blocks = ([{"type": "text", "text": full}] if full else []) + tool_uses
+                    if blocks:
+                        await store.append(chat_db, sid, "assistant", blocks)
+                        msgs.append({"role": "assistant", "content": blocks})
+                    if tool_uses:
+                        have = {r["tool_use_id"] for r in results}
+                        results += [{"type": "tool_result", "tool_use_id": t["id"], "is_error": True,
+                                     "content": "<tool_data>cancelled</tool_data>"}
+                                    for t in tool_uses if t["id"] not in have]
+                        await store.append(chat_db, sid, "user", results)
+                        msgs.append({"role": "user", "content": results})
+                carry = ""
 
         if not tool_uses:
             yield {"type": "done"}
             return
+        conts = 0
+        turn += 1
