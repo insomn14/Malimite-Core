@@ -55,12 +55,46 @@ public final class AssessmentScanner {
             assessIos(ctx, results);
         }
 
+        ObfuscationSignals.Result vm = ObfuscationSignals.analyze(store.getAllDecompiledFunctions(executableName));
+        results = applyBytecodeVmCaveat(results, vm, platform);
+
         for (AssessmentResult r : results)
             store.insertAssessment(r, executableName);
 
         log.info("AssessmentScanner: {} control(s) for {} in {}ms",
                 results.size(), platform, System.currentTimeMillis() - t0);
         return results.size();
+    }
+
+    /**
+     * A bytecode VM can hide jailbreak/root/Frida/anti-debug checks, so "no signals found" for a detection control is
+     * UNKNOWN, not ABSENT. Also inventories the VM itself, which no other control notices.
+     */
+    /** Controls decided by "did we see a signal?": the only ones a hidden check can invalidate. */
+    private static final java.util.Set<String> SIGNAL_BASED = java.util.Set.of(
+            "ASSESS-JAILBREAK-DETECTION", "ASSESS-ROOT-DETECTION", "ASSESS-FRIDA-DETECTION", "ASSESS-ANTIDEBUG",
+            "ASSESS-DEBUG-DETECTION", "ASSESS-EMULATOR-DETECTION", "ASSESS-INTEGRITY");
+
+    static List<AssessmentResult> applyBytecodeVmCaveat(List<AssessmentResult> in, ObfuscationSignals.Result vm,
+                                                        PackagePlatform platform) {
+        if (!vm.bytecodeVm()) return in;
+        List<AssessmentResult> out = new ArrayList<>();
+        for (AssessmentResult r : in) {
+            if (SIGNAL_BASED.contains(r.controlId()) && r.status() == AssessmentStatus.ABSENT) {
+                List<String> ev = new ArrayList<>(r.evidence());
+                ev.add(vm.caveat());
+                out.add(new AssessmentResult(r.controlId(), r.title(), r.category(), AssessmentStatus.UNKNOWN, "LOW",
+                        ev, r.detail(), r.platform()));
+            } else {
+                out.add(r);
+            }
+        }
+        out.add(new AssessmentResult("ASSESS-VM-OBFUSCATION", "Bytecode VM / interpreter obfuscation", "OBFUSCATION",
+                AssessmentStatus.PRESENT, "MEDIUM",
+                List.of(vm.vmFunctions() + " interpreter-like functions (opcode dispatch loop over a byte pointer), e.g. "
+                        + String.join(", ", vm.samples())),
+                java.util.Map.of("functions", String.valueOf(vm.vmFunctions())), platform.name()));
+        return out;
     }
 
     // ── Android ───────────────────────────────────────────────────────────────
