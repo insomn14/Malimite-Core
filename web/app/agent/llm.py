@@ -19,7 +19,7 @@ PROVIDERS = ("claude", "openai", "deepseek", "ollama")
 _DEFAULT_MODEL = {"claude": "claude-sonnet-4-6", "openai": "gpt-4o-mini",
                   "deepseek": "deepseek-v4-flash", "ollama": "llama3.1"}
 _KEY_ENV = {"claude": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
-MAX_TOKENS = 4096
+TRUNCATED = frozenset({"length", "max_tokens"})  # stop reasons meaning "cut off by the output limit" (openai-compat / anthropic)
 
 
 class LlmError(Exception):
@@ -177,7 +177,7 @@ async def chat_step(cfg: LlmCfg, system: str, messages: list[dict], tools: list[
     if cfg.provider == "claude":
         url = f"{cfg.base_url}/v1/messages"
         headers = {"x-api-key": cfg.api_key, "anthropic-version": "2023-06-01"}
-        body = {"model": cfg.model, "max_tokens": MAX_TOKENS, "stream": True, "system": system,
+        body = {"model": cfg.model, "max_tokens": settings.chat_max_output_tokens, "stream": True, "system": system,
                 "messages": messages, "tools": _tools_anthropic(tools)}
         if not allow_tools:
             body["tool_choice"] = {"type": "none"}
@@ -185,7 +185,7 @@ async def chat_step(cfg: LlmCfg, system: str, messages: list[dict], tools: list[
     else:
         url = f"{cfg.base_url}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {cfg.api_key}"} if cfg.api_key else {}
-        body = {"model": cfg.model, "stream": True, "max_tokens": MAX_TOKENS,
+        body = {"model": cfg.model, "stream": True, "max_tokens": settings.chat_max_output_tokens,
                 "messages": to_openai(system, messages), "tools": _tools_openai(tools)}
         if not allow_tools:
             body["tool_choice"] = "none"

@@ -141,6 +141,79 @@ class LoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([m["role"] for m in hist], ["user", "assistant", "user"])
         self.assertTrue(hist[2]["content"][0]["is_error"])
 
+    async def test_answer_cut_by_the_output_limit_continues_seamlessly_and_is_saved_once(self):
+        evs = await self._run(scripted(
+            [{"type": "text", "text": "Temuan pertama: ** `gra"}, {"type": "stop", "reason": "length"}],
+            [{"type": "text", "text": "nt` URI permission."}, {"type": "stop", "reason": "stop"}]), None, text="elaborate")
+        text = "".join(e["text"] for e in evs if e["type"] == "token")
+        self.assertEqual(text, "Temuan pertama: ** `grant` URI permission.")
+        self.assertEqual([e["type"] for e in evs if e["type"] in ("continue", "done", "error")], ["continue", "done"])
+        # the 2nd model call saw its own cut-off text plus a nudge, none of it persisted
+        sent = calls[1]["messages"]
+        self.assertEqual(sent[-2], {"role": "assistant", "content": [{"type": "text", "text": "Temuan pertama: ** `gra"}]})
+        self.assertIn("cut off", sent[-1]["content"][0]["text"])
+        self.assertNotIn("cut off", str(calls[0]["messages"]))
+        hist = await store.history(self.db, self.sid)
+        self.assertEqual([m["role"] for m in hist], ["user", "assistant"])   # no synthetic user turn, one assistant message
+        self.assertEqual(hist[-1]["content"][0]["text"], "Temuan pertama: ** `grant` URI permission.")
+
+    async def test_continuation_has_its_own_budget_and_ends_with_a_note(self):
+        cut = [{"type": "text", "text": "x"}, {"type": "stop", "reason": "max_tokens"}]
+        with patch.object(loop.settings, "chat_max_continuations", 2):
+            evs = await self._run(scripted(cut, cut, cut), None)
+        self.assertEqual(len(calls), 3)                                    # 1 call + 2 continuations, then give up
+        self.assertEqual(evs[-1], {"type": "done"})
+        self.assertIn("lanjutkan", "".join(e.get("text", "") for e in evs))  # tells the user how to go on
+        hist = await store.history(self.db, self.sid)
+        self.assertTrue(hist[-1]["content"][0]["text"].startswith("xxx"))
+
+    async def test_empty_continuation_does_not_loop(self):
+        with patch.object(loop.settings, "chat_max_continuations", 5):
+            evs = await self._run(scripted(
+                [{"type": "text", "text": "abc"}, {"type": "stop", "reason": "length"}],
+                [{"type": "stop", "reason": "length"}]), None)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(evs[-1], {"type": "done"})
+
+    async def test_continuations_do_not_consume_tool_rounds(self):
+        async def run(ctx, name, args):
+            return True, "x"
+        cut = [{"type": "text", "text": "a"}, {"type": "stop", "reason": "length"}]
+        with patch.object(loop.settings, "chat_max_turns", 2):
+            evs = await self._run(scripted(cut, cut, [TOOL], [{"type": "text", "text": "final"}]), run)
+        # 2 truncated segments + tool round + final answer: all fit in 2 turns
+        self.assertFalse(any(e["type"] == "error" for e in evs))
+        self.assertEqual(evs[-1], {"type": "done"})
+        self.assertEqual(calls[3]["allow_tools"] if "allow_tools" in calls[3] else True, False)  # 2nd turn is the forced last
+        hist = await store.history(self.db, self.sid)
+        self.assertEqual([m["role"] for m in hist], ["user", "assistant", "user", "assistant"])
+        self.assertEqual(hist[1]["content"][0]["text"], "aa")     # carried text joined the tool-calling message
+
+    async def test_cancel_during_continuation_saves_what_was_written(self):
+        started = asyncio.Event()
+
+        async def step(cfg, system, messages, tools, **kw):
+            calls.append({"messages": messages})
+            if len(calls) == 1:
+                yield {"type": "text", "text": "part1 "}
+                yield {"type": "stop", "reason": "length"}
+            else:
+                yield {"type": "text", "text": "part2"}
+                started.set()
+                await asyncio.sleep(30)
+
+        async def consume():
+            async for _ in loop.run_chat(self.ctx, self.db, self.sid, "q", CFG, step=step):
+                pass
+        calls.clear()
+        t = asyncio.create_task(consume())
+        await started.wait()
+        t.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await t
+        hist = await store.history(self.db, self.sid)
+        self.assertEqual(hist[-1]["content"][0]["text"], "part1 part2")
+
     def test_clip_elides_oldest_results_first(self):
         msgs = [{"role": "user", "content": [{"type": "tool_result", "tool_use_id": str(i), "content": "x" * 1000}]}
                 for i in range(3)]

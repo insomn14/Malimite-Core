@@ -90,6 +90,17 @@ class RequestBodyTests(unittest.IsolatedAsyncioTestCase):
                 pass
         return seen
 
+    async def test_output_limit_is_configurable_and_stop_reasons_reach_the_loop(self):
+        from unittest.mock import patch
+        with patch.object(llm.settings, "chat_max_output_tokens", 1234):
+            self.assertEqual((await self._body("deepseek"))["max_tokens"], 1234)
+            self.assertEqual((await self._body("claude"))["max_tokens"], 1234)
+        self.assertEqual(llm.TRUNCATED, {"length", "max_tokens"})
+        evs = [e async for e in llm.parse_openai(_feed({"choices": [{"delta": {"content": "hi"}, "finish_reason": "length"}]}, "[DONE]"))]
+        self.assertEqual(evs[-1], {"type": "stop", "reason": "length"})
+        evs = [e async for e in llm.parse_anthropic(_feed({"type": "message_delta", "delta": {"stop_reason": "max_tokens"}}))]
+        self.assertEqual(evs[-1], {"type": "stop", "reason": "max_tokens"})
+
     async def test_tool_choice_none_only_when_tools_are_disallowed(self):
         self.assertNotIn("tool_choice", await self._body("openai"))
         self.assertNotIn("tool_choice", await self._body("claude"))
