@@ -24,9 +24,19 @@ public class MalimiteAnalyzer {
 
     public AnalysisResult analyze(AnalyzeOptions opts) throws Exception {
         PackagePlatform platform = PackagePlatform.detect(opts.packagePath());
+        XapkBundle.Merged bundle = null;
+        if (platform == PackagePlatform.ANDROID && XapkBundle.isBundle(opts.packagePath())) {
+            // A split-APK bundle: analyse one merged APK. It lives in the output directory so that everything that
+            // later needs the package (on-demand decompilation) finds a real APK, recorded as packagePath.
+            Files.createDirectories(opts.outputDir());
+            String file = opts.packagePath().getFileName().toString();
+            String stem = file.contains(".") ? file.substring(0, file.lastIndexOf('.')) : file;
+            bundle = XapkBundle.merge(opts.packagePath(), opts.outputDir().resolve(stem + ".merged.apk"));
+            opts = opts.withPackagePath(bundle.apk());
+        }
         return switch (platform) {
             case IOS -> analyzeIos(opts);
-            case ANDROID -> analyzeAndroid(opts);
+            case ANDROID -> analyzeAndroid(opts, bundle);
         };
     }
 
@@ -102,7 +112,7 @@ public class MalimiteAnalyzer {
         return new AnalysisResult(scanId, opts.outputDir(), dt, dbPath);
     }
 
-    private AnalysisResult analyzeAndroid(AnalyzeOptions opts) throws Exception {
+    private AnalysisResult analyzeAndroid(AnalyzeOptions opts, XapkBundle.Merged bundle) throws Exception {
         long t0 = System.currentTimeMillis();
         String scanId = UUID.randomUUID().toString();
         log.info("scan={} platform=ANDROID package={} out={}", scanId, opts.packagePath(), opts.outputDir());
@@ -217,7 +227,7 @@ public class MalimiteAnalyzer {
         }
 
         saveScanJsonAndroid(opts.outputDir().resolve("scan.json"), scanId, manifest, opts, dbPath,
-                extraction, abis, nativeDecompiled, nativeSkippedReason, nativeSkippedScope);
+                extraction, abis, nativeDecompiled, nativeSkippedReason, nativeSkippedScope, bundle);
 
         long dt = System.currentTimeMillis() - t0;
         log.info("scan={} done in {}ms  db={}", scanId, dt, dbPath);
@@ -344,7 +354,8 @@ public class MalimiteAnalyzer {
                                      List<String> abis,
                                      List<String> nativeDecompiled,
                                      String nativeSkippedReason,
-                                     List<String> nativeSkippedScope) {
+                                     List<String> nativeSkippedScope,
+                                     XapkBundle.Merged bundle) {
         try {
             var meta = new java.util.LinkedHashMap<String, Object>();
             meta.put("scanId", scanId);
@@ -374,6 +385,11 @@ public class MalimiteAnalyzer {
             meta.put("dbPath", dbPath.toString());
             meta.put("ipaPath", opts.packagePath().toString());
             meta.put("packagePath", opts.packagePath().toString());
+            if (bundle != null) {   // packagePath is the merged APK; keep where it came from
+                meta.put("sourcePackage", bundle.source().toString());
+                meta.put("bundleBaseApk", bundle.base());
+                meta.put("bundleSplits", bundle.splits());
+            }
             putScopeMeta(meta, opts);
             writeJson(target, meta);
         } catch (Exception e) {

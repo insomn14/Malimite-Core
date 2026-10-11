@@ -36,7 +36,7 @@ public class Main implements Callable<Integer> {
         }
     }
 
-    @Parameters(index = "0", description = "IPA or APK file to analyze")
+    @Parameters(index = "0", description = "IPA, APK or XAPK (split-APK bundle) file to analyze")
     private Path ipa;
 
     @Option(names = {"-g", "--ghidra"}, description = "Ghidra install dir (required for .ipa)",

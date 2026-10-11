@@ -17,7 +17,7 @@ public enum PackagePlatform {
      */
     public static PackagePlatform detect(Path packagePath) throws IOException {
         String name = packagePath.getFileName().toString().toLowerCase(Locale.ROOT);
-        if (name.endsWith(".apk")) return ANDROID;
+        if (name.endsWith(".apk") || name.endsWith(".xapk")) return ANDROID;
         if (name.endsWith(".ipa")) return IOS;
 
         if (!Files.exists(packagePath) || Files.size(packagePath) < 4) {
@@ -42,7 +42,8 @@ public enum PackagePlatform {
             if (hasManifest && hasDex) return ANDROID;
             if (hasPayloadApp) return IOS;
         }
-        throw new IOException("Cannot detect package platform (expected .ipa or .apk): " + packagePath);
+        if (XapkBundle.isBundle(packagePath)) return ANDROID;      // split-APK bundle under another extension
+        throw new IOException("Cannot detect package platform (expected .ipa, .apk or .xapk): " + packagePath);
     }
 
     public boolean matchesRule(VulnerabilityRule.Platform rulePlatform) {
