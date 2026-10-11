@@ -182,11 +182,18 @@ public final class LearnedRulesStore {
                         r.id, abbreviate(r.regex, 60));
                 continue;
             }
+            String lowQuality = RuleQuality.rejection(r.regex);
+            if (lowQuality != null) {   // also protects rules stored before these gates existed
+                log.info("Stored rule {} skipped ({}): {}", r.id, lowQuality, abbreviate(r.regex, 60));
+                continue;
+            }
             try {
                 Pattern p = Pattern.compile(r.regex);
                 VulnerabilityRule.Platform plat = parsePlatform(r.platform);
+                // An LLM wrote this rule after reading one function: report it as a lead, not as a CRITICAL fact.
+                String severity = RuleQuality.capSeverity(r.severity, RuleQuality.learnedMaxSeverity());
                 out.add(new VulnerabilityRule(
-                        r.id, r.title, r.category, r.severity, r.cvssScore,
+                        r.id, r.title, r.category, severity, RuleQuality.capCvss(r.cvssScore, severity),
                         r.cwe, r.description, r.remediation, r.referenceUrl,
                         VulnerabilityRule.Target.valueOf(r.target),
                         p, r.pocTemplate, plat));
@@ -265,6 +272,11 @@ public final class LearnedRulesStore {
         try { Pattern.compile(regex); }
         catch (PatternSyntaxException ex) {
             log.warn("Rejected rule with invalid regex (scope={}): {}", scope, ex.getMessage());
+            return null;
+        }
+        String lowQuality = RuleQuality.rejection(regex);
+        if (lowQuality != null) {
+            log.info("Rejected low-quality rule (scope={}): {} — {}", scope, lowQuality, abbreviate(regex, 80));
             return null;
         }
         String normalized = normalizeRegex(regex);
