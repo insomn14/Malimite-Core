@@ -297,7 +297,8 @@ async def create_scan(
     d = _scan_dir(scan_id)
     d.mkdir(parents=True)
 
-    ext = ".apk" if filename.lower().endswith(".apk") else ".ipa"
+    lower = filename.lower()
+    ext = ".xapk" if lower.endswith(".xapk") else ".apk" if lower.endswith(".apk") else ".ipa"
     ipa_path = d / f"upload{ext}"
     ipa_path.write_bytes(ipa_bytes)
 
