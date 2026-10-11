@@ -702,7 +702,7 @@ async def chat(request: Request, scan_id: str, req: ChatRequest):
         raise HTTPException(status_code=409, detail="This chat session is already generating")
 
     ctx = Ctx(scan_id=scan_id, db_path=db_path, exe=exe, platform=detail.platform or "",
-              scan_dir=scan_dir, meta={})
+              scan_dir=scan_dir, meta=scanner._read_scan_json(scan_id) or {})
 
     async def gen():
         # claimed here, not in the route: if the client vanishes before the first iteration the flag is never set

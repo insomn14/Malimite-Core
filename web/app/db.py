@@ -694,3 +694,54 @@ def group_issues(rows: list[dict]) -> list[dict]:
         })
     out.sort(key=lambda g: (g["status"] in _SUPPRESSED, _SEV_ORDER.get(g["severity"], 5), -(g["cvss"] or 0)))
     return out
+
+
+# ── read-only helpers: assessments and manifest/config for the assistant ─────
+
+async def _has_table(db, name: str) -> bool:
+    async with db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)) as cur:
+        return await cur.fetchone() is not None
+
+
+async def get_assessments_brief(db_path: str, executable: str) -> Optional[list[dict]]:
+    """Controls inventory, or None when the scan never ran the Assessment (table absent: older DBs, --no-assessment)."""
+    async with _ro(db_path) as db:
+        if not await _has_table(db, "Assessments"):
+            return None
+        async with db.execute(
+            """SELECT ControlId, Title, Category, Status, Confidence, Evidence, Detail
+               FROM Assessments WHERE ExecutableName=? ORDER BY Category, ControlId""", (executable,)) as cur:
+            rows = await cur.fetchall()
+    keys = ("control_id", "title", "category", "status", "confidence", "evidence", "detail")
+    return [dict(zip(keys, r)) for r in rows]
+
+
+async def resource_type_counts(db_path: str) -> dict:
+    async with _ro(db_path) as db:
+        async with db.execute("SELECT type, COUNT(*) FROM ResourceStrings GROUP BY type") as cur:
+            return {r[0]: r[1] for r in await cur.fetchall()}
+
+
+async def get_resources_by_type(db_path: str, types: list[str], query: str, limit: int, offset: int) -> tuple[int, list[dict]]:
+    """(total matching, one page) of ResourceStrings rows of the given types, optional substring filter."""
+    limit = max(1, min(limit, 100))
+    marks = ",".join("?" * len(types))
+    where = f"type IN ({marks})" + (" AND value LIKE ? ESCAPE '\\'" if query else "")
+    args = [*types, *([_like(query)] if query else [])]
+    async with _ro(db_path) as db:
+        async with db.execute(f"SELECT COUNT(*) FROM ResourceStrings WHERE {where}", args) as cur:
+            total = (await cur.fetchone())[0]
+        async with db.execute(
+            f"SELECT resourceId, value, type FROM ResourceStrings WHERE {where} ORDER BY id LIMIT ? OFFSET ?",
+            [*args, limit, max(offset, 0)]) as cur:
+            rows = await cur.fetchall()
+    return total, [{"id": r[0], "value": r[1], "type": r[2]} for r in rows]
+
+
+async def get_entry_points_ro(db_path: str, executable: str) -> list[dict]:
+    async with _ro(db_path) as db:
+        async with db.execute(
+            "SELECT ClassName, FunctionName FROM EntryPoints WHERE ExecutableName=? ORDER BY ClassName, FunctionName",
+            (executable,)) as cur:
+            rows = await cur.fetchall()
+    return [{"class": r[0], "function": r[1]} for r in rows]
