@@ -51,3 +51,14 @@ class CliCmdTests(unittest.TestCase):
         self.assertEqual(cmd[1], "-jar")
         self.assertEqual(cmd[2], "/opt/malimite-cli.jar")
         self.assertEqual(cmd[cmd.index("--ghidra") + 1], "/opt/ghidra")
+
+
+class LlmEnvTests(unittest.TestCase):
+    def test_provider_env_mapping(self):
+        with patch.object(scanner.settings, "openai_api_key", "O"), \
+             patch.object(scanner.settings, "deepseek_api_key", "D"), \
+             patch.object(scanner.settings, "deepseek_base_url", "http://d"):
+            self.assertEqual(scanner.llm_env("openai"), {"OPENAI_API_KEY": "O"})
+            self.assertEqual(scanner.llm_env("openai", "per-req"), {"OPENAI_API_KEY": "per-req"})
+            self.assertEqual(scanner.llm_env("deepseek"), {"DEEPSEEK_API_KEY": "D", "DEEPSEEK_BASE_URL": "http://d"})
+            self.assertEqual(scanner.llm_env("none"), {})

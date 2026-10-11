@@ -1,4 +1,6 @@
 """Async SQLite queries against the analysis.sqlite produced by the CLI."""
+import json
+
 import aiosqlite
 from pathlib import Path
 from typing import Optional
@@ -536,3 +538,159 @@ async def get_llm_findings_page(
         size=size,
         pages=pages,
     )
+
+
+# ── read-only helpers for the AI assistant ────────────────────────────────────
+
+def _ro(db_path: str):
+    """Open the scan DB read-only: the assistant must never alter scan data."""
+    return aiosqlite.connect(f"{Path(db_path).resolve().as_uri()}?mode=ro", uri=True)
+
+
+def _like(q: str) -> str:
+    q = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{q}%"
+
+
+async def list_classes(db_path: str, executable: str, query: str, limit: int, offset: int) -> list[dict]:
+    limit = max(1, min(limit, 200))
+    async with _ro(db_path) as db:
+        async with db.execute(
+            """SELECT ClassName, Functions FROM Classes
+               WHERE ExecutableName=? AND ClassName LIKE ? ESCAPE '\\'
+               ORDER BY ClassName LIMIT ? OFFSET ?""",
+            (executable, _like(query), limit, max(offset, 0)),
+        ) as cur:
+            rows = await cur.fetchall()
+    out = []
+    for name, fns in rows:
+        try:
+            n = len(json.loads(fns or "[]"))
+        except ValueError:
+            n = 0
+        out.append({"class": name, "methods": n})
+    return out
+
+
+async def get_source(db_path: str, executable: str, class_name: str, function_name: Optional[str]) -> list[dict]:
+    """Stored decompilation. No function_name -> whole-class body ('<class>') if present."""
+    fn = function_name or "<class>"
+    async with _ro(db_path) as db:
+        async with db.execute(
+            """SELECT FunctionName, ParentClass, DecompilationCode, Origin FROM Functions
+               WHERE ExecutableName=? AND ParentClass=? AND FunctionName=?""",
+            (executable, class_name, fn),
+        ) as cur:
+            rows = await cur.fetchall()
+        if not rows and function_name is None:
+            # Ghidra/iOS rows have no '<class>' body: fall back to the class's functions.
+            async with db.execute(
+                """SELECT FunctionName, ParentClass, DecompilationCode, Origin FROM Functions
+                   WHERE ExecutableName=? AND ParentClass=? ORDER BY FunctionName LIMIT 50""",
+                (executable, class_name),
+            ) as cur:
+                rows = await cur.fetchall()
+    return [{"function": r[0], "class": r[1], "code": r[2] or "", "origin": r[3]} for r in rows]
+
+
+async def search_code(db_path: str, executable: str, query: str, limit: int) -> list[dict]:
+    limit = max(1, min(limit, 50))
+    async with _ro(db_path) as db:
+        async with db.execute(
+            """SELECT FunctionName, ParentClass, DecompilationCode, Origin FROM Functions
+               WHERE ExecutableName=? AND DecompilationCode LIKE ? ESCAPE '\\'
+               ORDER BY ParentClass, FunctionName LIMIT ?""",
+            (executable, _like(query), limit),
+        ) as cur:
+            rows = await cur.fetchall()
+    out = []
+    needle = query.lower()
+    for fn, cls, code, origin in rows:
+        i = (code or "").lower().find(needle)
+        snippet = (code or "")[max(0, i - 80): i + len(query) + 80] if i >= 0 else ""
+        out.append({"class": cls, "function": fn, "origin": origin, "snippet": snippet})
+    return out
+
+
+async def search_strings(db_path: str, executable: str, query: str, limit: int) -> list[dict]:
+    limit = max(1, min(limit, 100))
+    async with _ro(db_path) as db:
+        async with db.execute(
+            """SELECT address, value, segment, label FROM MachoStrings
+               WHERE ExecutableName=? AND value LIKE ? ESCAPE '\\' ORDER BY rowid LIMIT ?""",
+            (executable, _like(query), limit),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [{"address": r[0], "value": r[1], "segment": r[2], "label": r[3]} for r in rows]
+
+
+async def get_references(db_path: str, executable: str, function: str, direction: str) -> list[dict]:
+    """Call-graph edges; table is only populated by Ghidra ingest (empty on JADX/ASC)."""
+    col, other = ("targetFunction", "source") if direction == "callers" else ("sourceFunction", "target")
+    async with _ro(db_path) as db:
+        async with db.execute(
+            f"""SELECT {other}Class, {other}Function, lineNumber FROM FunctionReferences
+                WHERE ExecutableName=? AND {col}=? LIMIT 100""",
+            (executable, function),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [{"class": r[0], "function": r[1], "line": r[2]} for r in rows]
+
+
+async def has_references(db_path: str) -> bool:
+    async with _ro(db_path) as db:
+        async with db.execute("SELECT 1 FROM FunctionReferences LIMIT 1") as cur:
+            return await cur.fetchone() is not None
+
+
+async def origin_counts(db_path: str, executable: str) -> dict:
+    async with _ro(db_path) as db:
+        async with db.execute(
+            "SELECT COALESCE(Origin,'GHIDRA'), COUNT(*) FROM Functions WHERE ExecutableName=? GROUP BY 1",
+            (executable,),
+        ) as cur:
+            return {r[0]: r[1] for r in await cur.fetchall()}
+
+
+_SEV_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+_SUPPRESSED = ("false_positive", "fixed")
+
+
+async def get_vulnerabilities_brief(db_path: str, executable: str) -> list[dict]:
+    """Raw finding rows for the assistant. Strictly read-only: never runs the triage-column migration."""
+    async with _ro(db_path) as db:
+        async with db.execute("PRAGMA table_info(Vulnerabilities)") as cur:
+            cols = {r[1] for r in await cur.fetchall()}
+        sel = lambda c, default: c if c in cols else default  # noqa: E731
+        async with db.execute(
+            f"""SELECT RuleId, Title, Category, Severity, CvssScore, Cwe, AffectedName, Evidence, EvidenceLocation,
+                       COALESCE({sel('Status', 'NULL')}, 'open'), {sel('OverrideSeverity', 'NULL')},
+                       {sel('OverrideCvssScore', 'NULL')}
+                FROM Vulnerabilities WHERE ExecutableName=?""", (executable,)) as cur:
+            rows = await cur.fetchall()
+    keys = ("rule_id", "title", "category", "severity", "cvss", "cwe", "affected_name", "evidence",
+            "evidence_location", "status", "override_severity", "override_cvss")
+    return [dict(zip(keys, r)) for r in rows]
+
+
+def group_issues(rows: list[dict]) -> list[dict]:
+    """Same grouping as the Vulnerabilities tab: one issue per RuleId, effective (override) severity/CVSS,
+    `hits` = number of occurrences. Active issues first, then by severity."""
+    groups: dict[str, list[dict]] = {}
+    for i, r in enumerate(rows):
+        groups.setdefault(r["rule_id"] or f"__row_{i}", []).append(r)
+    out = []
+    for key, rs in groups.items():
+        def sev(r):
+            return (r["override_severity"] or r["severity"] or "INFO").upper()
+        active = [r for r in rs if (r["status"] or "open").lower() not in _SUPPRESSED] or rs
+        rep = min(active, key=lambda r: _SEV_ORDER.get(sev(r), 5))
+        cvss = rep["override_cvss"] if rep["override_cvss"] is not None else rep["cvss"]
+        out.append({
+            "rule_id": None if key.startswith("__row_") else key, "title": rep["title"],
+            "severity": sev(rep), "cvss": cvss, "cwe": rep["cwe"], "category": rep["category"],
+            "status": (rep["status"] or "open").lower(), "hits": len(rs),
+            "evidence": [{"where": r["affected_name"], "evidence": (r["evidence"] or "")[:200]} for r in rs[:5]],
+        })
+    out.sort(key=lambda g: (g["status"] in _SUPPRESSED, _SEV_ORDER.get(g["severity"], 5), -(g["cvss"] or 0)))
+    return out

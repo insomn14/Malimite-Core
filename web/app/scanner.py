@@ -328,20 +328,9 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
     return cmd
 
 
-# ── background runner ─────────────────────────────────────────────────────────
-
-async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
-    meta["state"] = "running"
-    meta["started_at"] = _now()
-    _write_meta(scan_id, meta)
-
-    cmd = _cli_cmd(ipa_path, out_dir, meta)
-
-    env = dict(os.environ)
-    # Per-request key takes priority over the .env/settings key
-    per_req_key = meta.get("_llm_api_key", "")
-    provider = meta.get("llm_provider", "none")
-
+def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
+    """Env vars the CLI (and the chat agent) need for the given LLM provider."""
+    env: dict[str, str] = {}
     if provider == "openai":
         key = per_req_key or settings.openai_api_key
         if key:
@@ -358,6 +347,21 @@ async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
             env["DEEPSEEK_BASE_URL"] = settings.deepseek_base_url
     elif provider == "ollama":
         env["OLLAMA_BASE_URL"] = settings.ollama_base_url or "http://localhost:11434"
+    return env
+
+
+# ── background runner ─────────────────────────────────────────────────────────
+
+async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
+    meta["state"] = "running"
+    meta["started_at"] = _now()
+    _write_meta(scan_id, meta)
+
+    cmd = _cli_cmd(ipa_path, out_dir, meta)
+
+    env = dict(os.environ)
+    # Per-request key takes priority over the .env/settings key
+    env.update(llm_env(meta.get("llm_provider", "none"), meta.get("_llm_api_key", "")))
 
     log_path = out_dir / "analysis.log"
     try:

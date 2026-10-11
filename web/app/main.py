@@ -12,6 +12,9 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import db, scanner
+from .agent import loop as agent_loop, store as chat_store
+from .agent.llm import LlmError, resolve_llm
+from .agent.tools import Ctx
 from .config import settings
 from .models import ScanDetail, ScanMeta
 
@@ -622,3 +625,90 @@ async def get_log(request: Request, scan_id: str, tail: int = 200):
         return JSONResponse({"lines": []})
     lines = p.read_text(errors="replace").splitlines()
     return JSONResponse({"lines": lines[-tail:]})
+
+
+# ── AI assistant (chat agent) ─────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    session_id: Optional[str] = None
+    message: str = Field(min_length=1, max_length=4000)
+    provider: Optional[str] = None   # override; must be in agent.llm.PROVIDERS
+    model: Optional[str] = None
+
+
+_ACTIVE_CHATS: set[str] = set()  # one live stream per session
+
+
+def _sse(ev: dict) -> str:
+    return f"data: {json.dumps(ev)}\n\n"
+
+
+@app.post("/api/v1/scans/{scan_id}/chat")
+async def chat(request: Request, scan_id: str, req: ChatRequest):
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    detail = scanner.get_scan_detail(scan_id)
+    scan_dir = scanner._scan_dir(scan_id)
+    chat_db = chat_store.path_for(scan_dir)
+
+    sess = None
+    if req.session_id:
+        sess = await chat_store.get_session(chat_db, req.session_id)
+        if not sess:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+    try:
+        cfg = resolve_llm(sess["provider"] if sess else detail.llm_provider,
+                          sess["model"] if sess else detail.llm_model,
+                          req.provider, req.model)
+    except LlmError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if sess:
+        sid = sess["id"]
+        if (cfg.provider, cfg.model) != (sess["provider"], sess["model"]):
+            await chat_store.set_llm(chat_db, sid, cfg.provider, cfg.model)
+    else:
+        sid = await chat_store.create_session(chat_db, cfg.provider, cfg.model)
+    if sid in _ACTIVE_CHATS:
+        raise HTTPException(status_code=409, detail="This chat session is already generating")
+
+    ctx = Ctx(scan_id=scan_id, db_path=db_path, exe=exe, platform=detail.platform or "",
+              scan_dir=scan_dir, meta={})
+
+    async def gen():
+        # claimed here, not in the route: if the client vanishes before the first iteration the flag is never set
+        if sid in _ACTIVE_CHATS:
+            yield _sse({"type": "error", "message": "This chat session is already generating"})
+            return
+        _ACTIVE_CHATS.add(sid)
+        try:
+            yield _sse({"type": "session", "session_id": sid, "provider": cfg.provider, "model": cfg.model})
+            async for ev in agent_loop.run_chat(ctx, chat_db, sid, req.message, cfg):
+                yield _sse(ev)
+        except Exception:
+            import logging
+            logging.getLogger("malimite").exception("chat failed for scan %s", scan_id)
+            yield _sse({"type": "error", "message": "internal error"})
+        finally:
+            _ACTIVE_CHATS.discard(sid)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/v1/scans/{scan_id}/chat")
+async def get_chat(request: Request, scan_id: str, session_id: Optional[str] = None):
+    _check_auth(request)
+    _require_db(scan_id)
+    chat_db = chat_store.path_for(scanner._scan_dir(scan_id))
+    sessions = await chat_store.list_sessions(chat_db)
+    sid = session_id or (sessions[0]["id"] if sessions else None)
+    return {"sessions": sessions, "session_id": sid,
+            "messages": await chat_store.history(chat_db, sid) if sid else []}
+
+
+@app.delete("/api/v1/scans/{scan_id}/chat/{session_id}", status_code=204)
+async def delete_chat(request: Request, scan_id: str, session_id: str):
+    _check_auth(request)
+    _require_db(scan_id)
+    if not await chat_store.delete_session(chat_store.path_for(scanner._scan_dir(scan_id)), session_id):
+        raise HTTPException(status_code=404, detail="Chat session not found")
