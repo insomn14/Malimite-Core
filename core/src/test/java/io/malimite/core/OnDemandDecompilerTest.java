@@ -70,10 +70,12 @@ class OnDemandDecompilerTest {
     @Test
     void ghidraCommandsKeepProjectAndReopenReadOnly() {
         CoreConfig cfg = new CoreConfig(Path.of("/opt/ghidra"));
-        var imp = GhidraOnDemand.importCmd(cfg, Path.of("/p"), "proj", Path.of("/bin/App"), true);
+        var imp = GhidraOnDemand.importCmd(cfg, Path.of("/p"), "proj", Path.of("/bin/App"));
         assertFalse(imp.contains("-deleteProject"), "persistent project must not be deleted");
-        assertTrue(imp.containsAll(java.util.List.of("-import", "/bin/App", "Objective-C")));
-        assertFalse(GhidraOnDemand.importCmd(cfg, Path.of("/p"), "proj", Path.of("/bin/a.so"), false).contains("Objective-C"));
+        assertEquals(java.util.List.of("/opt/ghidra/support/analyzeHeadless", "/p", "proj", "-import", "/bin/App"), imp);
+        // headless has no such options: 12.x would treat them as import paths, 11.x rejects them
+        for (String flag : new String[] {"-enableAnalyzer", "-disableAnalyzer", "-skipAnalysisPrompt"})
+            assertFalse(imp.contains(flag), flag);
         var proc = GhidraOnDemand.processCmd(cfg, Path.of("/p"), "proj", "App", Path.of("/s"), Path.of("/s/out.txt"), "main");
         assertTrue(proc.containsAll(java.util.List.of("-process", "App", "-noanalysis", "-readOnly", "DecompileOne.java", "main")));
         assertFalse(proc.contains("-import"));
@@ -103,5 +105,22 @@ class OnDemandDecompilerTest {
                 GhidraOnDemand.projectKey("a b.so"), GhidraOnDemand.projectKey("a+b.so"), GhidraOnDemand.projectKey("a_b.so")));
         assertEquals(3, keys.size());
         assertEquals(GhidraOnDemand.projectKey("libx.so"), GhidraOnDemand.projectKey("libx.so"));
+    }
+
+    @Test
+    void failureSummaryKeepsTheRealCauseNotStackFrames() {
+        var lines = java.util.List.of(
+                "2026-10-11 main ERROR Could not determine local host name java.net.UnknownHostException: x",
+                "\tat java.base/java.net.InetAddress.getLocalHost(InetAddress.java:1936)",
+                "INFO  IMPORTING: file:///w/lib.so (HeadlessAnalyzer)",
+                "ERROR Abort due to Headless analyzer error: libharfbuzz.so.0: cannot open shared object file (HeadlessAnalyzer)",
+                "\tat ghidra.Ghidra.main(Ghidra.java:54)",
+                "java.net.UnknownHostException: 8db509bd1fcf: Temporary failure in name resolution",
+                "Caused by: java.lang.Foo", "\t... 20 more");
+        String s = GhidraOnDemand.summarizeFailure(lines);
+        assertTrue(s.contains("libharfbuzz.so.0"), s);
+        assertFalse(s.contains("UnknownHost"), s);
+        assertFalse(s.contains("Ghidra.java:54"), s);
+        assertEquals("only line", GhidraOnDemand.summarizeFailure(java.util.List.of("\tat x", "only line")));
     }
 }

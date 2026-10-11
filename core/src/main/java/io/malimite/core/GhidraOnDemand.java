@@ -93,7 +93,6 @@ public final class GhidraOnDemand {
         Path work = Files.createTempDirectory("malimite-ghidra-src-");
         try {
             Path binary;
-            boolean objc;
             if (android) {
                 var ex = ApkExtractor.extract(pkg, work);
                 binary = ApkExtractor.preferArm64NativeLibs(ex.nativeLibs()).stream()
@@ -101,7 +100,6 @@ public final class GhidraOnDemand {
                         .orElseThrow(() -> new IllegalArgumentException("native lib '" + lib + "' not found in arm64-v8a; available: "
                                 + ApkExtractor.preferArm64NativeLibs(ex.nativeLibs()).stream()
                                         .map(p -> p.getFileName().toString()).toList()));
-                objc = false;
             } else {
                 var ex = IpaExtractor.extract(pkg, work);
                 binary = ex.executablePath();
@@ -110,11 +108,10 @@ public final class GhidraOnDemand {
                     List<String> archs = macho.getArchitectureStrings();
                     macho.processUniversalMacho(archs.stream().filter(a -> a.contains("ARM64")).findFirst().orElse(archs.get(0)));
                 }
-                objc = true;
             }
             log.info("Ghidra on-demand: importing + analyzing {} (first request for this scan; may take minutes)", binary);
             try {
-                run(importCmd(cfg, projDir, projName, binary, objc), IMPORT_TIMEOUT_MIN, "ghidra import");
+                run(importCmd(cfg, projDir, projName, binary), IMPORT_TIMEOUT_MIN, "ghidra import");
             } catch (Exception e) {
                 OnDemandDecompiler.deleteTree(projDir);  // never keep a half-built project
                 throw e;
@@ -134,13 +131,14 @@ public final class GhidraOnDemand {
         return s.isEmpty() ? null : s;
     }
 
-    static List<String> importCmd(CoreConfig cfg, Path projDir, String projName, Path binary, boolean objc) {
-        List<String> c = new ArrayList<>(List.of(cfg.analyzeHeadlessPath().toString(),
-                projDir.toString(), projName, "-import", binary.toString()));
-        if (objc) c.addAll(List.of("-enableAnalyzer", "Objective-C"));
-        c.addAll(List.of("-enableAnalyzer", "String Extraction", "-disableAnalyzer", "Decompiler Parameter ID",
-                "-disableAnalyzer", "DWARF", "-skipAnalysisPrompt"));  // same analyzers as the scan; NO -deleteProject
-        return c;
+    /**
+     * Plain import + default auto-analysis, no analyzer flags: headless has no -enableAnalyzer/-skipAnalysisPrompt
+     * (12.x reads them as extra import paths, 11.x rejects them). GhidraRunner passes them after -postScript where
+     * they are swallowed as script arguments, so the scan runs with the default analyzers too: same analysis here.
+     * No -deleteProject: this project is kept.
+     */
+    static List<String> importCmd(CoreConfig cfg, Path projDir, String projName, Path binary) {
+        return List.of(cfg.analyzeHeadlessPath().toString(), projDir.toString(), projName, "-import", binary.toString());
     }
 
     static List<String> processCmd(CoreConfig cfg, Path projDir, String projName, String program,
@@ -149,6 +147,23 @@ public final class GhidraOnDemand {
                 "-process", program, "-noanalysis", "-readOnly",
                 "-scriptPath", scriptDir.toString(),
                 "-postScript", "DecompileOne.java", outFile.toString(), query, String.valueOf(MAX_MATCHES));
+    }
+
+    /** The meaningful failure lines of a headless run: no stack frames, no log4j hostname noise. */
+    static String summarizeFailure(java.util.Collection<String> lines) {
+        List<String> key = new ArrayList<>();
+        String lastPlain = "";
+        for (String l : lines) {
+            String t = l.strip();
+            if (t.isEmpty() || t.startsWith("at ") || t.startsWith("... ") || t.startsWith("Caused by")
+                    || t.contains("Could not determine local host name")
+                    || t.contains("UnknownHostException")) continue;   // log4j noise when the sandbox has no DNS
+            lastPlain = t;
+            if (t.contains("Bad argument") || t.contains("Abort") || t.contains("ERROR") || t.contains("Exception"))
+                key.add(t.length() > 300 ? t.substring(0, 300) : t);
+        }
+        if (key.isEmpty()) return lastPlain;
+        return String.join(" | ", key.subList(Math.max(0, key.size() - 3), key.size()));
     }
 
     private static void run(List<String> cmd, long timeoutMin, String what) throws Exception {
@@ -165,7 +180,7 @@ public final class GhidraOnDemand {
             try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = r.readLine()) != null) {
-                    synchronized (tail) { tail.addLast(line); if (tail.size() > 40) tail.removeFirst(); }
+                    synchronized (tail) { tail.addLast(line); if (tail.size() > 400) tail.removeFirst(); }
                 }
             } catch (IOException ignored) { /* process ended */ }
         });
@@ -179,10 +194,7 @@ public final class GhidraOnDemand {
         reader.join(2000);
         if (p.exitValue() != 0) {
             String errs;
-            synchronized (tail) {
-                errs = String.join(" | ", tail.stream().filter(l -> l.contains("ERROR")).toList());
-                if (errs.isBlank()) errs = tail.peekLast() == null ? "" : tail.peekLast();
-            }
+            synchronized (tail) { errs = summarizeFailure(tail); }
             throw new IOException(what + " failed (exit=" + p.exitValue() + "): " + errs);
         }
     }
