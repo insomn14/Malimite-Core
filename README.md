@@ -6,7 +6,7 @@
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17+-orange.svg)](https://openjdk.org/)
-[![Ghidra](https://img.shields.io/badge/Ghidra-%E2%89%A511.1-purple.svg)](https://ghidra-sre.org/)
+[![Ghidra](https://img.shields.io/badge/Ghidra-12.0.x-purple.svg)](https://ghidra-sre.org/)
 [![JADX](https://img.shields.io/badge/JADX-%E2%89%A51.5-green.svg)](https://github.com/skylot/jadx)
 
 ---
@@ -128,7 +128,7 @@ Malimite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 |---|---|
 | **Java JDK** | 17+ |
 | **Maven** | 3.8+ |
-| **Ghidra** | ≥ 11.1 — must contain `support/analyzeHeadless` (required for `.ipa`) |
+| **Ghidra** | 12.0.x (the web Docker image ships 12.0.4) — must contain `support/analyzeHeadless` (required for `.ipa`). 11.1.2 rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`); 12.1+ is untested (see `web/app/config.py`). Headless also needs the JDK font libraries (`libharfbuzz0b`, `libfontconfig1`, `libfreetype6` on Debian) |
 | **JADX** | ≥ 1.5 — CLI `bin/jadx` (required for `.apk` DEX; set `JADX_HOME`) |
 | **Ghidra (Android native)** | Same install as iOS — used for APK `lib/arm64-v8a/*.so` when `GHIDRA_HOME` is set |
 | **Python** | 3.10+ (web service & Slack bot only) |
@@ -272,9 +272,12 @@ After a scan finishes, the web UI shows an **AI Assistant** tab: a chat with an 
 
 - **Config:** uses the scan's LLM provider/model by default (overridable per chat). The API key comes from the **server's** `web/.env` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`, or `OLLAMA_BASE_URL`), never from a per-upload key. Optional: `CHAT_MAX_TURNS`, `CHAT_TOOL_CAP`, `HEAVY_CONCURRENCY`, `GHIDRA_ONDEMAND_TIMEOUT` (default 5400).
 - **Storage:** chat history and the decompile cache live in `<scan-dir>/chat.sqlite`; the scan database is opened read-only.
-- **Ghidra on demand:** the scan deletes its Ghidra project, so the first `ghidra` request per binary re-imports and analyzes it into a persistent `<scan-dir>/ghidra-proj/` (minutes, disk about 2-5x the binary); later requests reopen it (`-process -noanalysis`).
+- **Ghidra on demand:** the scan deletes its Ghidra project, so the first `ghidra` request per binary re-imports and analyzes it into a persistent `<scan-dir>/ghidra-proj/` (minutes: measured 3.6 min for a 50 MB Mach-O, seconds for a small `.so`; disk about 1.2x the binary, 60 MB measured); later requests reopen it (`-process -noanalysis`, about 4 s).
 - **API:** `POST /api/v1/scans/{id}/chat` (SSE stream), `GET /api/v1/scans/{id}/chat`, `DELETE /api/v1/scans/{id}/chat/{session_id}`.
 - **Safety:** tools cannot run commands, write files or reach the network, and tool output is treated as untrusted data (decompiled code can contain prompt injection). Rebuild the CLI JAR after upgrading: the web service shells out to `io.malimite.core.OnDemandDecompiler` in it. Use only on software you are authorized to analyze.
+- **Access control:** the chat spends the server's LLM quota. Set `API_KEY` (UI field "API Key", header `X-Api-Key`; compared in constant time). `deploy/web-compose.yml` publishes the port on `127.0.0.1` only; set `MALIMITE_BIND=0.0.0.0` together with `API_KEY` to expose it. Chat requests are capped globally (`CHAT_RATE_PER_MIN`, default 30). The server logs a warning at startup when `API_KEY` is empty.
+- **Container:** the web image runs as an unprivileged user (uid 10001). Its entrypoint chowns an existing root-owned scan volume once, then drops privileges. Decompiler subprocesses get an allowlisted environment (no LLM or API keys).
+- **Stored keys:** a per-upload LLM key is only used while the scan runs and is no longer written to `meta.json`; older plaintext keys are removed at startup.
 
 ---
 

@@ -40,7 +40,26 @@ def _read_meta(scan_id: str) -> Optional[dict]:
 
 
 def _write_meta(scan_id: str, meta: dict) -> None:
-    _meta_path(scan_id).write_text(json.dumps(meta, indent=2))
+    # '_'-prefixed keys (e.g. the per-upload LLM key) live only in the in-memory dict handed to _run;
+    # they must never reach disk.
+    _meta_path(scan_id).write_text(json.dumps({k: v for k, v in meta.items() if not k.startswith("_")}, indent=2))
+
+
+def scrub_stored_keys() -> int:
+    """Remove plaintext per-upload LLM keys that older versions persisted in meta.json. Returns files fixed."""
+    fixed = 0
+    if not settings.scan_dir.exists():
+        return 0
+    for d in settings.scan_dir.iterdir():
+        p = d / "meta.json"
+        try:
+            meta = json.loads(p.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(meta, dict) and any(k.startswith("_") for k in meta):
+            p.write_text(json.dumps({k: v for k, v in meta.items() if not k.startswith("_")}, indent=2))
+            fixed += 1
+    return fixed
 
 
 _PATH_KEYS = ("dbPath", "ipaPath", "packagePath")
@@ -295,7 +314,7 @@ async def create_scan(
         "llm_mode": llm_mode,
         "llm_model": llm_model,
         "assessment_enabled": assessment_enabled,
-        # not exposed in ScanMeta — only used internally by _run
+        # in-memory only (stripped by _write_meta): used by _run to build the CLI environment
         "_llm_api_key": llm_api_key,
     }
     _write_meta(scan_id, meta)
