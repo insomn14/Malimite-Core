@@ -1,8 +1,13 @@
 """Malimite Python web service — wraps all Malimite-Core functionality."""
+import hmac
 import io
 import json
+import logging
 import re
+import time
 import zipfile
+from collections import deque
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -37,7 +42,19 @@ _CAT_TO_PHASE = {
     "OTHER": "SESSION",
 }
 
-app = FastAPI(title="Malimite", version="0.1.0", docs_url="/docs", redoc_url=None)
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    log = logging.getLogger("malimite")
+    n = scanner.scrub_stored_keys()
+    if n:
+        log.warning("removed plaintext per-upload LLM keys from %d meta.json file(s)", n)
+    if not settings.api_key:
+        log.warning("API_KEY is not set: anyone who can reach this port can upload scans, read results and "
+                    "spend this server's LLM quota through the AI Assistant. Set API_KEY and/or bind to 127.0.0.1.")
+    yield
+
+
+app = FastAPI(title="Malimite", version="0.1.0", docs_url="/docs", redoc_url=None, lifespan=_lifespan)
 
 _WEB = Path(__file__).parent.parent
 
@@ -48,7 +65,7 @@ def _check_auth(request: Request) -> None:
     if not settings.api_key:
         return
     key = request.headers.get("X-Api-Key", "")
-    if key != settings.api_key:
+    if not hmac.compare_digest(key.encode("utf-8"), settings.api_key.encode("utf-8")):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
@@ -637,6 +654,18 @@ class ChatRequest(BaseModel):
 
 
 _ACTIVE_CHATS: set[str] = set()  # one live stream per session
+_CHAT_HITS: deque = deque()      # monotonic timestamps of recent chat requests (global sliding window)
+
+
+def _chat_rate_limit() -> None:
+    now = time.monotonic()
+    while _CHAT_HITS and now - _CHAT_HITS[0] > 60:
+        _CHAT_HITS.popleft()
+    if len(_CHAT_HITS) >= settings.chat_rate_per_min:
+        wait = max(1, int(60 - (now - _CHAT_HITS[0])) + 1)
+        raise HTTPException(status_code=429, detail="Too many chat requests; try again shortly",
+                            headers={"Retry-After": str(wait)})
+    _CHAT_HITS.append(now)
 
 
 def _sse(ev: dict) -> str:
@@ -647,6 +676,7 @@ def _sse(ev: dict) -> str:
 async def chat(request: Request, scan_id: str, req: ChatRequest):
     _check_auth(request)
     db_path, exe = _require_db(scan_id)
+    _chat_rate_limit()
     detail = scanner.get_scan_detail(scan_id)
     scan_dir = scanner._scan_dir(scan_id)
     chat_db = chat_store.path_for(scan_dir)

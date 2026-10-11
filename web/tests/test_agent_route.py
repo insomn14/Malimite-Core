@@ -34,6 +34,7 @@ class ChatRouteTests(unittest.TestCase):
         ]
         for p in self.patches:
             p.start()
+        main._CHAT_HITS.clear()
         self.client = TestClient(main.app)
 
     def tearDown(self):
@@ -64,6 +65,25 @@ class ChatRouteTests(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
         r = self.client.post("/api/v1/scans/s1/chat", json={"message": "x", "session_id": "nope"})
         self.assertEqual(r.status_code, 404)
+
+    def test_chat_is_rate_limited_globally_with_retry_after(self):
+        with patch.object(main.settings, "chat_rate_per_min", 2):
+            codes = [self.client.post("/api/v1/scans/s1/chat", json={"message": "hi"}) for _ in range(3)]
+        self.assertEqual([r.status_code for r in codes], [200, 200, 429])
+        self.assertGreaterEqual(int(codes[2].headers["retry-after"]), 1)
+
+    def test_rate_limit_window_expires(self):
+        with patch.object(main.settings, "chat_rate_per_min", 1):
+            self.assertEqual(self.client.post("/api/v1/scans/s1/chat", json={"message": "a"}).status_code, 200)
+            main._CHAT_HITS[0] -= 61   # pretend a minute passed
+            self.assertEqual(self.client.post("/api/v1/scans/s1/chat", json={"message": "b"}).status_code, 200)
+
+    def test_auth_accepts_only_the_exact_key_even_with_odd_bytes(self):
+        with patch.object(main.settings, "api_key", "s3cret"):
+            ok = lambda k: self.client.get("/api/v1/scans/s1/chat", headers={"X-Api-Key": k.encode("latin-1")}).status_code  # noqa: E731
+            self.assertEqual(ok("s3cret"), 200)
+            for bad in ("", "s3cre", "s3cret ", "S3CRET", "sécret"):
+                self.assertEqual(ok(bad), 401, bad)
 
     def test_auth_enforced(self):
         with patch.object(main.settings, "api_key", "secret"):
