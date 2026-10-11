@@ -208,6 +208,14 @@ java -jar cli/target/malimite-cli.jar path/to/MyApp.apk \
      --jadx "$JADX_HOME" --out /tmp/full --llm-mode full
 ```
 
+**Split-APK bundles (`.xapk`):** pass the bundle like any other package. Malimite merges the base APK and the
+`split_config.*` / feature splits into one analysis APK (`<name>.merged.apk`, written next to the other outputs; not
+installable), so DEX, the manifest and the native libraries that live in `split_config.arm64_v8a.apk` are all analysed
+together. The base APK is taken from `manifest.json` when the bundle has one, else from `base.apk`, else from the only APK
+whose own manifest has no `split` attribute. OBB expansion files are ignored. `scan.json` records `sourcePackage`,
+`bundleBaseApk` and `bundleSplits`. The bundle is untrusted input: entry names are validated and the data read is capped
+at 2 GiB.
+
 **Outputs:**
 
 | File | Purpose |
@@ -245,7 +253,7 @@ cp .env.example .env    # optional: GHIDRA_HOME, API_KEY, LLM defaults
 # → http://localhost:7070
 ```
 
-Drop an `.ipa` or `.apk` on the upload page (enable **Security Assessment** via the checkbox — on by default). The FastAPI service runs the CLI in the background and exposes everything under `/api/v1/*`. OpenAPI docs: `http://localhost:7070/docs`. The UI groups findings by `rule_id` (unique issues) and has a dedicated **Assessment** tab for controls inventory.
+Drop an `.ipa`, `.apk` or `.xapk` on the upload page (enable **Security Assessment** via the checkbox — on by default). The FastAPI service runs the CLI in the background and exposes everything under `/api/v1/*`. OpenAPI docs: `http://localhost:7070/docs`. The UI groups findings by `rule_id` (unique issues) and has a dedicated **Assessment** tab for controls inventory.
 
 **Key endpoints:**
 
@@ -294,7 +302,7 @@ cp .env.example .env
 ./run.sh
 ```
 
-DM the bot an `.ipa` or `.apk` file → it replies with a severity-sorted summary, HTML report, and SARIF attachment. See [`bot/python/README.md`](bot/python/README.md) for Slack App setup.
+DM the bot an `.ipa`, `.apk` or `.xapk` file → it replies with a severity-sorted summary, HTML report, and SARIF attachment. See [`bot/python/README.md`](bot/python/README.md) for Slack App setup.
 
 ---
 
@@ -404,7 +412,7 @@ Reports (`report.html`, `findings.sarif`) regenerate automatically after each tr
 ### CLI flags
 
 ```
-malimite [OPTIONS] <ipa|apk>
+malimite [OPTIONS] <ipa|apk|xapk>
   -o, --out=<dir>          Output directory
   -g, --ghidra=<dir>       Ghidra install (or env GHIDRA_HOME) — iOS Mach-O + Android arm64 .so
   -j, --jadx=<dir>         JADX install (or env JADX_HOME) — Android DEX/Java

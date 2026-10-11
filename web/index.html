@@ -671,9 +671,9 @@ route('home', async function() {
       <div class="card-title">Upload package</div>
       <div class="drop-zone" id="drop">
         <div style="font-size:2rem">📦</div>
-        <p><strong>Drag &amp; drop .ipa or .apk here</strong></p>
+        <p><strong>Drag &amp; drop .ipa, .apk or .xapk here</strong></p>
         <p>iOS via Ghidra · Android via JADX (+ Ghidra for native .so) · Malimite finds the sketchy bits.</p>
-        <label class="drop-file-btn">Browse file<input type="file" id="ipa-file" accept=".ipa,.apk"/></label>
+        <label class="drop-file-btn">Browse file<input type="file" id="ipa-file" accept=".ipa,.apk,.xapk"/></label>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-top:1rem;font-size:.8rem">
         <label style="display:flex;flex-direction:column;gap:.3rem">
@@ -746,7 +746,7 @@ route('home', async function() {
   async function doUpload(file) {
     if (!file) return;
     const n = file.name.toLowerCase();
-    if (!n.endsWith('.ipa') && !n.endsWith('.apk')) { alert('Only .ipa or .apk files accepted'); return; }
+    if (!n.endsWith('.ipa') && !n.endsWith('.apk') && !n.endsWith('.xapk')) { alert('Only .ipa, .apk or .xapk files accepted'); return; }
 
     // Validate: API key required when provider needs one
     let provider = $('#llm-provider').value;
@@ -1765,7 +1765,7 @@ function extractErrorReason(log) {
       hint: 'Check [ghidra-output] for progress. After CONNECTED, payload transfer is not limited by this deadline — exclude noisy libraries via CoreConfig if decompile itself is too slow.',
     },
     {
-      re: /Only \.ipa(?: or \.apk)? files|wrong extension|not a valid IPA|not an APK/i,
+      re: /Only \.ipa(?:, \.apk(?:,)? or \.xapk| or \.apk)? files|wrong extension|not a valid IPA|not an APK/i,
       reason: 'Uploaded file failed IPA validation.',
       hint: 'Make sure the file is a real `.ipa` (not a renamed .zip) and has at least one .app bundle inside.',
     },

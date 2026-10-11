@@ -23,6 +23,7 @@ from .agent.tools import Ctx
 from .config import settings
 from .models import ScanDetail, ScanMeta
 
+_ACCEPTED_EXTENSIONS = (".ipa", ".apk", ".xapk")   # .xapk = split-APK bundle, merged into one APK by the CLI
 _OFFENSIVE_MODE_ALIASES = frozenset({"offensive", "offense", "frida", "bypass"})
 _FAST_MODE_ALIASES = frozenset({"summarize", "summary", "fast", "fast_scan", "fastscan"})
 _FULL_MODE_ALIASES = frozenset({"find_vulns", "vulns", "vuln", "full", "full_scan", "fullscan"})
@@ -98,8 +99,8 @@ async def create_scan(
 ):
     _check_auth(request)
     name = file.filename.lower()
-    if not (name.endswith(".ipa") or name.endswith(".apk")):
-        raise HTTPException(status_code=400, detail="Only .ipa or .apk files are accepted")
+    if not name.endswith(_ACCEPTED_EXTENSIONS):
+        raise HTTPException(status_code=400, detail="Only .ipa, .apk or .xapk files are accepted")
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
