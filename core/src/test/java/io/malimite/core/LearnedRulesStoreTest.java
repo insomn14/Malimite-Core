@@ -95,7 +95,7 @@ class LearnedRulesStoreTest {
         // Simulate "another process" by writing rules out-of-band, while A is still alive
         LearnedRulesStore b = new LearnedRulesStore(file);
         String idFromB = b.addRule("XSS", "by-B", "CODE", "HIGH", 7.5, "CWE-79",
-                "d", "r", "DECOMPILED", "B_regex", "p", "u");
+                "d", "r", "DECOMPILED", "evaluateJavascript\\(", "p", "u");
         assertNotNull(idFromB);
         assertTrue(Files.exists(file));
 
@@ -103,7 +103,7 @@ class LearnedRulesStoreTest {
         // inside the lock and notice B's rule, so A's id sequence continues
         // from there instead of clobbering it.
         String idFromA = a.addRule("XSS", "by-A", "CODE", "HIGH", 7.5, "CWE-79",
-                "d", "r", "DECOMPILED", "A_regex", "p", "u");
+                "d", "r", "DECOMPILED", "loadDataWithBaseURL\\(", "p", "u");
         assertNotNull(idFromA);
         assertNotEquals(idFromB, idFromA, "A's new ID must not collide with B's pre-existing one");
 
