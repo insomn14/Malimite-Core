@@ -1,6 +1,6 @@
 # Malimite-Core — Development Phases
 
-> Last updated: 2026-08-10 — reflects actual codebase state, not the original planning baseline.
+> Last updated: 2026-10-12 — reflects actual codebase state, not the original planning baseline.
 
 ## Current State (Baseline)
 
@@ -9,17 +9,19 @@
 | **Core analysis engine** (`core/`) | ✅ Production — Ghidra (iOS Mach-O + Android arm64 `.so`), JADX (Android DEX), MASTG/MSTG scanners, Assessment, LLM, SARIF/HTML |
 | CLI (`cli/`) | ✅ Production — fat JAR with `--llm`, `--sarif`, `--html`, `--assessment`, `--fail-on`; IPA + APK |
 | Web UI + REST (`web/`) | ✅ Production — FastAPI + SPA; IPA/APK upload; Assessment tab; unique vuln counts by `rule_id` |
-| Slack bot (`bot/python/`) | ✅ Production — Socket Mode; `.ipa` / `.apk` |
+| Slack bot (`bot/python/`) | ⚠️ Works, not hardened — Socket Mode; `.ipa` / `.apk`; runs the CLI itself. No user allowlist, no concurrency cap, no tests; counts raw occurrences (not unique issues); no `JADX_HOME`/ASC settings. See *Chat bots* below |
 | Watcher (`watcher/`) | ✅ Complete — inotify drop-folder daemon (`.ipa` / `.apk`) |
-| Docker / Compose (`deploy/`) | ✅ Complete — Ghidra + JADX image; Redis + MinIO + api/worker/watcher stack |
+| Docker: web image (`deploy/web.Dockerfile`) | ✅ Ghidra 12.0.4 + font libs + JADX; runs as uid 10001; port bound to `127.0.0.1` by default. Full iOS scan verified end to end |
+| Docker: legacy stack (`deploy/Dockerfile`, compose api/worker/watcher/bot) | ⚠️ Still Ghidra 11.1.2, which rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`): Ghidra scans are expected to fail there. Not updated |
+| AI Assistant (`web/app/agent/`) | ✅ Implemented on branch `feat/ai-assistant` (pending merge). Tools: scan data, assessments, manifest, on-demand ASC/JADX/Ghidra. Verified with DeepSeek; Claude/OpenAI parsers only against recorded/fake streams |
 | GitHub / GitLab / Bitbucket CI | ✅ Complete — SARIF upload wired (stock templates are IPA-oriented; image includes JADX) |
 | Legacy Javalin API (`api/`) | ⚠️ Legacy — superseded by `web/`; kept for Docker-compose compat |
-| Legacy Worker / Java bots | ⚠️ Legacy — Redis queue path; Python web runs CLI in-process |
+| Legacy Worker / Java bots (Telegram, Discord, Slack-Java) | ⚠️ Legacy — upload to `POST /api/v1/scans` (compatible with the Python web API) and reply with the `scan_id` only: no results, no polling, no tests |
 | Observability (Phase 6) | ❌ Not started |
-| Security hardening (Phase 7) | ❌ Not started |
+| Security hardening (Phase 7) | ⚠️ Started — see Phase 7 |
 | Enterprise scale (Phase 8) | ❌ Not started |
 
-Unit tests in `core/` cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM, SARIF/HTML, and platform-scoped learned rules. No real-IPA/APK integration test on CI yet (requires Ghidra / JADX on the runner).
+Unit tests in `core/` (189) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM, SARIF/HTML, learned-rule quality gates and on-demand decompilation; `web/tests/` (92, stdlib `unittest`) cover the AI Assistant. **Neither the Python tests nor a real-IPA/APK scan run on CI yet** (the latter needs Ghidra / JADX on the runner).
 
 ---
 
@@ -187,6 +189,41 @@ Assessment results appear in CLI/HTML/web without mixing into vulnerability seve
 
 ---
 
+## Phase 5c — AI Assistant
+**Status: ✅ Implemented on `feat/ai-assistant` — pending merge**
+
+**Goal:** Let an analyst talk to the scan: ask about code, findings and controls, and request reverse engineering of a class or function on demand.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 5c.1 | Agent loop + streaming chat API | ✅ | `web/app/agent/`; SSE; Anthropic and OpenAI-compatible (openai, deepseek, ollama) clients; per-message tool-round limit with a forced final answer; answers cut off by the output limit continue automatically |
+| 5c.2 | Tools over scan data | ✅ | `scan_overview`, `list_classes`, `search_code`, `get_source`, `search_strings`, `get_vulnerabilities` (grouped like the UI), `get_references`, `get_assessments`, `get_manifest` |
+| 5c.3 | On-demand decompilation | ✅ | `OnDemandDecompiler`: ASC (≈0.2 s/class), JADX `--single-class` (≈8 s), Ghidra with a persistent project (iOS Mach-O first import ≈3.6 min, then ≈4.5 s). Verified with the real tools |
+| 5c.4 | Chat UI | ✅ | "AI Assistant" tab, sessions kept per scan, markdown rendering, API-key aware |
+| 5c.5 | Safety | ✅ | Read-only scan DB, tool output treated as untrusted data, validated targets, allowlisted subprocess environment, key only from server settings, global rate limit |
+| 5c.6 | Regression set for answer quality | ❌ | Fixed questions against a sample scan asserting tool numbers (unique issues, severities) |
+| 5c.7 | Verify Claude / OpenAI streams against the real APIs | ❌ | Only DeepSeek has been exercised with a real key |
+| 5c.8 | Triage from chat ("mark false positive") | ❌ | Would be the first write tool: needs an explicit confirmation step |
+| 5c.9 | Bots can forward questions to `/chat` | ❌ | See *Chat bots* |
+
+---
+
+## Phase 5d — Detection quality
+**Status: ✅ First round done; needs a wider corpus**
+
+**Goal:** Fewer false positives and no over-confident "absent" claims.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 5d.1 | Quality gates for LLM-learned rules (`RuleQuality`) | ✅ | Semantic anchor, word boundaries, specificity vs the same app, scan-time guard (more than 20 functions → no findings), learned findings capped at MEDIUM; gates also filter stored rules |
+| 5d.2 | Prune shipped seed rules | ✅ | 17 iOS and 1 Android removed; a test keeps `deploy/rules/` clean. On a real crackme: 24 → 5 occurrences |
+| 5d.3 | Relevance preconditions for absence rules | ✅ | Pinning needs networking, keyboard rule needs a text input, GMS rule needs GMS |
+| 5d.4 | Bytecode-VM detection (`ObfuscationSignals`) | ✅ | Detection controls that found nothing become `UNKNOWN`; resilience findings carry a caveat |
+| 5d.5 | Validate the gates on more apps | ❌ | iOS validated on a single app (156 functions); no negative corpus of normal Ghidra output; the 69 remaining iOS seeds are unaudited beyond static checks |
+| 5d.6 | Negative-test learned rules against a corpus before persisting | ❌ | Today only the app being scanned is used |
+
+---
+
 ## Phase 6 — Observability
 **Status: ❌ Not started — NEXT MAJOR PHASE**
 
@@ -213,20 +250,22 @@ Grafana dashboard showing live scan throughput, queue depth, and error rate. Ale
 ---
 
 ## Phase 7 — Security & Hardening
-**Status: ❌ Not started**
+**Status: ⚠️ Started (~30%)**
 
 **Goal:** Production security — protect the analysis service from abuse.
 
 ### Tasks
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 7.1 | JWT / API key scopes | ❌ | Single optional `API_KEY` / `MALIMITE_API_KEY` only |
-| 7.2 | Rate limiting | ❌ | No Redis sliding-window filter |
+| 7.1 | JWT / API key scopes | ⚠️ | Single `API_KEY`, compared in constant time; the UI remembers it and fetches downloads with it. No scopes |
+| 7.2 | Rate limiting | ⚠️ | Global cap on chat requests (`CHAT_RATE_PER_MIN`); nothing on scan uploads |
 | 7.3 | Zip bomb / path traversal guard | ❌ | `IpaValidator` / `ApkValidator` check size + structure; no compression-ratio guard |
-| 7.4 | Sandbox Ghidra / JADX process | ❌ | No dedicated OS user; no seccomp in Docker |
-| 7.5 | Secrets management | ❌ | No Vault/SSM; no log token masking |
-| 7.6 | Audit log | ❌ | No `malimite:audit` Redis list |
-| 7.7 | TLS termination | ❌ | No nginx sidecar or `deploy/nginx.conf` |
+| 7.4 | Sandbox Ghidra / JADX process | ⚠️ | Web image runs as uid 10001; decompiler subprocesses get an allowlisted environment (no LLM/API keys) and die with their process group. No seccomp, no network isolation |
+| 7.5 | Secrets management | ⚠️ | Per-upload LLM key is no longer written to `meta.json` (old ones scrubbed at start); LLM keys only from server settings. No Vault/SSM, no log masking |
+| 7.6 | Audit log | ❌ | |
+| 7.7 | TLS termination | ❌ | |
+| 7.8 | Safe defaults | ✅ | Compose publishes `127.0.0.1` only (`MALIMITE_BIND`), `run.sh` binds loopback, startup warning when `API_KEY` is empty |
+| 7.9 | Access control for chat bots | ❌ | Any member of a channel the bot is in can start a heavy scan |
 
 ### Deliverable
 Penetration-test ready deployment; scoped API keys; decompilers run in restricted sandbox.
@@ -263,10 +302,25 @@ Phase 3   █████████░  Analysis Depth          ~90%   [cross-
 Phase 4   ████████░░  LLM Integration         ~85%   [async job + Redis cache in analyzer]
 Phase 5   ██████████  CI/CD & Reporting       100%   ✅ DONE
 Phase 5b  ██████████  Security Assessment     100%   ✅ DONE
+Phase 5c  █████████░  AI Assistant            ~90%   [pending merge; 5c.6–5c.9 open]
+Phase 5d  ███████░░░  Detection quality       ~70%   [wider corpus needed]
 Phase 6   ░░░░░░░░░░  Observability             0%   ← NEXT MAJOR PHASE
-Phase 7   ░░░░░░░░░░  Security & Hardening      0%
+Phase 7   ███░░░░░░░  Security & Hardening     ~30%   [started: 7.1, 7.2, 7.4, 7.5, 7.8 partial]
 Phase 8   ░░░░░░░░░░  Scale & Enterprise        0%
 ```
+
+### Chat bots (Slack / Telegram / Discord)
+Readiness today: the **standalone Python Slack bot** works end to end (it runs the CLI and replies in a thread with a
+summary, HTML report and SARIF); the **Java Telegram/Discord/Slack bots** only queue a scan and reply with its id. Both
+need work before they are production-ready:
+1. One backend: make every bot talk to the Python web API (`POST /api/v1/scans`, poll, fetch the summary) instead of
+   running the CLI itself or relying on the legacy API.
+2. Report what the UI reports: unique issues per `rule_id` plus occurrences, Assessment highlights, a link to the scan.
+3. Access control and limits: user/channel allowlist, a concurrency cap, per-user rate limit, file-size limits.
+4. APK settings (`JADX_HOME`, `ASC_HOME`) in the bot configuration; tests for message formatting and the upload flow.
+5. Privacy: uploading an app to a chat service and posting the report back sends it to a third party. Document it and
+   let operators restrict where reports are posted.
+6. Update the legacy Docker image to Ghidra 12.0.4 or retire it in favour of the web image.
 
 **Critical path (closure):** Finish Phase 1.8 → Phase 2 gaps → Phase 3 cross-ref API (~1 week total).
 **Next major phase:** Phase 6 Observability (can start in parallel with closure work).

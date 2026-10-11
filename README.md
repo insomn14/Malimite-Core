@@ -477,11 +477,15 @@ Unit tests in `core/` cover IPA/APK validation & extraction, Android manifest/NS
 See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 
 - ✅ Core Ghidra pipeline, MSTG/MASTG scanner, LLM, SARIF/HTML, CI templates
-- ✅ Android APK analysis (JADX DEX + optional Ghidra arm64 `.so`)
-- ✅ Security Assessment mode (PRESENT / PARTIAL / ABSENT / UNKNOWN)
-- 🔄 Closure items: real-IPA/APK integration test, cross-reference REST API
+- ✅ Android APK analysis (JADX or Droid ASC for DEX + optional Ghidra arm64 `.so`)
+- ✅ Security Assessment mode (PRESENT / PARTIAL / ABSENT / UNKNOWN), aware of bytecode-VM obfuscation
+- ✅ AI Assistant: chat over the scan with tools, on-demand ASC / JADX / Ghidra decompilation (branch `feat/ai-assistant`)
+- ✅ Detection quality: quality gates for LLM-learned rules, relevance preconditions for absence findings
+- ✅ Hardened web image: Ghidra 12.0.4, unprivileged user, loopback-only by default, API key + rate limit
+- 🔄 Closure items: real-IPA/APK integration test and Python tests on CI, cross-reference REST API
+- 🔄 Chat bots (Slack / Telegram / Discord): the standalone Slack bot works; Telegram/Discord only queue a scan. Unifying them on the web API is planned
 - 📋 Next major phase: **Observability** (Prometheus metrics, enriched health checks)
-- 📋 Future: security hardening, Helm/Kubernetes, enterprise SSO
+- 📋 Future: remaining security hardening, Helm/Kubernetes, enterprise SSO
 
 ---
 
@@ -496,6 +500,16 @@ Key upstream concepts ported (with Swing removed):
 - `AIBackend` → `LlmEnricher` (+ Claude, DeepSeek, Ollama providers)
 - `DecompilerBridge/ghidra/DumpClassData.java` → bundled Ghidra post-script
 - `SQLiteDBHandler` → `SqliteStore`
+
+**Built on the shoulders of:**
+
+- [**Ghidra**](https://github.com/NationalSecurityAgency/ghidra) (NSA) — iOS and native-library decompilation
+- [**JADX**](https://github.com/skylot/jadx) (skylot) — Android DEX → Java
+- [**Droid ASC**](https://pypi.org/project/droidasc/) — on-demand Android decompiler backend, developed by the author of Malimite-Core and inspired by [**MG1937/ASC**](https://github.com/MG1937/ASC) (Apache-2.0); builds on [Androguard](https://github.com/androguard/androguard)
+- [**OWASP MASTG / MASVS**](https://mas.owasp.org/) — the detection catalogs derive from the Mobile Application Security Testing Guide (CC BY-SA 4.0)
+- [**SARIF**](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) (OASIS) — result interchange format
+
+The full list, with licenses and how each is used (bundled, invoked, or derived), is in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 Licensed under the **Apache License 2.0**, consistent with upstream Malimite. See [Malimite LICENSE](https://github.com/LaurieWired/Malimite/blob/main/LICENSE).
 
