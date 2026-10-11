@@ -29,6 +29,7 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 - [Download pre-built CLI](#download-pre-built-cli)
 - [Quick start](#quick-start)
 - [Web UI & REST API](#web-ui--rest-api)
+- [AI Assistant](#ai-assistant)
 - [Slack bot](#slack-bot)
 - [CI/CD integration](#cicd-integration)
 - [Detection engines](#detection-engines)
@@ -257,6 +258,23 @@ Drop an `.ipa` or `.apk` on the upload page (enable **Security Assessment** via 
 | `GET` | `/api/v1/scans/{id}/report` | HTML report |
 | `GET` | `/api/v1/scans/{id}/sarif` | SARIF download |
 | `GET` | `/api/v1/scans/{id}/functions` | Browse decompiled functions |
+
+---
+
+## AI Assistant
+
+After a scan finishes, the web UI shows an **AI Assistant** tab: a chat with an LLM agent that can use the scan's data as tools and reverse engineer a specific class or function on demand.
+
+| Tool | What it does |
+|---|---|
+| `scan_overview`, `list_classes`, `search_code`, `get_source`, `search_strings`, `get_vulnerabilities`, `get_references` | Read-only queries over the scan's SQLite (stored decompiled code, strings, findings, call graph when present) |
+| `decompile` | Fresh single-class decompile: `asc` (Android, fast), `jadx` (Android), `ghidra` (iOS Mach-O, or Android `.so` via `lib`). Results are cached |
+
+- **Config:** uses the scan's LLM provider/model by default (overridable per chat). The API key comes from the **server's** `web/.env` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`, or `OLLAMA_BASE_URL`), never from a per-upload key. Optional: `CHAT_MAX_TURNS`, `CHAT_TOOL_CAP`, `HEAVY_CONCURRENCY`, `GHIDRA_ONDEMAND_TIMEOUT` (default 5400).
+- **Storage:** chat history and the decompile cache live in `<scan-dir>/chat.sqlite`; the scan database is opened read-only.
+- **Ghidra on demand:** the scan deletes its Ghidra project, so the first `ghidra` request per binary re-imports and analyzes it into a persistent `<scan-dir>/ghidra-proj/` (minutes, disk about 2-5x the binary); later requests reopen it (`-process -noanalysis`).
+- **API:** `POST /api/v1/scans/{id}/chat` (SSE stream), `GET /api/v1/scans/{id}/chat`, `DELETE /api/v1/scans/{id}/chat/{session_id}`.
+- **Safety:** tools cannot run commands, write files or reach the network, and tool output is treated as untrusted data (decompiled code can contain prompt injection). Rebuild the CLI JAR after upgrading: the web service shells out to `io.malimite.core.OnDemandDecompiler` in it. Use only on software you are authorized to analyze.
 
 ---
 
