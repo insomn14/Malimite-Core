@@ -457,7 +457,7 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
   <span class="nav-spacer"></span>
   <span class="nav-apikey">
     <label for="nav-key">API Key</label>
-    <input id="nav-key" type="password" placeholder="optional"/>
+    <input id="nav-key" type="password" placeholder="required if API_KEY is set" autocomplete="off"/>
   </span>
 </nav>
 
@@ -519,8 +519,18 @@ window.onLlmModeChange = function() {
 };
 
 /* ── config ── */
+const KEY_LS = 'malimite.apikey';   // remembered in this browser only; best-effort (storage can be blocked)
 const keyEl = () => document.getElementById('nav-key');
 function apiKey() { return keyEl() ? keyEl().value : ''; }
+(function initKey() {
+  const el = keyEl();
+  if (!el) return;
+  try { el.value = localStorage.getItem(KEY_LS) || ''; } catch (_) {}
+  el.addEventListener('change', () => {
+    try { el.value ? localStorage.setItem(KEY_LS, el.value) : localStorage.removeItem(KEY_LS); } catch (_) {}
+    router();   // reload whatever is on screen with the new key
+  });
+})();
 
 function headers(extra={}) {
   const h = {'Accept':'application/json', ...extra};
@@ -531,11 +541,43 @@ function headers(extra={}) {
 async function api(path, opts={}) {
   const r = await fetch('/api/v1' + path, {headers: headers(opts.headers||{}), ...opts});
   if (!r.ok) {
-    const txt = await r.text().catch(()=>'');
-    throw new Error(txt || r.statusText);
+    if (r.status === 401) {
+      if (keyEl()) keyEl().focus();
+      throw new Error(apiKey() ? 'Invalid API key — check the "API Key" field (top right).'
+                               : 'This server requires an API key — enter it in the "API Key" field (top right).');
+    }
+    let msg = await r.text().catch(()=>'');
+    try { const j = JSON.parse(msg); if (j && typeof j.detail === 'string') msg = j.detail; } catch (_) {}
+    throw new Error(msg || r.statusText);
   }
   return r.json();
 }
+
+/* Plain <a href="/api/v1/..."> links cannot send the X-Api-Key header, so with a key set they are fetched with it
+   and handed to the browser as a blob (report/log open in a tab, everything else downloads). */
+document.addEventListener('click', async ev => {
+  const a = ev.target.closest && ev.target.closest('a[href^="/api/v1/"]');
+  if (!a || !apiKey() || ev.defaultPrevented) return;
+  ev.preventDefault();
+  const popup = a.target === '_blank' ? window.open('', '_blank') : null;   // opened synchronously: popup blockers
+  try {
+    const r = await fetch(a.getAttribute('href'), {headers: headers({'Accept': '*/*'})});
+    if (!r.ok) throw new Error(r.status === 401 ? 'Invalid API key' : ((await r.text().catch(()=>'')) || r.statusText).slice(0, 200));
+    const url = URL.createObjectURL(await r.blob());
+    if (popup) { popup.location = url; }
+    else {
+      const m = (r.headers.get('content-disposition') || '').match(/filename="?([^";]+)/);
+      const d = document.createElement('a');
+      d.href = url;
+      d.download = a.getAttribute('download') || (m && m[1]) || a.getAttribute('href').split('?')[0].split('/').pop();
+      document.body.appendChild(d); d.click(); d.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    if (popup) popup.close();
+    alert('Download failed: ' + (e.message || e));
+  }
+});
 
 /* ── router ── */
 const routes = {};
@@ -1673,14 +1715,29 @@ function extractErrorReason(log) {
       hint: 'Known Ghidra Mach-O parser issue. See the full log for the specific cause, and check the Ghidra issue tracker for updates.',
     },
     {
-      re: /osgi\.ee=UNKNOWN|GhidraScriptLoadException|ClassNotFoundException: DumpClassData/,
-      reason: 'Ghidra imported the IPA, but DumpClassData.java failed to load. Root cause is usually an unsupported Java version for Ghidra\'s OSGi script loader (osgi.ee=UNKNOWN) — common with Homebrew Java 23/25.',
-      hint: 'Install Temurin/OpenJDK <strong>21</strong>, then restart Malimite with <code>export GHIDRA_JAVA_HOME=$(/usr/libexec/java_home -v 21)</code> (or point it at your JDK 21 home). Ghidra 11.x expects Java 17/21, not 25.',
+      re: /DumpClassData\.java:\d+: error: package org\.json does not exist/,
+      reason: 'Ghidra imported the app, but DumpClassData.java failed to compile inside Ghidra: "package org.json does not exist". Stock Ghidra does not ship org.json and gives scripts no third-party classpath. This is not a Java version problem.',
+      hint: 'Use a Malimite build whose DumpClassData.java has no org.json dependency: rebuild the CLI jar and the Docker image (<code>mvn -q -DskipTests package -pl core,cli</code> then <code>docker compose -f deploy/web-compose.yml up -d --build</code>), then upload the app again.',
+    },
+    {
+      re: /DumpClassData\.java:\d+: error:/,
+      reason: 'Ghidra imported the app, but DumpClassData.java failed to compile inside Ghidra.',
+      hint: 'Open the full log and look at the first lines starting with <code>DumpClassData.java:NN: error:</code>. They name the missing symbol or class.',
+    },
+    {
+      re: /osgi\.ee=UNKNOWN/,
+      reason: 'Ghidra imported the app, but DumpClassData.java failed to load because Ghidra\'s OSGi script loader does not recognise this Java version (osgi.ee=UNKNOWN) — common with Java 23/25.',
+      hint: 'Install Temurin/OpenJDK <strong>21</strong> and set <code>GHIDRA_JAVA_HOME</code> to its home (macOS: <code>$(/usr/libexec/java_home -v 21)</code>), then restart Malimite.',
+    },
+    {
+      re: /GhidraScriptLoadException|ClassNotFoundException: DumpClassData/,
+      reason: 'Ghidra imported the app, but DumpClassData.java could not be loaded.',
+      hint: 'Check the full log just above <code>GhidraScriptLoadException</code>: compile errors (<code>DumpClassData.java:NN: error:</code>) or an unsupported Java version (<code>osgi.ee=UNKNOWN</code>) are the usual causes.',
     },
     {
       re: /Import succeeded[\s\S]{0,2000}before heartbeat|Post-analysis succeeded[\s\S]{0,2000}before heartbeat|before heartbeat[\s\S]{0,800}post-script likely failed|SCRIPT ERROR: DumpClassData/,
       reason: 'Ghidra imported the binary successfully, but DumpClassData never connected back to Malimite (heartbeat missing). This is a post-script/IPC failure, not a Mach-O parse crash.',
-      hint: 'Open the full log and search for <code>SCRIPT ERROR</code> / <code>osgi.ee</code>. If you see Java 23/25, switch Ghidra to Java 21 via <code>GHIDRA_JAVA_HOME</code>.',
+      hint: 'Open the full log and search for <code>SCRIPT ERROR</code> / <code>osgi.ee</code>. Only if you see <code>osgi.ee=UNKNOWN</code> (Java 23/25), switch Ghidra to Java 21 via <code>GHIDRA_JAVA_HOME</code>.',
     },
     {
       re: /Ghidra subprocess exited[\s\S]{0,200}before heartbeat/,
