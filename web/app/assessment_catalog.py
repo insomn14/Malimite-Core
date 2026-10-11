@@ -57,6 +57,19 @@ _GUIDES: dict[tuple[str, str], dict] = {
             "Document naming posture only; do not treat this as a bypass of other protections.",
         ],
     ),
+    ("ASSESS-VM-OBFUSCATION", _ANY): _g(
+        "Detects bytecode-interpreter (VM) obfuscation: functions that dispatch on an opcode byte in a loop. Checks hidden in the bytecode are invisible to static signatures.",
+        [
+            "Look at the flagged functions: a loop that reads a byte, branches on many constants and advances a byte pointer is an interpreter.",
+            "Find the data it reads (DAT_/embedded tables): that is the bytecode. Strings and security checks may be decoded from it at runtime.",
+            "Treat 'absent' results for jailbreak/root, Frida and anti-debug checks as unknown for this app.",
+        ],
+        [
+            "On an authorized device, trace calls to the interpreter (Frida/lldb) and observe which APIs the decoded program reaches (file access, ptrace, sysctl, dlsym).",
+            "Compare behaviour on a stock device and a lab device to learn whether a hidden check exists.",
+            "Inventory only; do not publish a deobfuscation recipe.",
+        ],
+    ),
     ("ASSESS-OBFUSCATOR-VENDOR", _ANY): _g(
         "Looks for fingerprints of commercial app-shield / obfuscator vendors (DexGuard, iXGuard, Promon, Talsec, and similar).",
         [

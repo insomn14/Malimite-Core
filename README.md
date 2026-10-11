@@ -361,6 +361,16 @@ Modes: `summarize` (Fast Scan) · `find_vulns` (Full Scan) · `auto_fix` · `off
 
 When LLM finds a vulnerability (`find_vulns` / Full Scan), it returns a `detection_regex`. Regexes that self-validate against the source function are saved per platform — `~/.malimite/learned_rules.json` (iOS) or `learned_rules_android.json` (Android) — and reused on future scans **without further LLM calls**. Hollow placeholders such as `...` are rejected.
 
+A learned rule is a lead written by an LLM after reading one function, so it is held to a stricter standard than a catalog rule (`RuleQuality`):
+
+- **Semantic anchor:** every alternative of the regex must name something specific (an API, class or constant). Regexes made only of decompiler vocabulary (`param_1`, `uVar3`, `ulong`, `SoftwareBreakpoint`) are rejected: they match ordinary code.
+- **Word boundaries:** short generic words must be delimited. `(?:Runtime|exec)` also matches `execute()` and `Executors`; `Runtime\.getRuntime\(\)\.exec\(` does not.
+- **Specificity:** a new rule must not match more than ~3% (at least 3) of the *other* functions of the same app.
+- **At scan time:** a learned rule that matches more than 20 distinct functions reports nothing, and learned findings are capped at `MEDIUM` (`MALIMITE_LEARNED_MAX_SEVERITY`, default `MEDIUM`).
+- Rules stored by older versions are filtered by the same gates when they are loaded, and a unit test keeps the seeds in `deploy/rules/` clean.
+
+**Absence findings** ("no certificate pinning") that depend on a feature only apply when the app uses it, e.g. pinning is not reported for an app with no networking. When the code contains a bytecode interpreter (VM obfuscation), "no jailbreak/root/Frida/anti-debug found" is reported as `UNKNOWN` in the Assessment (with a caveat on the matching findings), and the VM is listed as its own control.
+
 ### DeepSeek models
 
 | Model | Use case |
@@ -419,6 +429,7 @@ malimite [OPTIONS] <ipa|apk>
 | `JADX_HOME` / `JADX_PATH` | JADX install root or binary path (Android DEX) |
 | `MALIMITE_LEARNED_RULES` / `MALIMITE_LEARNED_RULES_IOS` | iOS learned-rules JSON (default `~/.malimite/learned_rules.json`) |
 | `MALIMITE_LEARNED_RULES_ANDROID` | Android learned-rules JSON (default `~/.malimite/learned_rules_android.json`) |
+| `MALIMITE_LEARNED_MAX_SEVERITY` | Highest severity an LLM-learned rule may report (`CRITICAL`…`INFO`, default `MEDIUM`) |
 | `LLM_PROVIDER` | `openai` · `claude` · `deepseek` · `ollama` · `none` |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
