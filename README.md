@@ -527,7 +527,7 @@ Licensed under the **Apache License 2.0**, consistent with upstream Malimite. Se
 
 Issues and pull requests are welcome. Before opening a PR:
 
-1. Run `mvn test -pl core`
+1. Run `mvn test -pl core,cli` and, from the repo root, `python -m unittest discover web/tests` (both run on every pull request in CI)
 2. Keep changes focused — Malimite-Core favors minimal, headless diffs
 3. Credit Malimite when porting additional upstream functionality
 

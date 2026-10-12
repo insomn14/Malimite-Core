@@ -21,7 +21,7 @@
 | Security hardening (Phase 7) | ⚠️ Started — see Phase 7 |
 | Enterprise scale (Phase 8) | ❌ Not started |
 
-Unit tests in `core/` (189) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM, SARIF/HTML, learned-rule quality gates and on-demand decompilation; `web/tests/` (92, stdlib `unittest`) cover the AI Assistant. **Neither the Python tests nor a real-IPA/APK scan run on CI yet** (the latter needs Ghidra / JADX on the runner).
+Unit tests in `core/` and `cli/` (210) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM, SARIF/HTML, learned-rule quality gates and on-demand decompilation; `web/tests/` (97, stdlib `unittest`) cover the AI Assistant. Both suites run on every pull request and on `main` (`.github/workflows/ci.yml`: Java on JDK 17 and 21, Python on 3.12). **A real-IPA/APK scan does not run on CI yet** (it needs Ghidra / JADX on the runner).
 
 ---
 
