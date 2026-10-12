@@ -13,7 +13,7 @@ if ! python3 -c "import fastapi" &>/dev/null; then
 fi
 
 exec python3 -m uvicorn app.main:app \
-  --host "${HOST:-0.0.0.0}" \
+  --host "${HOST:-127.0.0.1}" \
   --port "${PORT:-7070}" \
   --reload \
   "$@"

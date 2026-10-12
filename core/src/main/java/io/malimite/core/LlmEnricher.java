@@ -249,6 +249,8 @@ public class LlmEnricher {
     private final LlmCache    cache;
     private final boolean     isSwift;
     private final LearnedRulesStore rulesStore;
+    /** Decompiled bodies of the app being enriched: negative examples for the specificity gate on new rules. */
+    private volatile List<String> ruleCorpus = List.of();
     private final PackagePlatform platform;
     private int maxFunctions = 0;
 
@@ -285,6 +287,8 @@ public class LlmEnricher {
     public void enrich(SqliteStore store, String executableName, ScanScopeFilter scope) {
         List<SqliteStore.DecompilationResult> fns = new ArrayList<>(store.getAllDecompiledFunctions(executableName));
         ScanScopeFilter filter = scope == null ? ScanScopeFilter.all() : scope;
+        ruleCorpus = fns.stream().map(SqliteStore.DecompilationResult::decompiledCode)
+                .filter(c -> c != null && !c.isEmpty()).collect(Collectors.toUnmodifiableList());
 
         // Cap: for very large apps, bound the number of functions the LLM sees by
         // picking the largest (most code) in-scope functions first.
@@ -503,18 +507,26 @@ public class LlmEnricher {
             String ruleId = null;
             String validationStatus = "MISSING_REGEX";
             if (LearnedRulesStore.isUsableDetectionRegex(detectionRe)) {
-                if (regexMatchesSource(detectionRe, fn.decompiledCode())) {
+                String lowQuality = RuleQuality.rejection(detectionRe);
+                if (lowQuality != null) {
+                    validationStatus = "LOW_QUALITY_REGEX";
+                    log.info("Dropping low-quality regex for {}.{} (scope={}): {} — {}",
+                            fn.className(), fn.functionName(), scope, lowQuality, abbreviate(detectionRe, 100));
+                } else if (!regexMatchesSource(detectionRe, fn.decompiledCode())) {
+                    validationStatus = "REGEX_FAILED_SELF_TEST";
+                    log.info("Dropping non-matching regex for {}.{} (scope={}): {}",
+                            fn.className(), fn.functionName(), scope, abbreviate(detectionRe, 100));
+                } else if (regexTooBroadForApp(detectionRe, fn.decompiledCode())) {
+                    validationStatus = "REGEX_TOO_BROAD";
+                    log.info("Dropping over-broad regex for {}.{} (scope={}): matches too many other functions: {}",
+                            fn.className(), fn.functionName(), scope, abbreviate(detectionRe, 100));
+                } else {
                     ruleId = rulesStore.addRule(
                             scope, title, category, severity, cvss, cwe,
                             description, remediation,
                             "DECOMPILED", detectionRe,
                             pocSteps, referenceUrl, platform.name());
                     validationStatus = ruleId != null ? "OK" : "INVALID_REGEX";
-                } else {
-                    validationStatus = "REGEX_FAILED_SELF_TEST";
-                    log.info("Dropping non-matching regex for {}.{} (scope={}): {}",
-                            fn.className(), fn.functionName(), scope,
-                            detectionRe.length() > 100 ? detectionRe.substring(0, 100) + "…" : detectionRe);
                 }
             } else if (!detectionRe.isBlank()) {
                 validationStatus = "PLACEHOLDER_REGEX";
@@ -730,6 +742,19 @@ public class LlmEnricher {
             case "DEBUG"    -> "RESILIENCE";
             default         -> "CODE";
         };
+    }
+
+    /** Negative test: a rule that also matches many other functions of this app is not specific to the bug it was learned from. */
+    private boolean regexTooBroadForApp(String regex, String own) {
+        try {
+            return RuleQuality.isTooBroad(java.util.regex.Pattern.compile(regex), own, ruleCorpus);
+        } catch (java.util.regex.PatternSyntaxException ex) {
+            return false;
+        }
+    }
+
+    private static String abbreviate(String s, int max) {
+        return s == null ? "" : (s.length() <= max ? s : s.substring(0, max) + "…");
     }
 
     private static boolean regexMatchesSource(String regex, String sourceCode) {

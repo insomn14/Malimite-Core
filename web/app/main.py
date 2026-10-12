@@ -1,8 +1,13 @@
 """Malimite Python web service — wraps all Malimite-Core functionality."""
+import hmac
 import io
 import json
+import logging
 import re
+import time
 import zipfile
+from collections import deque
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -12,9 +17,13 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import db, scanner
+from .agent import loop as agent_loop, store as chat_store
+from .agent.llm import LlmError, resolve_llm
+from .agent.tools import Ctx
 from .config import settings
 from .models import ScanDetail, ScanMeta
 
+_ACCEPTED_EXTENSIONS = (".ipa", ".apk", ".xapk")   # .xapk = split-APK bundle, merged into one APK by the CLI
 _OFFENSIVE_MODE_ALIASES = frozenset({"offensive", "offense", "frida", "bypass"})
 _FAST_MODE_ALIASES = frozenset({"summarize", "summary", "fast", "fast_scan", "fastscan"})
 _FULL_MODE_ALIASES = frozenset({"find_vulns", "vulns", "vuln", "full", "full_scan", "fullscan"})
@@ -34,7 +43,19 @@ _CAT_TO_PHASE = {
     "OTHER": "SESSION",
 }
 
-app = FastAPI(title="Malimite", version="0.1.0", docs_url="/docs", redoc_url=None)
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    log = logging.getLogger("malimite")
+    n = scanner.scrub_stored_keys()
+    if n:
+        log.warning("removed plaintext per-upload LLM keys from %d meta.json file(s)", n)
+    if not settings.api_key:
+        log.warning("API_KEY is not set: anyone who can reach this port can upload scans, read results and "
+                    "spend this server's LLM quota through the AI Assistant. Set API_KEY and/or bind to 127.0.0.1.")
+    yield
+
+
+app = FastAPI(title="Malimite", version="0.1.0", docs_url="/docs", redoc_url=None, lifespan=_lifespan)
 
 _WEB = Path(__file__).parent.parent
 
@@ -45,7 +66,7 @@ def _check_auth(request: Request) -> None:
     if not settings.api_key:
         return
     key = request.headers.get("X-Api-Key", "")
-    if key != settings.api_key:
+    if not hmac.compare_digest(key.encode("utf-8"), settings.api_key.encode("utf-8")):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
@@ -78,8 +99,8 @@ async def create_scan(
 ):
     _check_auth(request)
     name = file.filename.lower()
-    if not (name.endswith(".ipa") or name.endswith(".apk")):
-        raise HTTPException(status_code=400, detail="Only .ipa or .apk files are accepted")
+    if not name.endswith(_ACCEPTED_EXTENSIONS):
+        raise HTTPException(status_code=400, detail="Only .ipa, .apk or .xapk files are accepted")
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
@@ -622,3 +643,103 @@ async def get_log(request: Request, scan_id: str, tail: int = 200):
         return JSONResponse({"lines": []})
     lines = p.read_text(errors="replace").splitlines()
     return JSONResponse({"lines": lines[-tail:]})
+
+
+# ── AI assistant (chat agent) ─────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    session_id: Optional[str] = None
+    message: str = Field(min_length=1, max_length=4000)
+    provider: Optional[str] = None   # override; must be in agent.llm.PROVIDERS
+    model: Optional[str] = None
+
+
+_ACTIVE_CHATS: set[str] = set()  # one live stream per session
+_CHAT_HITS: deque = deque()      # monotonic timestamps of recent chat requests (global sliding window)
+
+
+def _chat_rate_limit() -> None:
+    now = time.monotonic()
+    while _CHAT_HITS and now - _CHAT_HITS[0] > 60:
+        _CHAT_HITS.popleft()
+    if len(_CHAT_HITS) >= settings.chat_rate_per_min:
+        wait = max(1, int(60 - (now - _CHAT_HITS[0])) + 1)
+        raise HTTPException(status_code=429, detail="Too many chat requests; try again shortly",
+                            headers={"Retry-After": str(wait)})
+    _CHAT_HITS.append(now)
+
+
+def _sse(ev: dict) -> str:
+    return f"data: {json.dumps(ev)}\n\n"
+
+
+@app.post("/api/v1/scans/{scan_id}/chat")
+async def chat(request: Request, scan_id: str, req: ChatRequest):
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    _chat_rate_limit()
+    detail = scanner.get_scan_detail(scan_id)
+    scan_dir = scanner._scan_dir(scan_id)
+    chat_db = chat_store.path_for(scan_dir)
+
+    sess = None
+    if req.session_id:
+        sess = await chat_store.get_session(chat_db, req.session_id)
+        if not sess:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+    try:
+        cfg = resolve_llm(sess["provider"] if sess else detail.llm_provider,
+                          sess["model"] if sess else detail.llm_model,
+                          req.provider, req.model)
+    except LlmError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if sess:
+        sid = sess["id"]
+        if (cfg.provider, cfg.model) != (sess["provider"], sess["model"]):
+            await chat_store.set_llm(chat_db, sid, cfg.provider, cfg.model)
+    else:
+        sid = await chat_store.create_session(chat_db, cfg.provider, cfg.model)
+    if sid in _ACTIVE_CHATS:
+        raise HTTPException(status_code=409, detail="This chat session is already generating")
+
+    ctx = Ctx(scan_id=scan_id, db_path=db_path, exe=exe, platform=detail.platform or "",
+              scan_dir=scan_dir, meta=scanner._read_scan_json(scan_id) or {})
+
+    async def gen():
+        # claimed here, not in the route: if the client vanishes before the first iteration the flag is never set
+        if sid in _ACTIVE_CHATS:
+            yield _sse({"type": "error", "message": "This chat session is already generating"})
+            return
+        _ACTIVE_CHATS.add(sid)
+        try:
+            yield _sse({"type": "session", "session_id": sid, "provider": cfg.provider, "model": cfg.model})
+            async for ev in agent_loop.run_chat(ctx, chat_db, sid, req.message, cfg):
+                yield _sse(ev)
+        except Exception:
+            import logging
+            logging.getLogger("malimite").exception("chat failed for scan %s", scan_id)
+            yield _sse({"type": "error", "message": "internal error"})
+        finally:
+            _ACTIVE_CHATS.discard(sid)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/v1/scans/{scan_id}/chat")
+async def get_chat(request: Request, scan_id: str, session_id: Optional[str] = None):
+    _check_auth(request)
+    _require_db(scan_id)
+    chat_db = chat_store.path_for(scanner._scan_dir(scan_id))
+    sessions = await chat_store.list_sessions(chat_db)
+    sid = session_id or (sessions[0]["id"] if sessions else None)
+    return {"sessions": sessions, "session_id": sid,
+            "messages": await chat_store.history(chat_db, sid) if sid else []}
+
+
+@app.delete("/api/v1/scans/{scan_id}/chat/{session_id}", status_code=204)
+async def delete_chat(request: Request, scan_id: str, session_id: str):
+    _check_auth(request)
+    _require_db(scan_id)
+    if not await chat_store.delete_session(chat_store.path_for(scanner._scan_dir(scan_id)), session_id):
+        raise HTTPException(status_code=404, detail="Chat session not found")

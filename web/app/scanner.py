@@ -40,7 +40,26 @@ def _read_meta(scan_id: str) -> Optional[dict]:
 
 
 def _write_meta(scan_id: str, meta: dict) -> None:
-    _meta_path(scan_id).write_text(json.dumps(meta, indent=2))
+    # '_'-prefixed keys (e.g. the per-upload LLM key) live only in the in-memory dict handed to _run;
+    # they must never reach disk.
+    _meta_path(scan_id).write_text(json.dumps({k: v for k, v in meta.items() if not k.startswith("_")}, indent=2))
+
+
+def scrub_stored_keys() -> int:
+    """Remove plaintext per-upload LLM keys that older versions persisted in meta.json. Returns files fixed."""
+    fixed = 0
+    if not settings.scan_dir.exists():
+        return 0
+    for d in settings.scan_dir.iterdir():
+        p = d / "meta.json"
+        try:
+            meta = json.loads(p.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(meta, dict) and any(k.startswith("_") for k in meta):
+            p.write_text(json.dumps({k: v for k, v in meta.items() if not k.startswith("_")}, indent=2))
+            fixed += 1
+    return fixed
 
 
 _PATH_KEYS = ("dbPath", "ipaPath", "packagePath")
@@ -278,7 +297,8 @@ async def create_scan(
     d = _scan_dir(scan_id)
     d.mkdir(parents=True)
 
-    ext = ".apk" if filename.lower().endswith(".apk") else ".ipa"
+    lower = filename.lower()
+    ext = ".xapk" if lower.endswith(".xapk") else ".apk" if lower.endswith(".apk") else ".ipa"
     ipa_path = d / f"upload{ext}"
     ipa_path.write_bytes(ipa_bytes)
 
@@ -295,7 +315,7 @@ async def create_scan(
         "llm_mode": llm_mode,
         "llm_model": llm_model,
         "assessment_enabled": assessment_enabled,
-        # not exposed in ScanMeta — only used internally by _run
+        # in-memory only (stripped by _write_meta): used by _run to build the CLI environment
         "_llm_api_key": llm_api_key,
     }
     _write_meta(scan_id, meta)
@@ -328,20 +348,9 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
     return cmd
 
 
-# ── background runner ─────────────────────────────────────────────────────────
-
-async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
-    meta["state"] = "running"
-    meta["started_at"] = _now()
-    _write_meta(scan_id, meta)
-
-    cmd = _cli_cmd(ipa_path, out_dir, meta)
-
-    env = dict(os.environ)
-    # Per-request key takes priority over the .env/settings key
-    per_req_key = meta.get("_llm_api_key", "")
-    provider = meta.get("llm_provider", "none")
-
+def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
+    """Env vars the CLI (and the chat agent) need for the given LLM provider."""
+    env: dict[str, str] = {}
     if provider == "openai":
         key = per_req_key or settings.openai_api_key
         if key:
@@ -358,6 +367,21 @@ async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
             env["DEEPSEEK_BASE_URL"] = settings.deepseek_base_url
     elif provider == "ollama":
         env["OLLAMA_BASE_URL"] = settings.ollama_base_url or "http://localhost:11434"
+    return env
+
+
+# ── background runner ─────────────────────────────────────────────────────────
+
+async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
+    meta["state"] = "running"
+    meta["started_at"] = _now()
+    _write_meta(scan_id, meta)
+
+    cmd = _cli_cmd(ipa_path, out_dir, meta)
+
+    env = dict(os.environ)
+    # Per-request key takes priority over the .env/settings key
+    env.update(llm_env(meta.get("llm_provider", "none"), meta.get("_llm_api_key", "")))
 
     log_path = out_dir / "analysis.log"
     try:

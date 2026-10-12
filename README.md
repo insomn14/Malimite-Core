@@ -6,7 +6,7 @@
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17+-orange.svg)](https://openjdk.org/)
-[![Ghidra](https://img.shields.io/badge/Ghidra-%E2%89%A511.1-purple.svg)](https://ghidra-sre.org/)
+[![Ghidra](https://img.shields.io/badge/Ghidra-12.0.x-purple.svg)](https://ghidra-sre.org/)
 [![JADX](https://img.shields.io/badge/JADX-%E2%89%A51.5-green.svg)](https://github.com/skylot/jadx)
 
 ---
@@ -29,6 +29,7 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 - [Download pre-built CLI](#download-pre-built-cli)
 - [Quick start](#quick-start)
 - [Web UI & REST API](#web-ui--rest-api)
+- [AI Assistant](#ai-assistant)
 - [Slack bot](#slack-bot)
 - [CI/CD integration](#cicd-integration)
 - [Detection engines](#detection-engines)
@@ -127,7 +128,7 @@ Malimite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 |---|---|
 | **Java JDK** | 17+ |
 | **Maven** | 3.8+ |
-| **Ghidra** | ≥ 11.1 — must contain `support/analyzeHeadless` (required for `.ipa`) |
+| **Ghidra** | 12.0.x (the web Docker image ships 12.0.4) — must contain `support/analyzeHeadless` (required for `.ipa`). 11.1.2 rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`); 12.1+ is untested (see `web/app/config.py`). Headless also needs the JDK font libraries (`libharfbuzz0b`, `libfontconfig1`, `libfreetype6` on Debian) |
 | **JADX** | ≥ 1.5 — CLI `bin/jadx` (required for `.apk` DEX; set `JADX_HOME`) |
 | **Ghidra (Android native)** | Same install as iOS — used for APK `lib/arm64-v8a/*.so` when `GHIDRA_HOME` is set |
 | **Python** | 3.10+ (web service & Slack bot only) |
@@ -207,6 +208,14 @@ java -jar cli/target/malimite-cli.jar path/to/MyApp.apk \
      --jadx "$JADX_HOME" --out /tmp/full --llm-mode full
 ```
 
+**Split-APK bundles (`.xapk`):** pass the bundle like any other package. Malimite merges the base APK and the
+`split_config.*` / feature splits into one analysis APK (`<name>.merged.apk`, written next to the other outputs; not
+installable), so DEX, the manifest and the native libraries that live in `split_config.arm64_v8a.apk` are all analysed
+together. The base APK is taken from `manifest.json` when the bundle has one, else from `base.apk`, else from the only APK
+whose own manifest has no `split` attribute. OBB expansion files are ignored. `scan.json` records `sourcePackage`,
+`bundleBaseApk` and `bundleSplits`. The bundle is untrusted input: entry names are validated and the data read is capped
+at 2 GiB.
+
 **Outputs:**
 
 | File | Purpose |
@@ -244,7 +253,7 @@ cp .env.example .env    # optional: GHIDRA_HOME, API_KEY, LLM defaults
 # → http://localhost:7070
 ```
 
-Drop an `.ipa` or `.apk` on the upload page (enable **Security Assessment** via the checkbox — on by default). The FastAPI service runs the CLI in the background and exposes everything under `/api/v1/*`. OpenAPI docs: `http://localhost:7070/docs`. The UI groups findings by `rule_id` (unique issues) and has a dedicated **Assessment** tab for controls inventory.
+Drop an `.ipa`, `.apk` or `.xapk` on the upload page (enable **Security Assessment** via the checkbox — on by default). The FastAPI service runs the CLI in the background and exposes everything under `/api/v1/*`. OpenAPI docs: `http://localhost:7070/docs`. The UI groups findings by `rule_id` (unique issues) and has a dedicated **Assessment** tab for controls inventory.
 
 **Key endpoints:**
 
@@ -260,6 +269,28 @@ Drop an `.ipa` or `.apk` on the upload page (enable **Security Assessment** via 
 
 ---
 
+## AI Assistant
+
+After a scan finishes, the web UI shows an **AI Assistant** tab: a chat with an LLM agent that can use the scan's data as tools and reverse engineer a specific class or function on demand.
+
+| Tool | What it does |
+|---|---|
+| `scan_overview`, `list_classes`, `search_code`, `get_source`, `search_strings`, `get_vulnerabilities`, `get_references` | Read-only queries over the scan's SQLite (stored decompiled code, strings, findings, call graph when present) |
+| `get_assessments` | The Security Assessment inventory (root/jailbreak, Frida, anti-debug, pinning, FLAG_SECURE, obfuscation, ...). Reports `UNKNOWN` as unknown and warns when a bytecode VM may hide checks; says so when a scan has no Assessment |
+| `get_manifest` | App configuration: Android package/SDK/debuggable/backup, permissions, components (with `exported`), deep links, native libs; iOS bundle/team/provisioning, Info.plist, entitlements, Mach-O flags. Overview first, then paged sections with a substring filter. Server paths are never exposed |
+| `decompile` | Fresh single-class decompile: `asc` (Android, fast), `jadx` (Android), `ghidra` (iOS Mach-O, or Android `.so` via `lib`). Results are cached |
+
+- **Config:** uses the scan's LLM provider/model by default (overridable per chat). The API key comes from the **server's** `web/.env` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`, or `OLLAMA_BASE_URL`), never from a per-upload key. Optional: `CHAT_MAX_TURNS`, `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_CONTINUATIONS`, `CHAT_TOOL_CAP`, `HEAVY_CONCURRENCY`, `GHIDRA_ONDEMAND_TIMEOUT`. An answer cut off by the output limit is continued automatically and shown (and saved) as one message (default 5400).
+- **Storage:** chat history and the decompile cache live in `<scan-dir>/chat.sqlite`; the scan database is opened read-only.
+- **Ghidra on demand:** the scan deletes its Ghidra project, so the first `ghidra` request per binary re-imports and analyzes it into a persistent `<scan-dir>/ghidra-proj/` (minutes: measured 3.6 min for a 50 MB Mach-O, seconds for a small `.so`; disk about 1.2x the binary, 60 MB measured); later requests reopen it (`-process -noanalysis`, about 4 s).
+- **API:** `POST /api/v1/scans/{id}/chat` (SSE stream), `GET /api/v1/scans/{id}/chat`, `DELETE /api/v1/scans/{id}/chat/{session_id}`.
+- **Safety:** tools cannot run commands, write files or reach the network, and tool output is treated as untrusted data (decompiled code can contain prompt injection). Rebuild the CLI JAR after upgrading: the web service shells out to `io.malimite.core.OnDemandDecompiler` in it. Use only on software you are authorized to analyze.
+- **Access control:** the chat spends the server's LLM quota. Set `API_KEY` (UI field "API Key", header `X-Api-Key`; compared in constant time). `deploy/web-compose.yml` publishes the port on `127.0.0.1` only; set `MALIMITE_BIND=0.0.0.0` together with `API_KEY` to expose it. Chat requests are capped globally (`CHAT_RATE_PER_MIN`, default 30). The server logs a warning at startup when `API_KEY` is empty.
+- **Container:** the web image runs as an unprivileged user (uid 10001). Its entrypoint chowns an existing root-owned scan volume once, then drops privileges. Decompiler subprocesses get an allowlisted environment (no LLM or API keys).
+- **Stored keys:** a per-upload LLM key is only used while the scan runs and is no longer written to `meta.json`; older plaintext keys are removed at startup.
+
+---
+
 ## Slack bot
 
 Standalone bot using Slack Socket Mode — **no public URL or ngrok required**.
@@ -271,7 +302,7 @@ cp .env.example .env
 ./run.sh
 ```
 
-DM the bot an `.ipa` or `.apk` file → it replies with a severity-sorted summary, HTML report, and SARIF attachment. See [`bot/python/README.md`](bot/python/README.md) for Slack App setup.
+DM the bot an `.ipa`, `.apk` or `.xapk` file → it replies with a severity-sorted summary, HTML report, and SARIF attachment. See [`bot/python/README.md`](bot/python/README.md) for Slack App setup.
 
 ---
 
@@ -340,6 +371,16 @@ Modes: `summarize` (Fast Scan) · `find_vulns` (Full Scan) · `auto_fix` · `off
 
 When LLM finds a vulnerability (`find_vulns` / Full Scan), it returns a `detection_regex`. Regexes that self-validate against the source function are saved per platform — `~/.malimite/learned_rules.json` (iOS) or `learned_rules_android.json` (Android) — and reused on future scans **without further LLM calls**. Hollow placeholders such as `...` are rejected.
 
+A learned rule is a lead written by an LLM after reading one function, so it is held to a stricter standard than a catalog rule (`RuleQuality`):
+
+- **Semantic anchor:** every alternative of the regex must name something specific (an API, class or constant). Regexes made only of decompiler vocabulary (`param_1`, `uVar3`, `ulong`, `SoftwareBreakpoint`) are rejected: they match ordinary code.
+- **Word boundaries:** short generic words must be delimited. `(?:Runtime|exec)` also matches `execute()` and `Executors`; `Runtime\.getRuntime\(\)\.exec\(` does not.
+- **Specificity:** a new rule must not match more than ~3% (at least 3) of the *other* functions of the same app.
+- **At scan time:** a learned rule that matches more than 20 distinct functions reports nothing, and learned findings are capped at `MEDIUM` (`MALIMITE_LEARNED_MAX_SEVERITY`, default `MEDIUM`).
+- Rules stored by older versions are filtered by the same gates when they are loaded, and a unit test keeps the seeds in `deploy/rules/` clean.
+
+**Absence findings** ("no certificate pinning") that depend on a feature only apply when the app uses it, e.g. pinning is not reported for an app with no networking. When the code contains a bytecode interpreter (VM obfuscation), "no jailbreak/root/Frida/anti-debug found" is reported as `UNKNOWN` in the Assessment (with a caveat on the matching findings), and the VM is listed as its own control.
+
 ### DeepSeek models
 
 | Model | Use case |
@@ -371,7 +412,7 @@ Reports (`report.html`, `findings.sarif`) regenerate automatically after each tr
 ### CLI flags
 
 ```
-malimite [OPTIONS] <ipa|apk>
+malimite [OPTIONS] <ipa|apk|xapk>
   -o, --out=<dir>          Output directory
   -g, --ghidra=<dir>       Ghidra install (or env GHIDRA_HOME) — iOS Mach-O + Android arm64 .so
   -j, --jadx=<dir>         JADX install (or env JADX_HOME) — Android DEX/Java
@@ -398,6 +439,7 @@ malimite [OPTIONS] <ipa|apk>
 | `JADX_HOME` / `JADX_PATH` | JADX install root or binary path (Android DEX) |
 | `MALIMITE_LEARNED_RULES` / `MALIMITE_LEARNED_RULES_IOS` | iOS learned-rules JSON (default `~/.malimite/learned_rules.json`) |
 | `MALIMITE_LEARNED_RULES_ANDROID` | Android learned-rules JSON (default `~/.malimite/learned_rules_android.json`) |
+| `MALIMITE_LEARNED_MAX_SEVERITY` | Highest severity an LLM-learned rule may report (`CRITICAL`…`INFO`, default `MEDIUM`) |
 | `LLM_PROVIDER` | `openai` · `claude` · `deepseek` · `ollama` · `none` |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
@@ -443,11 +485,15 @@ Unit tests in `core/` cover IPA/APK validation & extraction, Android manifest/NS
 See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 
 - ✅ Core Ghidra pipeline, MSTG/MASTG scanner, LLM, SARIF/HTML, CI templates
-- ✅ Android APK analysis (JADX DEX + optional Ghidra arm64 `.so`)
-- ✅ Security Assessment mode (PRESENT / PARTIAL / ABSENT / UNKNOWN)
-- 🔄 Closure items: real-IPA/APK integration test, cross-reference REST API
+- ✅ Android APK analysis (JADX or Droid ASC for DEX + optional Ghidra arm64 `.so`)
+- ✅ Security Assessment mode (PRESENT / PARTIAL / ABSENT / UNKNOWN), aware of bytecode-VM obfuscation
+- ✅ AI Assistant: chat over the scan with tools, on-demand ASC / JADX / Ghidra decompilation
+- ✅ Detection quality: quality gates for LLM-learned rules, relevance preconditions for absence findings
+- ✅ Hardened web image: Ghidra 12.0.4, unprivileged user, loopback-only by default, API key + rate limit
+- 🔄 Closure items: real-IPA/APK integration test and Python tests on CI, cross-reference REST API
+- 🔄 Chat bots (Slack / Telegram / Discord): the standalone Slack bot works; Telegram/Discord only queue a scan. Unifying them on the web API is planned
 - 📋 Next major phase: **Observability** (Prometheus metrics, enriched health checks)
-- 📋 Future: security hardening, Helm/Kubernetes, enterprise SSO
+- 📋 Future: remaining security hardening, Helm/Kubernetes, enterprise SSO
 
 ---
 
@@ -463,6 +509,16 @@ Key upstream concepts ported (with Swing removed):
 - `DecompilerBridge/ghidra/DumpClassData.java` → bundled Ghidra post-script
 - `SQLiteDBHandler` → `SqliteStore`
 
+**Built on the shoulders of:**
+
+- [**Ghidra**](https://github.com/NationalSecurityAgency/ghidra) (NSA) — iOS and native-library decompilation
+- [**JADX**](https://github.com/skylot/jadx) (skylot) — Android DEX → Java
+- [**Droid ASC**](https://pypi.org/project/droidasc/) — on-demand Android decompiler backend, developed by the author of Malimite-Core and inspired by [**MG1937/ASC**](https://github.com/MG1937/ASC) (Apache-2.0); builds on [Androguard](https://github.com/androguard/androguard)
+- [**OWASP MASTG / MASVS**](https://mas.owasp.org/) — the detection catalogs derive from the Mobile Application Security Testing Guide (CC BY-SA 4.0)
+- [**SARIF**](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) (OASIS) — result interchange format
+
+The full list, with licenses and how each is used (bundled, invoked, or derived), is in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
 Licensed under the **Apache License 2.0**, consistent with upstream Malimite. See [Malimite LICENSE](https://github.com/LaurieWired/Malimite/blob/main/LICENSE).
 
 ---
@@ -471,7 +527,7 @@ Licensed under the **Apache License 2.0**, consistent with upstream Malimite. Se
 
 Issues and pull requests are welcome. Before opening a PR:
 
-1. Run `mvn test -pl core`
+1. Run `mvn test -pl core,cli` and, from the repo root, `python -m unittest discover web/tests` (both run on every pull request in CI)
 2. Keep changes focused — Malimite-Core favors minimal, headless diffs
 3. Credit Malimite when porting additional upstream functionality
 

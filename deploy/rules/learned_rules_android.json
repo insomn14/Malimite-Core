@@ -69,23 +69,6 @@
       "platform": "ANDROID"
     },
     {
-      "id": "LLM-INJECTION-002",
-      "scope": "INJECTION",
-      "title": "Command Injection via JavaScript Interface getTime method",
-      "category": "CODE",
-      "severity": "CRITICAL",
-      "cvssScore": 9.8,
-      "cwe": "CWE-78",
-      "description": "The getTime JavaScript interface method passes the \u0027Time\u0027 parameter directly to Runtime.getRuntime().exec() without sanitization, allowing arbitrary shell command execution from WebView.",
-      "remediation": "Do not expose shell execution to JavaScript; if necessary, use a whitelist of allowed commands and avoid passing user input to exec.",
-      "referenceUrl": "LLM-discovered 2026-08-10 from function com.mobilehackinglab.guessme.WebviewActivity.\u003cclass\u003e",
-      "target": "DECOMPILED",
-      "regex": "(?:Runtime|exec)[\\s\\S]{0,200}(?:exec|Runtime)",
-      "pocTemplate": "1. Load the WebView in the app\n2. Inject JavaScript call: AndroidBridge.getTime(\u0027some; malicious; command\u0027)\n3. The command executes with app privileges",
-      "createdAt": 1786313087025,
-      "platform": "ANDROID"
-    },
-    {
       "id": "LLM-WEBVIEW-004",
       "scope": "WEBVIEW",
       "title": "Arbitrary URL Loading via loadWebsite JavaScript Interface leading to XSS",

@@ -24,6 +24,8 @@ public final class JadxRunner {
     /** Default wall-clock timeout for JADX (large apps can be slow). */
     private static final long DEFAULT_TIMEOUT_MINUTES = 45;
 
+    private static final long SINGLE_CLASS_TIMEOUT_MINUTES = 10;
+
     private final Path jadxBinary;
 
     public JadxRunner(Path jadxHomeOrNull) throws IOException {
@@ -83,6 +85,35 @@ public final class JadxRunner {
         else
             log.info("JADX finished → {}", root);
         return root;
+    }
+
+    /**
+     * Decompile one class on demand (JADX still loads the whole APK, so this is seconds-to-minutes,
+     * not milliseconds like ASC). {@code fqcn} must already be validated by the caller.
+     * Returns the generated {@code .java} source.
+     */
+    public String decompileClass(Path apkPath, String fqcn, Path outputDir) throws Exception {
+        Files.createDirectories(outputDir);
+        List<String> cmd = List.of(jadxBinary.toString(), "--deobf", "--show-bad-code",
+                "--single-class", fqcn, "--single-class-output", outputDir.toString(),
+                "-d", outputDir.toString(), apkPath.toString());
+        log.info("Running JADX single-class: {}", String.join(" ", cmd));
+        // output goes to a file, not a pipe: reading a pipe to EOF would block past the timeout if JADX hangs
+        Path logFile = Files.createTempFile(outputDir, "jadx", ".log");
+        Process proc = new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(logFile.toFile()).start();
+        if (!proc.waitFor(SINGLE_CLASS_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
+            proc.descendants().forEach(ProcessHandle::destroyForcibly);
+            proc.destroyForcibly();
+            throw new IOException("JADX timed out after " + SINGLE_CLASS_TIMEOUT_MINUTES + " minutes");
+        }
+        String out = Files.readString(logFile, StandardCharsets.UTF_8);
+        try (var walk = Files.walk(outputDir)) {
+            // layout differs across JADX versions: take the first .java produced
+            var java = walk.filter(p -> p.toString().endsWith(".java")).findFirst();
+            if (java.isPresent()) return Files.readString(java.get(), StandardCharsets.UTF_8);
+        }
+        throw new IOException("JADX produced no source for " + fqcn + " (exit=" + proc.exitValue() + ")\n"
+                + out.substring(0, Math.min(out.length(), 1000)));
     }
 
     static Path resolveJadx(Path jadxHomeOrNull) throws IOException {
