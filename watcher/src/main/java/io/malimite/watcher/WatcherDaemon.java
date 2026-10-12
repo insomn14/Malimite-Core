@@ -39,7 +39,7 @@ public class WatcherDaemon {
                 for (WatchEvent<?> ev : k.pollEvents()) {
                     Path p = incoming.resolve((Path) ev.context());
                     String lower = p.toString().toLowerCase();
-                    if (!lower.endsWith(".ipa") && !lower.endsWith(".apk")) continue;
+                    if (!lower.endsWith(".ipa") && !lower.endsWith(".apk") && !lower.endsWith(".xapk")) continue;
                     pool.submit(() -> handle(analyzer, p, ghidra, jadx, reports));
                 }
                 k.reset();

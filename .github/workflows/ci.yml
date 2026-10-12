@@ -1,0 +1,58 @@
+name: CI
+
+# Unit tests on every pull request and on main. Heavy checks that need Ghidra / JADX / a device (real IPA/APK scans)
+# are not run here; see PHASES.md.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  java:
+    name: Java tests (JDK ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["17", "21"]   # the pom targets 17; the Docker image and the release build run 21
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - name: Core and CLI tests
+        run: mvn -B -ntp test -pl core,cli -am
+
+  python:
+    name: Python tests (web service and AI Assistant)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"            # what deploy/web.Dockerfile runs
+          cache: pip
+          cache-dependency-path: web/requirements.txt
+
+      - name: Install the web service dependencies
+        run: pip install -r web/requirements.txt
+
+      - name: Unit tests
+        run: python -m unittest discover web/tests   # from the repo root: the tests import web.app

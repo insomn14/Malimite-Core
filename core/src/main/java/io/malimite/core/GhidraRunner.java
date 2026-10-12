@@ -219,12 +219,21 @@ public class GhidraRunner {
             // analyzeHeadless prefers JAVA_HOME; clear conflicting launcher vars
             pb.environment().remove("JDK_HOME");
             log.info("Using JAVA_HOME={} for Ghidra (set GHIDRA_JAVA_HOME to override)", ghidraJava);
+        } else if (isSupportedGhidraJava(Runtime.version().feature())) {
+            // resolveGhidraJavaHome only knows macOS/Homebrew locations; on Linux the default JDK is what Ghidra uses
+            log.info("Using the default JDK ({}) for Ghidra (set GHIDRA_JAVA_HOME to override)", Runtime.version().feature());
         } else {
-            log.warn("No Java 17/21 found for Ghidra — using process default. "
-                    + "If DumpClassData fails with osgi.ee=UNKNOWN, install Temurin 21 and set GHIDRA_JAVA_HOME.");
+            log.warn("No Java 17/21 found for Ghidra and the default JDK is {} — using it anyway. "
+                    + "If DumpClassData fails with osgi.ee=UNKNOWN, install Temurin 21 and set GHIDRA_JAVA_HOME.",
+                    Runtime.version().feature());
         }
         log.info("Launching: {}", String.join(" ", pb.command()));
         return pb.start();
+    }
+
+    /** JDKs Ghidra's OSGi script loader recognises (the running JVM is used as a proxy for the one analyzeHeadless finds). */
+    static boolean isSupportedGhidraJava(int feature) {
+        return feature == 17 || feature == 21;
     }
 
     /**

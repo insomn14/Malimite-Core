@@ -4,8 +4,6 @@
 # Usage:
 #   docker compose -f deploy/web-compose.yml up --build
 #   → http://localhost:7070
-version: "3.9"
-
 services:
   malimite-web:
     build:
@@ -14,8 +12,9 @@ services:
     image: malimite-web:latest
     container_name: malimite-web
     ports:
-      # host:container — 7070 free, already verified not to collide.
-      - "7070:7070"
+      # host:container. Loopback only by default: the chat spends your LLM quota. To expose it on the LAN set
+      # MALIMITE_BIND=0.0.0.0 AND API_KEY (deploy/.env).
+      - "${MALIMITE_BIND:-127.0.0.1}:7070:7070"
     environment:
       HOST: "0.0.0.0"
       PORT: "7070"

@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
     ollama_base_url: str = "http://localhost:11434"
 
+    # AI Assistant (chat agent)
+    chat_max_turns: int = 20
+    chat_max_output_tokens: int = 8192  # per LLM call; on deepseek this also covers hidden reasoning tokens
+    chat_max_continuations: int = 8     # auto-continue an answer cut off by the output limit
+    chat_tool_cap: int = 12000          # max chars returned to the model per tool call
+    chat_rate_per_min: int = 30         # global cap on chat requests/min: each one spends the server's LLM quota
+    heavy_concurrency: int = 1          # concurrent on-demand decompile subprocesses
+    ghidra_ondemand_timeout: int = 5400  # > Java import cap (60 min) so a big first import can finish
+
     model_config = {"env_file": str(_WEB / ".env"), "env_file_encoding": "utf-8"}
 
 

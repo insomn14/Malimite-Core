@@ -56,6 +56,19 @@ public final class AssessmentCatalog {
                         "Document naming posture only; do not treat this as a bypass of other protections."
                 });
 
+        any("ASSESS-VM-OBFUSCATION",
+                "Detects bytecode-interpreter (VM) obfuscation: functions that dispatch on an opcode byte in a loop. Checks hidden in the bytecode are invisible to static signatures.",
+                new String[]{
+                        "Look at the flagged functions: a loop that reads a byte, branches on many constants and advances a byte pointer is an interpreter.",
+                        "Find the data it reads (DAT_/embedded tables): that is the bytecode. Strings and security checks may be decoded from it at runtime.",
+                        "Treat 'absent' results for jailbreak/root, Frida and anti-debug checks as unknown for this app."
+                },
+                new String[]{
+                        "On an authorized device, trace calls to the interpreter (Frida/lldb) and observe which APIs the decoded program reaches (file access, ptrace, sysctl, dlsym).",
+                        "Compare behaviour on a stock device and a lab device to learn whether a hidden check exists.",
+                        "Inventory only; do not publish a deobfuscation recipe."
+                });
+
         any("ASSESS-OBFUSCATOR-VENDOR",
                 "Looks for fingerprints of commercial app-shield / obfuscator vendors (DexGuard, iXGuard, Promon, Talsec, and similar).",
                 new String[]{

@@ -18,10 +18,87 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.json.JSONObject;
-import org.json.JSONArray;
 
 public class DumpClassData extends GhidraScript {
+
+    // BEGIN MINIJSON
+    // Dependency-free JSON writer. Ghidra does not put third-party jars on the script compile classpath
+    // (org.json was "package org.json does not exist" on Ghidra 12.0.4 and no stock Ghidra bundles it), so the
+    // script cannot rely on the org.json that the Java side uses. Only the subset this script needs; the output is
+    // parsed on the other side by org.json, which is covered by a unit test. The indent arguments are ignored:
+    // compact output is smaller and the receiver reads whole blocks up to a terminator line.
+    static final class JSONObject {
+        private final java.util.LinkedHashMap<String, Object> map = new java.util.LinkedHashMap<>();
+        JSONObject() { }
+        JSONObject(Map<String, ?> src) { for (Map.Entry<String, ?> e : src.entrySet()) put(e.getKey(), e.getValue()); }
+        JSONObject put(String key, Object value) {
+            if (value == null) map.remove(key); else map.put(key, value);   // like org.json: null removes the key
+            return this;
+        }
+        @Override public String toString() { StringBuilder sb = new StringBuilder(); write(sb, this); return sb.toString(); }
+        public String toString(int indent) { return toString(); }
+    }
+
+    static final class JSONArray {
+        private final List<Object> list = new ArrayList<>();
+        JSONArray() { }
+        JSONArray(java.util.Collection<?> src) { list.addAll(src); }
+        JSONArray put(Object value) { list.add(value); return this; }
+        int length() { return list.size(); }
+        @Override public String toString() { StringBuilder sb = new StringBuilder(); write(sb, this); return sb.toString(); }
+        public String toString(int indent) { return toString(); }
+    }
+
+    static void write(StringBuilder sb, Object v) {
+        if (v == null) {
+            sb.append("null");
+        } else if (v instanceof JSONObject) {
+            sb.append('{');
+            boolean first = true;
+            for (Map.Entry<String, Object> e : ((JSONObject) v).map.entrySet()) {
+                if (!first) sb.append(',');
+                first = false;
+                quote(sb, e.getKey());
+                sb.append(':');
+                write(sb, e.getValue());
+            }
+            sb.append('}');
+        } else if (v instanceof JSONArray) {
+            sb.append('[');
+            boolean first = true;
+            for (Object o : ((JSONArray) v).list) {
+                if (!first) sb.append(',');
+                first = false;
+                write(sb, o);
+            }
+            sb.append(']');
+        } else if (v instanceof Number || v instanceof Boolean) {
+            sb.append(v);
+        } else {
+            quote(sb, v.toString());
+        }
+    }
+
+    static void quote(StringBuilder sb, String s) {
+        sb.append('"');
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"':  sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                case '\b': sb.append("\\b"); break;
+                case '\f': sb.append("\\f"); break;
+                default:
+                    if (c < 0x20 || c == '\u2028' || c == '\u2029') sb.append(String.format("\\u%04x", (int) c));
+                    else sb.append(c);
+            }
+        }
+        sb.append('"');
+    }
+    // END MINIJSON
 
     /** Per-function decompile budget (seconds). 0 would use Ghidra's default and can stall for ages. */
     private static final int DECOMPILE_TIMEOUT_SECS = 45;

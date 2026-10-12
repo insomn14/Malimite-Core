@@ -205,8 +205,8 @@ async def on_file_shared(event, client):
     info = await client.files_info(file=file_id)
     f = info["file"]
     name = (f.get("name") or "").lower()
-    if not (name.endswith(".ipa") or name.endswith(".apk")):
-        return  # ignore non-IPA uploads silently
+    if not name.endswith((".ipa", ".apk", ".xapk")):
+        return  # ignore other uploads silently
 
     # Thread the reply off the original file's message timestamp if available
     thread_ts = f.get("timestamp")

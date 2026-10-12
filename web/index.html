@@ -408,6 +408,38 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 .vuln-loc-count{font-size:.72rem;font-weight:600;color:var(--muted);background:var(--bg);padding:.1rem .45rem;border-radius:4px;white-space:nowrap}
 .regex-cell .regex-toggle{display:none;margin-top:.2rem;font-size:.68rem;font-weight:600;color:var(--accent);cursor:pointer;background:none;border:0;padding:0}
 .regex-cell.long .regex-toggle{display:inline}
+
+/* ai assistant */
+.chat-ai{max-width:100%}
+.chat-msg p{margin:.35rem 0}.chat-msg>*:first-child{margin-top:0}.chat-msg>*:last-child{margin-bottom:0}
+.chat-h{margin:.8rem 0 .3rem;font-size:.95rem;line-height:1.3}
+h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom:.2rem}
+.chat-msg ul,.chat-msg ol{margin:.35rem 0 .35rem 1.3rem}.chat-msg li{margin:.15rem 0}
+.chat-msg hr{border:0;border-top:1px solid var(--border);margin:.7rem 0}
+.chat-msg blockquote{margin:.4rem 0;padding:.2rem .7rem;border-left:3px solid var(--border);color:var(--muted)}
+.chat-tbl{overflow-x:auto;margin:.5rem 0}
+.chat-tbl table{border-collapse:collapse;font-size:.78rem;min-width:100%}
+.chat-tbl th,.chat-tbl td{border:1px solid var(--border);padding:.3rem .5rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+.chat-tbl td:first-child,.chat-tbl th:first-child{white-space:nowrap}
+.chat-tbl th{background:var(--bg);font-weight:600}
+.chat-user p{margin:.1rem 0}
+.chat-card{padding:1rem}
+.chat-bar{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem}
+.chat-bar select,.chat-bar input{padding:.3rem .5rem;border:1px solid var(--border);border-radius:4px;font-size:.8rem;max-width:200px}
+.chat-msgs{height:min(60vh,560px);overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:.75rem;background:var(--bg);display:flex;flex-direction:column;gap:.6rem}
+.chat-msg{max-width:92%;padding:.55rem .8rem;border-radius:var(--radius);overflow-wrap:anywhere;font-size:.85rem}
+.chat-user{align-self:flex-end;background:var(--accent);color:#fff}
+.chat-ai{align-self:flex-start;background:var(--surface);border:1px solid var(--border)}
+.chat-code{margin:.4rem 0;padding:.5rem .6rem;background:#0f172a;color:#e2e8f0;border-radius:6px;font-size:.75rem;overflow-x:auto;white-space:pre;max-height:320px}
+.chat-msg code{background:#eef0f4;padding:0 .25rem;border-radius:3px;font-size:.8em}
+.chat-user code{background:rgba(255,255,255,.2)}
+.chat-tool{margin:.2rem 0;font-size:.75rem}
+.chat-tool summary{cursor:pointer;color:var(--muted);overflow-wrap:anywhere}
+.chat-hint{color:var(--muted);font-size:.85rem}
+.chat-chips{display:flex;flex-wrap:wrap;gap:.4rem}
+.chat-input{display:flex;gap:.5rem;margin-top:.75rem;align-items:flex-end}
+.chat-input textarea{flex:1;min-width:0;padding:.5rem;border:1px solid var(--border);border-radius:var(--radius);font:inherit;resize:vertical}
+.chat-note{margin-top:.5rem;font-size:.7rem;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -425,7 +457,7 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
   <span class="nav-spacer"></span>
   <span class="nav-apikey">
     <label for="nav-key">API Key</label>
-    <input id="nav-key" type="password" placeholder="optional"/>
+    <input id="nav-key" type="password" placeholder="required if API_KEY is set" autocomplete="off"/>
   </span>
 </nav>
 
@@ -487,8 +519,18 @@ window.onLlmModeChange = function() {
 };
 
 /* ── config ── */
+const KEY_LS = 'malimite.apikey';   // remembered in this browser only; best-effort (storage can be blocked)
 const keyEl = () => document.getElementById('nav-key');
 function apiKey() { return keyEl() ? keyEl().value : ''; }
+(function initKey() {
+  const el = keyEl();
+  if (!el) return;
+  try { el.value = localStorage.getItem(KEY_LS) || ''; } catch (_) {}
+  el.addEventListener('change', () => {
+    try { el.value ? localStorage.setItem(KEY_LS, el.value) : localStorage.removeItem(KEY_LS); } catch (_) {}
+    router();   // reload whatever is on screen with the new key
+  });
+})();
 
 function headers(extra={}) {
   const h = {'Accept':'application/json', ...extra};
@@ -499,11 +541,43 @@ function headers(extra={}) {
 async function api(path, opts={}) {
   const r = await fetch('/api/v1' + path, {headers: headers(opts.headers||{}), ...opts});
   if (!r.ok) {
-    const txt = await r.text().catch(()=>'');
-    throw new Error(txt || r.statusText);
+    if (r.status === 401) {
+      if (keyEl()) keyEl().focus();
+      throw new Error(apiKey() ? 'Invalid API key — check the "API Key" field (top right).'
+                               : 'This server requires an API key — enter it in the "API Key" field (top right).');
+    }
+    let msg = await r.text().catch(()=>'');
+    try { const j = JSON.parse(msg); if (j && typeof j.detail === 'string') msg = j.detail; } catch (_) {}
+    throw new Error(msg || r.statusText);
   }
   return r.json();
 }
+
+/* Plain <a href="/api/v1/..."> links cannot send the X-Api-Key header, so with a key set they are fetched with it
+   and handed to the browser as a blob (report/log open in a tab, everything else downloads). */
+document.addEventListener('click', async ev => {
+  const a = ev.target.closest && ev.target.closest('a[href^="/api/v1/"]');
+  if (!a || !apiKey() || ev.defaultPrevented) return;
+  ev.preventDefault();
+  const popup = a.target === '_blank' ? window.open('', '_blank') : null;   // opened synchronously: popup blockers
+  try {
+    const r = await fetch(a.getAttribute('href'), {headers: headers({'Accept': '*/*'})});
+    if (!r.ok) throw new Error(r.status === 401 ? 'Invalid API key' : ((await r.text().catch(()=>'')) || r.statusText).slice(0, 200));
+    const url = URL.createObjectURL(await r.blob());
+    if (popup) { popup.location = url; }
+    else {
+      const m = (r.headers.get('content-disposition') || '').match(/filename="?([^";]+)/);
+      const d = document.createElement('a');
+      d.href = url;
+      d.download = a.getAttribute('download') || (m && m[1]) || a.getAttribute('href').split('?')[0].split('/').pop();
+      document.body.appendChild(d); d.click(); d.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    if (popup) popup.close();
+    alert('Download failed: ' + (e.message || e));
+  }
+});
 
 /* ── router ── */
 const routes = {};
@@ -597,9 +671,9 @@ route('home', async function() {
       <div class="card-title">Upload package</div>
       <div class="drop-zone" id="drop">
         <div style="font-size:2rem">📦</div>
-        <p><strong>Drag &amp; drop .ipa or .apk here</strong></p>
+        <p><strong>Drag &amp; drop .ipa, .apk or .xapk here</strong></p>
         <p>iOS via Ghidra · Android via JADX (+ Ghidra for native .so) · Malimite finds the sketchy bits.</p>
-        <label class="drop-file-btn">Browse file<input type="file" id="ipa-file" accept=".ipa,.apk"/></label>
+        <label class="drop-file-btn">Browse file<input type="file" id="ipa-file" accept=".ipa,.apk,.xapk"/></label>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-top:1rem;font-size:.8rem">
         <label style="display:flex;flex-direction:column;gap:.3rem">
@@ -672,7 +746,7 @@ route('home', async function() {
   async function doUpload(file) {
     if (!file) return;
     const n = file.name.toLowerCase();
-    if (!n.endsWith('.ipa') && !n.endsWith('.apk')) { alert('Only .ipa or .apk files accepted'); return; }
+    if (!n.endsWith('.ipa') && !n.endsWith('.apk') && !n.endsWith('.xapk')) { alert('Only .ipa, .apk or .xapk files accepted'); return; }
 
     // Validate: API key required when provider needs one
     let provider = $('#llm-provider').value;
@@ -1246,19 +1320,20 @@ route('learned', async function() {
 
 
 /* ── scan detail view ── */
-const TABS = ['summary','vulnerabilities','assessment','functions','strings','resources','entrypoints','llm','log','downloads'];
+const TABS = ['summary','vulnerabilities','assessment','functions','strings','resources','entrypoints','llm','assistant','log','downloads'];
 
 function tabsForDetail(detail) {
   const mode = String(detail?.llm_mode || '').toLowerCase().replace(/-/g, '_');
   const showOff = mode === 'offensive' || mode === 'offense' || mode === 'frida' || mode === 'bypass';
-  if (!showOff) return TABS.slice();
-  const tabs = TABS.slice();
+  const tabs = TABS.filter(t => t !== 'assistant' || detail?.state === 'done');
+  if (!showOff) return tabs;
   const i = tabs.indexOf('llm');
   tabs.splice(i >= 0 ? i : tabs.length, 0, 'offensive');
   return tabs;
 }
 
 function tabLabel(t) {
+  if (t === 'assistant') return 'AI Assistant';
   return t === 'llm' ? 'Llm' : t.charAt(0).toUpperCase() + t.slice(1);
 }
 
@@ -1271,7 +1346,7 @@ route('scan', async function(id, tab='summary') {
   const tabs = tabsForDetail(detail);
   if (tab === 'offensive' && !tabs.includes('offensive')) tab = 'summary';
   const tabsHtml = tabs.map(t=>
-    `<div class="tab${t===tab?' active':''}" onclick="goTab('${id}','${t}')">${tabLabel(t)}</div>`
+    `<div class="tab${t===tab?' active':''}" data-tab="${t}" onclick="goTab('${id}','${t}')">${tabLabel(t)}</div>`
   ).join('');
 
   render(`
@@ -1307,7 +1382,7 @@ route('scan', async function(id, tab='summary') {
 window.goTab = function(id, tab) {
   history.replaceState(null,'','#/scan/'+id+'/'+tab);
   document.querySelectorAll('.tab').forEach(t=>{
-    t.classList.toggle('active', t.textContent.toLowerCase()===tab);
+    t.classList.toggle('active', t.dataset.tab===tab);
   });
   api('/scans/'+id).then(detail => renderTab(id, tab, detail));
 };
@@ -1331,6 +1406,7 @@ async function renderTab(id, tab, detail) {
       case 'entrypoints': await tabEntryPoints(el, id, detail); break;
       case 'offensive':   await tabOffensive(el, id, detail); break;
       case 'llm':         await tabLlm(el, id, detail); break;
+      case 'assistant':   await tabAssistant(el, id, detail); break;
       case 'log':         await tabLog(el, id); break;
       case 'downloads':   el.innerHTML = tabDownloads(id, detail); break;
       default:            el.innerHTML = '<div class="empty">Unknown tab.</div>';
@@ -1338,6 +1414,288 @@ async function renderTab(id, tab, detail) {
   } catch(e) {
     el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
+}
+
+/* ── AI Assistant tab ── */
+const chatState = {};
+function chatSt(id) { return chatState[id] || (chatState[id] = {sid: null, fresh: false, sessions: [], ctrl: null, busy: false}); }
+
+const CHAT_PROMPTS = [
+  'Give me a security overview of this app',
+  'Find crypto misuse (weak algorithms, ECB, hardcoded keys)',
+  'Find hardcoded secrets, tokens and URLs',
+  'Where is certificate pinning implemented?',
+];
+
+/* mini markdown (headings, bold/italic, `code`, fenced code, lists, tables, quotes, hr).
+   Every piece of model/tool text goes through esc() before any tag is added; no links/images are rendered. */
+function chatInline(s) {
+  return String(s).split(/(`[^`\n]+`)/).map(p => {
+    if (p.length > 1 && p[0] === '`' && p[p.length - 1] === '`') return '<code>' + esc(p.slice(1, -1)) + '</code>';
+    return esc(p)
+      .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*\w])\*(?=[^\s*])(.+?)(?<=[^\s*])\*(?![*\w])/g, '$1<em>$2</em>');
+  }).join('');
+}
+
+function chatSplitRow(row) {
+  let r = row.trim();
+  if (r.startsWith('|')) r = r.slice(1);
+  if (r.endsWith('|')) r = r.slice(0, -1);
+  return r.split(/\|(?=(?:[^`]*`[^`]*`)*[^`]*$)/).map(c => c.trim());
+}
+
+function chatBlocks(text) {
+  const L = text.split('\n'), out = [];
+  const isTableStart = i => L[i].includes('|') && i + 1 < L.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(L[i + 1]);
+  const isBlockStart = i => /^#{1,6}\s/.test(L[i]) || /^\s*([-*+]|\d+[.)])\s+/.test(L[i]) || /^>\s?/.test(L[i]) || isTableStart(i);
+  let i = 0, m;
+  while (i < L.length) {
+    const l = L[i];
+    if (!l.trim()) { i++; continue; }
+    if ((m = l.match(/^(#{1,6})\s+(.*)$/))) {
+      const n = Math.min(m[1].length + 2, 6);   // chat-sized: # -> h3
+      out.push(`<h${n} class="chat-h">${chatInline(m[2])}</h${n}>`); i++; continue;
+    }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) { out.push('<hr>'); i++; continue; }
+    if (isTableStart(i)) {
+      const head = chatSplitRow(l); i += 2;
+      const rows = [];
+      while (i < L.length && L[i].includes('|') && L[i].trim()) { rows.push(chatSplitRow(L[i])); i++; }
+      out.push('<div class="chat-tbl"><table><thead><tr>' + head.map(c => `<th>${chatInline(c)}</th>`).join('') +
+        '</tr></thead><tbody>' + rows.map(r => '<tr>' + head.map((_, k) => `<td>${chatInline(r[k] || '')}</td>`).join('') + '</tr>').join('') +
+        '</tbody></table></div>');
+      continue;
+    }
+    if (/^\s*([-*+]|\d+[.)])\s+/.test(l)) {
+      const ordered = /^\s*\d/.test(l), items = [];
+      while (i < L.length && (m = L[i].match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/))) {
+        let item = m[1]; i++;
+        while (i < L.length && L[i].trim() && /^\s{2,}\S/.test(L[i]) && !/^\s*([-*+]|\d+[.)])\s+/.test(L[i])) { item += ' ' + L[i].trim(); i++; }
+        items.push(item);
+      }
+      const tag = ordered ? 'ol' : 'ul';
+      out.push(`<${tag}>` + items.map(t => `<li>${chatInline(t)}</li>`).join('') + `</${tag}>`);
+      continue;
+    }
+    if (/^>\s?/.test(l)) {
+      const q = [];
+      while (i < L.length && /^>\s?/.test(L[i])) { q.push(L[i].replace(/^>\s?/, '')); i++; }
+      out.push('<blockquote>' + q.map(chatInline).join('<br>') + '</blockquote>'); continue;
+    }
+    const para = [];
+    while (i < L.length && L[i].trim() && !(para.length && isBlockStart(i))) { para.push(L[i]); i++; }
+    out.push('<p>' + para.map(chatInline).join('<br>') + '</p>');
+  }
+  return out.join('');
+}
+
+function chatMd(text) {
+  return String(text).split('```').map((part, i) => {
+    if (i % 2) return '<pre class="chat-code">' + esc(part.replace(/^[^\n]*\n/, '')) + '</pre>';
+    return chatBlocks(part);
+  }).join('');
+}
+
+function chatToolHtml(tu, result) {
+  const status = !result ? 'running' : (result.is_error || result.ok === false ? 'error' : 'ok');
+  const body = result ? esc(result.preview != null ? result.preview : result.content) : '';
+  return `<details class="chat-tool" data-tid="${escAttr(tu.id)}">
+    <summary>${esc(tu.name)}(${esc(JSON.stringify(tu.args != null ? tu.args : tu.input))})
+      <span class="badge badge-${status === 'ok' ? 'done' : status === 'error' ? 'error' : 'running'}">${status}</span></summary>
+    <pre class="chat-code">${body}</pre></details>`;
+}
+
+function chatAdd(cls, html) {
+  const box = document.getElementById('chat-msgs');
+  if (!box) return null;
+  const d = document.createElement('div');
+  d.className = 'chat-msg ' + cls;
+  d.innerHTML = html;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+  return d;
+}
+
+function chatRenderHistory(messages) {
+  const box = document.getElementById('chat-msgs');
+  if (!box) return;
+  box.innerHTML = '';
+  const results = {};
+  messages.forEach(m => m.content.forEach(b => { if (b.type === 'tool_result') results[b.tool_use_id] = b; }));
+  messages.forEach(m => {
+    if (m.role === 'user') {
+      const t = m.content.filter(b => b.type === 'text').map(b => b.text).join('');
+      if (t) chatAdd('chat-user', chatMd(t));
+    } else {
+      const html = m.content.map(b => b.type === 'text' ? chatMd(b.text)
+        : b.type === 'tool_use' ? chatToolHtml(b, results[b.id]) : '').join('');
+      if (html) chatAdd('chat-ai', html);
+    }
+  });
+  if (!messages.length) chatShowPrompts();
+}
+
+function chatShowPrompts() {
+  const box = document.getElementById('chat-msgs');
+  if (!box) return;
+  box.innerHTML = '<div class="chat-hint">Ask about this app. The assistant reads the scan data and can decompile a class on demand.</div>' +
+    '<div class="chat-chips">' + CHAT_PROMPTS.map(p => `<button class="btn btn-ghost btn-sm" data-p="${escAttr(p)}">${esc(p)}</button>`).join('') +
+    '<button class="btn btn-ghost btn-sm" data-fill="Explain what class ">Explain class …</button></div>';
+}
+
+async function tabAssistant(el, id, detail) {
+  if (detail.state !== 'done') {
+    el.innerHTML = `<div class="alert alert-warn">Scan not complete.</div>`; return;
+  }
+  const st = chatSt(id);
+  el.innerHTML = `
+    <div class="card chat-card">
+      <div class="chat-bar">
+        <select id="chat-session" title="Chat session"></select>
+        <button class="btn btn-ghost btn-sm" id="chat-new">New chat</button>
+        <button class="btn btn-ghost btn-sm" id="chat-del">Delete</button>
+        <span class="nav-spacer"></span>
+        <select id="chat-provider" title="LLM provider">
+          <option value="">Scan default${detail.llm_provider && detail.llm_provider !== 'none' ? ' (' + esc(detail.llm_provider) + ')' : ''}</option>
+          <option value="claude">claude</option><option value="openai">openai</option>
+          <option value="deepseek">deepseek</option><option value="ollama">ollama</option>
+        </select>
+        <input id="chat-model" placeholder="${escAttr(detail.llm_model || 'model (default)')}" title="Model override"/>
+      </div>
+      <div id="chat-msgs" class="chat-msgs"></div>
+      <div id="chat-err"></div>
+      <div class="chat-input">
+        <textarea id="chat-in" rows="2" placeholder="Ask about a class, function or behavior… (Enter to send, Shift+Enter for newline)"></textarea>
+        <button class="btn btn-primary" id="chat-send">Send</button>
+        <button class="btn btn-danger" id="chat-stop" style="display:none">Stop</button>
+      </div>
+      <div class="chat-note">AI output may be wrong. Decompiled code is untrusted input. Use only on software you are authorized to analyze.</div>
+    </div>`;
+
+  const $in = document.getElementById('chat-in');
+  const setBusy = b => {
+    document.getElementById('chat-send').style.display = b ? 'none' : '';
+    document.getElementById('chat-stop').style.display = b ? '' : 'none';
+    $in.disabled = b;
+  };
+  const showErr = m => { const e = document.getElementById('chat-err'); if (e) e.innerHTML = m ? `<div class="alert alert-error">${esc(m)}</div>` : ''; };
+
+  const lsKey = 'malimite.chat.' + id;   // last-open session per scan; best-effort (storage can be blocked)
+  const saveSid = sid => { try { sid ? localStorage.setItem(lsKey, sid) : localStorage.removeItem(lsKey); } catch (_) {} };
+  const savedSid = () => { try { return localStorage.getItem(lsKey); } catch (_) { return null; } };
+  const when = c => { try { return new Date(c * 1000).toLocaleString([], {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'}); } catch (_) { return ''; } };
+
+  /* dropdown = "+ New chat" followed by EVERY saved session, so starting a new chat never hides the old ones */
+  function renderSessions() {
+    const sel = document.getElementById('chat-session');
+    if (!sel) return;
+    sel.innerHTML = `<option value=""${st.sid ? '' : ' selected'}>＋ New chat</option>` +
+      st.sessions.map(s => `<option value="${escAttr(s.id)}"${s.id === st.sid ? ' selected' : ''}>${esc(s.title || 'Untitled')} · ${esc(when(s.created))}</option>`).join('');
+    const del = document.getElementById('chat-del');
+    if (del) del.disabled = !st.sid;
+  }
+
+  function startFresh() {
+    st.sid = null; st.fresh = true;
+    showErr(''); renderSessions(); chatShowPrompts();
+  }
+
+  /* sid: open that session; null: keep a pending "new chat" if the user asked for one, else resume
+     the last-open (or newest) session. Always refreshes the full list from the server. */
+  async function loadSession(sid) {
+    let data = await api('/scans/' + id + '/chat');
+    st.sessions = data.sessions;
+    if (sid === null && st.fresh) { st.sid = null; renderSessions(); if (!document.querySelector('.chat-msg')) chatShowPrompts(); return; }
+    const want = [sid, st.sid, savedSid()].find(x => x && st.sessions.some(s => s.id === x)) || (st.sessions[0] && st.sessions[0].id) || null;
+    if (!want) { st.sid = null; st.fresh = false; renderSessions(); chatShowPrompts(); return; }
+    if (want !== data.session_id) data = await api('/scans/' + id + '/chat?session_id=' + encodeURIComponent(want));
+    st.sid = want; st.fresh = false; saveSid(want);
+    renderSessions();
+    chatRenderHistory(data.messages);
+  }
+
+  async function send(text) {
+    text = (text || '').trim();
+    if (!text || st.busy) return;
+    st.busy = true; setBusy(true); showErr('');
+    document.querySelectorAll('.chat-hint,.chat-chips').forEach(n => n.remove());
+    chatAdd('chat-user', chatMd(text));
+    $in.value = '';
+    let bubble = null, buf = '', raf = 0;
+    const paint = () => { raf = 0; if (bubble) { bubble.innerHTML = (bubble.dataset.pre || '') + chatMd(buf); const b = document.getElementById('chat-msgs'); if (b) b.scrollTop = b.scrollHeight; } };
+    const ensureBubble = () => { if (!bubble) { bubble = chatAdd('chat-ai', ''); buf = ''; } };
+    const toolEls = {};
+    const handle = ev => {
+      if (ev.type === 'session') { st.sid = ev.session_id; st.fresh = false; saveSid(st.sid); }
+      else if (ev.type === 'token') { ensureBubble(); buf += ev.text; if (!raf) raf = requestAnimationFrame(paint); }
+      else if (ev.type === 'tool_call') {
+        bubble = null; buf = '';  // next text starts a fresh bubble after the tool block
+        const d = chatAdd('chat-ai', chatToolHtml(ev, null));
+        if (d) { d.dataset.args = JSON.stringify(ev.args); toolEls[ev.id] = d; }
+      } else if (ev.type === 'tool_result') {
+        const d = toolEls[ev.id];
+        if (d) d.innerHTML = chatToolHtml({id: ev.id, name: ev.name, args: JSON.parse(d.dataset.args || 'null')}, ev);
+      } else if (ev.type === 'error') showErr(ev.message);
+    };
+    st.ctrl = new AbortController();
+    try {
+      const body = {message: text, session_id: st.sid || null,
+        provider: document.getElementById('chat-provider')?.value || null,
+        model: document.getElementById('chat-model')?.value.trim() || null};
+      const r = await fetch('/api/v1/scans/' + id + '/chat', {method: 'POST', signal: st.ctrl.signal,
+        headers: headers({'Content-Type': 'application/json'}), body: JSON.stringify(body)});
+      if (!r.ok) {
+        let d = await r.text();
+        try { const j = JSON.parse(d); d = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); } catch (_) {}
+        throw new Error(d || r.statusText);
+      }
+      const reader = r.body.getReader(), dec = new TextDecoder();
+      let sse = '';
+      for (;;) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        sse += dec.decode(value, {stream: true});
+        let i;
+        while ((i = sse.indexOf('\n\n')) >= 0) {
+          const chunk = sse.slice(0, i); sse = sse.slice(i + 2);
+          if (chunk.startsWith('data: ')) { try { handle(JSON.parse(chunk.slice(6))); } catch (_) {} }
+        }
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') showErr(e.message);
+    } finally {
+      if (raf) cancelAnimationFrame(raf);
+      paint();
+      st.busy = false; st.ctrl = null;
+      if (document.getElementById('chat-in')) { setBusy(false); document.getElementById('chat-in').focus(); }
+      loadSession(st.sid).catch(() => {});  // refresh the list/titles; replays what the server persisted
+    }
+  }
+
+  document.getElementById('chat-send').onclick = () => send($in.value);
+  document.getElementById('chat-stop').onclick = () => st.ctrl && st.ctrl.abort();
+  $in.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($in.value); } };
+  document.getElementById('chat-msgs').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.p) send(b.dataset.p);
+    else if (b.dataset.fill != null) { $in.value = b.dataset.fill; $in.focus(); }
+  };
+  document.getElementById('chat-new').onclick = () => { if (!st.busy) startFresh(); };
+  document.getElementById('chat-del').onclick = async () => {
+    if (st.busy || !st.sid || !confirm('Delete this chat? This cannot be undone.')) return;
+    const r = await fetch('/api/v1/scans/' + id + '/chat/' + encodeURIComponent(st.sid), {method: 'DELETE', headers: headers()});
+    if (!r.ok && r.status !== 404) { showErr('Could not delete chat: HTTP ' + r.status); return; }
+    saveSid(null); st.sid = null; st.fresh = false;
+    await loadSession(null);   // falls back to the newest remaining chat, or an empty new chat
+  };
+  document.getElementById('chat-session').onchange = e => {
+    if (st.busy) { renderSessions(); return; }
+    if (!e.target.value) startFresh(); else loadSession(e.target.value).catch(err => showErr(err.message));
+  };
+
+  setBusy(st.busy);
+  try { await loadSession(st.fresh ? null : st.sid); } catch (e) { showErr(e.message); chatShowPrompts(); }
 }
 
 /* ── log → human-friendly error reason ── */
@@ -1357,14 +1715,29 @@ function extractErrorReason(log) {
       hint: 'Known Ghidra Mach-O parser issue. See the full log for the specific cause, and check the Ghidra issue tracker for updates.',
     },
     {
-      re: /osgi\.ee=UNKNOWN|GhidraScriptLoadException|ClassNotFoundException: DumpClassData/,
-      reason: 'Ghidra imported the IPA, but DumpClassData.java failed to load. Root cause is usually an unsupported Java version for Ghidra\'s OSGi script loader (osgi.ee=UNKNOWN) — common with Homebrew Java 23/25.',
-      hint: 'Install Temurin/OpenJDK <strong>21</strong>, then restart Malimite with <code>export GHIDRA_JAVA_HOME=$(/usr/libexec/java_home -v 21)</code> (or point it at your JDK 21 home). Ghidra 11.x expects Java 17/21, not 25.',
+      re: /DumpClassData\.java:\d+: error: package org\.json does not exist/,
+      reason: 'Ghidra imported the app, but DumpClassData.java failed to compile inside Ghidra: "package org.json does not exist". Stock Ghidra does not ship org.json and gives scripts no third-party classpath. This is not a Java version problem.',
+      hint: 'Use a Malimite build whose DumpClassData.java has no org.json dependency: rebuild the CLI jar and the Docker image (<code>mvn -q -DskipTests package -pl core,cli</code> then <code>docker compose -f deploy/web-compose.yml up -d --build</code>), then upload the app again.',
+    },
+    {
+      re: /DumpClassData\.java:\d+: error:/,
+      reason: 'Ghidra imported the app, but DumpClassData.java failed to compile inside Ghidra.',
+      hint: 'Open the full log and look at the first lines starting with <code>DumpClassData.java:NN: error:</code>. They name the missing symbol or class.',
+    },
+    {
+      re: /osgi\.ee=UNKNOWN/,
+      reason: 'Ghidra imported the app, but DumpClassData.java failed to load because Ghidra\'s OSGi script loader does not recognise this Java version (osgi.ee=UNKNOWN) — common with Java 23/25.',
+      hint: 'Install Temurin/OpenJDK <strong>21</strong> and set <code>GHIDRA_JAVA_HOME</code> to its home (macOS: <code>$(/usr/libexec/java_home -v 21)</code>), then restart Malimite.',
+    },
+    {
+      re: /GhidraScriptLoadException|ClassNotFoundException: DumpClassData/,
+      reason: 'Ghidra imported the app, but DumpClassData.java could not be loaded.',
+      hint: 'Check the full log just above <code>GhidraScriptLoadException</code>: compile errors (<code>DumpClassData.java:NN: error:</code>) or an unsupported Java version (<code>osgi.ee=UNKNOWN</code>) are the usual causes.',
     },
     {
       re: /Import succeeded[\s\S]{0,2000}before heartbeat|Post-analysis succeeded[\s\S]{0,2000}before heartbeat|before heartbeat[\s\S]{0,800}post-script likely failed|SCRIPT ERROR: DumpClassData/,
       reason: 'Ghidra imported the binary successfully, but DumpClassData never connected back to Malimite (heartbeat missing). This is a post-script/IPC failure, not a Mach-O parse crash.',
-      hint: 'Open the full log and search for <code>SCRIPT ERROR</code> / <code>osgi.ee</code>. If you see Java 23/25, switch Ghidra to Java 21 via <code>GHIDRA_JAVA_HOME</code>.',
+      hint: 'Open the full log and search for <code>SCRIPT ERROR</code> / <code>osgi.ee</code>. Only if you see <code>osgi.ee=UNKNOWN</code> (Java 23/25), switch Ghidra to Java 21 via <code>GHIDRA_JAVA_HOME</code>.',
     },
     {
       re: /Ghidra subprocess exited[\s\S]{0,200}before heartbeat/,
@@ -1392,7 +1765,7 @@ function extractErrorReason(log) {
       hint: 'Check [ghidra-output] for progress. After CONNECTED, payload transfer is not limited by this deadline — exclude noisy libraries via CoreConfig if decompile itself is too slow.',
     },
     {
-      re: /Only \.ipa(?: or \.apk)? files|wrong extension|not a valid IPA|not an APK/i,
+      re: /Only \.ipa(?:, \.apk(?:,)? or \.xapk| or \.apk)? files|wrong extension|not a valid IPA|not an APK/i,
       reason: 'Uploaded file failed IPA validation.',
       hint: 'Make sure the file is a real `.ipa` (not a renamed .zip) and has at least one .app bundle inside.',
     },

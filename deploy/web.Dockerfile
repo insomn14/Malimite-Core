@@ -16,15 +16,19 @@ COPY cli/target/malimite-cli.jar /cli.jar
 # ── stage 2: runtime ───────────────────────────────────────────────────────
 FROM python:3.12-slim
 
-ARG GHIDRA_VERSION=11.1.2
-ARG GHIDRA_DATE=20240709
+# 12.x: the scan code passes -enableAnalyzer/-disableAnalyzer, which 11.1.2 rejects ("Bad argument").
+# Do not move to 12.1+ until DumpClassData.java is updated (see web/app/config.py).
+ARG GHIDRA_VERSION=12.0.4
+ARG GHIDRA_DATE=20260303
 ARG GHIDRA_URL=https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/ghidra_${GHIDRA_VERSION}_PUBLIC_${GHIDRA_DATE}.zip
 ARG JADX_VERSION=1.5.1
 ARG JADX_URL=https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/jadx-${JADX_VERSION}.zip
 
 # System deps + Python build deps
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl unzip ca-certificates default-jdk-headless && \
+    # libharfbuzz0b/libfontconfig1/libfreetype6: Ghidra's analyzers load the JDK font manager even headless
+    apt-get install -y --no-install-recommends curl unzip ca-certificates default-jdk-headless \
+        libharfbuzz0b libfontconfig1 libfreetype6 && \
     rm -rf /var/lib/apt/lists/*
 
 # Ghidra (iOS Mach-O + Android lib/arm64-v8a/*.so)
@@ -56,9 +60,13 @@ COPY web/ /app/
 COPY --from=cli /cli.jar /app/cli.jar
 ENV CLI_JAR=/app/cli.jar
 
-# Scan outputs (mount as a volume)
+# Scan outputs (mount as a volume). The service runs as an unprivileged user (uid 10001): the entrypoint
+# chowns an existing root-owned volume once, then drops privileges.
 ENV SCAN_DIR=/var/malimite/scans
-RUN mkdir -p /var/malimite/scans
+RUN useradd --system --uid 10001 --create-home --home-dir /home/malimite malimite && \
+    mkdir -p /var/malimite/scans && chown -R malimite /var/malimite
+ENV HOME=/home/malimite
+COPY deploy/web-entrypoint.sh /usr/local/bin/malimite-entrypoint
 
 # Server defaults (override via env)
 ENV HOST=0.0.0.0
@@ -66,4 +74,5 @@ ENV PORT=7070
 
 EXPOSE 7070
 
+ENTRYPOINT ["/usr/local/bin/malimite-entrypoint"]
 CMD ["sh", "-c", "python -m uvicorn app.main:app --host $HOST --port $PORT"]
