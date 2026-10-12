@@ -487,7 +487,7 @@ See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 - ✅ Core Ghidra pipeline, MSTG/MASTG scanner, LLM, SARIF/HTML, CI templates
 - ✅ Android APK analysis (JADX or Droid ASC for DEX + optional Ghidra arm64 `.so`)
 - ✅ Security Assessment mode (PRESENT / PARTIAL / ABSENT / UNKNOWN), aware of bytecode-VM obfuscation
-- ✅ AI Assistant: chat over the scan with tools, on-demand ASC / JADX / Ghidra decompilation (branch `feat/ai-assistant`)
+- ✅ AI Assistant: chat over the scan with tools, on-demand ASC / JADX / Ghidra decompilation
 - ✅ Detection quality: quality gates for LLM-learned rules, relevance preconditions for absence findings
 - ✅ Hardened web image: Ghidra 12.0.4, unprivileged user, loopback-only by default, API key + rate limit
 - 🔄 Closure items: real-IPA/APK integration test and Python tests on CI, cross-reference REST API

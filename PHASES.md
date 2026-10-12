@@ -13,7 +13,7 @@
 | Watcher (`watcher/`) | ✅ Complete — inotify drop-folder daemon (`.ipa` / `.apk`) |
 | Docker: web image (`deploy/web.Dockerfile`) | ✅ Ghidra 12.0.4 + font libs + JADX; runs as uid 10001; port bound to `127.0.0.1` by default. Full iOS scan verified end to end |
 | Docker: legacy stack (`deploy/Dockerfile`, compose api/worker/watcher/bot) | ⚠️ Still Ghidra 11.1.2, which rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`): Ghidra scans are expected to fail there. Not updated |
-| AI Assistant (`web/app/agent/`) | ✅ Implemented on branch `feat/ai-assistant` (pending merge). Tools: scan data, assessments, manifest, on-demand ASC/JADX/Ghidra. Verified with DeepSeek; Claude/OpenAI parsers only against recorded/fake streams |
+| AI Assistant (`web/app/agent/`) | ✅ Merged to `main` (PR #1). Tools: scan data, assessments, manifest, on-demand ASC/JADX/Ghidra. Verified with DeepSeek; Claude/OpenAI parsers only against recorded/fake streams |
 | GitHub / GitLab / Bitbucket CI | ✅ Complete — SARIF upload wired (stock templates are IPA-oriented; image includes JADX) |
 | Legacy Javalin API (`api/`) | ⚠️ Legacy — superseded by `web/`; kept for Docker-compose compat |
 | Legacy Worker / Java bots (Telegram, Discord, Slack-Java) | ⚠️ Legacy — upload to `POST /api/v1/scans` (compatible with the Python web API) and reply with the `scan_id` only: no results, no polling, no tests |
@@ -190,7 +190,7 @@ Assessment results appear in CLI/HTML/web without mixing into vulnerability seve
 ---
 
 ## Phase 5c — AI Assistant
-**Status: ✅ Implemented on `feat/ai-assistant` — pending merge**
+**Status: ✅ Merged to `main` (PR #1) — 5c.6–5c.9 still open**
 
 **Goal:** Let an analyst talk to the scan: ask about code, findings and controls, and request reverse engineering of a class or function on demand.
 
@@ -302,7 +302,7 @@ Phase 3   █████████░  Analysis Depth          ~90%   [cross-
 Phase 4   ████████░░  LLM Integration         ~85%   [async job + Redis cache in analyzer]
 Phase 5   ██████████  CI/CD & Reporting       100%   ✅ DONE
 Phase 5b  ██████████  Security Assessment     100%   ✅ DONE
-Phase 5c  █████████░  AI Assistant            ~90%   [pending merge; 5c.6–5c.9 open]
+Phase 5c  █████████░  AI Assistant            ~90%   [merged in PR #1; 5c.6–5c.9 open]
 Phase 5d  ███████░░░  Detection quality       ~70%   [wider corpus needed]
 Phase 6   ░░░░░░░░░░  Observability             0%   ← NEXT MAJOR PHASE
 Phase 7   ███░░░░░░░  Security & Hardening     ~30%   [started: 7.1, 7.2, 7.4, 7.5, 7.8 partial]
