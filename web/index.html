@@ -152,7 +152,9 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 
 /* Functions tab: JADX-GUI-style file tree + source viewer */
 .fn-wrap{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;height:calc(100vh - 220px);min-height:420px}
-.fn-tree-pane{flex:0 0 280px;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);overflow:hidden}
+.fn-tree-pane{flex:0 0 var(--fn-tree-w,280px);border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);overflow:hidden}
+.fn-drag-handle{flex:0 0 auto;width:6px;cursor:col-resize;background:transparent}
+.fn-drag-handle:hover,.fn-drag-handle.dragging{background:var(--accent)}
 .fn-tree-search{padding:.6rem;border-bottom:1px solid var(--border)}
 .fn-tree-search input{width:100%;padding:.4rem .6rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.8rem}
 .fn-tree-list{flex:1;overflow-y:auto;font-size:.8rem;padding:.25rem 0}
@@ -176,6 +178,15 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .fn-open-tab-close:hover{opacity:1}
 .fn-viewer-body{flex:1;min-height:0;display:flex;flex-direction:column}
 .fn-breadcrumb{padding:.5rem .75rem;font-size:.75rem;color:var(--muted);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-family:monospace}
+.fn-breadcrumb-actions{display:flex;align-items:center;gap:.4rem;font-family:inherit}
+.fn-outline{position:relative}
+.fn-outline summary{cursor:pointer;list-style:none;padding:.3rem .6rem;font-size:.72rem;border:1px solid var(--border);border-radius:var(--radius);color:var(--muted)}
+.fn-outline summary::-webkit-details-marker{display:none}
+.fn-outline[open] summary{color:var(--text);border-color:var(--accent)}
+.fn-outline-list{position:absolute;right:0;top:calc(100% + .3rem);background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow);max-height:300px;overflow-y:auto;z-index:20;min-width:220px}
+.fn-outline-item{padding:.4rem .7rem;font-size:.75rem;cursor:pointer;white-space:nowrap;color:var(--text)}
+.fn-outline-item:hover{background:var(--bg)}
 .fn-code-scroll{flex:1;overflow-y:auto;display:flex;background:#0d1117;
   scrollbar-width:thin;scrollbar-color:#30363d #0d1117}
 .fn-code-scroll::-webkit-scrollbar{width:10px;height:10px}
@@ -1644,6 +1655,10 @@ async function tabAssistant(el, id, detail) {
     </div>`;
 
   const $in = document.getElementById('chat-in');
+  // Prefill left by another tab (e.g. Functions tab's "Ask AI Assistant"), consumed once. Fills
+  // only — never auto-sends, so a click there never spends LLM quota without the user pressing
+  // Enter/Send themselves.
+  if (st.prefill) { $in.value = st.prefill; st.prefill = null; }
   const setBusy = b => {
     document.getElementById('chat-send').style.display = b ? 'none' : '';
     document.getElementById('chat-stop').style.display = b ? '' : 'none';
@@ -2064,6 +2079,10 @@ async function tabFunctions(el, id, detail) {
     fnSt = {id, detail, classes, query: '', tree: fnBuildTree(classes, detail),
             openFiles: [], activePath: null, classSevMap: null};
     fnLoadSeverityMap(id);   // background; dots fill in once this resolves
+    try {
+      const savedW = localStorage.getItem('malimite.fnTreeWidth');
+      if (savedW) document.documentElement.style.setProperty('--fn-tree-w', savedW + 'px');
+    } catch(e) { /* per-viewer convenience only */ }
   }
   fnRenderShell(el);
 }
@@ -2075,6 +2094,7 @@ function fnRenderShell(el) {
         <div class="fn-tree-search"><input id="fn-filter" type="text" placeholder="Filter classes…" autocomplete="off"/></div>
         <div class="fn-tree-list" id="fn-tree-list"></div>
       </div>
+      <div class="fn-drag-handle" id="fn-drag-handle"></div>
       <div class="fn-tree-backdrop" id="fn-tree-backdrop" onclick="fnCloseDrawer()"></div>
       <div class="fn-viewer-pane">
         <div class="fn-open-tabs" id="fn-open-tabs"></div>
@@ -2089,9 +2109,39 @@ function fnRenderShell(el) {
     fnSt.query = ev.target.value.trim().toLowerCase();
     fnRenderTree();
   });
+  fnWireDragHandle();
   fnRenderTree();
   fnRenderOpenTabs();
   fnRenderViewer();
+}
+
+// Drag-resize the tree pane. A no-op above/below the breakpoint where the media query takes over
+// the tree's width for the drawer layout — nothing here conflicts with that.
+function fnWireDragHandle() {
+  const handle = document.getElementById('fn-drag-handle');
+  const pane = document.getElementById('fn-tree-pane');
+  if (!handle || !pane) return;
+  handle.addEventListener('mousedown', ev => {
+    ev.preventDefault();
+    handle.classList.add('dragging');
+    const startX = ev.clientX;
+    const startW = pane.getBoundingClientRect().width;
+    const onMove = mv => {
+      const w = Math.max(180, Math.min(520, startW + (mv.clientX - startX)));
+      document.documentElement.style.setProperty('--fn-tree-w', w + 'px');
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      try {
+        const w = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--fn-tree-w'));
+        if (w) localStorage.setItem('malimite.fnTreeWidth', w);
+      } catch(e) { /* per-viewer convenience only */ }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 }
 
 window.fnOpenDrawer = function() {
@@ -2204,29 +2254,67 @@ async function fnOpenClass(className, rowEl) {
   document.querySelectorAll('#fn-tree-list .fn-tree-node.active').forEach(r => r.classList.remove('active'));
   rowEl?.classList.add('active');
   fnCloseDrawer();
-  let file = fnSt.openFiles.find(f => f.class === className);
-  if (!file) {
-    fnSt.activePath = className;
-    fnRenderOpenTabs();
-    fnRenderViewer('loading');
-    let rows;
-    try {
-      rows = await api('/scans/'+fnSt.id+'/source?'+new URLSearchParams({class_name: className}));
-    } catch(e) {
-      if (fnSt.activePath === className) fnRenderViewer('error', e.message);
-      return;
-    }
-    if (fnSt.activePath !== className) return;   // user clicked elsewhere while this was in flight
-    if (!rows.length) {
-      file = {class: className, code: null};
-    } else {
-      const code = rows.map(r => `// ${r.class}.${r.function} [${r.origin}]\n${r.code||''}`).join('\n\n');
-      file = {class: className, code, language: fnLanguageFor(rows[0].origin, fnSt.detail)};
-    }
-    fnSt.openFiles.push(file);
-    if (fnSt.openFiles.length > 12) fnSt.openFiles.shift();   // simple FIFO cap on open tabs
-  }
+  const existing = fnSt.openFiles.find(f => f.class === className);
+  if (existing) { fnSt.activePath = className; fnRenderOpenTabs(); fnRenderViewer(); return; }
+
   fnSt.activePath = className;
+  fnRenderOpenTabs();
+  fnRenderViewer('loading');
+  let rows;
+  try {
+    rows = await api('/scans/'+fnSt.id+'/source?'+new URLSearchParams({class_name: className}));
+  } catch(e) {
+    if (fnSt.activePath === className) fnRenderViewer('error', e.message);
+    return;
+  }
+  if (fnSt.activePath !== className) return;   // user clicked elsewhere while this was in flight
+  let file;
+  if (!rows.length) {
+    file = {class: className, code: null};
+  } else {
+    // Outline only when there's more than one row — that's the only case where we actually have a
+    // per-function boundary (typically Ghidra origin). A single '<class>' row is one opaque text
+    // blob as far as our data model goes; guessing method boundaries there with a regex would be a
+    // fragile heuristic, so outline is simply not offered rather than risking a wrong jump target.
+    let code = '';
+    const outline = rows.length > 1 ? [] : null;
+    rows.forEach((r, i) => {
+      if (i > 0) code += '\n\n';
+      if (outline) outline.push({name: r.function, line: code.split('\n').length});
+      code += `// ${r.class}.${r.function} [${r.origin}]\n${r.code||''}`;
+    });
+    file = {class: className, code, language: fnLanguageFor(rows[0].origin, fnSt.detail), outline};
+  }
+  fnCommitFile(file);
+}
+
+// On-demand decompile for Android classes with nothing stored yet (asc/jadx only — ghidra native
+// targets need a symbol/address picker this tree doesn't have, and stay chat-only).
+async function fnDecompileNow(className, tool) {
+  fnRenderViewer('loading');
+  let data;
+  try {
+    const r = await fetch(`/api/v1/scans/${fnSt.id}/decompile`, {
+      method: 'POST', headers: {...headers(), 'Content-Type': 'application/json'},
+      body: JSON.stringify({tool, target: className}),
+    });
+    if (!r.ok) { const txt = await r.text(); throw new Error(txt); }
+    data = await r.json();
+  } catch(e) {
+    if (fnSt.activePath === className) fnRenderViewer('error', e.message);
+    return;
+  }
+  if (fnSt.activePath !== className) return;
+  fnCommitFile({class: className, code: data.code, language: fnLanguageFor(tool, fnSt.detail), outline: null});
+}
+
+// New files (fresh fetch, fresh decompile) go through here; switching to an already-open tab does
+// not — see fnRenderOpenTabs's own click handler.
+function fnCommitFile(file) {
+  fnSt.openFiles = fnSt.openFiles.filter(f => f.class !== file.class);
+  fnSt.openFiles.push(file);
+  if (fnSt.openFiles.length > 12) fnSt.openFiles.shift();   // simple FIFO cap on open tabs
+  fnSt.activePath = file.class;
   fnRenderOpenTabs();
   fnRenderViewer();
 }
@@ -2264,17 +2352,48 @@ function fnRenderViewer(mode, errMsg) {
   const file = fnSt.activePath ? fnSt.openFiles.find(f => f.class === fnSt.activePath) : null;
   if (!file) { el.innerHTML = '<div class="empty" style="padding:2rem">Select a class from the tree to view its decompiled source.</div>'; return; }
   if (file.code === null) {
-    el.innerHTML = `<div class="empty" style="padding:2rem">No stored decompiled code for <code>${esc(file.class)}</code>.<br/>
-      Use the <code>decompile</code> tool in the <a href="#" onclick="event.preventDefault();goTab(${JSON.stringify(fnSt.id)},'assistant')">AI Assistant</a> tab to decompile it on demand.</div>`;
+    const isAndroid = String(fnSt.detail.platform||'').toUpperCase() === 'ANDROID';
+    el.innerHTML = isAndroid
+      ? `<div class="empty" style="padding:2rem">No stored decompiled code for <code>${esc(file.class)}</code>.<br/>
+          <button class="btn btn-sm" id="fn-dec-jadx" style="margin-top:.75rem">Decompile with JADX</button>
+          <button class="btn btn-ghost btn-sm" id="fn-dec-asc">try ASC instead</button></div>`
+      : `<div class="empty" style="padding:2rem">No stored decompiled code for <code>${esc(file.class)}</code>.<br/>
+          Use the <code>decompile</code> tool in the <a href="#" onclick="event.preventDefault();goTab(${JSON.stringify(fnSt.id)},'assistant')">AI Assistant</a> tab to decompile it on demand.</div>`;
+    if (isAndroid) {
+      document.getElementById('fn-dec-jadx').onclick = () => fnDecompileNow(file.class, 'jadx');
+      document.getElementById('fn-dec-asc').onclick = () => fnDecompileNow(file.class, 'asc');
+    }
     return;
   }
   const lineCount = file.code.split('\n').length;
+  const outlineHtml = file.outline ? `
+    <details class="fn-outline"><summary>Outline (${file.outline.length})</summary>
+      <div class="fn-outline-list">${file.outline.map(o =>
+        `<div class="fn-outline-item" data-line="${o.line}">${esc(o.name)}</div>`).join('')}</div>
+    </details>` : '';
   el.innerHTML = `
-    <div class="fn-breadcrumb"><span>${esc(file.class)}</span><button class="btn btn-ghost btn-sm" id="fn-copy-btn">Copy</button></div>
+    <div class="fn-breadcrumb">
+      <span>${esc(file.class)}</span>
+      <span class="fn-breadcrumb-actions">
+        ${outlineHtml}
+        <button class="btn btn-ghost btn-sm" id="fn-ask-btn">Ask AI Assistant</button>
+        <button class="btn btn-ghost btn-sm" id="fn-copy-btn">Copy</button>
+      </span>
+    </div>
     <div class="fn-code-scroll">
       <pre class="fn-gutter">${Array.from({length:lineCount},(_,i)=>i+1).join('\n')}</pre>
       <pre class="fn-code-pre"><code id="fn-code-el" class="hljs"></code></pre>
     </div>`;
+  if (file.outline) {
+    el.querySelectorAll('.fn-outline-item').forEach(item => item.addEventListener('click', () => {
+      fnScrollToLine(+item.dataset.line);
+      item.closest('details').open = false;
+    }));
+  }
+  document.getElementById('fn-ask-btn').onclick = () => {
+    chatSt(fnSt.id).prefill = 'Explain the class ' + file.class;
+    goTab(fnSt.id, 'assistant');
+  };
   const codeEl = document.getElementById('fn-code-el');
   // hljs.highlight() escapes its own output while emitting <span> tokens — it must receive the
   // RAW string. Never pre-escape with esc() first (that double-escapes), and never fall back to
@@ -2287,6 +2406,17 @@ function fnRenderViewer(mode, errMsg) {
     }
   } catch(e) { codeEl.textContent = file.code; }
   document.getElementById('fn-copy-btn').onclick = () => { navigator.clipboard?.writeText(file.code).catch(()=>{}); };
+}
+
+function fnScrollToLine(line) {
+  const codeEl = document.getElementById('fn-code-el');
+  const scrollEl = document.querySelector('.fn-code-scroll');
+  const file = fnSt?.activePath ? fnSt.openFiles.find(f => f.class === fnSt.activePath) : null;
+  if (!codeEl || !scrollEl || !file) return;
+  // Measured from the rendered element rather than hardcoded from our own CSS line-height, so it
+  // stays correct even if the browser's actual font metrics differ slightly from what we asked for.
+  const pxPerLine = codeEl.getBoundingClientRect().height / file.code.split('\n').length;
+  scrollEl.scrollTop = Math.max(0, (line - 1) * pxPerLine - 40);
 }
 
 async function fnLoadSeverityMap(id) {
