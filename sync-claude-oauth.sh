@@ -29,6 +29,18 @@
 # tokens expire roughly hourly); you only need to re-run this script after a
 # fresh *host-side* login, not on every restart. (2) is a one-shot import —
 # the container doesn't write back to its copy of the Claude Code credential.
+#
+# After syncing (2), this ALSO calls the running web service's
+# import-claude-code endpoint so the new token takes effect immediately —
+# without this, syncing only refreshes claude-code-credentials.json; the file
+# the service actually authenticates with (anthropic-oauth.json) stays
+# whatever it was until something separately calls import. That gap bit in
+# production twice: once because the import button was clicked before this
+# script finished writing (a timing race), once because the script ran but
+# nobody re-clicked import afterward at all (this one). Automating the import
+# call here removes the second failure mode entirely; the web UI's "Import
+# from Claude Code CLI" button is still there for when the container was
+# down during sync, or for the first-ever sync before API_KEY exists.
 set -euo pipefail
 
 DEST_DIR="$HOME/.malimite-docker"
@@ -57,4 +69,35 @@ if [ "$synced_anything" = false ]; then
   echo "  java -jar cli/target/malimite-cli.jar claude-login   # Malimite's own OAuth login" >&2
   echo "  claude /login                                         # official Claude Code CLI login" >&2
   exit 1
+fi
+
+# ── Auto-import into the running web service, if we can ────────────────────
+#
+# Best-effort only: a missing .env, an unreachable service, or any HTTP
+# failure here is NOT fatal — the sync above already succeeded, and the web
+# UI's own "Import from Claude Code CLI" button remains available as a
+# fallback (e.g. before the container's first start, when API_KEY doesn't
+# exist in deploy/.env yet).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/deploy/.env"
+WEB_URL="${MALIMITE_WEB_URL:-http://127.0.0.1:7070}"
+
+if [ -f "$CLAUDE_CODE_SRC" ] && [ -f "$ENV_FILE" ]; then
+  API_KEY="$(grep -m1 '^API_KEY=' "$ENV_FILE" | cut -d= -f2-)"
+  if [ -n "$API_KEY" ]; then
+    response="$(curl -fsS -m 10 -X POST -H "X-Api-Key: $API_KEY" \
+      "$WEB_URL/api/v1/auth/claude-oauth/import-claude-code" 2>&1)" \
+      && import_ok=true || import_ok=false
+    if [ "$import_ok" = true ]; then
+      if printf '%s' "$response" | grep -q '"changed":true'; then
+        echo "Imported into the running web service — new token now active."
+      else
+        echo "Web service already had this exact token (no change needed)."
+      fi
+    else
+      echo "note: could not reach the web service to auto-import ($WEB_URL) — is the container up?" >&2
+      echo "      The sync above still succeeded; use the web UI's \"Import from Claude Code CLI\"" >&2
+      echo "      button once the container is running, or re-run this script then." >&2
+    fi
+  fi
 fi
