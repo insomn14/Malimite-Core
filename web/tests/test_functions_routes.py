@@ -1,4 +1,5 @@
 import sqlite3
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,7 +7,9 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from web.app import main
+from web.app import main, scanner
+from web.app.agent import ondemand
+from web.app.models import ScanDetail
 
 SCHEMA = """
 CREATE TABLE Classes(ClassName TEXT, Functions TEXT, ExecutableName TEXT);
@@ -103,6 +106,75 @@ class FunctionsRoutesTests(unittest.TestCase):
         r = self.client.get("/vendor/hljs/highlight.min.js")
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"hljs", r.content[:200])
+
+
+def _fake_cmd(code):
+    """Same trick as test_agent_ondemand.py: stand in for the real `java -cp cli.jar ...` argv so
+    the actual subprocess/semaphore/timeout machinery in ondemand.decompile runs for real, just
+    against a tiny Python script instead of a real decompiler."""
+    return lambda *a, **k: [sys.executable, "-c", code]
+
+
+class DecompileRouteTests(unittest.TestCase):
+    """POST /decompile: Android-only asc/jadx on-demand decompile, sharing ondemand.decompile's
+    real subprocess path (mocked at the argv level, not the route level) and the chat.sqlite cache."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        detail = ScanDetail(scan_id="s1", filename="a.apk", state="done", created_at="t",
+                            llm_provider="none", platform="ANDROID")
+        self.patches = [
+            patch.object(main, "_require_db", return_value=("/nope", "app")),
+            patch.object(scanner, "get_scan_detail", return_value=detail),
+            patch.object(scanner, "_scan_dir", return_value=Path(self.tmp.name)),
+            patch.object(main.settings, "api_key", ""),
+        ]
+        for p in self.patches:
+            p.start()
+        self.client = TestClient(main.app)
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.tmp.cleanup()
+
+    def test_decompiles_and_then_serves_from_cache(self):
+        with patch.object(ondemand, "_cmd", _fake_cmd("print('{\"ok\": true, \"code\": \"class X {}\"}')")):
+            r1 = self.client.post("/api/v1/scans/s1/decompile", json={"tool": "jadx", "target": "com.a.X"})
+        self.assertEqual(r1.status_code, 200)
+        body = r1.json()
+        self.assertEqual(body, {"tool": "jadx", "target": "com.a.X", "code": "class X {}", "cached": False})
+
+        # Second call must not need ondemand at all: patch _cmd to blow up if it's ever invoked.
+        def boom(*a, **k):
+            raise AssertionError("ondemand.decompile should not run again for a cached target")
+        with patch.object(ondemand, "_cmd", boom):
+            r2 = self.client.post("/api/v1/scans/s1/decompile", json={"tool": "jadx", "target": "com.a.X"})
+        self.assertEqual(r2.status_code, 200)
+        self.assertTrue(r2.json()["cached"])
+
+    def test_ghidra_tool_rejected(self):
+        r = self.client.post("/api/v1/scans/s1/decompile", json={"tool": "ghidra", "target": "0x1000"})
+        self.assertEqual(r.status_code, 422)
+
+    def test_ios_platform_rejected(self):
+        with patch.object(scanner, "get_scan_detail",
+                          return_value=ScanDetail(scan_id="s1", filename="a.ipa", state="done",
+                                                  created_at="t", llm_provider="none", platform="IOS")):
+            r = self.client.post("/api/v1/scans/s1/decompile", json={"tool": "jadx", "target": "com.a.X"})
+        self.assertEqual(r.status_code, 422)
+
+    def test_invalid_class_name_rejected_before_touching_a_subprocess(self):
+        def boom(*a, **k):
+            raise AssertionError("invalid input must be rejected before any subprocess is spawned")
+        with patch.object(ondemand, "_cmd", boom):
+            r = self.client.post("/api/v1/scans/s1/decompile", json={"tool": "jadx", "target": "; rm -rf /"})
+        self.assertEqual(r.status_code, 422)
+
+    def test_decompile_failure_becomes_502(self):
+        with patch.object(ondemand, "_cmd", _fake_cmd("import sys; print('boom', file=sys.stderr); sys.exit(1)")):
+            r = self.client.post("/api/v1/scans/s1/decompile", json={"tool": "asc", "target": "com.a.Y"})
+        self.assertEqual(r.status_code, 502)
 
 
 if __name__ == "__main__":
