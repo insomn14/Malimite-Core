@@ -343,5 +343,119 @@ class AssessmentAndManifestToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("UNKNOWN", next(t for t in tools.TOOLS if t["name"] == "get_assessments")["description"])
 
 
+class HookTargetToolTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        h = tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False)
+        h.close()
+        self.path = h.name
+        self.c = sqlite3.connect(self.path)
+        self.c.executescript(SCHEMA)
+
+    def tearDown(self):
+        self.c.close()
+        Path(self.path).unlink(missing_ok=True)
+
+    def ctx(self):
+        self.c.commit()
+        return Ctx("s", self.path, "app", "android", Path("/tmp"), {})
+
+    @staticmethod
+    def body(out):
+        return json.loads(out.split("\n", 1)[1].rsplit("\n", 1)[0])
+
+    def add_assessments(self, rows):
+        self.c.execute("""CREATE TABLE Assessments(id INTEGER PRIMARY KEY, ControlId TEXT, Title TEXT, Category TEXT,
+                          Status TEXT, Confidence TEXT, Evidence TEXT, Detail TEXT, Platform TEXT, CreatedAt INTEGER,
+                          ExecutableName TEXT)""")
+        self.c.executemany("INSERT INTO Assessments(ControlId,Title,Category,Status,Confidence,Evidence,Detail,ExecutableName) "
+                           "VALUES (?,?,?,?,?,?,?,'app')", rows)
+
+    async def test_no_candidates_returns_empty_list_and_a_caveat(self):
+        d = self.body((await tools.run_tool(self.ctx(), "recommend_hook_targets", {}))[1])
+        self.assertEqual(d["targets"], [])
+        self.assertIn("No bypass-relevant", d["note"])
+        self.assertIn("AUTHORIZED", d["note"])
+
+    async def test_vulnerability_with_call_graph_is_high_confidence(self):
+        self.c.execute("INSERT INTO Vulnerabilities(RuleId,Category,Severity,AffectedType,AffectedName,Evidence,"
+                      "EvidenceLocation,ExecutableName) VALUES ('R1','NETWORK','HIGH','FUNCTION','check',"
+                      "'cert pinned','com.x.Net.check','app')")
+        self.c.execute("INSERT INTO FunctionReferences(sourceFunction,sourceClass,targetFunction,targetClass,"
+                      "ExecutableName) VALUES ('onCreate','com.x.Main','check','com.x.Net','app')")
+        d = self.body((await tools.run_tool(self.ctx(), "recommend_hook_targets", {}))[1])
+        self.assertEqual(len(d["targets"]), 1)
+        t = d["targets"][0]
+        self.assertEqual(t["symbol"], "check")
+        self.assertEqual(t["class"], "com.x.Net")
+        self.assertEqual(t["category"], "SSL_PINNING")
+        self.assertEqual(t["phase"], "TRANSPORT")
+        self.assertEqual(t["confidence"], "HIGH")
+        self.assertEqual(t["callers"], ["com.x.Main.onCreate"])
+
+    async def test_vulnerability_without_call_graph_is_medium_confidence(self):
+        self.c.execute("INSERT INTO Vulnerabilities(RuleId,Category,Severity,AffectedType,AffectedName,Evidence,"
+                      "EvidenceLocation,ExecutableName) VALUES ('R1','CRYPTO','HIGH','FUNCTION','enc',"
+                      "'DES used','com.x.Crypto.enc','app')")
+        d = self.body((await tools.run_tool(self.ctx(), "recommend_hook_targets", {}))[1])
+        t = d["targets"][0]
+        self.assertEqual(t["confidence"], "MEDIUM")
+        self.assertEqual(t["callers"], [])
+        self.assertEqual(t["phase"], "SECRETS")
+
+    async def test_suppressed_vulnerability_is_excluded(self):
+        self.c.execute("ALTER TABLE Vulnerabilities ADD COLUMN Status TEXT")
+        self.c.execute("INSERT INTO Vulnerabilities(RuleId,Category,Severity,AffectedType,AffectedName,Evidence,"
+                      "EvidenceLocation,Status,ExecutableName) VALUES ('R1','NETWORK','HIGH','FUNCTION','check',"
+                      "'x','com.x.Net.check','false_positive','app')")
+        d = self.body((await tools.run_tool(self.ctx(), "recommend_hook_targets", {}))[1])
+        self.assertEqual(d["targets"], [])
+
+    async def test_assessment_only_candidate_is_low_confidence_with_no_symbol(self):
+        self.add_assessments([("ASSESS-ROOT-DETECTION", "Root detection", "DETECTION", "PRESENT", "HIGH",
+                               "isRooted() found", "")])
+        d = self.body((await tools.run_tool(self.ctx(), "recommend_hook_targets", {}))[1])
+        t = d["targets"][0]
+        self.assertIsNone(t["symbol"])
+        self.assertEqual(t["category"], "ROOT_DETECTION")
+        self.assertEqual(t["phase"], "ENVIRONMENT")
+        self.assertEqual(t["confidence"], "LOW")
+        self.assertEqual(t["source"], "assessment")
+
+    async def test_absent_assessment_control_is_excluded(self):
+        self.add_assessments([("ASSESS-ROOT-DETECTION", "Root detection", "DETECTION", "ABSENT", "HIGH", "x", "")])
+        d = self.body((await tools.run_tool(self.ctx(), "recommend_hook_targets", {}))[1])
+        self.assertEqual(d["targets"], [])
+
+    async def test_non_bypass_control_is_not_a_candidate(self):
+        self.add_assessments([("ASSESS-PIE", "PIE", "HARDENING", "PRESENT", "HIGH", "MH_PIE=1", "")])
+        d = self.body((await tools.run_tool(self.ctx(), "recommend_hook_targets", {}))[1])
+        self.assertEqual(d["targets"], [])
+
+    async def test_category_filter(self):
+        self.add_assessments([
+            ("ASSESS-ROOT-DETECTION", "Root detection", "DETECTION", "PRESENT", "HIGH", "x", ""),
+            ("ASSESS-SSL-PINNING", "SSL pinning", "NETWORK", "PRESENT", "HIGH", "y", ""),
+        ])
+        d = self.body((await tools.run_tool(self.ctx(), "recommend_hook_targets", {"category": "ssl_pinning"}))[1])
+        self.assertEqual([t["category"] for t in d["targets"]], ["SSL_PINNING"])
+
+    async def test_sorted_by_severity_then_confidence(self):
+        self.c.execute("INSERT INTO Vulnerabilities(RuleId,Category,Severity,AffectedType,AffectedName,Evidence,"
+                      "EvidenceLocation,ExecutableName) VALUES ('R1','CRYPTO','MEDIUM','FUNCTION','enc','x',"
+                      "'com.x.Crypto.enc','app')")
+        self.add_assessments([("ASSESS-SSL-PINNING", "SSL pinning", "NETWORK", "PRESENT", "HIGH", "y", "")])
+        self.c.execute("INSERT INTO Vulnerabilities(RuleId,Category,Severity,AffectedType,AffectedName,Evidence,"
+                      "EvidenceLocation,ExecutableName) VALUES ('R2','NETWORK','CRITICAL','FUNCTION','check','z',"
+                      "'com.x.Net.check','app')")
+        d = self.body((await tools.run_tool(self.ctx(), "recommend_hook_targets", {}))[1])
+        self.assertEqual([t["symbol"] or t["rule_id"] for t in d["targets"]],
+                         ["check", "enc", "ASSESS-SSL-PINNING"])
+
+    def test_tool_is_registered_with_a_valid_schema(self):
+        spec = next(t for t in tools.TOOLS if t["name"] == "recommend_hook_targets")
+        self.assertEqual(spec["schema"]["type"], "object")
+        self.assertIn("recommend_hook_targets", __import__("web.app.agent.loop", fromlist=["SYSTEM"]).SYSTEM)
+
+
 if __name__ == "__main__":
     unittest.main()
