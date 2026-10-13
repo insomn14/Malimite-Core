@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import db, scanner
+from . import db, offensive_phases, scanner
 from .agent import loop as agent_loop, ondemand, store as chat_store
 from .agent.llm import LlmError, resolve_llm
 from .agent.tools import Ctx, valid_class_name
@@ -30,20 +30,6 @@ _OFFENSIVE_MODE_ALIASES = frozenset({"offensive", "offense", "frida", "bypass"})
 _FAST_MODE_ALIASES = frozenset({"summarize", "summary", "fast", "fast_scan", "fastscan"})
 _FULL_MODE_ALIASES = frozenset({"find_vulns", "vulns", "vuln", "full", "full_scan", "fullscan"})
 _AUTO_FIX_MODE_ALIASES = frozenset({"auto_fix", "autofix", "fix"})
-_PHASE_DIRS = {
-    "ENVIRONMENT": "01_environment",
-    "TRANSPORT": "02_transport",
-    "SECRETS": "03_secrets",
-    "SESSION": "04_session",
-}
-_CAT_TO_PHASE = {
-    "ROOT_DETECTION": "ENVIRONMENT",
-    "JAILBREAK": "ENVIRONMENT",
-    "SSL_PINNING": "TRANSPORT",
-    "CRYPTO": "SECRETS",
-    "BIOMETRIC": "SESSION",
-    "OTHER": "SESSION",
-}
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
@@ -393,19 +379,6 @@ def _parse_offensive_targets(finding_text: str) -> list[dict]:
     return []
 
 
-def _normalize_phase(target: dict) -> str:
-    phase = str(target.get("phase") or "").strip().upper()
-    if phase in _PHASE_DIRS:
-        return phase
-    cat = str(target.get("category") or "OTHER").strip().upper().replace("-", "_")
-    return _CAT_TO_PHASE.get(cat, "SESSION")
-
-
-def _slug(s: str, fallback: str = "target") -> str:
-    t = re.sub(r"[^a-zA-Z0-9._-]+", "_", (s or "").strip())[:60].strip("_")
-    return t or fallback
-
-
 @app.get("/api/v1/scans/{scan_id}/offensive/kit")
 async def export_offensive_frida_kit(request: Request, scan_id: str):
     """Zip Frida kit: 01_environment/ … 04_session/ + README (authorized testing)."""
@@ -419,7 +392,7 @@ async def export_offensive_frida_kit(request: Request, scan_id: str):
             continue
         for t in _parse_offensive_targets(getattr(f, "finding", "") or ""):
             row = dict(t)
-            row["_phase"] = _normalize_phase(row)
+            row["_phase"] = offensive_phases.normalize_phase(row)
             row["_fn"] = getattr(f, "function_name", "") or ""
             row["_cls"] = getattr(f, "class_name", "") or ""
             targets.append(row)
@@ -440,18 +413,18 @@ async def export_offensive_frida_kit(request: Request, scan_id: str):
             "  frida -U -f <package> -l 01_environment/01_bypass.js --no-pause\n"
         )
         zf.writestr("README.md", readme)
-        for folder in _PHASE_DIRS.values():
+        for folder in offensive_phases.PHASE_DIRS.values():
             zf.writestr(f"{folder}/.keep", "")
-        counters = {p: 0 for p in _PHASE_DIRS}
+        counters = {p: 0 for p in offensive_phases.PHASE_DIRS}
         for t in targets:
             phase = t.get("_phase") or "SESSION"
-            folder = _PHASE_DIRS.get(phase, "04_session")
+            folder = offensive_phases.PHASE_DIRS.get(phase, "04_session")
             counters[phase] = counters.get(phase, 0) + 1
             n = counters[phase]
             script = (t.get("frida_script") or "").strip()
             if not script:
                 continue
-            title = _slug(str(t.get("title") or "target"), f"target_{n}")
+            title = offensive_phases.slug(str(t.get("title") or "target"), f"target_{n}")
             name = f"{n:02d}_{title}.js"
             header = (
                 f"// Malimite Offensive — {t.get('title') or title}\n"
