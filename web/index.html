@@ -39,6 +39,7 @@ nav a.nav-link:hover,nav a.nav-link.active{color:var(--text);background:var(--bg
 
 /* layout */
 main{width:100%;max-width:1100px;min-width:0;margin:0 auto;padding:1.5rem}
+main.main-wide{max-width:1500px}
 main>*,#tab-content{min-width:0;max-width:100%}
 
 /* cards */
@@ -149,11 +150,51 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 /* log */
 .log-box{max-width:100%;background:#111;color:#e2e8f0;border-radius:var(--radius);padding:.9rem 1rem;font-family:monospace;font-size:.72rem;max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all}
 
-/* code viewer */
-.fn-code{max-width:100%;background:#111;color:#e2e8f0;border-radius:0 0 var(--radius) var(--radius);padding:.75rem;font-family:monospace;font-size:.72rem;max-height:300px;overflow:auto;white-space:pre;display:none}
-.fn-row td{cursor:pointer;user-select:none}
-.fn-row.open td:first-child::before{content:"▾ "}
-.fn-row:not(.open) td:first-child::before{content:"▸ "}
+/* Functions tab: JADX-GUI-style file tree + source viewer */
+.fn-wrap{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;height:calc(100vh - 220px);min-height:420px}
+.fn-tree-pane{flex:0 0 280px;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);overflow:hidden}
+.fn-tree-search{padding:.6rem;border-bottom:1px solid var(--border)}
+.fn-tree-search input{width:100%;padding:.4rem .6rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.8rem}
+.fn-tree-list{flex:1;overflow-y:auto;font-size:.8rem;padding:.25rem 0}
+.fn-tree-node{padding:.3rem .5rem;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:.3rem}
+.fn-tree-node:hover{background:var(--bg)}
+.fn-tree-node.active{background:var(--bg);font-weight:600}
+.fn-tree-arrow{display:inline-block;width:1em;color:var(--muted);font-size:.7rem}
+.fn-tree-label{overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:.35rem}
+.fn-tree-sev{display:inline-block;width:6px;height:6px;border-radius:50%;flex:0 0 auto}
+.fn-tree-sev.CRITICAL{background:#9d174d}
+.fn-tree-sev.HIGH{background:var(--high)}
+.fn-tree-sev.MEDIUM{background:var(--medium)}
+.fn-tree-sev.LOW{background:var(--low)}
+.fn-drawer-toggle{display:none;margin-top:.5rem}
+
+.fn-viewer-pane{flex:1;min-width:0;display:flex;flex-direction:column}
+.fn-open-tabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--border);flex:0 0 auto;scrollbar-width:thin}
+.fn-open-tab{display:flex;align-items:center;gap:.5rem;padding:.4rem .7rem;font-size:.78rem;border-right:1px solid var(--border);cursor:pointer;white-space:nowrap;color:var(--muted)}
+.fn-open-tab.active{color:var(--text);background:var(--bg)}
+.fn-open-tab-close{opacity:.55;padding:0 .15rem}
+.fn-open-tab-close:hover{opacity:1}
+.fn-viewer-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.fn-breadcrumb{padding:.5rem .75rem;font-size:.75rem;color:var(--muted);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-family:monospace}
+.fn-code-scroll{flex:1;overflow-y:auto;display:flex;background:#111}
+.fn-gutter{flex:0 0 auto;margin:0;padding:.75rem .6rem;color:#64748b;font-family:monospace;font-size:.72rem;text-align:right;user-select:none;white-space:pre}
+.fn-code-pre{flex:1;overflow-x:auto;margin:0;padding:.75rem;font-size:.72rem;min-width:0}
+.hljs{background:#111!important}
+
+@media(max-width:900px){
+  .fn-wrap{height:calc(100vh - 180px)}
+  .fn-tree-pane{position:fixed;top:0;left:0;bottom:0;width:min(320px,85vw);z-index:210;
+    transform:translateX(-100%);transition:transform .22s ease;box-shadow:8px 0 24px rgba(0,0,0,.08)}
+  .fn-tree-pane.open{transform:translateX(0)}
+  .fn-tree-backdrop{display:block;position:fixed;inset:0;background:rgba(26,29,35,.28);z-index:205;opacity:0;pointer-events:none;transition:opacity .2s}
+  .fn-tree-backdrop.open{opacity:1;pointer-events:auto}
+  .fn-drawer-toggle{display:inline-flex}
+}
+.fn-tree-backdrop{display:none}
+@media(max-width:640px){
+  .fn-open-tab{padding:.35rem .5rem;font-size:.72rem}
+  .fn-tree-pane{width:min(280px,85vw)}
+}
 
 /* search bar */
 .search-bar{display:flex;gap:.5rem;margin-bottom:1rem}
@@ -608,7 +649,11 @@ function router() {
 }
 
 window.addEventListener('hashchange', router);
-function render(html) { document.getElementById('app').innerHTML = html; }
+function render(html) {
+  const app = document.getElementById('app');
+  app.classList.remove('main-wide');   // every full-page route resets the Functions-tab width exception
+  app.innerHTML = html;
+}
 function $(s) { return document.querySelector(s); }
 function $$(s) { return [...document.querySelectorAll(s)]; }
 
@@ -1401,6 +1446,7 @@ window.goTab = function(id, tab) {
 async function renderTab(id, tab, detail) {
   const el = document.getElementById('tab-content');
   if (!el) return;
+  document.getElementById('app')?.classList.toggle('main-wide', tab === 'functions');
   if (typeof closeLlmDrawer === 'function') closeLlmDrawer();
   if (typeof closeAssessDrawer === 'function') closeAssessDrawer();
   try {
@@ -1955,88 +2001,311 @@ async function postSummaryHydrate(id) {
   }
 }
 
-/* ── functions tab ── */
-let fnState = {page:0, size:50, class_name:null};
+/* ── functions tab: JADX-GUI-style file tree + source viewer ──
+   State is kept across tab switches for the same scan (fnSt.id === id) so the user doesn't
+   lose open files/scroll position by flipping to another tab and back; switching to a
+   different scan rebuilds it from scratch. */
+let fnSt = null;
+
+function fnIsAndroid(detail) {
+  return String(detail.platform||'').toUpperCase() === 'ANDROID';
+}
+
+// Android: ClassName is a dotted package ("com.foo.Bar"); inner classes ("Bar$Inner") become
+// leaves nested under their outer class. iOS/Mach-O class names carry no such path convention,
+// so the tree falls back to a flat sorted list rather than fabricating a fake hierarchy.
+function fnBuildTree(classNames, detail) {
+  if (!fnIsAndroid(detail)) return {flat: true, items: classNames.slice().sort((a,b)=>a.localeCompare(b))};
+  const root = {children: {}};
+  for (const full of classNames) {
+    const dotParts = full.split('.');
+    const parts = dotParts.flatMap((seg,i) => i === dotParts.length-1 ? seg.split('$') : [seg]);
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      node = node.children[parts[i]] || (node.children[parts[i]] = {children: {}});
+      if (i === parts.length-1) node.className = full;
+    }
+  }
+  return {flat: false, root};
+}
+
+function fnLanguageFor(origin, detail) {
+  const o = String(origin||'').toUpperCase();
+  if (o === 'ASC' || o === 'JADX') return 'java';
+  if (String(detail.platform||'').toUpperCase() === 'IOS') return detail.is_swift ? 'swift' : 'objectivec';
+  return 'cpp';
+}
 
 async function tabFunctions(el, id, detail) {
+  if (detail.state !== 'done') { el.innerHTML = '<div class="alert alert-warn">Scan not complete.</div>'; return; }
+  if (!fnSt || fnSt.id !== id) {
+    el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    let classes;
+    try {
+      const rows = await api('/scans/'+id+'/classes?'+new URLSearchParams({limit: 200000}));
+      classes = rows.map(r => r.class);
+    } catch(e) {
+      el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+      return;
+    }
+    fnSt = {id, detail, classes, query: '', tree: fnBuildTree(classes, detail),
+            openFiles: [], activePath: null, classSevMap: null};
+    fnLoadSeverityMap(id);   // background; dots fill in once this resolves
+  }
+  fnRenderShell(el);
+}
+
+function fnRenderShell(el) {
   el.innerHTML = `
-    <div class="search-bar">
-      <select id="fn-class"><option value="">All classes</option></select>
-      <button class="btn btn-ghost btn-sm" id="fn-load-btn">Load</button>
+    <div class="fn-wrap">
+      <div class="fn-tree-pane" id="fn-tree-pane">
+        <div class="fn-tree-search"><input id="fn-filter" type="text" placeholder="Filter classes…" autocomplete="off"/></div>
+        <div class="fn-tree-list" id="fn-tree-list"></div>
+      </div>
+      <div class="fn-tree-backdrop" id="fn-tree-backdrop" onclick="fnCloseDrawer()"></div>
+      <div class="fn-viewer-pane">
+        <div class="fn-open-tabs" id="fn-open-tabs"></div>
+        <div id="fn-viewer-body" class="fn-viewer-body"></div>
+      </div>
     </div>
-    <div id="fn-table"><div class="empty">Select a class and click Load.</div></div>
-    <div id="fn-pages" class="pagination"></div>`;
-
-  if (detail.state !== 'done') {
-    el.innerHTML = `<div class="alert alert-warn">Scan not complete.</div>`; return;
-  }
-  try {
-    const data = await api('/scans/'+id+'/functions?size=0&page=0');
-    const sel = document.getElementById('fn-class');
-    data.classes.forEach(c => { const o=document.createElement('option'); o.value=c; o.text=c; sel.appendChild(o); });
-  } catch(e) { /* ignore */ }
-
-  document.getElementById('fn-load-btn').onclick = () => {
-    fnState.page = 0;
-    fnState.class_name = document.getElementById('fn-class').value || null;
-    loadFunctions(id);
-  };
+    <button class="btn btn-ghost btn-sm fn-drawer-toggle" id="fn-drawer-toggle" onclick="fnOpenDrawer()">
+      ☰ Classes (${fnSt.classes.length.toLocaleString()})
+    </button>`;
+  document.getElementById('fn-filter').value = fnSt.query;
+  document.getElementById('fn-filter').addEventListener('input', ev => {
+    fnSt.query = ev.target.value.trim().toLowerCase();
+    fnRenderTree();
+  });
+  fnRenderTree();
+  fnRenderOpenTabs();
+  fnRenderViewer();
 }
 
-async function loadFunctions(id) {
-  const el = document.getElementById('fn-table');
-  if (!el) return;
-  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-  try {
-    const q = new URLSearchParams({page:fnState.page, size:fnState.size});
-    if (fnState.class_name) q.set('class_name', fnState.class_name);
-    const data = await api('/scans/'+id+'/functions?'+q);
-    if (!data.items.length) { el.innerHTML='<div class="empty">No functions found.</div>'; return; }
-    el.innerHTML = `
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>Function</th><th>Has Decompiled</th></tr></thead>
-          <tbody>${data.items.map((fn,i)=>`
-            <tr class="fn-row" data-i="${i}" onclick="toggleFn(this,${JSON.stringify(esc(fn.function_name))},${JSON.stringify(esc(fn.decompiled||''))})">
-              <td>${esc(fn.function_name)}</td>
-              <td>${fn.decompiled?'Yes':'—'}</td>
-            </tr>
-            <tr class="fn-code-row" id="fn-code-${i}" hidden>
-              <td colspan="2"><pre class="fn-code" style="display:block">${esc(fn.decompiled||'(no decompiled code)')}</pre></td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
-    renderFnPagination(id, data.page, data.size, data.total);
-  } catch(e) {
-    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
-  }
-}
-
-window.toggleFn = function(row, name, code) {
-  const i = row.dataset.i;
-  const codeRow = document.getElementById('fn-code-'+i);
-  if (!codeRow) return;
-  const isOpen = !codeRow.hidden;
-  codeRow.hidden = isOpen;
-  row.classList.toggle('open', !isOpen);
+window.fnOpenDrawer = function() {
+  document.getElementById('fn-tree-pane')?.classList.add('open');
+  document.getElementById('fn-tree-backdrop')?.classList.add('open');
+};
+window.fnCloseDrawer = function() {
+  document.getElementById('fn-tree-pane')?.classList.remove('open');
+  document.getElementById('fn-tree-backdrop')?.classList.remove('open');
 };
 
-function renderFnPagination(id, page, size, total) {
-  const el = document.getElementById('fn-pages');
-  if (!el) return;
-  const pages = Math.ceil(total/size);
-  if (pages<=1) { el.innerHTML=''; return; }
-  let html = `<span>${total.toLocaleString()} total</span>`;
-  if (page>0) html+=`<button class="page-btn" onclick="fnPage('${id}',${page-1})">←</button>`;
-  const start=Math.max(0,page-2), end=Math.min(pages,page+3);
-  for(let i=start;i<end;i++)
-    html+=`<button class="page-btn${i===page?' active':''}" onclick="fnPage('${id}',${i})">${i+1}</button>`;
-  if (page<pages-1) html+=`<button class="page-btn" onclick="fnPage('${id}',${page+1})">→</button>`;
-  el.innerHTML=html;
+function fnMakeLeafRow(className) {
+  const row = document.createElement('div');
+  row.className = 'fn-tree-node';
+  row.dataset.class = className;
+  const label = document.createElement('span');
+  label.className = 'fn-tree-label';
+  label.textContent = fnSt.tree.flat ? className : className.split(/[.$]/).pop();
+  row.title = className;
+  row.appendChild(label);
+  row.addEventListener('click', () => fnOpenClass(className, row));
+  return row;
 }
 
-window.fnPage = function(id, p) { fnState.page=p; loadFunctions(id); };
+// Lazy: a folder's children are only built into the DOM the first time it's expanded — cheap
+// even for a scan with tens of thousands of classes (confirmed against a real 30k-class app).
+function fnBuildNodeRow(key, node, depth) {
+  const hasChildren = Object.keys(node.children).length > 0;
+  if (!hasChildren) return fnMakeLeafRow(node.className);
+
+  const frag = document.createDocumentFragment();
+  const row = document.createElement('div');
+  row.className = 'fn-tree-node fn-tree-folder';
+  row.style.paddingLeft = (0.5 + depth*0.9) + 'rem';
+  const arrow = document.createElement('span');
+  arrow.className = 'fn-tree-arrow';
+  arrow.textContent = '▸';
+  row.appendChild(arrow);
+  const label = document.createElement('span');
+  label.className = 'fn-tree-label';
+  label.textContent = key;
+  if (node.className) {   // a class that also has inner classes: label opens it, row toggles the folder
+    label.dataset.class = node.className;
+    label.style.cursor = 'pointer';
+    label.title = node.className;
+    label.addEventListener('click', ev => { ev.stopPropagation(); fnOpenClass(node.className, label); });
+  }
+  row.appendChild(label);
+
+  const childrenWrap = document.createElement('div');
+  childrenWrap.className = 'fn-tree-children';
+  childrenWrap.hidden = true;
+  row.addEventListener('click', () => {
+    const opening = childrenWrap.hidden;
+    if (opening && !childrenWrap.dataset.built) {
+      childrenWrap.appendChild(fnBuildChildren(node, depth+1));
+      childrenWrap.dataset.built = '1';
+      fnApplySeverityDots();
+    }
+    childrenWrap.hidden = !opening;
+    arrow.textContent = opening ? '▾' : '▸';
+  });
+
+  frag.appendChild(row);
+  frag.appendChild(childrenWrap);
+  return frag;
+}
+
+function fnBuildChildren(node, depth) {
+  const frag = document.createDocumentFragment();
+  const keys = Object.keys(node.children).sort((a,b) => {
+    const aFolder = Object.keys(node.children[a].children).length > 0;
+    const bFolder = Object.keys(node.children[b].children).length > 0;
+    if (aFolder !== bFolder) return aFolder ? -1 : 1;   // folders first, then leaves, alphabetic within each
+    return a.localeCompare(b);
+  });
+  for (const key of keys) frag.appendChild(fnBuildNodeRow(key, node.children[key], depth));
+  return frag;
+}
+
+const FN_FILTER_CAP = 500;   // filtered results render as a flat list (pruning the real tree to only
+                              // matching branches is a nicer v1.1; a flat cap is simpler and correct for v1)
+
+function fnRenderTree() {
+  const list = document.getElementById('fn-tree-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const q = fnSt.query;
+  if (q || fnSt.tree.flat) {
+    const pool = fnSt.tree.flat ? fnSt.tree.items : fnSt.classes.slice().sort((a,b)=>a.localeCompare(b));
+    const filtered = q ? pool.filter(c => c.toLowerCase().includes(q)) : pool;
+    if (!filtered.length) { list.innerHTML = '<div class="empty" style="padding:.75rem">No classes match.</div>'; return; }
+    const frag = document.createDocumentFragment();
+    for (const cls of filtered.slice(0, FN_FILTER_CAP)) frag.appendChild(fnMakeLeafRow(cls));
+    list.appendChild(frag);
+    if (filtered.length > FN_FILTER_CAP) {
+      const more = document.createElement('div');
+      more.className = 'empty';
+      more.style.padding = '.5rem';
+      more.textContent = `…and ${(filtered.length-FN_FILTER_CAP).toLocaleString()} more — refine your filter`;
+      list.appendChild(more);
+    }
+  } else {
+    list.appendChild(fnBuildChildren(fnSt.tree.root, 0));
+  }
+  fnApplySeverityDots();
+}
+
+async function fnOpenClass(className, rowEl) {
+  document.querySelectorAll('#fn-tree-list .fn-tree-node.active').forEach(r => r.classList.remove('active'));
+  rowEl?.classList.add('active');
+  fnCloseDrawer();
+  let file = fnSt.openFiles.find(f => f.class === className);
+  if (!file) {
+    fnSt.activePath = className;
+    fnRenderOpenTabs();
+    fnRenderViewer('loading');
+    let rows;
+    try {
+      rows = await api('/scans/'+fnSt.id+'/source?'+new URLSearchParams({class_name: className}));
+    } catch(e) {
+      if (fnSt.activePath === className) fnRenderViewer('error', e.message);
+      return;
+    }
+    if (fnSt.activePath !== className) return;   // user clicked elsewhere while this was in flight
+    if (!rows.length) {
+      file = {class: className, code: null};
+    } else {
+      const code = rows.map(r => `// ${r.class}.${r.function} [${r.origin}]\n${r.code||''}`).join('\n\n');
+      file = {class: className, code, language: fnLanguageFor(rows[0].origin, fnSt.detail)};
+    }
+    fnSt.openFiles.push(file);
+    if (fnSt.openFiles.length > 12) fnSt.openFiles.shift();   // simple FIFO cap on open tabs
+  }
+  fnSt.activePath = className;
+  fnRenderOpenTabs();
+  fnRenderViewer();
+}
+
+function fnRenderOpenTabs() {
+  const el = document.getElementById('fn-open-tabs');
+  if (!el) return;
+  if (!fnSt.openFiles.length) { el.innerHTML = ''; return; }
+  el.innerHTML = fnSt.openFiles.map(f => `
+    <div class="fn-open-tab${f.class===fnSt.activePath?' active':''}" data-class="${escAttr(f.class)}" title="${escAttr(f.class)}">
+      <span class="fn-open-tab-label">${esc(f.class.split(/[.$]/).pop())}</span>
+      <span class="fn-open-tab-close" data-close="${escAttr(f.class)}">×</span>
+    </div>`).join('');
+  el.querySelectorAll('.fn-open-tab').forEach(tabEl => tabEl.addEventListener('click', ev => {
+    if (ev.target.closest('.fn-open-tab-close')) return;
+    fnSt.activePath = tabEl.dataset.class;
+    fnRenderOpenTabs();
+    fnRenderViewer();
+  }));
+  el.querySelectorAll('.fn-open-tab-close').forEach(closeEl => closeEl.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const cls = closeEl.dataset.close;
+    fnSt.openFiles = fnSt.openFiles.filter(f => f.class !== cls);
+    if (fnSt.activePath === cls) fnSt.activePath = fnSt.openFiles.at(-1)?.class || null;
+    fnRenderOpenTabs();
+    fnRenderViewer();
+  }));
+}
+
+function fnRenderViewer(mode, errMsg) {
+  const el = document.getElementById('fn-viewer-body');
+  if (!el) return;
+  if (mode === 'loading') { el.innerHTML = '<div class="loading"><div class="spinner"></div></div>'; return; }
+  if (mode === 'error') { el.innerHTML = `<div class="alert alert-error">${esc(errMsg||'Failed to load source.')}</div>`; return; }
+  const file = fnSt.activePath ? fnSt.openFiles.find(f => f.class === fnSt.activePath) : null;
+  if (!file) { el.innerHTML = '<div class="empty" style="padding:2rem">Select a class from the tree to view its decompiled source.</div>'; return; }
+  if (file.code === null) {
+    el.innerHTML = `<div class="empty" style="padding:2rem">No stored decompiled code for <code>${esc(file.class)}</code>.<br/>
+      Use the <code>decompile</code> tool in the <a href="#" onclick="event.preventDefault();goTab(${JSON.stringify(fnSt.id)},'assistant')">AI Assistant</a> tab to decompile it on demand.</div>`;
+    return;
+  }
+  const lineCount = file.code.split('\n').length;
+  el.innerHTML = `
+    <div class="fn-breadcrumb"><span>${esc(file.class)}</span><button class="btn btn-ghost btn-sm" id="fn-copy-btn">Copy</button></div>
+    <div class="fn-code-scroll">
+      <pre class="fn-gutter">${Array.from({length:lineCount},(_,i)=>i+1).join('\n')}</pre>
+      <pre class="fn-code-pre"><code id="fn-code-el"></code></pre>
+    </div>`;
+  const codeEl = document.getElementById('fn-code-el');
+  // hljs.highlight() escapes its own output while emitting <span> tokens — it must receive the
+  // RAW string. Never pre-escape with esc() first (that double-escapes), and never fall back to
+  // innerHTML with raw text (decompiled code can contain attacker-influenced strings).
+  try {
+    if (file.language && window.hljs && hljs.getLanguage(file.language)) {
+      codeEl.innerHTML = hljs.highlight(file.code, {language: file.language, ignoreIllegals: true}).value;
+    } else {
+      codeEl.textContent = file.code;
+    }
+  } catch(e) { codeEl.textContent = file.code; }
+  document.getElementById('fn-copy-btn').onclick = () => { navigator.clipboard?.writeText(file.code).catch(()=>{}); };
+}
+
+async function fnLoadSeverityMap(id) {
+  let rows;
+  try { rows = await api('/scans/'+id+'/vulnerabilities'); } catch(e) { return; }
+  if (!fnSt || fnSt.id !== id) return;
+  const order = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3};
+  const map = {};
+  for (const r of rows) {
+    if (r.affected_type !== 'FUNCTION' || !r.evidence_location || r.is_false_positive) continue;
+    const i = String(r.evidence_location).lastIndexOf('.');
+    if (i < 0) continue;
+    const cls = r.evidence_location.slice(0, i);
+    const sev = String(r.effective_severity || r.severity || '').toUpperCase();
+    if (!(sev in order)) continue;
+    if (!(cls in map) || order[sev] < order[map[cls]]) map[cls] = sev;
+  }
+  fnSt.classSevMap = map;
+  fnApplySeverityDots();
+}
+
+function fnApplySeverityDots() {
+  if (!fnSt?.classSevMap) return;
+  document.querySelectorAll('#fn-tree-list [data-class]').forEach(elNode => {
+    const label = elNode.classList.contains('fn-tree-label') ? elNode : elNode.querySelector('.fn-tree-label');
+    const sev = fnSt.classSevMap[elNode.dataset.class];
+    if (!label || !sev || label.querySelector('.fn-tree-sev')) return;
+    const dot = document.createElement('span');
+    dot.className = 'fn-tree-sev ' + sev;
+    label.prepend(dot);
+  });
+}
 
 /* ── strings tab ── */
 let stringsRequestSeq = 0;
