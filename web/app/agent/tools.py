@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Optional
 
-from .. import db
+from .. import db, offensive_phases
 from ..config import settings
 from . import ondemand, store
 
@@ -84,6 +84,16 @@ TOOLS = [
           "get_source is missing/garbled or a second opinion is requested.",
           {"tool": {"type": "string", "enum": ["asc", "jadx", "ghidra"]}, "target": _S, "lib": _S, "offset": _I},
           ["tool", "target"]),
+    _spec("recommend_hook_targets", "Recon-only ranking of symbols worth a Frida hook, for AUTHORIZED pentest work "
+          "on THIS app. Built deterministically (no LLM call) from this scan's vulnerabilities and Security "
+          "Assessment (SSL pinning, root/jailbreak detection, anti-debug, crypto/keychain). Does NOT generate a "
+          "Frida script (the UI's Offensive Frida kit does that) — this only says where to look and why, with a "
+          "confidence: HIGH = known symbol plus a call graph (who calls it), MEDIUM = known symbol but no call "
+          "graph, LOW = only assessment text evidence, no symbol. Call this instead of guessing from get_source "
+          "when asked where to hook for a bypass.",
+          {"category": {"type": "string",
+                         "enum": ["ROOT_DETECTION", "JAILBREAK", "SSL_PINNING", "CRYPTO", "BIOMETRIC"]},
+           "limit": _I}),
 ]
 
 
@@ -286,10 +296,41 @@ async def _manifest(ctx: Ctx, a: dict) -> str:
                **({"next_offset": nxt} if nxt < total else {})})
 
 
+_HOOK_NOTE = "Recon-only recommendation for AUTHORIZED testing; verify manually before hooking anything."
+_SEV_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+_CONF_ORDER = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+
+
+async def _hook_targets(ctx: Ctx, a: dict) -> str:
+    candidates = await db.get_candidate_symbols(ctx.db_path, ctx.exe)
+    if not candidates:
+        return _j({"targets": [], "note": "No bypass-relevant vulnerability or Security Assessment signal in this "
+                   "scan. This does not mean the app has no such control, only that nothing was detected. " + _HOOK_NOTE})
+    have_refs = await db.has_references(ctx.db_path)
+    want = (a.get("category") or "").upper().replace("-", "_")
+    limit = max(1, min(int(a.get("limit", 20)), 50))
+    targets = []
+    for c in candidates:
+        if want and c["bucket"] != want:
+            continue
+        callers = await db.get_references(ctx.db_path, ctx.exe, c["symbol"], "callers") \
+            if c["has_symbol"] and have_refs else []
+        confidence = "HIGH" if callers else ("MEDIUM" if c["has_symbol"] else "LOW")
+        targets.append({
+            "symbol": c["symbol"], "class": c["class"], "category": c["bucket"],
+            "phase": offensive_phases.normalize_phase({"category": c["bucket"]}),
+            "confidence": confidence, "severity": c["severity"], "source": c["source"], "rule_id": c["rule_id"],
+            "evidence": c["evidence"], "callers": [f"{r['class']}.{r['function']}" for r in callers[:5]],
+        })
+    targets.sort(key=lambda t: (_SEV_ORDER.get(t["severity"] or "INFO", 5), _CONF_ORDER.get(t["confidence"], 9)))
+    return _j({"targets": targets[:limit], "note": _HOOK_NOTE})
+
+
 _RUN: dict[str, Callable[[Ctx, dict], Awaitable[str]]] = {
     "scan_overview": _overview, "list_classes": _list_classes, "search_code": _search_code,
     "get_source": _get_source, "search_strings": _search_strings, "get_vulnerabilities": _vulns,
     "get_references": _refs, "get_assessments": _assessments, "get_manifest": _manifest, "decompile": _decompile,
+    "recommend_hook_targets": _hook_targets,
 }
 
 
