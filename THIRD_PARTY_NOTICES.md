@@ -52,6 +52,12 @@ FastAPI (MIT), Starlette (BSD 3-Clause), Uvicorn (BSD 3-Clause), Pydantic and py
 (BSD 3-Clause), aiosqlite (MIT), aiofiles (Apache-2.0), python-multipart (Apache-2.0), Slack Bolt and Slack SDK for
 Python (MIT), python-dotenv (BSD 3-Clause).
 
+## Frontend assets (vendored in `web/vendor/`, served to the browser)
+
+| Library | License | Role |
+|---|---|---|
+| [highlight.js](https://github.com/highlightjs/highlight.js) 11.12.0 | BSD 3-Clause | Syntax highlighting in the Functions tab's source viewer. Self-hosted (not loaded from a CDN) so the web UI keeps working on an offline/air-gapped network; see `web/vendor/hljs/LICENSE`. |
+
 ## Services (not bundled)
 
 Optional LLM enrichment and the AI Assistant call the APIs of Anthropic (Claude), OpenAI, DeepSeek, or a local
