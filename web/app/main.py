@@ -289,9 +289,20 @@ async def get_strings(
 
 
 @app.get("/api/v1/scans/{scan_id}/resources")
-async def get_resources(request: Request, scan_id: str, limit: int = 200):
+async def get_resources(
+    request: Request, scan_id: str,
+    q: Optional[str] = None,
+    type: Optional[str] = None,
+    limit: int = Query(default=200, ge=0, le=2000),
+    page: Optional[int] = Query(default=None, ge=1),
+    size: int = Query(default=50, ge=10, le=200),
+):
     _check_auth(request)
     db_path, _ = _require_db(scan_id)
+    # Keep the original flat list response for callers that do not opt into pagination
+    # (e.g. the raw API link on the Downloads tab).
+    if page is not None:
+        return await db.get_resources_page(db_path, type, q, page, size)
     return await db.get_resources(db_path, limit)
 
 

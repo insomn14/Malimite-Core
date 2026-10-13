@@ -232,6 +232,8 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .pagination .page-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .pagination .page-btn:disabled{cursor:not-allowed;opacity:.45;background:var(--surface)}
 .strings-table{min-width:700px}
+.res-row-highlight td{background:#fef3c7!important;animation:res-flash 1.6s ease-out 1}
+@keyframes res-flash{from{background:#fde68a}to{background:#fef3c7}}
 .strings-pagination{justify-content:space-between}
 .strings-pagination-actions{display:flex;align-items:center;gap:.5rem}
 .llm-table{min-width:700px}
@@ -2545,20 +2547,103 @@ async function loadStrings(root, id, state) {
 }
 
 /* ── resources tab ── */
+let resourcesRequestSeq = 0;
+// A value to search for and highlight the next time the Resources tab loads, left by another tab
+// (e.g. the Vulnerabilities tab's "View in Resources" link) before calling goTab — same
+// fnPendingOpen/chatSt(id).prefill pattern used elsewhere, so goTab's lack of an await never matters.
+let resPendingHighlight = null;
+
 async function tabResources(el, id) {
-  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const root = document.createElement('div');
+  root.id = 'resources-root';
+  root.innerHTML = `
+    <div class="search-bar">
+      <input id="res-q" type="text" placeholder="Search resources…" autocomplete="off"/>
+      <button id="res-search" class="btn btn-primary btn-sm">Search</button>
+    </div>
+    <div id="res-table"></div>
+    <div id="res-pages" class="pagination strings-pagination"></div>`;
+  el.replaceChildren(root);
+
+  const state = {page: 1, size: 50, query: '', highlight: null};
+  if (resPendingHighlight) {
+    state.query = resPendingHighlight;
+    state.highlight = resPendingHighlight;
+    resPendingHighlight = null;
+    root.querySelector('#res-q').value = state.query;
+  }
+  const search = () => {
+    state.query = root.querySelector('#res-q').value.trim();
+    state.highlight = null;   // a manual search replaces the auto-highlight target
+    state.page = 1;
+    loadResources(root, id, state);
+  };
+  root.querySelector('#res-search').addEventListener('click', search);
+  root.querySelector('#res-q').addEventListener('keydown', event => {
+    if (event.key === 'Enter') search();
+  });
+  await loadResources(root, id, state);
+}
+
+async function loadResources(root, id, state) {
+  const table = root.querySelector('#res-table');
+  const pager = root.querySelector('#res-pages');
+  if (!table || !pager) return;
+  const requestSeq = ++resourcesRequestSeq;
+  table.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  pager.innerHTML = '';
   try {
-    const items = await api('/scans/'+id+'/resources?limit=500');
-    if (!items.length) { el.innerHTML='<div class="empty">No resource strings found.</div>'; return; }
-    el.innerHTML = `<div class="tbl-wrap"><table>
-      <thead><tr><th>Resource</th><th>Value</th><th>Type</th></tr></thead>
-      <tbody>${items.map(r=>`<tr>
-        <td class="mono truncate">${esc(r.resource_id)}</td>
-        <td class="truncate">${esc(r.value)}</td>
-        <td>${esc(r.type)}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
-  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+    const params = new URLSearchParams({page: state.page, size: state.size});
+    if (state.query) params.set('q', state.query);
+    const data = await api('/scans/'+id+'/resources?'+params);
+    if (requestSeq !== resourcesRequestSeq || !root.isConnected
+        || root !== document.getElementById('resources-root')) return;
+
+    const items = Array.isArray(data.items) ? data.items : [];
+    const total = Math.max(0, Number(data.total) || 0);
+    const page  = Math.max(1, Number(data.page) || 1);
+    const size  = Math.max(1, Number(data.size) || state.size);
+    const pages = Math.max(0, Number(data.pages) || 0);
+    state.page = page;
+
+    table.innerHTML = items.length
+      ? `<div class="tbl-wrap"><table>
+          <thead><tr><th>Resource</th><th>Value</th><th>Type</th></tr></thead>
+          <tbody>${items.map(r => {
+            const isMatch = state.highlight && r.value === state.highlight;
+            return `<tr${isMatch ? ' class="res-row-highlight"' : ''}>
+              <td class="mono truncate">${esc(r.resource_id)}</td>
+              <td class="truncate" title="${escAttr(r.value||'')}">${esc(r.value)}</td>
+              <td>${esc(r.type)}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>`
+      : '<div class="empty">No resources match this filter.</div>';
+
+    if (state.highlight) {
+      const hit = table.querySelector('.res-row-highlight');
+      if (hit) hit.scrollIntoView({block: 'center'});
+    }
+
+    const first = items.length ? (page - 1) * size + 1 : 0;
+    const last  = items.length ? first + items.length - 1 : 0;
+    pager.innerHTML = `<span>Showing ${esc(String(first))}–${esc(String(last))} of ${esc(total.toLocaleString())} · Page ${esc(String(pages ? page : 0))} of ${esc(String(pages))}</span>
+      <span class="strings-pagination-actions">
+        <button class="page-btn" data-page="prev" ${page <= 1 ? 'disabled' : ''}>Previous</button>
+        <button class="page-btn" data-page="next" ${pages === 0 || page >= pages ? 'disabled' : ''}>Next</button>
+      </span>`;
+    pager.querySelector('[data-page="prev"]').onclick = () => {
+      if (state.page > 1) { state.page--; loadResources(root, id, state); }
+    };
+    pager.querySelector('[data-page="next"]').onclick = () => {
+      if (state.page < pages) { state.page++; loadResources(root, id, state); }
+    };
+  } catch(e) {
+    if (requestSeq === resourcesRequestSeq && root.isConnected
+        && root === document.getElementById('resources-root')) {
+      table.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+    }
+  }
 }
 
 /* ── entry points tab ── */
@@ -2871,16 +2956,23 @@ function fnComponentNameFromEvidence(evidence) {
 function fnAffectedLink(a) {
   if (a.affected_type === 'FUNCTION') {
     const cls = fnClassFromFunctionLocation(a.affected_name, a.evidence_location);
-    return cls ? {label: cls, target: cls} : null;
+    return cls ? {label: cls, tab: 'functions', target: cls} : null;
   }
   if (a.affected_type === 'RESOURCE' && a.affected_name === 'Component') {
     const cls = fnComponentNameFromEvidence(a.evidence);
-    return cls ? {label: cls, target: cls} : null;
+    return cls ? {label: cls, tab: 'functions', target: cls} : null;
+  }
+  if (a.affected_type === 'RESOURCE') {
+    // Every other RESOURCE finding's `evidence` is the exact ResourceStrings.value it matched
+    // against (VulnerabilityScanner truncates at 200 chars, so this can miss on an unusually long
+    // value — the search still narrows things down even when the exact-match highlight doesn't hit).
+    if (!a.evidence) return null;
+    return {label: a.affected_name, tab: 'resources', target: a.evidence};
   }
   if (a.affected_type === 'BINARY') {
     // One BINARY finding covers the whole executable, not a specific native library — there is no
     // per-library target in this data. Still useful to jump to the tab itself, just not pre-opened.
-    return {label: null, target: null};
+    return {label: null, tab: 'functions', target: null};
   }
   return null;
 }
@@ -2895,8 +2987,9 @@ function renderAffectedAssetsList(assets) {
   }
   return `<div class="affected-list">${assets.map(a => {
     const link = fnAffectedLink(a);
+    const linkLabel = link?.tab === 'resources' ? 'View in Resources →' : 'View in Functions →';
     const viewLink = link
-      ? ` · <a href="#" class="aff-view-link" data-target="${escAttr(link.target || '')}">View in Functions →</a>`
+      ? ` · <a href="#" class="aff-view-link" data-tab="${escAttr(link.tab)}" data-target="${escAttr(link.target || '')}">${linkLabel}</a>`
       : '';
     return `
     <div class="affected-item">
@@ -2971,6 +3064,11 @@ async function tabVulnerabilities(el, id, detail) {
       if (!a) return;
       ev.preventDefault();
       const target = a.dataset.target;
+      if (a.dataset.tab === 'resources') {
+        if (target) resPendingHighlight = target;
+        goTab(id, 'resources');
+        return;
+      }
       if (target) fnPendingOpen = target;
       goTab(id, 'functions');
     });
