@@ -2273,7 +2273,7 @@ function fnRenderViewer(mode, errMsg) {
     <div class="fn-breadcrumb"><span>${esc(file.class)}</span><button class="btn btn-ghost btn-sm" id="fn-copy-btn">Copy</button></div>
     <div class="fn-code-scroll">
       <pre class="fn-gutter">${Array.from({length:lineCount},(_,i)=>i+1).join('\n')}</pre>
-      <pre class="fn-code-pre"><code id="fn-code-el"></code></pre>
+      <pre class="fn-code-pre"><code id="fn-code-el" class="hljs"></code></pre>
     </div>`;
   const codeEl = document.getElementById('fn-code-el');
   // hljs.highlight() escapes its own output while emitting <span> tokens — it must receive the
