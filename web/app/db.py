@@ -12,6 +12,7 @@ from .models import (
     LlmFinding,
     LlmFindingPage,
     ResourceItem,
+    ResourcePage,
     StringItem,
     StringPage,
 )
@@ -725,11 +726,17 @@ async def resource_type_counts(db_path: str) -> dict:
 
 
 async def get_resources_by_type(db_path: str, types: list[str], query: str, limit: int, offset: int) -> tuple[int, list[dict]]:
-    """(total matching, one page) of ResourceStrings rows of the given types, optional substring filter."""
-    limit = max(1, min(limit, 100))
-    marks = ",".join("?" * len(types))
-    where = f"type IN ({marks})" + (" AND value LIKE ? ESCAPE '\\'" if query else "")
-    args = [*types, *([_like(query)] if query else [])]
+    """(total matching, one page) of ResourceStrings rows, optionally scoped to `types` (empty list
+    = no type filter, i.e. every resource) and an optional substring filter on value."""
+    limit = max(1, min(limit, 200))
+    conds, args = [], []
+    if types:
+        conds.append(f"type IN ({','.join('?' * len(types))})")
+        args += types
+    if query:
+        conds.append("value LIKE ? ESCAPE '\\'")
+        args.append(_like(query))
+    where = " AND ".join(conds) if conds else "1=1"
     async with _ro(db_path) as db:
         async with db.execute(f"SELECT COUNT(*) FROM ResourceStrings WHERE {where}", args) as cur:
             total = (await cur.fetchone())[0]
@@ -738,6 +745,21 @@ async def get_resources_by_type(db_path: str, types: list[str], query: str, limi
             [*args, limit, max(offset, 0)]) as cur:
             rows = await cur.fetchall()
     return total, [{"id": r[0], "value": r[1], "type": r[2]} for r in rows]
+
+
+async def get_resources_page(db_path: str, type_: Optional[str], query: Optional[str],
+                              page: int, size: int) -> ResourcePage:
+    """One stable, one-based page of ResourceStrings (optionally one `type`, optional substring
+    filter on value) for the Resources tab, mirroring get_strings_page's shape."""
+    page = max(page, 1)
+    size = max(10, min(size, 200))
+    offset = (page - 1) * size
+    types = [type_] if type_ else []
+    total, rows = await get_resources_by_type(db_path, types, (query or "").strip(), size, offset)
+    items = [ResourceItem(resource_id=r["id"], value=r["value"], type=r["type"]) for r in rows]
+    pages = (total + size - 1) // size if total else 0
+    return ResourcePage(items=items, total=total, page=page, size=size, pages=pages,
+                         type_counts=await resource_type_counts(db_path))
 
 
 async def get_entry_points_ro(db_path: str, executable: str) -> list[dict]:
