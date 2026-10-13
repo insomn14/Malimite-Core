@@ -666,12 +666,12 @@ async def get_vulnerabilities_brief(db_path: str, executable: str) -> list[dict]
             cols = {r[1] for r in await cur.fetchall()}
         sel = lambda c, default: c if c in cols else default  # noqa: E731
         async with db.execute(
-            f"""SELECT RuleId, Title, Category, Severity, CvssScore, Cwe, AffectedName, Evidence, EvidenceLocation,
-                       COALESCE({sel('Status', 'NULL')}, 'open'), {sel('OverrideSeverity', 'NULL')},
+            f"""SELECT RuleId, Title, Category, Severity, CvssScore, Cwe, AffectedType, AffectedName, Evidence,
+                       EvidenceLocation, COALESCE({sel('Status', 'NULL')}, 'open'), {sel('OverrideSeverity', 'NULL')},
                        {sel('OverrideCvssScore', 'NULL')}
                 FROM Vulnerabilities WHERE ExecutableName=?""", (executable,)) as cur:
             rows = await cur.fetchall()
-    keys = ("rule_id", "title", "category", "severity", "cvss", "cwe", "affected_name", "evidence",
+    keys = ("rule_id", "title", "category", "severity", "cvss", "cwe", "affected_type", "affected_name", "evidence",
             "evidence_location", "status", "override_severity", "override_cvss")
     return [dict(zip(keys, r)) for r in rows]
 
@@ -769,3 +769,48 @@ async def get_entry_points_ro(db_path: str, executable: str) -> list[dict]:
             (executable,)) as cur:
             rows = await cur.fetchall()
     return [{"class": r[0], "function": r[1]} for r in rows]
+
+
+# ── read-only helper: hook-target candidates for the assistant's recommend_hook_targets tool ─────
+
+# VulnerabilityCatalog/AndroidVulnerabilityCatalog Category -> offensive_phases bucket (see main.py's
+# offensive kit, which uses the same bucket names to pick a phase folder).
+_VULN_CATEGORY_BUCKET = {"NETWORK": "SSL_PINNING", "RESILIENCE": "ROOT_DETECTION", "CRYPTO": "CRYPTO", "AUTH": "BIOMETRIC"}
+
+# AssessmentCatalog control id -> bucket, restricted to controls a pentest hook target would actually bypass
+# (not e.g. ASSESS-PIE/ASSESS-FLAG-SECURE, which aren't hookable bypass targets).
+_ASSESS_CONTROL_BUCKET = {
+    "ASSESS-ROOT-DETECTION": "ROOT_DETECTION", "ASSESS-JAILBREAK-DETECTION": "JAILBREAK",
+    "ASSESS-FRIDA-DETECTION": "ROOT_DETECTION", "ASSESS-ANTIDEBUG": "ROOT_DETECTION",
+    "ASSESS-DEBUG-DETECTION": "ROOT_DETECTION", "ASSESS-EMULATOR-DETECTION": "ROOT_DETECTION",
+    "ASSESS-SSL-PINNING": "SSL_PINNING", "ASSESS-BIOMETRIC": "BIOMETRIC",
+    "ASSESS-KEYCHAIN": "CRYPTO", "ASSESS-KEYSTORE": "CRYPTO",
+}
+
+
+async def get_candidate_symbols(db_path: str, executable: str) -> list[dict]:
+    """Bypass-relevant candidates for recommend_hook_targets: Vulnerabilities rows in a hook-relevant
+    category (symbol known when AffectedType=='FUNCTION', via EvidenceLocation='Class.function'), plus
+    PRESENT/PARTIAL Assessment controls (symbol unknown: the scanner only recorded matched text)."""
+    out: list[dict] = []
+    for r in await get_vulnerabilities_brief(db_path, executable):
+        bucket = _VULN_CATEGORY_BUCKET.get((r["category"] or "").upper())
+        if not bucket or (r["status"] or "open").lower() in _SUPPRESSED:
+            continue
+        has_symbol = r["affected_type"] == "FUNCTION" and bool(r["evidence_location"])
+        cls, _, fn = (r["evidence_location"] or "").rpartition(".")
+        out.append({
+            "symbol": fn if has_symbol else None, "class": cls if has_symbol else None, "bucket": bucket,
+            "severity": r["severity"], "rule_id": r["rule_id"], "evidence": (r["evidence"] or "")[:200],
+            "source": "vulnerability", "has_symbol": has_symbol,
+        })
+    rows = await get_assessments_brief(db_path, executable)
+    for a in rows or []:
+        bucket = _ASSESS_CONTROL_BUCKET.get(a["control_id"])
+        if not bucket or a["status"] not in ("PRESENT", "PARTIAL"):
+            continue
+        out.append({
+            "symbol": None, "class": None, "bucket": bucket, "severity": None, "rule_id": a["control_id"],
+            "evidence": (a["evidence"] or "")[:200], "source": "assessment", "has_symbol": False,
+        })
+    return out
