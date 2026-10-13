@@ -54,6 +54,19 @@ class FunctionsRoutesTests(unittest.TestCase):
         r = self.client.get("/api/v1/scans/s1/classes", params={"query": "nomatch"})
         self.assertEqual(r.json(), [])
 
+    def test_classes_returns_more_than_the_agent_tools_200row_cap(self):
+        # Regression: db.list_classes clamps `limit` to a `cap` (default 200, sized for the chat
+        # agent). The Functions tab tree needs every class at once — found via a real Krom scan
+        # (30k+ classes) silently truncating to 200 before this route raised its cap.
+        c = sqlite3.connect(self.path)
+        c.executemany("INSERT INTO Classes VALUES (?,?,?)",
+                      [(f"com.many.C{i:04d}", "[]", "app") for i in range(250)])
+        c.commit()
+        c.close()
+        r = self.client.get("/api/v1/scans/s1/classes")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.json()), 251)  # 250 new + the one from setUp
+
     def test_source_whole_class(self):
         r = self.client.get("/api/v1/scans/s1/source", params={"class_name": "com.a.Crypto"})
         self.assertEqual(r.status_code, 200)
