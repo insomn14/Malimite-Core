@@ -1,4 +1,5 @@
 """Malimite Python web service — wraps all Malimite-Core functionality."""
+import asyncio
 import hmac
 import io
 import json
@@ -14,12 +15,13 @@ from typing import Optional
 import aiofiles
 from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import db, offensive_phases, scanner
-from .agent import anthropic_oauth, loop as agent_loop, store as chat_store
+from .agent import anthropic_oauth, loop as agent_loop, ondemand, store as chat_store
 from .agent.llm import LlmError, resolve_llm
-from .agent.tools import Ctx
+from .agent.tools import Ctx, valid_class_name
 from .config import settings
 from .models import ScanDetail, ScanMeta
 
@@ -44,6 +46,7 @@ async def _lifespan(_: FastAPI):
 app = FastAPI(title="Malimite", version="0.1.0", docs_url="/docs", redoc_url=None, lifespan=_lifespan)
 
 _WEB = Path(__file__).parent.parent
+app.mount("/vendor", StaticFiles(directory=_WEB / "vendor"), name="vendor")
 
 
 # ── auth ──────────────────────────────────────────────────────────────────────
@@ -188,6 +191,72 @@ async def get_functions(
     return await db.get_functions(db_path, exe, class_name, page, size)
 
 
+@app.get("/api/v1/scans/{scan_id}/classes")
+async def get_classes(request: Request, scan_id: str, query: str = "", limit: int = 200_000, offset: int = 0):
+    """Class names only (no decompiled code) — the data source for the Functions tab's file tree.
+    Unlike the chat agent's list_classes tool, the tree needs the whole inventory at once, so this
+    route raises db.list_classes's default 200-row cap (a real app can have tens of thousands)."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    return await db.list_classes(db_path, exe, query, limit, offset, cap=200_000)
+
+
+@app.get("/api/v1/scans/{scan_id}/source")
+async def get_source(request: Request, scan_id: str, class_name: str, function_name: Optional[str] = None):
+    """Stored decompiled code for one class (whole body) or one function."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    return await db.get_source(db_path, exe, class_name, function_name)
+
+
+@app.get("/api/v1/scans/{scan_id}/code-search")
+async def get_code_search(request: Request, scan_id: str, q: str, limit: int = 30):
+    """Substring search over all stored decompiled code."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    return await db.search_code(db_path, exe, q, limit)
+
+
+class DecompileRequest(BaseModel):
+    tool: str
+    target: str
+
+
+@app.post("/api/v1/scans/{scan_id}/decompile")
+async def post_decompile(request: Request, scan_id: str, req: DecompileRequest):
+    """On-demand decompile of one Android class for the Functions tab, when nothing is stored yet.
+    Android asc/jadx only — ghidra native targets (iOS Mach-O, Android .so) need a symbol/address
+    picker this tab doesn't have, and stay reachable only through the AI Assistant's decompile tool.
+    Shares its cache (and its concurrency limit) with that tool: both read/write the same
+    AgentDecompiles table in <scan_dir>/<id>/chat.sqlite."""
+    _check_auth(request)
+    _require_db(scan_id)
+    detail = scanner.get_scan_detail(scan_id)
+    if req.tool not in ("asc", "jadx"):
+        raise HTTPException(status_code=422,
+                             detail="only asc/jadx is available here; ghidra targets go through the AI Assistant")
+    if str(detail.platform or "").upper() != "ANDROID":
+        raise HTTPException(status_code=422, detail="asc/jadx decompile is Android-only")
+    if not valid_class_name(req.target):
+        raise HTTPException(status_code=422, detail="invalid class name")
+
+    scan_dir = scanner._scan_dir(scan_id)
+    chat_db = chat_store.path_for(scan_dir)
+    code = await chat_store.cache_get(chat_db, req.tool, "", req.target)
+    cached = code is not None
+    if code is None:
+        try:
+            res = await asyncio.wait_for(ondemand.decompile(scan_dir, req.tool, req.target, ""),
+                                          timeout=settings.ghidra_ondemand_timeout)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="decompile timed out")
+        if not res.get("ok"):
+            raise HTTPException(status_code=502, detail=res.get("error") or "decompile failed")
+        code = res["code"]
+        await chat_store.cache_put(chat_db, req.tool, "", req.target, code)
+    return {"tool": req.tool, "target": req.target, "code": code, "cached": cached}
+
+
 @app.get("/api/v1/scans/{scan_id}/strings")
 async def get_strings(
     request: Request,
@@ -206,9 +275,20 @@ async def get_strings(
 
 
 @app.get("/api/v1/scans/{scan_id}/resources")
-async def get_resources(request: Request, scan_id: str, limit: int = 200):
+async def get_resources(
+    request: Request, scan_id: str,
+    q: Optional[str] = None,
+    type: Optional[str] = None,
+    limit: int = Query(default=200, ge=0, le=2000),
+    page: Optional[int] = Query(default=None, ge=1),
+    size: int = Query(default=50, ge=10, le=200),
+):
     _check_auth(request)
     db_path, _ = _require_db(scan_id)
+    # Keep the original flat list response for callers that do not opt into pagination
+    # (e.g. the raw API link on the Downloads tab).
+    if page is not None:
+        return await db.get_resources_page(db_path, type, q, page, size)
     return await db.get_resources(db_path, limit)
 
 

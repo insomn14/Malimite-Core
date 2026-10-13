@@ -77,6 +77,15 @@ class ResourceItem(BaseModel):
     type: str
 
 
+class ResourcePage(BaseModel):
+    items: list[ResourceItem]
+    total: int
+    page: int
+    size: int
+    pages: int
+    type_counts: dict[str, int] = {}
+
+
 class LlmFinding(BaseModel):
     function_name: str
     class_name: Optional[str]
