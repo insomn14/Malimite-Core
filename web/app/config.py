@@ -30,6 +30,20 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
     ollama_base_url: str = "http://localhost:11434"
 
+    # Anthropic OAuth (Claude Pro/Max subscription usage, no ANTHROPIC_API_KEY needed).
+    # Written by `java -jar cli/target/malimite-cli.jar claude-login` (run wherever a
+    # browser is available — see AnthropicOAuthCredentials.java for the same path
+    # convention on the Java side). In the shipped web-compose.yml this resolves to the
+    # shared ~/.malimite-docker mount at /home/malimite/.malimite/anthropic-oauth.json.
+    anthropic_oauth_path: str = str(Path.home() / ".malimite" / "anthropic-oauth.json")
+
+    # Where to auto-detect an already-completed `claude /login` session for the
+    # "Import from Claude Code CLI" button / `malimite claude-login --import`.
+    # Defaults to the official claude CLI's own file; web-compose.yml overrides
+    # this to a synced copy (see sync-claude-oauth.sh) because the real file is
+    # 0600 and owned by the host uid, unreadable by the container's own uid.
+    claude_code_credentials_path: str = str(Path.home() / ".claude" / ".credentials.json")
+
     # AI Assistant (chat agent)
     chat_max_turns: int = 20
     chat_max_output_tokens: int = 8192  # per LLM call; on deepseek this also covers hidden reasoning tokens

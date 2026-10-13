@@ -17,7 +17,8 @@ import java.util.concurrent.Callable;
 @Command(name = "malimite",
          mixinStandardHelpOptions = true,
          versionProvider = Main.ManifestVersionProvider.class,
-         description = "Headless IPA/APK analyzer (Ghidra for iOS, JADX for Android).")
+         description = "Headless IPA/APK analyzer (Ghidra for iOS, JADX for Android).",
+         subcommands = { ClaudeLoginCommand.class })
 public class Main implements Callable<Integer> {
 
     public static final class ManifestVersionProvider implements IVersionProvider {
@@ -36,7 +37,10 @@ public class Main implements Callable<Integer> {
         }
     }
 
-    @Parameters(index = "0", description = "IPA, APK or XAPK (split-APK bundle) file to analyze")
+    // arity 0..1 (rather than a plain required positional) so 'malimite claude-login'
+    // can run without also demanding an <ipa> path; absence is checked explicitly
+    // in call() for the no-subcommand case, where <ipa> is still mandatory.
+    @Parameters(index = "0", arity = "0..1", description = "IPA, APK or XAPK (split-APK bundle) file to analyze")
     private Path ipa;
 
     @Option(names = {"-g", "--ghidra"}, description = "Ghidra install dir (required for .ipa)",
@@ -132,6 +136,12 @@ public class Main implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        if (ipa == null) {
+            System.err.println("error: Missing required parameter: '<ipa>'");
+            System.err.println("(use 'malimite claude-login' to sign in with Claude instead of running a scan)");
+            return 2;
+        }
+
         LlmMode mode = LlmMode.fromString(llmModeStr);
         if (mode == LlmMode.OFFENSIVE && !llm) {
             System.err.println("error: --llm-mode offensive requires --llm (LLM enrichment is mandatory for Offensive mode)");

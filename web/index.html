@@ -561,6 +561,16 @@ const LLM_MODEL_CATALOG = {
     {value:'claude-opus-5-5', label:'Claude Opus 5.5 (most capable)'},
     {value:'claude-haiku-5-5', label:'Claude Haiku 5.5 (fast, cheap)'},
   ],
+  // Same Messages API, same model lineup as the API-key 'claude' provider above —
+  // only the auth mechanism (OAuth bearer token vs x-api-key) differs. Mirrors
+  // ClaudeOAuthProvider.java's own default ("claude-sonnet-4-6" when unset) as
+  // the first/default entry rather than silently diverging from what the
+  // backend actually falls back to.
+  'claude-oauth': [
+    {value:'claude-sonnet-4-6', label:'Claude Sonnet 4.6 (balanced, default)'},
+    {value:'claude-opus-5-5', label:'Claude Opus 5.5 (most capable)'},
+    {value:'claude-haiku-5-5', label:'Claude Haiku 5.5 (fast, cheap)'},
+  ],
   deepseek: [
     {value:'deepseek-v4-flash', label:'deepseek-v4-flash (default, fast)'},
     {value:'deepseek-v4-pro', label:'deepseek-v4-pro (higher quality)'},
@@ -580,6 +590,11 @@ window.onProviderChange = function() {
   if (provider === 'openai') keyLabel.innerHTML = 'OpenAI API Key (sk-...) <span style="color:var(--red)">*</span>';
   if (provider === 'claude') keyLabel.innerHTML = 'Anthropic API Key (sk-ant-...) <span style="color:var(--red)">*</span>';
   if (provider === 'deepseek') keyLabel.innerHTML = 'DeepSeek API Key <span style="color:var(--red)">*</span>';
+  const oauthHint = document.getElementById('llm-oauth-hint');
+  if (oauthHint) {
+    oauthHint.hidden = provider !== 'claude-oauth';
+    if (provider === 'claude-oauth') refreshOauthStatus();
+  }
 
   const modelEl = document.getElementById('llm-model');
   const modelSelect = document.getElementById('llm-model-select');
@@ -617,6 +632,71 @@ window.clearKeyError = function() {
   const keyError = document.getElementById('llm-key-error');
   if (keyInput) keyInput.style.borderColor = '';
   if (keyError) keyError.hidden = true;
+};
+
+/* ── Claude OAuth status/import (provider = claude-oauth) ── */
+window.refreshOauthStatus = async function() {
+  const textEl = document.getElementById('oauth-status-text');
+  const ccRow = document.getElementById('oauth-claude-code-row');
+  if (!textEl) return;
+  try {
+    const s = await api('/auth/claude-oauth/status');
+    textEl.textContent = s.configured
+      ? ' A session is already stored on the server — ready to use.'
+      : ' No session stored on the server yet.';
+    if (ccRow) ccRow.hidden = !(s.claude_code_detected && !s.configured);
+  } catch (e) {
+    textEl.textContent = ' Could not check status: ' + (e.message || e);
+  }
+};
+
+window.importFromClaudeCode = async function() {
+  const errEl = document.getElementById('oauth-import-err');
+  errEl.innerHTML = '';
+  try {
+    const r = await api('/auth/claude-oauth/import-claude-code', {method: 'POST'});
+    if (r.changed) {
+      errEl.innerHTML = `<div class="alert alert-info" style="margin-top:.4rem">Imported a new token (${esc(r.token_fingerprint)}).</div>`;
+    } else {
+      // Same access_token as what was already stored — most likely sync-claude-oauth.sh
+      // (run on the host) hadn't finished writing a fresh one yet when this ran. Say so
+      // plainly instead of a bare "ok" that looks identical to a real new import.
+      errEl.innerHTML = `<div class="alert alert-warn" style="margin-top:.4rem">
+        Imported the <strong>same</strong> token that was already stored (${esc(r.token_fingerprint)}) — nothing changed.
+        If chat/scans still fail after this, the server operator likely needs to re-run
+        <code>./sync-claude-oauth.sh</code> on the host and wait for it to finish
+        <strong>before</strong> clicking Import again.
+      </div>`;
+    }
+    refreshOauthStatus();
+  } catch (e) {
+    errEl.innerHTML = `<div class="alert alert-error" style="margin-top:.4rem">${esc(e.message || String(e))}</div>`;
+  }
+};
+
+window.importOauthToken = async function() {
+  const errEl = document.getElementById('oauth-import-err');
+  errEl.innerHTML = '';
+  const access_token = document.getElementById('oauth-imp-access').value.trim();
+  const refresh_token = document.getElementById('oauth-imp-refresh').value.trim();
+  const expires_at_ms = parseInt(document.getElementById('oauth-imp-expires').value.trim(), 10);
+  if (!access_token || !refresh_token || !Number.isFinite(expires_at_ms)) {
+    errEl.innerHTML = '<div class="alert alert-error" style="margin-top:.4rem">Fill in all three fields (expiresAt must be a number).</div>';
+    return;
+  }
+  try {
+    await api('/auth/claude-oauth/import-token', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({access_token, refresh_token, expires_at_ms}),
+    });
+    document.getElementById('oauth-imp-access').value = '';
+    document.getElementById('oauth-imp-refresh').value = '';
+    document.getElementById('oauth-imp-expires').value = '';
+    refreshOauthStatus();
+  } catch (e) {
+    errEl.innerHTML = `<div class="alert alert-error" style="margin-top:.4rem">${esc(e.message || String(e))}</div>`;
+  }
 };
 
 window.onLlmModeChange = function() {
@@ -809,6 +889,7 @@ route('home', async function() {
             <option value="none">Disabled</option>
             <option value="openai">OpenAI</option>
             <option value="claude">Claude</option>
+            <option value="claude-oauth">Claude (OAuth — Pro/Max)</option>
             <option value="deepseek">DeepSeek</option>
             <option value="ollama">Ollama (local)</option>
           </select>
@@ -837,6 +918,34 @@ route('home', async function() {
           <span id="llm-key-error" hidden style="color:var(--red);font-weight:600">API key is required to use this provider.</span>
           <span style="color:var(--muted);font-size:.72rem">Sent only to this server to authenticate with the LLM provider. Never stored.</span>
         </label>
+      </div>
+      <div id="llm-oauth-hint" class="alert alert-info" hidden style="margin-top:.75rem;font-size:.8rem">
+        Uses the Claude Pro/Max subscription signed in on the <strong>server host</strong> (no API key needed here).
+        <span id="oauth-status-text">Checking status…</span>
+        <div id="oauth-claude-code-row" hidden style="margin-top:.5rem">
+          <button class="btn btn-ghost btn-sm" onclick="importFromClaudeCode()">Import from Claude Code CLI</button>
+          <span style="color:var(--muted);font-size:.72rem">
+            Found a <code>claude /login</code> session on this server — one click reuses it.
+          </span>
+        </div>
+        <details style="margin-top:.5rem">
+          <summary style="cursor:pointer">…or paste a token manually</summary>
+          <p style="color:var(--muted);font-size:.72rem;margin:.4rem 0">
+            From <code>~/.claude/.credentials.json</code>'s <code>claudeAiOauth</code> object
+            (wherever you last ran <code>claude /login</code>), or your own sandbox. Sent straight
+            to this server — never shown elsewhere.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:.3rem;max-width:420px">
+            <input id="oauth-imp-access" type="password" placeholder="accessToken (sk-ant-oat01-...)"
+              style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
+            <input id="oauth-imp-refresh" type="password" placeholder="refreshToken (sk-ant-ort01-...)"
+              style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
+            <input id="oauth-imp-expires" type="text" placeholder="expiresAt (epoch milliseconds)"
+              style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
+            <button class="btn btn-ghost btn-sm" onclick="importOauthToken()" style="align-self:flex-start">Import token</button>
+          </div>
+        </details>
+        <div id="oauth-import-err"></div>
       </div>
       <div id="offensive-warn" class="alert alert-warn off-warn" hidden>
         Offensive mode generates Frida bypass/intercept scripts for <strong>authorized testing only</strong>.
@@ -1686,7 +1795,7 @@ async function tabAssistant(el, id, detail) {
         <span class="nav-spacer"></span>
         <select id="chat-provider" title="LLM provider">
           <option value="">Scan default${detail.llm_provider && detail.llm_provider !== 'none' ? ' (' + esc(detail.llm_provider) + ')' : ''}</option>
-          <option value="claude">claude</option><option value="openai">openai</option>
+          <option value="claude">claude</option><option value="claude-oauth">claude (OAuth)</option><option value="openai">openai</option>
           <option value="deepseek">deepseek</option><option value="ollama">ollama</option>
         </select>
         <input id="chat-model" placeholder="${escAttr(detail.llm_model || 'model (default)')}" title="Model override"/>
