@@ -14,6 +14,7 @@ from typing import Optional
 import aiofiles
 from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import db, scanner
@@ -58,6 +59,7 @@ async def _lifespan(_: FastAPI):
 app = FastAPI(title="Malimite", version="0.1.0", docs_url="/docs", redoc_url=None, lifespan=_lifespan)
 
 _WEB = Path(__file__).parent.parent
+app.mount("/vendor", StaticFiles(directory=_WEB / "vendor"), name="vendor")
 
 
 # ── auth ──────────────────────────────────────────────────────────────────────
@@ -200,6 +202,30 @@ async def get_functions(
     _check_auth(request)
     db_path, exe = _require_db(scan_id)
     return await db.get_functions(db_path, exe, class_name, page, size)
+
+
+@app.get("/api/v1/scans/{scan_id}/classes")
+async def get_classes(request: Request, scan_id: str, query: str = "", limit: int = 100, offset: int = 0):
+    """Class names only (no decompiled code) — the data source for the Functions tab's file tree."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    return await db.list_classes(db_path, exe, query, limit, offset)
+
+
+@app.get("/api/v1/scans/{scan_id}/source")
+async def get_source(request: Request, scan_id: str, class_name: str, function_name: Optional[str] = None):
+    """Stored decompiled code for one class (whole body) or one function."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    return await db.get_source(db_path, exe, class_name, function_name)
+
+
+@app.get("/api/v1/scans/{scan_id}/code-search")
+async def get_code_search(request: Request, scan_id: str, q: str, limit: int = 30):
+    """Substring search over all stored decompiled code."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    return await db.search_code(db_path, exe, q, limit)
 
 
 @app.get("/api/v1/scans/{scan_id}/strings")
