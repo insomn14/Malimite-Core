@@ -543,6 +543,33 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 
 <script>
 /* ── LLM provider change handler ── */
+// Curated, not live-fetched: a provider's real catalog needs its API key to query (which the user
+// hasn't necessarily entered yet at this point in the form) and changes over time regardless, so a
+// hardcoded list would need to stay in sync either way. Every provider here also gets an explicit
+// "Custom" escape hatch into the plain text input, so a model missing from this list is never a
+// dead end — same safety net Ollama (no fixed catalog at all) already relied on before this change.
+const LLM_MODEL_CATALOG = {
+  openai: [
+    {value:'gpt-4o', label:'gpt-4o (flagship)'},
+    {value:'gpt-4o-mini', label:'gpt-4o-mini (fast, cheap, default)'},
+    {value:'gpt-4.1', label:'gpt-4.1'},
+    {value:'gpt-4.1-mini', label:'gpt-4.1-mini'},
+    {value:'o3-mini', label:'o3-mini (reasoning)'},
+  ],
+  claude: [
+    {value:'claude-sonnet-5-5', label:'Claude Sonnet 5.5 (balanced, default)'},
+    {value:'claude-opus-5-5', label:'Claude Opus 5.5 (most capable)'},
+    {value:'claude-haiku-5-5', label:'Claude Haiku 5.5 (fast, cheap)'},
+  ],
+  deepseek: [
+    {value:'deepseek-v4-flash', label:'deepseek-v4-flash (default, fast)'},
+    {value:'deepseek-v4-pro', label:'deepseek-v4-pro (higher quality)'},
+    {value:'deepseek-chat', label:'deepseek-chat (legacy alias)'},
+    {value:'deepseek-reasoner', label:'deepseek-reasoner (reasoning)'},
+  ],
+};
+const LLM_MODEL_CUSTOM = '__custom__';
+
 window.onProviderChange = function() {
   const provider = document.getElementById('llm-provider')?.value || 'none';
   const keyRow   = document.getElementById('llm-key-row');
@@ -553,18 +580,36 @@ window.onProviderChange = function() {
   if (provider === 'openai') keyLabel.innerHTML = 'OpenAI API Key (sk-...) <span style="color:var(--red)">*</span>';
   if (provider === 'claude') keyLabel.innerHTML = 'Anthropic API Key (sk-ant-...) <span style="color:var(--red)">*</span>';
   if (provider === 'deepseek') keyLabel.innerHTML = 'DeepSeek API Key <span style="color:var(--red)">*</span>';
+
   const modelEl = document.getElementById('llm-model');
   const modelSelect = document.getElementById('llm-model-select');
   if (modelEl && modelSelect) {
-    const useDeepSeek = provider === 'deepseek';
-    modelEl.hidden = useDeepSeek;
-    modelSelect.hidden = !useDeepSeek;
-    if (useDeepSeek && !modelSelect.value) modelSelect.value = 'deepseek-v4-flash';
-    if (!useDeepSeek) modelEl.placeholder = provider === 'openai' ? 'e.g. gpt-4o-mini'
-      : provider === 'claude' ? 'e.g. claude-sonnet-4-6' : 'leave empty for default';
+    const catalog = LLM_MODEL_CATALOG[provider];
+    if (catalog) {
+      modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('')
+        + `<option value="${LLM_MODEL_CUSTOM}">Custom (type model name)…</option>`;
+      modelSelect.value = catalog[0].value;
+      modelSelect.hidden = false;
+      modelEl.hidden = true;
+      modelEl.value = '';
+    } else {
+      // ollama (every install's local model list is different) or no provider: plain text, as before.
+      modelSelect.hidden = true;
+      modelEl.hidden = false;
+      modelEl.placeholder = provider === 'ollama' ? 'e.g. llama3 (leave empty for default)' : 'leave empty for default';
+    }
   }
   // Clear any previous error when switching provider
   clearKeyError();
+};
+
+window.onModelSelectChange = function() {
+  const modelSelect = document.getElementById('llm-model-select');
+  const modelEl = document.getElementById('llm-model');
+  if (!modelSelect || !modelEl) return;
+  const custom = modelSelect.value === LLM_MODEL_CUSTOM;
+  modelEl.hidden = !custom;
+  if (custom) { modelEl.value = ''; modelEl.placeholder = 'Type the exact model name'; modelEl.focus(); }
 };
 
 window.clearKeyError = function() {
@@ -780,13 +825,8 @@ route('home', async function() {
         </label>
         <label style="display:flex;flex-direction:column;gap:.3rem">
           Model override
-          <select id="llm-model-select" hidden style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px">
-            <option value="deepseek-v4-flash">deepseek-v4-flash (default, fast)</option>
-            <option value="deepseek-v4-pro">deepseek-v4-pro (higher quality)</option>
-            <option value="deepseek-chat">deepseek-chat (legacy alias)</option>
-            <option value="deepseek-reasoner">deepseek-reasoner (reasoning)</option>
-          </select>
-          <input id="llm-model" type="text" placeholder="e.g. gpt-4o-mini" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
+          <select id="llm-model-select" hidden onchange="onModelSelectChange()" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"></select>
+          <input id="llm-model" type="text" placeholder="leave empty for default" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
         </label>
       </div>
       <div id="llm-key-row" hidden style="margin-top:.75rem;font-size:.8rem">
@@ -859,8 +899,13 @@ route('home', async function() {
     fd.append('llm_enabled', provider !== 'none');
     fd.append('llm_provider', provider);
     fd.append('llm_mode', mode);
-    fd.append('llm_model', ($('#llm-model-select') && !$('#llm-model-select').hidden)
-      ? $('#llm-model-select').value : $('#llm-model').value);
+    fd.append('llm_model', (() => {
+      const sel = $('#llm-model-select');
+      // The select stays visible with "Custom" picked (so the user can switch back without
+      // re-choosing a provider) — only read from it when it's showing a real catalog entry.
+      if (sel && !sel.hidden && sel.value !== LLM_MODEL_CUSTOM) return sel.value;
+      return $('#llm-model').value;
+    })());
     fd.append('llm_api_key', apiKeyVal);
     fd.append('assessment_enabled', $('#assessment-enabled')?.checked !== false);
 
