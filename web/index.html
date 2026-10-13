@@ -2153,10 +2153,11 @@ window.fnCloseDrawer = function() {
   document.getElementById('fn-tree-backdrop')?.classList.remove('open');
 };
 
-function fnMakeLeafRow(className) {
+function fnMakeLeafRow(className, depth = 0) {
   const row = document.createElement('div');
   row.className = 'fn-tree-node';
   row.dataset.class = className;
+  if (depth > 0) row.style.paddingLeft = (0.5 + depth * 0.9) + 'rem';
   const label = document.createElement('span');
   label.className = 'fn-tree-label';
   label.textContent = fnSt.tree.flat ? className : className.split(/[.$]/).pop();
@@ -2170,7 +2171,7 @@ function fnMakeLeafRow(className) {
 // even for a scan with tens of thousands of classes (confirmed against a real 30k-class app).
 function fnBuildNodeRow(key, node, depth) {
   const hasChildren = Object.keys(node.children).length > 0;
-  if (!hasChildren) return fnMakeLeafRow(node.className);
+  if (!hasChildren) return fnMakeLeafRow(node.className, depth);
 
   const frag = document.createDocumentFragment();
   const row = document.createElement('div');
