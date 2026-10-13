@@ -9,9 +9,9 @@ import java.util.Map;
  * Creates an {@link LlmProvider} from a config map (env vars).
  *
  * <pre>
- * LLM_PROVIDER      = openai | claude | deepseek | ollama | none   (default: none)
+ * LLM_PROVIDER      = openai | claude | claude-oauth | deepseek | ollama | none   (default: none)
  * OPENAI_API_KEY    = sk-...
- * ANTHROPIC_API_KEY = sk-ant-...
+ * ANTHROPIC_API_KEY = sk-ant-...            (required for provider=claude)
  * DEEPSEEK_API_KEY  = sk-...
  * DEEPSEEK_BASE_URL = https://api.deepseek.com   (optional override)
  * OLLAMA_BASE_URL   = http://localhost:11434
@@ -46,6 +46,12 @@ public final class LlmProviderFactory {
                 if (key == null || key.isBlank()) throw new IllegalStateException("ANTHROPIC_API_KEY missing");
                 log.info("LLM provider: Claude model={}", model.isBlank() ? "claude-sonnet-4-6" : model);
                 yield new ClaudeProvider(key, model, maxTokens);
+            }
+            // Uses a Claude Pro/Max OAuth session (see AnthropicOAuthLogin) instead of
+            // a pay-per-token API key. Requires 'malimite claude-login' to have run once.
+            case "claude-oauth" -> {
+                log.info("LLM provider: Claude (OAuth) model={}", model.isBlank() ? "claude-sonnet-4-6" : model);
+                yield new ClaudeOAuthProvider(model, maxTokens);
             }
             case "deepseek" -> {
                 String key = cfg.get("DEEPSEEK_API_KEY");

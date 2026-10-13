@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import db, offensive_phases, scanner
-from .agent import loop as agent_loop, store as chat_store
+from .agent import anthropic_oauth, loop as agent_loop, store as chat_store
 from .agent.llm import LlmError, resolve_llm
 from .agent.tools import Ctx
 from .config import settings
@@ -523,6 +523,69 @@ async def get_learned_rules(request: Request, platform: Optional[str] = None):
         "rules": all_rules,
         "platform": filt,
     }
+
+
+# ── Claude OAuth (claude-oauth provider) ────────────────────────────────────
+#
+# No browser flow lives here: this container has no browser, and the loopback
+# callback server the flow needs (localhost:53692) isn't reachable from a
+# browser running on the host anyway. These routes only import an
+# already-completed login — either auto-detected from the official `claude`
+# CLI's own session file, or pasted directly — the same two paths
+# `malimite claude-login --import` / `--access-token ...` expose on the CLI
+# side (see ClaudeLoginCommand.java).
+
+class ImportTokenRequest(BaseModel):
+    access_token: str
+    refresh_token: str
+    expires_at_ms: int
+
+
+@app.get("/api/v1/auth/claude-oauth/status")
+async def claude_oauth_status(request: Request):
+    _check_auth(request)
+    configured = anthropic_oauth.is_configured()
+    return {
+        "configured": configured,
+        "claude_code_detected": anthropic_oauth.claude_code_credentials_available(),
+    }
+
+
+@app.post("/api/v1/auth/claude-oauth/import-token")
+async def claude_oauth_import_token(request: Request, req: ImportTokenRequest):
+    _check_auth(request)
+    if not req.access_token.startswith("sk-ant-oat"):
+        raise HTTPException(status_code=422,
+                             detail="access_token doesn't look like an OAuth token "
+                                    "(expected it to start with 'sk-ant-oat').")
+    anthropic_oauth.import_manual(req.access_token, req.refresh_token, req.expires_at_ms)
+    return {"ok": True}
+
+
+@app.post("/api/v1/auth/claude-oauth/import-claude-code")
+async def claude_oauth_import_claude_code(request: Request):
+    """Imports the session already stored by the official `claude` CLI
+    (`claude /login`), if one is readable from this process.
+
+    `changed=false` in the response means the imported access_token was
+    byte-for-byte identical to what was already stored — almost always a sign
+    that `./sync-claude-oauth.sh` (repo root) hadn't finished writing a fresh
+    token yet when this ran (it's asynchronous relative to a human clicking
+    "Import"), not that the import itself failed. This happened in production:
+    a human clicked Import, the call reported HTTP 200, but the token
+    underneath was still the old/invalid one because sync finished ~2 minutes
+    later. Callers should treat changed=false + a still-failing chat/scan as
+    "re-run sync-claude-oauth.sh, wait for it to actually finish, then
+    import again" rather than a code bug.
+    """
+    _check_auth(request)
+    result = anthropic_oauth.import_from_claude_code()
+    if result is None:
+        raise HTTPException(status_code=404,
+                             detail=f"No Claude Code session found at "
+                                    f"{anthropic_oauth.claude_code_credentials_path()}. "
+                                    f"Run 'claude /login' first, wherever this process can read that file.")
+    return {"ok": True, "changed": result.changed, "token_fingerprint": result.fingerprint}
 
 
 # ── file downloads ────────────────────────────────────────────────────────────

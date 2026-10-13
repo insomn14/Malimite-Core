@@ -35,11 +35,32 @@ services:
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
       DEEPSEEK_BASE_URL: "${DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
       OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://localhost:11434}"
+      # Lets the "Import from Claude Code CLI" button (web UI, LLM Enrichment =
+      # Claude OAuth) and `malimite claude-login --import` auto-detect an
+      # already-completed `claude /login` session. Points at a *copy*
+      # (./sync-claude-oauth.sh), not ~/.claude/.credentials.json directly —
+      # that file is correctly 0600 and owned by the host uid, unreadable by
+      # this container's unprivileged uid 10001. Entirely optional.
+      CLAUDE_CODE_CREDENTIALS_PATH: "/home/malimite/.malimite/claude-code-credentials.json"
     volumes:
       # Persist scan outputs (SQLite, report.html, findings.sarif, scan.json)
       - malimite-scans:/var/malimite/scans
       # Learned rules seed (read-only)
       - ./rules:/var/malimite/rules:ro
+      # Anthropic OAuth credential, shared by TWO consumers that both read/refresh the
+      # same anthropic-oauth.json: the Java CLI (scan enrichment, llm_provider=claude-oauth
+      # → ClaudeOAuthProvider.java) and the Python chat agent (AI Assistant tab, provider
+      # claude-oauth → web/app/agent/anthropic_oauth.py). The container has no browser, so
+      # the *initial* sign-in has to happen on the HOST:
+      #   java -jar cli/target/malimite-cli.jar claude-login
+      #   ./sync-claude-oauth.sh     # copies the result into ~/.malimite-docker
+      # This mounts a dedicated ~/.malimite-docker (NOT ~/.malimite itself) because
+      # the service runs as uid 10001 inside the container while the host user is a
+      # different uid — sharing ~/.malimite directly would require chowning it to
+      # 10001, which breaks host-side access to that directory. The mount is
+      # read-write: both consumers refresh the access token roughly hourly and persist
+      # the new pair back to this same path.
+      - ${HOME}/.malimite-docker:/home/malimite/.malimite
     restart: unless-stopped
 
 volumes:
