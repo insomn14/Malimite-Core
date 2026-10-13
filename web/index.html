@@ -152,7 +152,9 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 
 /* Functions tab: JADX-GUI-style file tree + source viewer */
 .fn-wrap{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;height:calc(100vh - 220px);min-height:420px}
-.fn-tree-pane{flex:0 0 280px;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);overflow:hidden}
+.fn-tree-pane{flex:0 0 var(--fn-tree-w,280px);border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);overflow:hidden}
+.fn-drag-handle{flex:0 0 auto;width:6px;cursor:col-resize;background:transparent}
+.fn-drag-handle:hover,.fn-drag-handle.dragging{background:var(--accent)}
 .fn-tree-search{padding:.6rem;border-bottom:1px solid var(--border)}
 .fn-tree-search input{width:100%;padding:.4rem .6rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.8rem}
 .fn-tree-list{flex:1;overflow-y:auto;font-size:.8rem;padding:.25rem 0}
@@ -176,7 +178,16 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .fn-open-tab-close:hover{opacity:1}
 .fn-viewer-body{flex:1;min-height:0;display:flex;flex-direction:column}
 .fn-breadcrumb{padding:.5rem .75rem;font-size:.75rem;color:var(--muted);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-family:monospace}
-.fn-code-scroll{flex:1;overflow-y:auto;display:flex;background:#0d1117;
+.fn-breadcrumb-actions{display:flex;align-items:center;gap:.4rem;font-family:inherit}
+.fn-outline{position:relative}
+.fn-outline summary{cursor:pointer;list-style:none;padding:.3rem .6rem;font-size:.72rem;border:1px solid var(--border);border-radius:var(--radius);color:var(--muted)}
+.fn-outline summary::-webkit-details-marker{display:none}
+.fn-outline[open] summary{color:var(--text);border-color:var(--accent)}
+.fn-outline-list{position:absolute;right:0;top:calc(100% + .3rem);background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow);max-height:300px;overflow-y:auto;z-index:20;min-width:220px}
+.fn-outline-item{padding:.4rem .7rem;font-size:.75rem;cursor:pointer;white-space:nowrap;color:var(--text)}
+.fn-outline-item:hover{background:var(--bg)}
+.fn-code-scroll{flex:1;overflow-y:auto;display:flex;align-items:flex-start;background:#0d1117;
   scrollbar-width:thin;scrollbar-color:#30363d #0d1117}
 .fn-code-scroll::-webkit-scrollbar{width:10px;height:10px}
 .fn-code-scroll::-webkit-scrollbar-track{background:#0d1117}
@@ -185,7 +196,7 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .fn-gutter{flex:0 0 auto;margin:0;padding:.85rem .9rem;color:#4b5563;font-size:.78rem;line-height:1.65;
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   text-align:right;user-select:none;white-space:pre;background:#090c10;border-right:1px solid #1c232c}
-.fn-code-pre{flex:1;overflow-x:auto;margin:0;padding:.85rem 1.1rem;font-size:.78rem;line-height:1.65;min-width:0;
+.fn-code-pre{flex:1;overflow-x:auto;overflow-y:hidden;margin:0;padding:.85rem 1.1rem;font-size:.78rem;line-height:1.65;min-width:0;
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   scrollbar-width:thin;scrollbar-color:#30363d #0d1117}
 .fn-code-pre::-webkit-scrollbar{height:10px}
@@ -221,6 +232,8 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .pagination .page-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .pagination .page-btn:disabled{cursor:not-allowed;opacity:.45;background:var(--surface)}
 .strings-table{min-width:700px}
+.res-row-highlight td{background:#fef3c7!important;animation:res-flash 1.6s ease-out 1}
+@keyframes res-flash{from{background:#fde68a}to{background:#fef3c7}}
 .strings-pagination{justify-content:space-between}
 .strings-pagination-actions{display:flex;align-items:center;gap:.5rem}
 .llm-table{min-width:700px}
@@ -530,6 +543,33 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 
 <script>
 /* ── LLM provider change handler ── */
+// Curated, not live-fetched: a provider's real catalog needs its API key to query (which the user
+// hasn't necessarily entered yet at this point in the form) and changes over time regardless, so a
+// hardcoded list would need to stay in sync either way. Every provider here also gets an explicit
+// "Custom" escape hatch into the plain text input, so a model missing from this list is never a
+// dead end — same safety net Ollama (no fixed catalog at all) already relied on before this change.
+const LLM_MODEL_CATALOG = {
+  openai: [
+    {value:'gpt-4o', label:'gpt-4o (flagship)'},
+    {value:'gpt-4o-mini', label:'gpt-4o-mini (fast, cheap, default)'},
+    {value:'gpt-4.1', label:'gpt-4.1'},
+    {value:'gpt-4.1-mini', label:'gpt-4.1-mini'},
+    {value:'o3-mini', label:'o3-mini (reasoning)'},
+  ],
+  claude: [
+    {value:'claude-sonnet-5-5', label:'Claude Sonnet 5.5 (balanced, default)'},
+    {value:'claude-opus-5-5', label:'Claude Opus 5.5 (most capable)'},
+    {value:'claude-haiku-5-5', label:'Claude Haiku 5.5 (fast, cheap)'},
+  ],
+  deepseek: [
+    {value:'deepseek-v4-flash', label:'deepseek-v4-flash (default, fast)'},
+    {value:'deepseek-v4-pro', label:'deepseek-v4-pro (higher quality)'},
+    {value:'deepseek-chat', label:'deepseek-chat (legacy alias)'},
+    {value:'deepseek-reasoner', label:'deepseek-reasoner (reasoning)'},
+  ],
+};
+const LLM_MODEL_CUSTOM = '__custom__';
+
 window.onProviderChange = function() {
   const provider = document.getElementById('llm-provider')?.value || 'none';
   const keyRow   = document.getElementById('llm-key-row');
@@ -540,18 +580,36 @@ window.onProviderChange = function() {
   if (provider === 'openai') keyLabel.innerHTML = 'OpenAI API Key (sk-...) <span style="color:var(--red)">*</span>';
   if (provider === 'claude') keyLabel.innerHTML = 'Anthropic API Key (sk-ant-...) <span style="color:var(--red)">*</span>';
   if (provider === 'deepseek') keyLabel.innerHTML = 'DeepSeek API Key <span style="color:var(--red)">*</span>';
+
   const modelEl = document.getElementById('llm-model');
   const modelSelect = document.getElementById('llm-model-select');
   if (modelEl && modelSelect) {
-    const useDeepSeek = provider === 'deepseek';
-    modelEl.hidden = useDeepSeek;
-    modelSelect.hidden = !useDeepSeek;
-    if (useDeepSeek && !modelSelect.value) modelSelect.value = 'deepseek-v4-flash';
-    if (!useDeepSeek) modelEl.placeholder = provider === 'openai' ? 'e.g. gpt-4o-mini'
-      : provider === 'claude' ? 'e.g. claude-sonnet-4-6' : 'leave empty for default';
+    const catalog = LLM_MODEL_CATALOG[provider];
+    if (catalog) {
+      modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('')
+        + `<option value="${LLM_MODEL_CUSTOM}">Custom (type model name)…</option>`;
+      modelSelect.value = catalog[0].value;
+      modelSelect.hidden = false;
+      modelEl.hidden = true;
+      modelEl.value = '';
+    } else {
+      // ollama (every install's local model list is different) or no provider: plain text, as before.
+      modelSelect.hidden = true;
+      modelEl.hidden = false;
+      modelEl.placeholder = provider === 'ollama' ? 'e.g. llama3 (leave empty for default)' : 'leave empty for default';
+    }
   }
   // Clear any previous error when switching provider
   clearKeyError();
+};
+
+window.onModelSelectChange = function() {
+  const modelSelect = document.getElementById('llm-model-select');
+  const modelEl = document.getElementById('llm-model');
+  if (!modelSelect || !modelEl) return;
+  const custom = modelSelect.value === LLM_MODEL_CUSTOM;
+  modelEl.hidden = !custom;
+  if (custom) { modelEl.value = ''; modelEl.placeholder = 'Type the exact model name'; modelEl.focus(); }
 };
 
 window.clearKeyError = function() {
@@ -767,13 +825,8 @@ route('home', async function() {
         </label>
         <label style="display:flex;flex-direction:column;gap:.3rem">
           Model override
-          <select id="llm-model-select" hidden style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px">
-            <option value="deepseek-v4-flash">deepseek-v4-flash (default, fast)</option>
-            <option value="deepseek-v4-pro">deepseek-v4-pro (higher quality)</option>
-            <option value="deepseek-chat">deepseek-chat (legacy alias)</option>
-            <option value="deepseek-reasoner">deepseek-reasoner (reasoning)</option>
-          </select>
-          <input id="llm-model" type="text" placeholder="e.g. gpt-4o-mini" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
+          <select id="llm-model-select" hidden onchange="onModelSelectChange()" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"></select>
+          <input id="llm-model" type="text" placeholder="leave empty for default" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
         </label>
       </div>
       <div id="llm-key-row" hidden style="margin-top:.75rem;font-size:.8rem">
@@ -846,8 +899,13 @@ route('home', async function() {
     fd.append('llm_enabled', provider !== 'none');
     fd.append('llm_provider', provider);
     fd.append('llm_mode', mode);
-    fd.append('llm_model', ($('#llm-model-select') && !$('#llm-model-select').hidden)
-      ? $('#llm-model-select').value : $('#llm-model').value);
+    fd.append('llm_model', (() => {
+      const sel = $('#llm-model-select');
+      // The select stays visible with "Custom" picked (so the user can switch back without
+      // re-choosing a provider) — only read from it when it's showing a real catalog entry.
+      if (sel && !sel.hidden && sel.value !== LLM_MODEL_CUSTOM) return sel.value;
+      return $('#llm-model').value;
+    })());
     fd.append('llm_api_key', apiKeyVal);
     fd.append('assessment_enabled', $('#assessment-enabled')?.checked !== false);
 
@@ -1644,6 +1702,10 @@ async function tabAssistant(el, id, detail) {
     </div>`;
 
   const $in = document.getElementById('chat-in');
+  // Prefill left by another tab (e.g. Functions tab's "Ask AI Assistant"), consumed once. Fills
+  // only — never auto-sends, so a click there never spends LLM quota without the user pressing
+  // Enter/Send themselves.
+  if (st.prefill) { $in.value = st.prefill; st.prefill = null; }
   const setBusy = b => {
     document.getElementById('chat-send').style.display = b ? 'none' : '';
     document.getElementById('chat-stop').style.display = b ? '' : 'none';
@@ -2019,6 +2081,11 @@ async function postSummaryHydrate(id) {
    lose open files/scroll position by flipping to another tab and back; switching to a
    different scan rebuilds it from scratch. */
 let fnSt = null;
+// A class to auto-open the next time the Functions tab renders, left by another tab (e.g. the
+// Vulnerabilities tab's "View in Functions" link) before calling goTab — same reasoning as
+// chatSt(id).prefill: nothing reaches into this tab's DOM directly, so goTab's lack of an await
+// never matters here.
+let fnPendingOpen = null;
 
 function fnIsAndroid(detail) {
   return String(detail.platform||'').toUpperCase() === 'ANDROID';
@@ -2064,8 +2131,17 @@ async function tabFunctions(el, id, detail) {
     fnSt = {id, detail, classes, query: '', tree: fnBuildTree(classes, detail),
             openFiles: [], activePath: null, classSevMap: null};
     fnLoadSeverityMap(id);   // background; dots fill in once this resolves
+    try {
+      const savedW = localStorage.getItem('malimite.fnTreeWidth');
+      if (savedW) document.documentElement.style.setProperty('--fn-tree-w', savedW + 'px');
+    } catch(e) { /* per-viewer convenience only */ }
   }
   fnRenderShell(el);
+  if (fnPendingOpen) {
+    const target = fnPendingOpen;
+    fnPendingOpen = null;
+    fnOpenClass(target);
+  }
 }
 
 function fnRenderShell(el) {
@@ -2075,6 +2151,7 @@ function fnRenderShell(el) {
         <div class="fn-tree-search"><input id="fn-filter" type="text" placeholder="Filter classes…" autocomplete="off"/></div>
         <div class="fn-tree-list" id="fn-tree-list"></div>
       </div>
+      <div class="fn-drag-handle" id="fn-drag-handle"></div>
       <div class="fn-tree-backdrop" id="fn-tree-backdrop" onclick="fnCloseDrawer()"></div>
       <div class="fn-viewer-pane">
         <div class="fn-open-tabs" id="fn-open-tabs"></div>
@@ -2089,9 +2166,39 @@ function fnRenderShell(el) {
     fnSt.query = ev.target.value.trim().toLowerCase();
     fnRenderTree();
   });
+  fnWireDragHandle();
   fnRenderTree();
   fnRenderOpenTabs();
   fnRenderViewer();
+}
+
+// Drag-resize the tree pane. A no-op above/below the breakpoint where the media query takes over
+// the tree's width for the drawer layout — nothing here conflicts with that.
+function fnWireDragHandle() {
+  const handle = document.getElementById('fn-drag-handle');
+  const pane = document.getElementById('fn-tree-pane');
+  if (!handle || !pane) return;
+  handle.addEventListener('mousedown', ev => {
+    ev.preventDefault();
+    handle.classList.add('dragging');
+    const startX = ev.clientX;
+    const startW = pane.getBoundingClientRect().width;
+    const onMove = mv => {
+      const w = Math.max(180, Math.min(520, startW + (mv.clientX - startX)));
+      document.documentElement.style.setProperty('--fn-tree-w', w + 'px');
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      try {
+        const w = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--fn-tree-w'));
+        if (w) localStorage.setItem('malimite.fnTreeWidth', w);
+      } catch(e) { /* per-viewer convenience only */ }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 }
 
 window.fnOpenDrawer = function() {
@@ -2103,10 +2210,11 @@ window.fnCloseDrawer = function() {
   document.getElementById('fn-tree-backdrop')?.classList.remove('open');
 };
 
-function fnMakeLeafRow(className) {
+function fnMakeLeafRow(className, depth = 0) {
   const row = document.createElement('div');
   row.className = 'fn-tree-node';
   row.dataset.class = className;
+  if (depth > 0) row.style.paddingLeft = (0.5 + depth * 0.9) + 'rem';
   const label = document.createElement('span');
   label.className = 'fn-tree-label';
   label.textContent = fnSt.tree.flat ? className : className.split(/[.$]/).pop();
@@ -2120,7 +2228,7 @@ function fnMakeLeafRow(className) {
 // even for a scan with tens of thousands of classes (confirmed against a real 30k-class app).
 function fnBuildNodeRow(key, node, depth) {
   const hasChildren = Object.keys(node.children).length > 0;
-  if (!hasChildren) return fnMakeLeafRow(node.className);
+  if (!hasChildren) return fnMakeLeafRow(node.className, depth);
 
   const frag = document.createDocumentFragment();
   const row = document.createElement('div');
@@ -2204,29 +2312,67 @@ async function fnOpenClass(className, rowEl) {
   document.querySelectorAll('#fn-tree-list .fn-tree-node.active').forEach(r => r.classList.remove('active'));
   rowEl?.classList.add('active');
   fnCloseDrawer();
-  let file = fnSt.openFiles.find(f => f.class === className);
-  if (!file) {
-    fnSt.activePath = className;
-    fnRenderOpenTabs();
-    fnRenderViewer('loading');
-    let rows;
-    try {
-      rows = await api('/scans/'+fnSt.id+'/source?'+new URLSearchParams({class_name: className}));
-    } catch(e) {
-      if (fnSt.activePath === className) fnRenderViewer('error', e.message);
-      return;
-    }
-    if (fnSt.activePath !== className) return;   // user clicked elsewhere while this was in flight
-    if (!rows.length) {
-      file = {class: className, code: null};
-    } else {
-      const code = rows.map(r => `// ${r.class}.${r.function} [${r.origin}]\n${r.code||''}`).join('\n\n');
-      file = {class: className, code, language: fnLanguageFor(rows[0].origin, fnSt.detail)};
-    }
-    fnSt.openFiles.push(file);
-    if (fnSt.openFiles.length > 12) fnSt.openFiles.shift();   // simple FIFO cap on open tabs
-  }
+  const existing = fnSt.openFiles.find(f => f.class === className);
+  if (existing) { fnSt.activePath = className; fnRenderOpenTabs(); fnRenderViewer(); return; }
+
   fnSt.activePath = className;
+  fnRenderOpenTabs();
+  fnRenderViewer('loading');
+  let rows;
+  try {
+    rows = await api('/scans/'+fnSt.id+'/source?'+new URLSearchParams({class_name: className}));
+  } catch(e) {
+    if (fnSt.activePath === className) fnRenderViewer('error', e.message);
+    return;
+  }
+  if (fnSt.activePath !== className) return;   // user clicked elsewhere while this was in flight
+  let file;
+  if (!rows.length) {
+    file = {class: className, code: null};
+  } else {
+    // Outline only when there's more than one row — that's the only case where we actually have a
+    // per-function boundary (typically Ghidra origin). A single '<class>' row is one opaque text
+    // blob as far as our data model goes; guessing method boundaries there with a regex would be a
+    // fragile heuristic, so outline is simply not offered rather than risking a wrong jump target.
+    let code = '';
+    const outline = rows.length > 1 ? [] : null;
+    rows.forEach((r, i) => {
+      if (i > 0) code += '\n\n';
+      if (outline) outline.push({name: r.function, line: code.split('\n').length});
+      code += `// ${r.class}.${r.function} [${r.origin}]\n${r.code||''}`;
+    });
+    file = {class: className, code, language: fnLanguageFor(rows[0].origin, fnSt.detail), outline};
+  }
+  fnCommitFile(file);
+}
+
+// On-demand decompile for Android classes with nothing stored yet (asc/jadx only — ghidra native
+// targets need a symbol/address picker this tree doesn't have, and stay chat-only).
+async function fnDecompileNow(className, tool) {
+  fnRenderViewer('loading');
+  let data;
+  try {
+    const r = await fetch(`/api/v1/scans/${fnSt.id}/decompile`, {
+      method: 'POST', headers: {...headers(), 'Content-Type': 'application/json'},
+      body: JSON.stringify({tool, target: className}),
+    });
+    if (!r.ok) { const txt = await r.text(); throw new Error(txt); }
+    data = await r.json();
+  } catch(e) {
+    if (fnSt.activePath === className) fnRenderViewer('error', e.message);
+    return;
+  }
+  if (fnSt.activePath !== className) return;
+  fnCommitFile({class: className, code: data.code, language: fnLanguageFor(tool, fnSt.detail), outline: null});
+}
+
+// New files (fresh fetch, fresh decompile) go through here; switching to an already-open tab does
+// not — see fnRenderOpenTabs's own click handler.
+function fnCommitFile(file) {
+  fnSt.openFiles = fnSt.openFiles.filter(f => f.class !== file.class);
+  fnSt.openFiles.push(file);
+  if (fnSt.openFiles.length > 12) fnSt.openFiles.shift();   // simple FIFO cap on open tabs
+  fnSt.activePath = file.class;
   fnRenderOpenTabs();
   fnRenderViewer();
 }
@@ -2264,17 +2410,48 @@ function fnRenderViewer(mode, errMsg) {
   const file = fnSt.activePath ? fnSt.openFiles.find(f => f.class === fnSt.activePath) : null;
   if (!file) { el.innerHTML = '<div class="empty" style="padding:2rem">Select a class from the tree to view its decompiled source.</div>'; return; }
   if (file.code === null) {
-    el.innerHTML = `<div class="empty" style="padding:2rem">No stored decompiled code for <code>${esc(file.class)}</code>.<br/>
-      Use the <code>decompile</code> tool in the <a href="#" onclick="event.preventDefault();goTab(${JSON.stringify(fnSt.id)},'assistant')">AI Assistant</a> tab to decompile it on demand.</div>`;
+    const isAndroid = String(fnSt.detail.platform||'').toUpperCase() === 'ANDROID';
+    el.innerHTML = isAndroid
+      ? `<div class="empty" style="padding:2rem">No stored decompiled code for <code>${esc(file.class)}</code>.<br/>
+          <button class="btn btn-sm" id="fn-dec-jadx" style="margin-top:.75rem">Decompile with JADX</button>
+          <button class="btn btn-ghost btn-sm" id="fn-dec-asc">try ASC instead</button></div>`
+      : `<div class="empty" style="padding:2rem">No stored decompiled code for <code>${esc(file.class)}</code>.<br/>
+          Use the <code>decompile</code> tool in the <a href="#" onclick="event.preventDefault();goTab(${JSON.stringify(fnSt.id)},'assistant')">AI Assistant</a> tab to decompile it on demand.</div>`;
+    if (isAndroid) {
+      document.getElementById('fn-dec-jadx').onclick = () => fnDecompileNow(file.class, 'jadx');
+      document.getElementById('fn-dec-asc').onclick = () => fnDecompileNow(file.class, 'asc');
+    }
     return;
   }
   const lineCount = file.code.split('\n').length;
+  const outlineHtml = file.outline ? `
+    <details class="fn-outline"><summary>Outline (${file.outline.length})</summary>
+      <div class="fn-outline-list">${file.outline.map(o =>
+        `<div class="fn-outline-item" data-line="${o.line}">${esc(o.name)}</div>`).join('')}</div>
+    </details>` : '';
   el.innerHTML = `
-    <div class="fn-breadcrumb"><span>${esc(file.class)}</span><button class="btn btn-ghost btn-sm" id="fn-copy-btn">Copy</button></div>
+    <div class="fn-breadcrumb">
+      <span>${esc(file.class)}</span>
+      <span class="fn-breadcrumb-actions">
+        ${outlineHtml}
+        <button class="btn btn-ghost btn-sm" id="fn-ask-btn">Ask AI Assistant</button>
+        <button class="btn btn-ghost btn-sm" id="fn-copy-btn">Copy</button>
+      </span>
+    </div>
     <div class="fn-code-scroll">
       <pre class="fn-gutter">${Array.from({length:lineCount},(_,i)=>i+1).join('\n')}</pre>
       <pre class="fn-code-pre"><code id="fn-code-el" class="hljs"></code></pre>
     </div>`;
+  if (file.outline) {
+    el.querySelectorAll('.fn-outline-item').forEach(item => item.addEventListener('click', () => {
+      fnScrollToLine(+item.dataset.line);
+      item.closest('details').open = false;
+    }));
+  }
+  document.getElementById('fn-ask-btn').onclick = () => {
+    chatSt(fnSt.id).prefill = 'Explain the class ' + file.class;
+    goTab(fnSt.id, 'assistant');
+  };
   const codeEl = document.getElementById('fn-code-el');
   // hljs.highlight() escapes its own output while emitting <span> tokens — it must receive the
   // RAW string. Never pre-escape with esc() first (that double-escapes), and never fall back to
@@ -2287,6 +2464,17 @@ function fnRenderViewer(mode, errMsg) {
     }
   } catch(e) { codeEl.textContent = file.code; }
   document.getElementById('fn-copy-btn').onclick = () => { navigator.clipboard?.writeText(file.code).catch(()=>{}); };
+}
+
+function fnScrollToLine(line) {
+  const codeEl = document.getElementById('fn-code-el');
+  const scrollEl = document.querySelector('.fn-code-scroll');
+  const file = fnSt?.activePath ? fnSt.openFiles.find(f => f.class === fnSt.activePath) : null;
+  if (!codeEl || !scrollEl || !file) return;
+  // Measured from the rendered element rather than hardcoded from our own CSS line-height, so it
+  // stays correct even if the browser's actual font metrics differ slightly from what we asked for.
+  const pxPerLine = codeEl.getBoundingClientRect().height / file.code.split('\n').length;
+  scrollEl.scrollTop = Math.max(0, (line - 1) * pxPerLine - 40);
 }
 
 async function fnLoadSeverityMap(id) {
@@ -2404,20 +2592,103 @@ async function loadStrings(root, id, state) {
 }
 
 /* ── resources tab ── */
+let resourcesRequestSeq = 0;
+// A value to search for and highlight the next time the Resources tab loads, left by another tab
+// (e.g. the Vulnerabilities tab's "View in Resources" link) before calling goTab — same
+// fnPendingOpen/chatSt(id).prefill pattern used elsewhere, so goTab's lack of an await never matters.
+let resPendingHighlight = null;
+
 async function tabResources(el, id) {
-  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const root = document.createElement('div');
+  root.id = 'resources-root';
+  root.innerHTML = `
+    <div class="search-bar">
+      <input id="res-q" type="text" placeholder="Search resources…" autocomplete="off"/>
+      <button id="res-search" class="btn btn-primary btn-sm">Search</button>
+    </div>
+    <div id="res-table"></div>
+    <div id="res-pages" class="pagination strings-pagination"></div>`;
+  el.replaceChildren(root);
+
+  const state = {page: 1, size: 50, query: '', highlight: null};
+  if (resPendingHighlight) {
+    state.query = resPendingHighlight;
+    state.highlight = resPendingHighlight;
+    resPendingHighlight = null;
+    root.querySelector('#res-q').value = state.query;
+  }
+  const search = () => {
+    state.query = root.querySelector('#res-q').value.trim();
+    state.highlight = null;   // a manual search replaces the auto-highlight target
+    state.page = 1;
+    loadResources(root, id, state);
+  };
+  root.querySelector('#res-search').addEventListener('click', search);
+  root.querySelector('#res-q').addEventListener('keydown', event => {
+    if (event.key === 'Enter') search();
+  });
+  await loadResources(root, id, state);
+}
+
+async function loadResources(root, id, state) {
+  const table = root.querySelector('#res-table');
+  const pager = root.querySelector('#res-pages');
+  if (!table || !pager) return;
+  const requestSeq = ++resourcesRequestSeq;
+  table.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  pager.innerHTML = '';
   try {
-    const items = await api('/scans/'+id+'/resources?limit=500');
-    if (!items.length) { el.innerHTML='<div class="empty">No resource strings found.</div>'; return; }
-    el.innerHTML = `<div class="tbl-wrap"><table>
-      <thead><tr><th>Resource</th><th>Value</th><th>Type</th></tr></thead>
-      <tbody>${items.map(r=>`<tr>
-        <td class="mono truncate">${esc(r.resource_id)}</td>
-        <td class="truncate">${esc(r.value)}</td>
-        <td>${esc(r.type)}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
-  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+    const params = new URLSearchParams({page: state.page, size: state.size});
+    if (state.query) params.set('q', state.query);
+    const data = await api('/scans/'+id+'/resources?'+params);
+    if (requestSeq !== resourcesRequestSeq || !root.isConnected
+        || root !== document.getElementById('resources-root')) return;
+
+    const items = Array.isArray(data.items) ? data.items : [];
+    const total = Math.max(0, Number(data.total) || 0);
+    const page  = Math.max(1, Number(data.page) || 1);
+    const size  = Math.max(1, Number(data.size) || state.size);
+    const pages = Math.max(0, Number(data.pages) || 0);
+    state.page = page;
+
+    table.innerHTML = items.length
+      ? `<div class="tbl-wrap"><table>
+          <thead><tr><th>Resource</th><th>Value</th><th>Type</th></tr></thead>
+          <tbody>${items.map(r => {
+            const isMatch = state.highlight && r.value === state.highlight;
+            return `<tr${isMatch ? ' class="res-row-highlight"' : ''}>
+              <td class="mono truncate">${esc(r.resource_id)}</td>
+              <td class="truncate" title="${escAttr(r.value||'')}">${esc(r.value)}</td>
+              <td>${esc(r.type)}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>`
+      : '<div class="empty">No resources match this filter.</div>';
+
+    if (state.highlight) {
+      const hit = table.querySelector('.res-row-highlight');
+      if (hit) hit.scrollIntoView({block: 'center'});
+    }
+
+    const first = items.length ? (page - 1) * size + 1 : 0;
+    const last  = items.length ? first + items.length - 1 : 0;
+    pager.innerHTML = `<span>Showing ${esc(String(first))}–${esc(String(last))} of ${esc(total.toLocaleString())} · Page ${esc(String(pages ? page : 0))} of ${esc(String(pages))}</span>
+      <span class="strings-pagination-actions">
+        <button class="page-btn" data-page="prev" ${page <= 1 ? 'disabled' : ''}>Previous</button>
+        <button class="page-btn" data-page="next" ${pages === 0 || page >= pages ? 'disabled' : ''}>Next</button>
+      </span>`;
+    pager.querySelector('[data-page="prev"]').onclick = () => {
+      if (state.page > 1) { state.page--; loadResources(root, id, state); }
+    };
+    pager.querySelector('[data-page="next"]').onclick = () => {
+      if (state.page < pages) { state.page++; loadResources(root, id, state); }
+    };
+  } catch(e) {
+    if (requestSeq === resourcesRequestSeq && root.isConnected
+        && root === document.getElementById('resources-root')) {
+      table.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+    }
+  }
 }
 
 /* ── entry points tab ── */
@@ -2708,6 +2979,49 @@ function countUniqueIssueSeverities(groups) {
   return counts;
 }
 
+// FUNCTION findings store evidence_location as the exact concatenation "<class>.<affected_name>"
+// (see VulnerabilityScanner.java's buildFinding callers) — invert that known concatenation to get
+// the class name back, rather than guessing from the string shape.
+function fnClassFromFunctionLocation(affectedName, evidenceLocation) {
+  if (!evidenceLocation || !affectedName || evidenceLocation === affectedName) return null;
+  const suffix = '.' + affectedName;
+  return evidenceLocation.endsWith(suffix) ? evidenceLocation.slice(0, -suffix.length) : null;
+}
+
+// Manifest-component RESOURCE findings all share the generic resourceId "Component" (see
+// JadxIngest.ingestManifest) — the real component class name only exists inside the evidence text,
+// in the fixed shape "<type> <fqcn> exported=<bool>[ permission=<perm>]".
+function fnComponentNameFromEvidence(evidence) {
+  const m = /^\S+\s+(\S+)\s+exported=/.exec(evidence || '');
+  return m ? m[1] : null;
+}
+
+// {label, target} to show/open in the Functions tab, or null when this asset has nothing
+// Functions-tab-browsable (no guessing: every branch here inverts a known, fixed data convention).
+function fnAffectedLink(a) {
+  if (a.affected_type === 'FUNCTION') {
+    const cls = fnClassFromFunctionLocation(a.affected_name, a.evidence_location);
+    return cls ? {label: cls, tab: 'functions', target: cls} : null;
+  }
+  if (a.affected_type === 'RESOURCE' && a.affected_name === 'Component') {
+    const cls = fnComponentNameFromEvidence(a.evidence);
+    return cls ? {label: cls, tab: 'functions', target: cls} : null;
+  }
+  if (a.affected_type === 'RESOURCE') {
+    // Every other RESOURCE finding's `evidence` is the exact ResourceStrings.value it matched
+    // against (VulnerabilityScanner truncates at 200 chars, so this can miss on an unusually long
+    // value — the search still narrows things down even when the exact-match highlight doesn't hit).
+    if (!a.evidence) return null;
+    return {label: a.affected_name, tab: 'resources', target: a.evidence};
+  }
+  if (a.affected_type === 'BINARY') {
+    // One BINARY finding covers the whole executable, not a specific native library — there is no
+    // per-library target in this data. Still useful to jump to the tab itself, just not pre-opened.
+    return {label: null, tab: 'functions', target: null};
+  }
+  return null;
+}
+
 function renderAffectedAssetsList(assets) {
   if (!assets.length) {
     return `<div class="kv">
@@ -2716,13 +3030,20 @@ function renderAffectedAssetsList(assets) {
       <span class="kv-key">Location</span><span class="kv-val">—</span>
     </div>`;
   }
-  return `<div class="affected-list">${assets.map(a => `
+  return `<div class="affected-list">${assets.map(a => {
+    const link = fnAffectedLink(a);
+    const linkLabel = link?.tab === 'resources' ? 'View in Resources →' : 'View in Functions →';
+    const viewLink = link
+      ? ` · <a href="#" class="aff-view-link" data-tab="${escAttr(link.tab)}" data-target="${escAttr(link.target || '')}">${linkLabel}</a>`
+      : '';
+    return `
     <div class="affected-item">
-      <div class="aff-name">${esc(a.affected_name || '—')}</div>
+      <div class="aff-name">${esc((link && link.label) || a.affected_name || '—')}</div>
       <div class="aff-meta">
-        ${esc(a.affected_type || 'asset')}${a.evidence_location ? ' · ' + esc(a.evidence_location) : ''}
+        ${esc(a.affected_type || 'asset')}${a.evidence_location ? ' · ' + esc(a.evidence_location) : ''}${viewLink}
       </div>
-    </div>`).join('')}</div>`;
+    </div>`;
+  }).join('')}</div>`;
 }
 
 async function tabVulnerabilities(el, id, detail) {
@@ -2782,6 +3103,20 @@ async function tabVulnerabilities(el, id, detail) {
 
     const cards = groups.map((g, i) => renderVulnCard(g, i)).join('');
     el.innerHTML = totals + filter + '<div id="vuln-list">' + cards + '</div>';
+
+    document.getElementById('vuln-list').addEventListener('click', ev => {
+      const a = ev.target.closest('.aff-view-link');
+      if (!a) return;
+      ev.preventDefault();
+      const target = a.dataset.target;
+      if (a.dataset.tab === 'resources') {
+        if (target) resPendingHighlight = target;
+        goTab(id, 'resources');
+        return;
+      }
+      if (target) fnPendingOpen = target;
+      goTab(id, 'functions');
+    });
 
     const filterFn = () => {
       const q   = (document.getElementById('vuln-q')?.value || '').toLowerCase();
