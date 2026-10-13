@@ -12,3 +12,4 @@ __pycache__/
 incoming/
 reports/
 .env
+.claude/agents/*
