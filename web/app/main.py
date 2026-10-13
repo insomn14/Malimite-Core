@@ -205,11 +205,13 @@ async def get_functions(
 
 
 @app.get("/api/v1/scans/{scan_id}/classes")
-async def get_classes(request: Request, scan_id: str, query: str = "", limit: int = 100, offset: int = 0):
-    """Class names only (no decompiled code) — the data source for the Functions tab's file tree."""
+async def get_classes(request: Request, scan_id: str, query: str = "", limit: int = 200_000, offset: int = 0):
+    """Class names only (no decompiled code) — the data source for the Functions tab's file tree.
+    Unlike the chat agent's list_classes tool, the tree needs the whole inventory at once, so this
+    route raises db.list_classes's default 200-row cap (a real app can have tens of thousands)."""
     _check_auth(request)
     db_path, exe = _require_db(scan_id)
-    return await db.list_classes(db_path, exe, query, limit, offset)
+    return await db.list_classes(db_path, exe, query, limit, offset, cap=200_000)
 
 
 @app.get("/api/v1/scans/{scan_id}/source")

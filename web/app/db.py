@@ -552,8 +552,10 @@ def _like(q: str) -> str:
     return f"%{q}%"
 
 
-async def list_classes(db_path: str, executable: str, query: str, limit: int, offset: int) -> list[dict]:
-    limit = max(1, min(limit, 200))
+async def list_classes(db_path: str, executable: str, query: str, limit: int, offset: int, cap: int = 200) -> list[dict]:
+    """`cap` keeps the chat agent's tool (`cap=200`, the default) from flooding the model's context;
+    the Functions tab's tree needs the whole inventory at once, so its route passes a much higher cap."""
+    limit = max(1, min(limit, cap))
     async with _ro(db_path) as db:
         async with db.execute(
             """SELECT ClassName, Functions FROM Classes
