@@ -280,6 +280,50 @@ public class LlmEnricher {
         this.rulesStore = rulesStore != null ? rulesStore : LearnedRulesStore.forPlatform(this.platform);
     }
 
+    // Default parallel LLM calls for a pay-per-token provider (API key): generous,
+    // since that quota is dedicated to this one scan and billed separately.
+    private static final int DEFAULT_CONCURRENCY_API_KEY = 8;
+
+    // Default parallel LLM calls for Claude Pro/Max OAuth: deliberately much lower.
+    // OAuth sessions share ONE rate-limit budget across every concurrent consumer —
+    // this scan's enrichment, any other scan running at the same time, and a human
+    // using the AI Assistant chat tab, all draw from the same bucket. A large scan
+    // (one call per in-scope function — hundreds to low thousands for a typical
+    // app) run at the API-key default of 8 parallel requests empirically burns
+    // through enough of that shared burst/5h budget to make concurrent chat usage
+    // fail with 429 (observed directly: a 1181-function enrichment pushed 5h
+    // utilization from ~20% to ~50%+ in minutes). 2 parallel requests keeps
+    // enrichment working (just slower) without starving other OAuth consumers.
+    private static final int DEFAULT_CONCURRENCY_OAUTH = 2;
+
+    /**
+     * Resolves how many LLM calls run in parallel for this enrichment pass.
+     * Provider-aware: Claude OAuth gets a much lower default than a pay-per-token
+     * API key (see {@link #DEFAULT_CONCURRENCY_OAUTH}), because OAuth shares its
+     * rate-limit budget across every concurrent consumer of that same subscription,
+     * not just this one scan. Either default can be overridden with the
+     * LLM_ENRICH_CONCURRENCY environment variable (same value for every provider;
+     * intended for operators who know their own account's limits better than
+     * these defaults).
+     */
+    private int resolveConcurrency() {
+        String override = System.getenv("LLM_ENRICH_CONCURRENCY");
+        if (override != null && !override.isBlank()) {
+            try {
+                int v = Integer.parseInt(override.trim());
+                if (v > 0) return v;
+                log.warn("LLM_ENRICH_CONCURRENCY={} is not positive, ignoring", override);
+            } catch (NumberFormatException e) {
+                log.warn("LLM_ENRICH_CONCURRENCY={} is not a valid integer, ignoring", override);
+            }
+        }
+        int cores = Runtime.getRuntime().availableProcessors();
+        int defaultForProvider = (provider instanceof ClaudeOAuthProvider)
+                ? DEFAULT_CONCURRENCY_OAUTH
+                : DEFAULT_CONCURRENCY_API_KEY;
+        return Math.max(1, Math.min(defaultForProvider, cores));
+    }
+
     public void enrich(SqliteStore store, String executableName) {
         enrich(store, executableName, ScanScopeFilter.all());
     }
@@ -317,8 +361,8 @@ public class LlmEnricher {
         // Concurrency: the slow part (LLM network call + JSON parse) runs in
         // parallel; DB writes stay on the main thread so SqliteStore's single
         // connection is never used concurrently.
-        int cores = Runtime.getRuntime().availableProcessors();
-        int concurrency = Math.max(1, Math.min(8, cores));
+        int concurrency = resolveConcurrency();
+        log.info("LLM enrichment concurrency: {} parallel worker(s)", concurrency);
         ExecutorService pool = Executors.newFixedThreadPool(concurrency);
         try {
             List<Future<FunctionResult>> futures = new ArrayList<>();
@@ -374,6 +418,9 @@ public class LlmEnricher {
             r.called = true;
         } catch (LlmProvider.LlmException e) {
             log.warn("LLM call failed for {}.{}: {}", fn.className(), fn.functionName(), e.getMessage());
+            if (e.getCause() != null) {
+                log.debug("LLM call failure cause for {}.{}", fn.className(), fn.functionName(), e.getCause());
+            }
             r.error = true;
         }
         return r;
