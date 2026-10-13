@@ -2034,6 +2034,11 @@ async function postSummaryHydrate(id) {
    lose open files/scroll position by flipping to another tab and back; switching to a
    different scan rebuilds it from scratch. */
 let fnSt = null;
+// A class to auto-open the next time the Functions tab renders, left by another tab (e.g. the
+// Vulnerabilities tab's "View in Functions" link) before calling goTab — same reasoning as
+// chatSt(id).prefill: nothing reaches into this tab's DOM directly, so goTab's lack of an await
+// never matters here.
+let fnPendingOpen = null;
 
 function fnIsAndroid(detail) {
   return String(detail.platform||'').toUpperCase() === 'ANDROID';
@@ -2085,6 +2090,11 @@ async function tabFunctions(el, id, detail) {
     } catch(e) { /* per-viewer convenience only */ }
   }
   fnRenderShell(el);
+  if (fnPendingOpen) {
+    const target = fnPendingOpen;
+    fnPendingOpen = null;
+    fnOpenClass(target);
+  }
 }
 
 function fnRenderShell(el) {
@@ -2839,6 +2849,42 @@ function countUniqueIssueSeverities(groups) {
   return counts;
 }
 
+// FUNCTION findings store evidence_location as the exact concatenation "<class>.<affected_name>"
+// (see VulnerabilityScanner.java's buildFinding callers) — invert that known concatenation to get
+// the class name back, rather than guessing from the string shape.
+function fnClassFromFunctionLocation(affectedName, evidenceLocation) {
+  if (!evidenceLocation || !affectedName || evidenceLocation === affectedName) return null;
+  const suffix = '.' + affectedName;
+  return evidenceLocation.endsWith(suffix) ? evidenceLocation.slice(0, -suffix.length) : null;
+}
+
+// Manifest-component RESOURCE findings all share the generic resourceId "Component" (see
+// JadxIngest.ingestManifest) — the real component class name only exists inside the evidence text,
+// in the fixed shape "<type> <fqcn> exported=<bool>[ permission=<perm>]".
+function fnComponentNameFromEvidence(evidence) {
+  const m = /^\S+\s+(\S+)\s+exported=/.exec(evidence || '');
+  return m ? m[1] : null;
+}
+
+// {label, target} to show/open in the Functions tab, or null when this asset has nothing
+// Functions-tab-browsable (no guessing: every branch here inverts a known, fixed data convention).
+function fnAffectedLink(a) {
+  if (a.affected_type === 'FUNCTION') {
+    const cls = fnClassFromFunctionLocation(a.affected_name, a.evidence_location);
+    return cls ? {label: cls, target: cls} : null;
+  }
+  if (a.affected_type === 'RESOURCE' && a.affected_name === 'Component') {
+    const cls = fnComponentNameFromEvidence(a.evidence);
+    return cls ? {label: cls, target: cls} : null;
+  }
+  if (a.affected_type === 'BINARY') {
+    // One BINARY finding covers the whole executable, not a specific native library — there is no
+    // per-library target in this data. Still useful to jump to the tab itself, just not pre-opened.
+    return {label: null, target: null};
+  }
+  return null;
+}
+
 function renderAffectedAssetsList(assets) {
   if (!assets.length) {
     return `<div class="kv">
@@ -2847,13 +2893,19 @@ function renderAffectedAssetsList(assets) {
       <span class="kv-key">Location</span><span class="kv-val">—</span>
     </div>`;
   }
-  return `<div class="affected-list">${assets.map(a => `
+  return `<div class="affected-list">${assets.map(a => {
+    const link = fnAffectedLink(a);
+    const viewLink = link
+      ? ` · <a href="#" class="aff-view-link" data-target="${escAttr(link.target || '')}">View in Functions →</a>`
+      : '';
+    return `
     <div class="affected-item">
-      <div class="aff-name">${esc(a.affected_name || '—')}</div>
+      <div class="aff-name">${esc((link && link.label) || a.affected_name || '—')}</div>
       <div class="aff-meta">
-        ${esc(a.affected_type || 'asset')}${a.evidence_location ? ' · ' + esc(a.evidence_location) : ''}
+        ${esc(a.affected_type || 'asset')}${a.evidence_location ? ' · ' + esc(a.evidence_location) : ''}${viewLink}
       </div>
-    </div>`).join('')}</div>`;
+    </div>`;
+  }).join('')}</div>`;
 }
 
 async function tabVulnerabilities(el, id, detail) {
@@ -2913,6 +2965,15 @@ async function tabVulnerabilities(el, id, detail) {
 
     const cards = groups.map((g, i) => renderVulnCard(g, i)).join('');
     el.innerHTML = totals + filter + '<div id="vuln-list">' + cards + '</div>';
+
+    document.getElementById('vuln-list').addEventListener('click', ev => {
+      const a = ev.target.closest('.aff-view-link');
+      if (!a) return;
+      ev.preventDefault();
+      const target = a.dataset.target;
+      if (target) fnPendingOpen = target;
+      goTab(id, 'functions');
+    });
 
     const filterFn = () => {
       const q   = (document.getElementById('vuln-q')?.value || '').toLowerCase();
