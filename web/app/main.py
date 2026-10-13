@@ -1,4 +1,5 @@
 """Malimite Python web service — wraps all Malimite-Core functionality."""
+import asyncio
 import hmac
 import io
 import json
@@ -18,9 +19,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import db, scanner
-from .agent import loop as agent_loop, store as chat_store
+from .agent import loop as agent_loop, ondemand, store as chat_store
 from .agent.llm import LlmError, resolve_llm
-from .agent.tools import Ctx
+from .agent.tools import Ctx, valid_class_name
 from .config import settings
 from .models import ScanDetail, ScanMeta
 
@@ -228,6 +229,46 @@ async def get_code_search(request: Request, scan_id: str, q: str, limit: int = 3
     _check_auth(request)
     db_path, exe = _require_db(scan_id)
     return await db.search_code(db_path, exe, q, limit)
+
+
+class DecompileRequest(BaseModel):
+    tool: str
+    target: str
+
+
+@app.post("/api/v1/scans/{scan_id}/decompile")
+async def post_decompile(request: Request, scan_id: str, req: DecompileRequest):
+    """On-demand decompile of one Android class for the Functions tab, when nothing is stored yet.
+    Android asc/jadx only — ghidra native targets (iOS Mach-O, Android .so) need a symbol/address
+    picker this tab doesn't have, and stay reachable only through the AI Assistant's decompile tool.
+    Shares its cache (and its concurrency limit) with that tool: both read/write the same
+    AgentDecompiles table in <scan_dir>/<id>/chat.sqlite."""
+    _check_auth(request)
+    _require_db(scan_id)
+    detail = scanner.get_scan_detail(scan_id)
+    if req.tool not in ("asc", "jadx"):
+        raise HTTPException(status_code=422,
+                             detail="only asc/jadx is available here; ghidra targets go through the AI Assistant")
+    if str(detail.platform or "").upper() != "ANDROID":
+        raise HTTPException(status_code=422, detail="asc/jadx decompile is Android-only")
+    if not valid_class_name(req.target):
+        raise HTTPException(status_code=422, detail="invalid class name")
+
+    scan_dir = scanner._scan_dir(scan_id)
+    chat_db = chat_store.path_for(scan_dir)
+    code = await chat_store.cache_get(chat_db, req.tool, "", req.target)
+    cached = code is not None
+    if code is None:
+        try:
+            res = await asyncio.wait_for(ondemand.decompile(scan_dir, req.tool, req.target, ""),
+                                          timeout=settings.ghidra_ondemand_timeout)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="decompile timed out")
+        if not res.get("ok"):
+            raise HTTPException(status_code=502, detail=res.get("error") or "decompile failed")
+        code = res["code"]
+        await chat_store.cache_put(chat_db, req.tool, "", req.target, code)
+    return {"tool": req.tool, "target": req.target, "code": code, "cached": cached}
 
 
 @app.get("/api/v1/scans/{scan_id}/strings")
