@@ -176,10 +176,23 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .fn-open-tab-close:hover{opacity:1}
 .fn-viewer-body{flex:1;min-height:0;display:flex;flex-direction:column}
 .fn-breadcrumb{padding:.5rem .75rem;font-size:.75rem;color:var(--muted);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-family:monospace}
-.fn-code-scroll{flex:1;overflow-y:auto;display:flex;background:#111}
-.fn-gutter{flex:0 0 auto;margin:0;padding:.75rem .6rem;color:#64748b;font-family:monospace;font-size:.72rem;text-align:right;user-select:none;white-space:pre}
-.fn-code-pre{flex:1;overflow-x:auto;margin:0;padding:.75rem;font-size:.72rem;min-width:0}
-.hljs{background:#111!important}
+.fn-code-scroll{flex:1;overflow-y:auto;display:flex;background:#0d1117;
+  scrollbar-width:thin;scrollbar-color:#30363d #0d1117}
+.fn-code-scroll::-webkit-scrollbar{width:10px;height:10px}
+.fn-code-scroll::-webkit-scrollbar-track{background:#0d1117}
+.fn-code-scroll::-webkit-scrollbar-thumb{background:#30363d;border-radius:6px;border:2px solid #0d1117}
+.fn-code-scroll::-webkit-scrollbar-thumb:hover{background:#484f58}
+.fn-gutter{flex:0 0 auto;margin:0;padding:.85rem .9rem;color:#4b5563;font-size:.78rem;line-height:1.65;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  text-align:right;user-select:none;white-space:pre;background:#090c10;border-right:1px solid #1c232c}
+.fn-code-pre{flex:1;overflow-x:auto;margin:0;padding:.85rem 1.1rem;font-size:.78rem;line-height:1.65;min-width:0;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  scrollbar-width:thin;scrollbar-color:#30363d #0d1117}
+.fn-code-pre::-webkit-scrollbar{height:10px}
+.fn-code-pre::-webkit-scrollbar-track{background:#0d1117}
+.fn-code-pre::-webkit-scrollbar-thumb{background:#30363d;border-radius:6px;border:2px solid #0d1117}
+.fn-code-pre::-webkit-scrollbar-thumb:hover{background:#484f58}
+.hljs{background:#0d1117!important}
 
 @media(max-width:900px){
   .fn-wrap{height:calc(100vh - 180px)}
