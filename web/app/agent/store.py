@@ -68,6 +68,36 @@ async def set_title_if_empty(path: str, sid: str, text: str) -> None:
         await db.commit()
 
 
+async def set_title(path: str, sid: str, title: str) -> bool:
+    async with _conn(path) as db:
+        cur = await db.execute("UPDATE ChatSessions SET title=? WHERE id=?", (title.strip()[:60], sid))
+        await db.commit()
+        return cur.rowcount > 0
+
+
+async def fork_session(path: str, sid: str) -> Optional[str]:
+    """Copy a session's title/provider/model and full message history into a new, independent
+    session the user can keep going from without touching the original."""
+    async with _conn(path) as db:
+        async with db.execute("SELECT title,provider,model FROM ChatSessions WHERE id=?", (sid,)) as c:
+            row = await c.fetchone()
+        if not row:
+            return None
+        title, provider, model = row
+        new_sid = uuid.uuid4().hex[:16]
+        await db.execute("INSERT INTO ChatSessions VALUES (?,?,?,?,?)",
+                         (new_sid, ("Fork: " + title)[:60] if title else "", provider, model, time.time()))
+        async with db.execute(
+            "SELECT role, content_json, created FROM ChatMessages WHERE session_id=? ORDER BY id", (sid,)) as c:
+            rows = await c.fetchall()
+        if rows:
+            await db.executemany(
+                "INSERT INTO ChatMessages(session_id,role,content_json,created) VALUES (?,?,?,?)",
+                [(new_sid, role, content_json, created) for role, content_json, created in rows])
+        await db.commit()
+    return new_sid
+
+
 async def set_llm(path: str, sid: str, provider: str, model: str) -> None:
     async with _conn(path) as db:
         await db.execute("UPDATE ChatSessions SET provider=?, model=? WHERE id=?", (provider, model, sid))

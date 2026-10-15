@@ -58,6 +58,36 @@ class ChatRouteTests(unittest.TestCase):
         self.assertEqual(self.client.delete(f"/api/v1/scans/s1/chat/{sid}").status_code, 204)
         self.assertEqual(self.client.delete(f"/api/v1/scans/s1/chat/{sid}").status_code, 404)
 
+    def test_rename(self):
+        sid = _events(self.client.post("/api/v1/scans/s1/chat", json={"message": "hi"}).text)[0]["session_id"]
+        r = self.client.patch(f"/api/v1/scans/s1/chat/{sid}", json={"title": "My renamed chat"})
+        self.assertEqual(r.status_code, 200)
+        h = self.client.get("/api/v1/scans/s1/chat").json()
+        self.assertEqual(h["sessions"][0]["title"], "My renamed chat")
+        self.assertEqual(self.client.patch("/api/v1/scans/s1/chat/nope", json={"title": "x"}).status_code, 404)
+        self.assertEqual(self.client.patch(f"/api/v1/scans/s1/chat/{sid}", json={"title": ""}).status_code, 422)
+
+    def test_fork_copies_history_into_a_new_independent_session(self):
+        sid = _events(self.client.post("/api/v1/scans/s1/chat", json={"message": "hi"}).text)[0]["session_id"]
+        self.client.patch(f"/api/v1/scans/s1/chat/{sid}", json={"title": "Original"})
+        r = self.client.post(f"/api/v1/scans/s1/chat/{sid}/fork")
+        self.assertEqual(r.status_code, 200)
+        new_sid = r.json()["session_id"]
+        self.assertNotEqual(new_sid, sid)
+
+        original = self.client.get(f"/api/v1/scans/s1/chat?session_id={sid}").json()
+        forked = self.client.get(f"/api/v1/scans/s1/chat?session_id={new_sid}").json()
+        self.assertEqual(forked["messages"], original["messages"])   # same history, copied not shared
+        new_title = next(s["title"] for s in forked["sessions"] if s["id"] == new_sid)
+        self.assertEqual(new_title, "Fork: Original")
+
+        # continuing the fork must not touch the original session's history
+        self.client.post("/api/v1/scans/s1/chat", json={"message": "only in the fork", "session_id": new_sid})
+        original_after = self.client.get(f"/api/v1/scans/s1/chat?session_id={sid}").json()
+        self.assertEqual(len(original_after["messages"]), len(original["messages"]))
+
+        self.assertEqual(self.client.post("/api/v1/scans/s1/chat/nope/fork").status_code, 404)
+
     def test_validation_and_errors(self):
         self.assertEqual(self.client.post("/api/v1/scans/s1/chat", json={"message": ""}).status_code, 422)
         self.assertEqual(self.client.post("/api/v1/scans/s1/chat", json={"message": "x" * 20001}).status_code, 422)
