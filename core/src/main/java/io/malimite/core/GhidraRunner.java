@@ -206,6 +206,13 @@ public class GhidraRunner {
         cmd.add("Decompiler Parameter ID");
         cmd.add("-disableAnalyzer");
         cmd.add("DWARF");
+        // Invokes the native decompiler per function during auto-analysis (before our own
+        // DumpClassData skip-list ever runs) purely to reconstruct switch statements for
+        // readability — large ObjC/Swift binaries can balloon container memory here.
+        // Measured against UnCrackable-Level1/Level2 (llm disabled, rule-based scan only):
+        // vulnerability_counts identical with this analyzer on vs off in both apps.
+        cmd.add("-disableAnalyzer");
+        cmd.add("Decompiler Switch Analysis");
         cmd.add("-skipAnalysisPrompt");
         cmd.add("-deleteProject");
 
