@@ -155,6 +155,30 @@ class LoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([m["role"] for m in hist], ["user", "assistant", "user"])
         self.assertTrue(hist[2]["content"][0]["is_error"])
 
+    async def test_cancel_mid_text_stream_saves_the_partial_answer(self):
+        # The Stop button aborts the fetch while the model is still actively streaming text (the
+        # common "this is taking a long time" case) — not only while a tool is running, which was
+        # the only cancellation path with a regression test so far.
+        started = asyncio.Event()
+
+        async def slow_stream(cfg, system, messages, tools, **kw):
+            yield {"type": "text", "text": "jawaban sebagian "}
+            started.set()
+            await asyncio.sleep(30)
+            yield {"type": "text", "text": "tidak akan pernah sampai sini"}  # pragma: no cover
+
+        async def consume():
+            async for _ in loop.run_chat(self.ctx, self.db, self.sid, "q", CFG, step=slow_stream, run=None):
+                pass
+        t = asyncio.create_task(consume())
+        await started.wait()
+        t.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await t
+        hist = await store.history(self.db, self.sid)
+        self.assertEqual([m["role"] for m in hist], ["user", "assistant"])
+        self.assertEqual(hist[1]["content"], [{"type": "text", "text": "jawaban sebagian "}])
+
     async def test_answer_cut_by_the_output_limit_continues_seamlessly_and_is_saved_once(self):
         evs = await self._run(scripted(
             [{"type": "text", "text": "Temuan pertama: ** `gra"}, {"type": "stop", "reason": "length"}],
