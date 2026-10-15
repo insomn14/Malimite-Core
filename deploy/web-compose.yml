@@ -62,6 +62,16 @@ services:
       # the new pair back to this same path.
       - ${HOME}/.malimite-docker:/home/malimite/.malimite
     restart: unless-stopped
+    # Caps this one container so a heavy iOS/Ghidra scan can't swap-storm the whole
+    # host: without this, Ghidra's analysis can push system-wide swap past 90%, and
+    # systemd-oomd (on the host) kills the ENTIRE container's cgroup — not just the
+    # scan's subprocess — taking down every in-progress scan and the API with it.
+    # With the limit, a single oversized scan hits ITS OWN container limit and gets
+    # OOM-killed cleanly (reap_stale_running_scans() then reports it as an error),
+    # while the rest of the host and other scans stay unaffected. Raise this if a
+    # legitimate scan needs more headroom than Ghidra's own 2G heap + overhead.
+    mem_limit: "6g"
+    memswap_limit: "6g"
 
 volumes:
   malimite-scans:
