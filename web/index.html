@@ -746,12 +746,16 @@ async function api(path, opts={}) {
   if (!r.ok) {
     if (r.status === 401) {
       if (keyEl()) keyEl().focus();
-      throw new Error(apiKey() ? 'Invalid API key — check the "API Key" field (top right).'
+      const err = new Error(apiKey() ? 'Invalid API key — check the "API Key" field (top right).'
                                : 'This server requires an API key — enter it in the "API Key" field (top right).');
+      err.status = 401;
+      throw err;
     }
     let msg = await r.text().catch(()=>'');
     try { const j = JSON.parse(msg); if (j && typeof j.detail === 'string') msg = j.detail; } catch (_) {}
-    throw new Error(msg || r.statusText);
+    const err = new Error(msg || r.statusText);
+    err.status = r.status;
+    throw err;
   }
   return r.json();
 }
@@ -1605,8 +1609,15 @@ route('scan', async function(id, tab='summary') {
   // auto-refresh if running
   if (detail.state === 'queued' || detail.state === 'running') {
     const iv = setInterval(async () => {
-      const d = await api('/scans/'+id).catch(()=>null);
-      if (!d) return;
+      let d;
+      try { d = await api('/scans/'+id); }
+      catch (e) {
+        // A transient network error should keep retrying, but a scan that's gone (e.g. deleted
+        // from under this open tab) will 404 forever — polling silently is indistinguishable
+        // from a scan that's still genuinely running, so this tab would show "running" forever.
+        if (e.status === 404) { clearInterval(iv); render(`<div class="alert alert-error">${esc(e.message)}</div>`); }
+        return;
+      }
       if (d.state === 'done' || d.state === 'error') {
         clearInterval(iv);
         location.hash = '#/scan/' + id + '/summary';
