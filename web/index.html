@@ -507,6 +507,9 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 .chat-input{display:flex;gap:.5rem;margin-top:.75rem;align-items:flex-end}
 .chat-input textarea{flex:1;min-width:0;padding:.5rem;border:1px solid var(--border);border-radius:var(--radius);font:inherit;resize:vertical}
 .chat-note{margin-top:.5rem;font-size:.7rem;color:var(--muted)}
+.chat-attach-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .55rem;border:1px solid var(--border);border-radius:999px;font-size:.75rem;background:var(--surface);margin-top:.5rem}
+.chat-attach-chip button{border:none;background:none;cursor:pointer;color:var(--muted);font-size:.95rem;line-height:1;padding:0 0 0 .1rem}
+.chat-attach-chip button:hover{color:var(--red)}
 </style>
 <!-- Vendored, self-hosted (not a CDN) so the Functions tab's syntax highlighting works offline — see THIRD_PARTY_NOTICES.md -->
 <link rel="stylesheet" href="/vendor/hljs/styles/atom-one-dark.min.css"/>
@@ -1710,7 +1713,7 @@ async function renderTab(id, tab, detail) {
 
 /* ── AI Assistant tab ── */
 const chatState = {};
-function chatSt(id) { return chatState[id] || (chatState[id] = {sid: null, fresh: false, sessions: [], ctrl: null, busy: false}); }
+function chatSt(id) { return chatState[id] || (chatState[id] = {sid: null, fresh: false, sessions: [], ctrl: null, busy: false, attachedFile: null}); }
 
 const CHAT_PROMPTS = [
   'Give me a security overview of this app',
@@ -1809,6 +1812,58 @@ function chatAdd(cls, html) {
   return d;
 }
 
+async function exportChat(id, st, detail) {
+  // Local, not tabAssistant's own showErr closure: this function is top-level so other callers
+  // besides the chat bar could reuse it later without dragging that closure along.
+  const showErr = m => { const e = document.getElementById('chat-err'); if (e) e.innerHTML = m ? `<div class="alert alert-error">${esc(m)}</div>` : ''; };
+  if (!st.sid) { showErr('No chat to export yet.'); return; }
+  let data;
+  try { data = await api('/scans/' + id + '/chat?session_id=' + encodeURIComponent(st.sid)); }
+  catch (e) { showErr('Could not export: ' + e.message); return; }
+  const sess = (data.sessions || []).find(s => s.id === st.sid) || {};
+  const results = {};
+  (data.messages || []).forEach(m => m.content.forEach(b => { if (b.type === 'tool_result') results[b.tool_use_id] = b; }));
+
+  // A session title is the first 60 chars of the user's first message verbatim, so it can itself
+  // contain newlines or a code fence (e.g. a message that opens with "```") — collapse it to one
+  // line so it can't split the H1 across lines or open an unbalanced fence this early in the file.
+  const titleLine = (sess.title || 'Malimite AI Assistant conversation').replace(/\s+/g, ' ').trim();
+  const lines = [
+    `# ${titleLine}`, '',
+    `- App: ${detail.bundle_id || detail.filename}`,
+    `- Scan ID: ${id}`,
+    `- Provider / model: ${sess.provider || '?'} / ${sess.model || '?'}`,
+    `- Exported: ${new Date().toISOString()}`, '',
+    '---', ''
+  ];
+  (data.messages || []).forEach(m => {
+    if (m.role === 'user') {
+      const t = m.content.filter(b => b.type === 'text').map(b => b.text).join('');
+      if (t) lines.push('**User:**', '', t, '');
+    } else {
+      m.content.forEach(b => {
+        if (b.type === 'text' && b.text) {
+          lines.push('**Assistant:**', '', b.text, '');
+        } else if (b.type === 'tool_use') {
+          const r = results[b.id];
+          const status = r ? (r.is_error ? 'error' : 'ok') : 'no result recorded';
+          const body = r ? String(r.content).split('\n') : ['(no result recorded)'];
+          lines.push(`> 🔧 **${b.name}**(\`${JSON.stringify(b.input)}\`) → ${status}`, '>', '> \`\`\`',
+            ...body.map(l => '> ' + l), '> ```', '');
+        }
+      });
+    }
+  });
+
+  const slug = String(sess.title || 'chat').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 50);
+  const blob = new Blob([lines.join('\n')], {type: 'text/markdown'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `malimite-chat-${id.slice(0, 8)}-${slug}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function chatRenderHistory(messages) {
   const box = document.getElementById('chat-msgs');
   if (!box) return;
@@ -1846,6 +1901,7 @@ async function tabAssistant(el, id, detail) {
       <div class="chat-bar">
         <select id="chat-session" title="Chat session"></select>
         <button class="btn btn-ghost btn-sm" id="chat-new">New chat</button>
+        <button class="btn btn-ghost btn-sm" id="chat-export" title="Download this conversation as Markdown">Export</button>
         <button class="btn btn-ghost btn-sm" id="chat-del">Delete</button>
         <span class="nav-spacer"></span>
         <select id="chat-provider" title="LLM provider" onchange="onChatProviderChange()">
@@ -1858,7 +1914,10 @@ async function tabAssistant(el, id, detail) {
       </div>
       <div id="chat-msgs" class="chat-msgs"></div>
       <div id="chat-err"></div>
+      <div id="chat-attachment" hidden></div>
       <div class="chat-input">
+        <input type="file" id="chat-file" hidden accept=".txt,.md,.markdown,.log,.csv,.json,.yaml,.yml,.xml,.toml,.ini,.cfg,.properties,.gradle,.py,.js,.jsx,.ts,.tsx,.java,.kt,.swift,.m,.mm,.c,.cpp,.h,.hpp,.go,.rs,.rb,.php,.sh,.sql"/>
+        <button class="btn btn-ghost" id="chat-attach" type="button" title="Attach a text/code file (.md, .txt, script…)">📎</button>
         <textarea id="chat-in" rows="2" placeholder="Ask about a class, function or behavior… (Enter to send, Shift+Enter for newline)"></textarea>
         <button class="btn btn-primary" id="chat-send">Send</button>
         <button class="btn btn-danger" id="chat-stop" style="display:none">Stop</button>
@@ -1914,11 +1973,14 @@ async function tabAssistant(el, id, detail) {
 
   async function send(text) {
     text = (text || '').trim();
-    if (!text || st.busy) return;
+    const att = st.attachedFile;
+    if ((!text && !att) || st.busy) return;
+    const full = att ? (text ? text + '\n\n' : '') + `Attached file: ${att.name}\n\`\`\`\n${att.content}\n\`\`\`` : text;
     st.busy = true; setBusy(true); showErr('');
     document.querySelectorAll('.chat-hint,.chat-chips').forEach(n => n.remove());
-    chatAdd('chat-user', chatMd(text));
+    chatAdd('chat-user', chatMd(full));
     $in.value = '';
+    st.attachedFile = null; renderAttachment();
     let bubble = null, buf = '', raf = 0;
     const paint = () => { raf = 0; if (bubble) { bubble.innerHTML = (bubble.dataset.pre || '') + chatMd(buf); const b = document.getElementById('chat-msgs'); if (b) b.scrollTop = b.scrollHeight; } };
     const ensureBubble = () => { if (!bubble) { bubble = chatAdd('chat-ai', ''); buf = ''; } };
@@ -1937,7 +1999,7 @@ async function tabAssistant(el, id, detail) {
     };
     st.ctrl = new AbortController();
     try {
-      const body = {message: text, session_id: st.sid || null,
+      const body = {message: full, session_id: st.sid || null,
         provider: document.getElementById('chat-provider')?.value || null,
         model: (() => {
           const sel = document.getElementById('chat-model-select');
@@ -1973,6 +2035,40 @@ async function tabAssistant(el, id, detail) {
       loadSession(st.sid).catch(() => {});  // refresh the list/titles; replays what the server persisted
     }
   }
+
+  function renderAttachment() {
+    const box = document.getElementById('chat-attachment');
+    if (!box) return;
+    const att = st.attachedFile;
+    box.hidden = !att;
+    box.innerHTML = att ? `<span class="chat-attach-chip">📎 ${esc(att.name)} (${att.content.length.toLocaleString()} chars)
+      <button type="button" id="chat-attach-remove" title="Remove attachment">&times;</button></span>` : '';
+    if (att) document.getElementById('chat-attach-remove').onclick = () => { st.attachedFile = null; renderAttachment(); };
+  }
+
+  const MAX_ATTACH_CHARS = 15000;   // leaves headroom under the 20000-char message cap for the user's own text
+  document.getElementById('chat-attach').onclick = () => document.getElementById('chat-file').click();
+  document.getElementById('chat-file').onchange = async e => {
+    const file = e.target.files[0];
+    e.target.value = '';   // lets the same file be re-picked later
+    if (!file) return;
+    showErr('');
+    let text;
+    try { text = await file.text(); }
+    catch (err) { showErr('Could not read "' + file.name + '": ' + err.message); return; }
+    if (text.length > MAX_ATTACH_CHARS) {
+      showErr(`"${file.name}" is too long (${text.length.toLocaleString()} characters, max ${MAX_ATTACH_CHARS.toLocaleString()}). Trim it and try again.`);
+      return;
+    }
+    if (text.includes('\u0000') || (text.match(/�/g) || []).length > text.length * 0.01) {
+      showErr(`"${file.name}" does not look like a text file.`);
+      return;
+    }
+    st.attachedFile = {name: file.name, content: text};
+    renderAttachment();
+  };
+
+  document.getElementById('chat-export').onclick = () => exportChat(id, st, detail);
 
   document.getElementById('chat-send').onclick = () => send($in.value);
   document.getElementById('chat-stop').onclick = () => st.ctrl && st.ctrl.abort();
