@@ -627,6 +627,36 @@ window.onModelSelectChange = function() {
   if (custom) { modelEl.value = ''; modelEl.placeholder = 'Type the exact model name'; modelEl.focus(); }
 };
 
+/* Same dropdown-with-Custom-escape-hatch pattern as the upload form's "Model override" field,
+   reused here for the AI Assistant chat bar's own provider/model pair. claude-oauth shares
+   claude's model catalog — it is the same Claude models, just authenticated differently. */
+window.onChatProviderChange = function() {
+  const provider = document.getElementById('chat-provider')?.value || '';
+  const modelSelect = document.getElementById('chat-model-select');
+  const modelEl = document.getElementById('chat-model');
+  if (!modelSelect || !modelEl) return;
+  const catalog = LLM_MODEL_CATALOG[provider === 'claude-oauth' ? 'claude' : provider];
+  if (catalog) {
+    modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('')
+      + `<option value="${LLM_MODEL_CUSTOM}">Custom (type model name)…</option>`;
+    modelSelect.value = catalog[0].value;
+    modelSelect.hidden = false;
+    modelEl.hidden = true;
+  } else {
+    modelSelect.hidden = true;
+    modelEl.hidden = false;
+  }
+};
+
+window.onChatModelSelectChange = function() {
+  const modelSelect = document.getElementById('chat-model-select');
+  const modelEl = document.getElementById('chat-model');
+  if (!modelSelect || !modelEl) return;
+  const custom = modelSelect.value === LLM_MODEL_CUSTOM;
+  modelEl.hidden = !custom;
+  if (custom) { modelEl.value = ''; modelEl.focus(); }
+};
+
 window.clearKeyError = function() {
   const keyInput = document.getElementById('llm-api-key');
   const keyError = document.getElementById('llm-key-error');
@@ -1818,11 +1848,12 @@ async function tabAssistant(el, id, detail) {
         <button class="btn btn-ghost btn-sm" id="chat-new">New chat</button>
         <button class="btn btn-ghost btn-sm" id="chat-del">Delete</button>
         <span class="nav-spacer"></span>
-        <select id="chat-provider" title="LLM provider">
+        <select id="chat-provider" title="LLM provider" onchange="onChatProviderChange()">
           <option value="">Scan default${detail.llm_provider && detail.llm_provider !== 'none' ? ' (' + esc(detail.llm_provider) + ')' : ''}</option>
           <option value="claude">claude</option><option value="claude-oauth">claude (OAuth)</option><option value="openai">openai</option>
           <option value="deepseek">deepseek</option><option value="ollama">ollama</option>
         </select>
+        <select id="chat-model-select" hidden title="Model override" onchange="onChatModelSelectChange()"></select>
         <input id="chat-model" placeholder="${escAttr(detail.llm_model || 'model (default)')}" title="Model override"/>
       </div>
       <div id="chat-msgs" class="chat-msgs"></div>
@@ -1908,7 +1939,11 @@ async function tabAssistant(el, id, detail) {
     try {
       const body = {message: text, session_id: st.sid || null,
         provider: document.getElementById('chat-provider')?.value || null,
-        model: document.getElementById('chat-model')?.value.trim() || null};
+        model: (() => {
+          const sel = document.getElementById('chat-model-select');
+          if (sel && !sel.hidden && sel.value !== LLM_MODEL_CUSTOM) return sel.value;
+          return document.getElementById('chat-model')?.value.trim() || null;
+        })()};
       const r = await fetch('/api/v1/scans/' + id + '/chat', {method: 'POST', signal: st.ctrl.signal,
         headers: headers({'Content-Type': 'application/json'}), body: JSON.stringify(body)});
       if (!r.ok) {
