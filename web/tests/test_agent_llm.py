@@ -53,6 +53,26 @@ class ParserTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(llm.LlmError):
             await _collect(llm.parse_anthropic(_feed({"type": "error", "error": {"message": "overloaded"}})))
 
+    async def test_anthropic_thinking_only_stream_logs_diagnostics_not_an_event(self):
+        # Regression for a real, reported symptom: claude-opus-5-5 (and other models that reason
+        # by default with no `thinking` request param) can spend its whole output budget on a
+        # thinking block and stop with no visible text/tool_use — loop.py's empty-round fallback
+        # already covers this from the user's side; this checks the stream itself is diagnosable
+        # instead of silently indistinguishable from a truly empty response.
+        with self.assertLogs("malimite", level="WARNING") as cm:
+            evs = await _collect(llm.parse_anthropic(_feed(
+                {"type": "message_start", "message": {"usage": {"input_tokens": 64000}}},
+                {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking"}},
+                {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "..."}},
+                {"type": "content_block_stop", "index": 0},
+                {"type": "message_delta", "delta": {"stop_reason": "max_tokens"},
+                 "usage": {"output_tokens": 8192}},
+            )))
+        self.assertEqual(evs, [{"type": "stop", "reason": "max_tokens"}])  # no fabricated text/tool_use event
+        self.assertIn("thinking", cm.output[0])
+        self.assertIn("max_tokens", cm.output[0])
+        self.assertIn("8192", cm.output[0])
+
     async def test_openai_fragmented_tool_calls_and_done(self):
         def tc(args, **extra):
             return {"choices": [{"delta": {"tool_calls": [{"index": 0, **extra, "function": args}]}}]}

@@ -7,6 +7,7 @@ chat_step() yields events: {"type":"text","text"} | {"type":"tool_use","id","nam
 """
 import asyncio
 import json
+import logging
 import random
 import time
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ import httpx
 from .. import scanner
 from ..config import settings
 from . import anthropic_oauth
+
+_log = logging.getLogger("malimite")
 
 PROVIDERS = ("claude", "claude-oauth", "openai", "deepseek", "ollama")
 _DEFAULT_MODEL = {"claude": "claude-sonnet-4-6", "claude-oauth": "claude-sonnet-4-6",
@@ -168,6 +171,15 @@ def _args(raw) -> dict:
 async def parse_anthropic(data: AsyncIterator[str]) -> AsyncIterator[dict]:
     blocks: dict[int, dict] = {}
     reason = "end_turn"
+    # Diagnostics only (never yielded as events, never changes behavior): a round that ends with
+    # no text and no tool_use looks identical from loop.py's side whether the stream was truly
+    # empty or the model spent its whole output budget on a "thinking" block we silently drop
+    # below (seen for real: claude-opus-5-5 reasons by default with no `thinking` request param,
+    # and reasoning counts against the same max_tokens as the visible answer). Logged so the next
+    # occurrence is diagnosable from stop_reason/usage instead of guessed at again.
+    saw_visible = False
+    block_types_seen: set[str] = set()
+    usage: dict = {}
     async for d in data:
         try:
             ev = json.loads(d)
@@ -176,21 +188,28 @@ async def parse_anthropic(data: AsyncIterator[str]) -> AsyncIterator[dict]:
         t = ev.get("type")
         if t == "content_block_start":
             cb = ev["content_block"]
+            block_types_seen.add(cb["type"])
             blocks[ev["index"]] = {"type": cb["type"], "id": cb.get("id"), "name": cb.get("name"), "json": ""}
         elif t == "content_block_delta":
             dl = ev["delta"]
             if dl.get("type") == "text_delta":
+                saw_visible = True
                 yield {"type": "text", "text": dl["text"]}
             elif dl.get("type") == "input_json_delta" and ev["index"] in blocks:
                 blocks[ev["index"]]["json"] += dl.get("partial_json", "")
         elif t == "content_block_stop":
             b = blocks.pop(ev["index"], None)
             if b and b["type"] == "tool_use":
+                saw_visible = True
                 yield {"type": "tool_use", "id": b["id"], "name": b["name"], "input": _args(b["json"])}
-        elif t == "message_delta":
+        elif t in ("message_start", "message_delta"):
             reason = ev.get("delta", {}).get("stop_reason") or reason
+            usage.update((ev.get("message") or {}).get("usage") or ev.get("usage") or {})
         elif t == "error":
             raise LlmError(ev.get("error", {}).get("message", "provider stream error")[:200])
+    if not saw_visible:
+        _log.warning("claude stream produced no visible text/tool_use: stop_reason=%s block_types=%s usage=%s",
+                     reason, sorted(block_types_seen), usage)
     yield {"type": "stop", "reason": reason}
 
 
