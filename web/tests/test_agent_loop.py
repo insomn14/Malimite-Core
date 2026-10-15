@@ -90,6 +90,20 @@ class LoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("lanjutkan", evs[0]["text"])
         self.assertEqual(evs[-1], {"type": "done"})
 
+    async def test_empty_non_final_round_gets_a_visible_fallback_instead_of_vanishing(self):
+        # Regression: a round with neither text nor a tool call used to be treated as "model is
+        # done, nothing to persist" on any round but the forced-wrap-up last one — a provider
+        # stream that comes back empty (200 OK, no exception) silently dropped the user's turn
+        # with no assistant message ever stored and nothing shown in the chat UI.
+        with patch.object(loop.settings, "chat_max_turns", 3):
+            evs = await self._run(scripted([{"type": "stop", "reason": "end_turn"}]), None)
+        self.assertEqual(evs[0]["type"], "token")
+        self.assertIn("tidak mengirim balasan", evs[0]["text"])
+        self.assertEqual(evs[-1], {"type": "done"})
+        hist = await store.history(self.db, self.sid)
+        self.assertEqual(hist[-1]["role"], "assistant")   # visible and persisted, not silently dropped
+        self.assertIn("tidak mengirim balasan", hist[-1]["content"][0]["text"])
+
     async def test_conversation_continues_after_a_wrapped_up_message(self):
         async def run(ctx, name, args):
             return True, "x"
