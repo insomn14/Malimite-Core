@@ -62,6 +62,36 @@ def scrub_stored_keys() -> int:
     return fixed
 
 
+def reap_stale_running_scans() -> int:
+    """Mark scans stuck in queued/running as errored at process startup.
+
+    Their background task lived in a previous process (killed by a container
+    restart, OOM, or crash) — on a fresh start no task can possibly still be
+    running them, so any meta.json still saying queued/running is orphaned.
+    Returns the number of scans reaped.
+    """
+    if not settings.scan_dir.exists():
+        return 0
+    reaped = 0
+    for d in settings.scan_dir.iterdir():
+        meta = _read_meta(d.name)
+        if not meta or meta.get("state") not in ("queued", "running"):
+            continue
+        meta["state"] = "error"
+        meta["finished_at"] = _now()
+        meta["exit_code"] = -1
+        _write_meta(d.name, meta)
+        try:
+            with open(d / "analysis.log", "a") as f:
+                f.write("\n[malimite] scan interrupted: the server restarted while this scan was in progress.\n")
+        except OSError:
+            pass
+        reaped += 1
+    if reaped:
+        log.warning("Reaped %d stale queued/running scan(s) left over from a previous process", reaped)
+    return reaped
+
+
 _PATH_KEYS = ("dbPath", "ipaPath", "packagePath")
 
 
