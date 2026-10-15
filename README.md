@@ -513,7 +513,7 @@ Key upstream concepts ported (with Swing removed):
 
 - [**Ghidra**](https://github.com/NationalSecurityAgency/ghidra) (NSA) — iOS and native-library decompilation
 - [**JADX**](https://github.com/skylot/jadx) (skylot) — Android DEX → Java
-- [**Droid ASC**](https://pypi.org/project/droidasc/) — on-demand Android decompiler backend, developed by the author of Malimite-Core and inspired by [**MG1937/ASC**](https://github.com/MG1937/ASC) (Apache-2.0); builds on [Androguard](https://github.com/androguard/androguard)
+- [**Droid ASC**](https://pypi.org/project/droidasc/) — on-demand Android decompiler backend, a separate independently released package inspired by [**MG1937/ASC**](https://github.com/MG1937/ASC) (Apache-2.0); builds on [Androguard](https://github.com/androguard/androguard)
 - [**OWASP MASTG / MASVS**](https://mas.owasp.org/) — the detection catalogs derive from the Mobile Application Security Testing Guide (CC BY-SA 4.0)
 - [**SARIF**](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) (OASIS) — result interchange format
 
