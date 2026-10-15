@@ -102,9 +102,18 @@ async def run_chat(
             except LlmError as e:
                 yield {"type": "error", "message": str(e)}
                 return
-            if last and not (carry + text).strip():
-                text = ("Batas putaran tool tercapai sebelum jawaban akhir tersusun. Balas \"lanjutkan\" dan saya "
-                        "teruskan dari data yang sudah dikumpulkan.")
+            if not tool_uses and not (carry + text).strip():
+                # A round with neither visible text nor a tool call is not "nothing to do" — it is the
+                # provider's stream coming back empty (seen with claude-oauth: 200 OK, no exception, zero
+                # text/tool_use events). Leaving this silent drops the user's turn with no sign anything
+                # went wrong; surface it on every round, not just the forced-wrap-up last one.
+                text = (
+                    "Batas putaran tool tercapai sebelum jawaban akhir tersusun. Balas \"lanjutkan\" dan saya "
+                    "teruskan dari data yang sudah dikumpulkan."
+                ) if last else (
+                    "Model tidak mengirim balasan untuk giliran ini (kemungkinan gangguan stream). "
+                    "Coba kirim ulang pesan Anda."
+                )
                 yield {"type": "token", "text": text}
 
             if stop in TRUNCATED and not tool_uses and text.strip():
