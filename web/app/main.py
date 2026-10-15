@@ -37,6 +37,9 @@ async def _lifespan(_: FastAPI):
     n = scanner.scrub_stored_keys()
     if n:
         log.warning("removed plaintext per-upload LLM keys from %d meta.json file(s)", n)
+    r = scanner.reap_stale_running_scans()
+    if r:
+        log.warning("marked %d scan(s) as errored: stuck queued/running from before this restart", r)
     if not settings.api_key:
         log.warning("API_KEY is not set: anyone who can reach this port can upload scans, read results and "
                     "spend this server's LLM quota through the AI Assistant. Set API_KEY and/or bind to 127.0.0.1.")

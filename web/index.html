@@ -739,7 +739,7 @@ window.onLlmModeChange = function() {
   if (warn) warn.hidden = mode !== 'offensive';
   if (help) {
     help.textContent = ({
-      summarize: 'Fast Scan = first-party app code and native libs only. Cheaper MSTG + optional LLM.',
+      summarize: 'Fast Scan = scopes MSTG + optional LLM to first-party app code and native libs. On .ipa, Ghidra still decompiles the whole binary first (no first-party skip at that step), so this does not shorten the decompile phase.',
       find_vulns: 'Full Scan = includes third-party Java/native. MSTG on everything ingested; optional LLM FIND_VULNS.',
       auto_fix: 'Auto Fix = reconstruct decompiled code. First-party scope (same as Fast Scan).',
       offensive: 'Offensive = first-party Frida playbooks plus a small security-SDK allowlist. Requires LLM on.'
