@@ -2131,6 +2131,11 @@ function extractErrorReason(log) {
   // Known patterns ranked by specificity (first match wins)
   const patterns = [
     {
+      re: /Cannot run program "[^"]*analyzeHeadless"[\s\S]{0,200}No such file or directory/,
+      reason: 'Ghidra is not installed at the configured path — the analyzeHeadless binary itself was never found, so nothing was imported or analyzed. This is unrelated to Java version or OSGi.',
+      hint: 'Set <code>GHIDRA_HOME</code> to a real Ghidra installation (must contain <code>support/analyzeHeadless</code>) and restart Malimite.',
+    },
+    {
       re: /chainedImport.*null|DyldChainedImport\.getName/,
       reason: 'Ghidra Mach-O loader crashed on chained-fixups — a chained import entry has a null target name. This is a known upstream bug in Ghidra (verified present in 12.0.4 and 12.1) triggered by some IPAs built with recent Xcode toolchains.',
       hint: 'There is no clean workaround as of Ghidra 12.1. Options: (a) wait for an upstream fix, (b) re-build the IPA with chained-fixups disabled (linker flag <code>-fixup_chains</code> in some toolchain configs), or (c) skip this app from your scan queue. The CLI now fails fast (~15s) instead of hanging, so retrying gains nothing.',
