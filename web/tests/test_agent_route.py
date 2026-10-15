@@ -60,7 +60,7 @@ class ChatRouteTests(unittest.TestCase):
 
     def test_validation_and_errors(self):
         self.assertEqual(self.client.post("/api/v1/scans/s1/chat", json={"message": ""}).status_code, 422)
-        self.assertEqual(self.client.post("/api/v1/scans/s1/chat", json={"message": "x" * 4001}).status_code, 422)
+        self.assertEqual(self.client.post("/api/v1/scans/s1/chat", json={"message": "x" * 20001}).status_code, 422)
         r = self.client.post("/api/v1/scans/s1/chat", json={"message": "x", "provider": "evil"})
         self.assertEqual(r.status_code, 400)
         r = self.client.post("/api/v1/scans/s1/chat", json={"message": "x", "session_id": "nope"})
