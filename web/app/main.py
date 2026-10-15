@@ -765,7 +765,7 @@ async def get_log(request: Request, scan_id: str, tail: int = 200):
 
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
-    message: str = Field(min_length=1, max_length=4000)
+    message: str = Field(min_length=1, max_length=20000)
     provider: Optional[str] = None   # override; must be in agent.llm.PROVIDERS
     model: Optional[str] = None
 

@@ -741,6 +741,20 @@ function headers(extra={}) {
   return h;
 }
 
+/* FastAPI's `detail` is a plain string for a hand-raised HTTPException, but a list of
+   {type,loc,msg,ctx} objects for a Pydantic request-validation failure (422) — shown raw via
+   JSON.stringify before this, e.g. `[{"type":"string_too_long",...}]`. */
+function formatApiErrorDetail(detail) {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(e => {
+      const field = Array.isArray(e.loc) ? e.loc[e.loc.length - 1] : '';
+      return field ? `${field}: ${e.msg}` : (e.msg || JSON.stringify(e));
+    }).join('; ');
+  }
+  return JSON.stringify(detail);
+}
+
 async function api(path, opts={}) {
   const r = await fetch('/api/v1' + path, {headers: headers(opts.headers||{}), ...opts});
   if (!r.ok) {
@@ -752,7 +766,7 @@ async function api(path, opts={}) {
       throw err;
     }
     let msg = await r.text().catch(()=>'');
-    try { const j = JSON.parse(msg); if (j && typeof j.detail === 'string') msg = j.detail; } catch (_) {}
+    try { const j = JSON.parse(msg); if (j && j.detail != null) msg = formatApiErrorDetail(j.detail); } catch (_) {}
     const err = new Error(msg || r.statusText);
     err.status = r.status;
     throw err;
@@ -1899,7 +1913,7 @@ async function tabAssistant(el, id, detail) {
         headers: headers({'Content-Type': 'application/json'}), body: JSON.stringify(body)});
       if (!r.ok) {
         let d = await r.text();
-        try { const j = JSON.parse(d); d = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); } catch (_) {}
+        try { const j = JSON.parse(d); if (j && j.detail != null) d = formatApiErrorDetail(j.detail); } catch (_) {}
         throw new Error(d || r.statusText);
       }
       const reader = r.body.getReader(), dec = new TextDecoder();
