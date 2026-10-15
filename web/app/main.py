@@ -770,6 +770,10 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
 
 
+class RenameChatRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=60)
+
+
 _ACTIVE_CHATS: set[str] = set()  # one live stream per session
 _CHAT_HITS: deque = deque()      # monotonic timestamps of recent chat requests (global sliding window)
 
@@ -859,3 +863,24 @@ async def delete_chat(request: Request, scan_id: str, session_id: str):
     _require_db(scan_id)
     if not await chat_store.delete_session(chat_store.path_for(scanner._scan_dir(scan_id)), session_id):
         raise HTTPException(status_code=404, detail="Chat session not found")
+
+
+@app.patch("/api/v1/scans/{scan_id}/chat/{session_id}")
+async def rename_chat(request: Request, scan_id: str, session_id: str, req: RenameChatRequest):
+    _check_auth(request)
+    _require_db(scan_id)
+    chat_db = chat_store.path_for(scanner._scan_dir(scan_id))
+    if not await chat_store.set_title(chat_db, session_id, req.title):
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    return {"ok": True}
+
+
+@app.post("/api/v1/scans/{scan_id}/chat/{session_id}/fork")
+async def fork_chat(request: Request, scan_id: str, session_id: str):
+    _check_auth(request)
+    _require_db(scan_id)
+    chat_db = chat_store.path_for(scanner._scan_dir(scan_id))
+    new_sid = await chat_store.fork_session(chat_db, session_id)
+    if not new_sid:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    return {"session_id": new_sid}

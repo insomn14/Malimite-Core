@@ -1900,6 +1900,8 @@ async function tabAssistant(el, id, detail) {
     <div class="card chat-card">
       <div class="chat-bar">
         <select id="chat-session" title="Chat session"></select>
+        <button class="btn btn-ghost btn-sm" id="chat-rename" title="Rename this chat">Rename</button>
+        <button class="btn btn-ghost btn-sm" id="chat-fork" title="Start a new chat that continues from here">Fork</button>
         <button class="btn btn-ghost btn-sm" id="chat-new">New chat</button>
         <button class="btn btn-ghost btn-sm" id="chat-export" title="Download this conversation as Markdown">Export</button>
         <button class="btn btn-ghost btn-sm" id="chat-del">Delete</button>
@@ -1948,8 +1950,10 @@ async function tabAssistant(el, id, detail) {
     if (!sel) return;
     sel.innerHTML = `<option value=""${st.sid ? '' : ' selected'}>＋ New chat</option>` +
       st.sessions.map(s => `<option value="${escAttr(s.id)}"${s.id === st.sid ? ' selected' : ''}>${esc(s.title || 'Untitled')} · ${esc(when(s.created))}</option>`).join('');
-    const del = document.getElementById('chat-del');
-    if (del) del.disabled = !st.sid;
+    ['chat-del', 'chat-rename', 'chat-fork'].forEach(bid => {
+      const b = document.getElementById(bid);
+      if (b) b.disabled = !st.sid;
+    });
   }
 
   function startFresh() {
@@ -2089,6 +2093,28 @@ async function tabAssistant(el, id, detail) {
   document.getElementById('chat-session').onchange = e => {
     if (st.busy) { renderSessions(); return; }
     if (!e.target.value) startFresh(); else loadSession(e.target.value).catch(err => showErr(err.message));
+  };
+  document.getElementById('chat-rename').onclick = async () => {
+    if (st.busy || !st.sid) return;
+    const current = (st.sessions.find(s => s.id === st.sid) || {}).title || '';
+    const title = prompt('Rename this chat:', current);
+    if (title == null) return;   // cancelled
+    const trimmed = title.trim();
+    if (!trimmed) { showErr('Title cannot be empty.'); return; }
+    try {
+      await api('/scans/' + id + '/chat/' + encodeURIComponent(st.sid), {method: 'PATCH',
+        headers: {'Content-Type': 'application/json'}, body: JSON.stringify({title: trimmed})});
+    } catch (e) { showErr('Could not rename: ' + e.message); return; }
+    await loadSession(st.sid);
+  };
+  document.getElementById('chat-fork').onclick = async () => {
+    if (st.busy || !st.sid) return;
+    let res;
+    try {
+      res = await api('/scans/' + id + '/chat/' + encodeURIComponent(st.sid) + '/fork', {method: 'POST'});
+    } catch (e) { showErr('Could not fork: ' + e.message); return; }
+    saveSid(res.session_id);
+    await loadSession(res.session_id);
   };
 
   setBusy(st.busy);
