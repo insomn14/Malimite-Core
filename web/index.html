@@ -1009,6 +1009,10 @@ route('home', async function() {
         <input type="checkbox" id="assessment-enabled" checked/>
         <span><strong>Security Assessment</strong> — inventory controls (obfuscation, pinning, root/Frida detection, FLAG_SECURE, …). Independent of LLM.</span>
       </label>
+      <label style="display:flex;align-items:center;gap:.5rem;margin-top:.5rem;font-size:.8rem;cursor:pointer">
+        <input type="checkbox" id="ios-light"/>
+        <span><strong>iOS light scan</strong> — skip Ghidra: strings, imported symbols and plist only (seconds, little RAM). For very large .ipa that run out of memory; rules that need pseudocode are reported as not evaluated. Ignored for Android.</span>
+      </label>
       <progress id="upload-bar" value="0" max="100" hidden></progress>
     </div>
 
@@ -1071,6 +1075,7 @@ route('home', async function() {
     })());
     fd.append('llm_api_key', apiKeyVal);
     fd.append('assessment_enabled', $('#assessment-enabled')?.checked !== false);
+    fd.append('ios_light', !!$('#ios-light')?.checked);
 
     const bar = $('#upload-bar');
     bar.hidden = false; bar.value = 0;
@@ -1651,6 +1656,7 @@ route('scan', async function(id, tab='summary') {
         <button class="btn btn-danger btn-sm" onclick="deleteScan('${id}', event)">Delete</button>
       </div>
     </div>
+    ${detail.scan_mode==='light'?`<div class="alert alert-warn" style="margin-bottom:.75rem"><strong>Light scan</strong> — Ghidra was skipped, so there is no pseudocode. ${(detail.rules_not_evaluated||[]).length} pseudocode-based rule(s) were <strong>not evaluated</strong> (${(detail.rules_not_evaluated||[]).map(esc).join(', ')}); absence of a finding for them does not mean the app is safe. Decompile single functions on demand from the Functions tab or the AI Assistant.</div>`:''}
     <div class="tabs">${tabsHtml}</div>
     <div id="tab-content"><div class="loading"><div class="spinner"></div></div></div>`);
 

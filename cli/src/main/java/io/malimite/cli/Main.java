@@ -108,6 +108,13 @@ public class Main implements Callable<Integer> {
             defaultValue = "${env:DECOMPILE_THREADS:-8}")
     private int decompileThreads;
 
+    @Option(names = "--ios-light",
+            description = "iOS only: skip Ghidra and scan strings, imported symbols and plist only (no "
+                    + "pseudocode; pseudocode-based rules are reported as not evaluated). For binaries too "
+                    + "large for Ghidra auto-analysis. (env: MALIMITE_IOS_LIGHT)",
+            defaultValue = "${env:MALIMITE_IOS_LIGHT:-false}")
+    private boolean iosLight;
+
     @Option(names = "--llm-model",
             description = "Override model id per provider  (env: LLM_MODEL)",
             defaultValue = "${env:LLM_MODEL:-}")
@@ -171,6 +178,7 @@ public class Main implements Callable<Integer> {
                 .ascHome(ascHome == null || ascHome.isBlank() ? null : Path.of(ascHome))
                 .maxAscClasses(maxAscClasses)
                 .decompileThreads(decompileThreads)
+                .iosLight(iosLight)
                 .build();
 
         AnalysisResult r = new MalimiteAnalyzer().analyze(opts);

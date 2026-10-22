@@ -261,6 +261,9 @@ def get_scan_detail(scan_id: str) -> Optional[ScanDetail]:
         detail.provisioning_expiry = scan_json.get("provisioningExpiry")
         detail.min_sdk = scan_json.get("minSdk")
         detail.target_sdk = scan_json.get("targetSdk")
+    if scan_json:
+        detail.scan_mode = scan_json.get("scanMode")
+        detail.rules_not_evaluated = scan_json.get("rulesNotEvaluated")
 
     d = _scan_dir(scan_id)
     detail.has_sarif = (d / "findings.sarif").exists()
@@ -320,6 +323,7 @@ async def create_scan(
     llm_model: str,
     llm_api_key: str = "",
     assessment_enabled: bool = True,
+    ios_light: bool = False,
 ) -> ScanMeta:
     migrate_legacy_scan_dirs()
     settings.scan_dir.mkdir(parents=True, exist_ok=True)
@@ -345,6 +349,7 @@ async def create_scan(
         "llm_mode": llm_mode,
         "llm_model": llm_model,
         "assessment_enabled": assessment_enabled,
+        "ios_light": ios_light,
         # in-memory only (stripped by _write_meta): used by _run to build the CLI environment
         "_llm_api_key": llm_api_key,
     }
@@ -375,6 +380,8 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
     # jars with inverted --assessment polarity cannot disable the scan.
     if not meta.get("assessment_enabled", True):
         cmd += ["--no-assessment"]
+    if meta.get("ios_light"):
+        cmd += ["--ios-light"]
     return cmd
 
 
