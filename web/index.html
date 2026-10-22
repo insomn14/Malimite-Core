@@ -1648,6 +1648,7 @@ route('scan', async function(id, tab='summary') {
       <div class="detail-actions">
         ${detail.has_html?`<a class="btn btn-ghost btn-sm" href="/api/v1/scans/${id}/report" target="_blank">HTML Report</a>`:''}
         ${detail.has_sarif?`<a class="btn btn-ghost btn-sm" href="/api/v1/scans/${id}/sarif">Download SARIF</a>`:''}
+        ${detail.has_package?`<a class="btn btn-ghost btn-sm" href="/api/v1/scans/${id}/package">Download ${/\.ipa$/i.test(detail.filename)?'IPA':'APK'}</a>`:''}
         <button class="btn btn-danger btn-sm" onclick="deleteScan('${id}', event)">Delete</button>
       </div>
     </div>
@@ -4349,6 +4350,7 @@ function tabDownloads(id, detail) {
     ['SARIF 2.1 Report', 'findings.sarif', detail.has_sarif, `/api/v1/scans/${id}/sarif`],
     ['HTML Report', 'report.html', detail.has_html, `/api/v1/scans/${id}/report`],
     ['Analysis Log', 'analysis.log', detail.has_log, `/api/v1/scans/${id}/log`],
+    ['Uploaded package', detail.filename, detail.has_package, `/api/v1/scans/${id}/package`],
   ];
   return `<div class="card">
     <div class="card-title">Downloads</div>

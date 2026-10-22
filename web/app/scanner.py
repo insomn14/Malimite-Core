@@ -266,6 +266,7 @@ def get_scan_detail(scan_id: str) -> Optional[ScanDetail]:
     detail.has_sarif = (d / "findings.sarif").exists()
     detail.has_html = (d / "report.html").exists()
     detail.has_log = (d / "analysis.log").exists()
+    detail.has_package = next(d.glob("upload.*"), None) is not None
 
     # DB counts filled lazily by caller when needed
     return detail
