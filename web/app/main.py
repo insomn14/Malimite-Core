@@ -687,6 +687,18 @@ async def get_sarif(request: Request, scan_id: str):
                         filename=f"malimite-{scan_id[:8]}.sarif")
 
 
+@app.get("/api/v1/scans/{scan_id}/package")
+async def get_package(request: Request, scan_id: str):
+    _check_auth(request)
+    detail = scanner.get_scan_detail(scan_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    p = next((settings.scan_dir / scan_id).glob("upload.*"), None)
+    if p is None:
+        raise HTTPException(status_code=404, detail="Uploaded package not found")
+    return FileResponse(str(p), media_type="application/octet-stream", filename=detail.filename)
+
+
 @app.get("/api/v1/scans/{scan_id}/report", response_class=HTMLResponse)
 async def get_report(request: Request, scan_id: str):
     _check_auth(request)

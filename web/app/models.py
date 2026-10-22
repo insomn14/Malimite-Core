@@ -40,6 +40,7 @@ class ScanDetail(ScanMeta):
     has_sarif: bool = False
     has_html: bool = False
     has_log: bool = False
+    has_package: bool = False
 
 
 class FunctionItem(BaseModel):
