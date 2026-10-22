@@ -22,7 +22,9 @@ public record AnalyzeOptions(
         /** Cap classes decompiled via ASC (0 = no cap). */
         int maxAscClasses,
         /** Parallel ASC getclass workers. */
-        int decompileThreads) {
+        int decompileThreads,
+        /** iOS only: skip Ghidra, scan strings/symbols/plist (no pseudocode). For binaries too big for auto-analysis. */
+        boolean iosLight) {
 
     public AnalyzeOptions {
         if (llmMode == null) llmMode = LlmMode.SUMMARIZE;
@@ -48,7 +50,7 @@ public record AnalyzeOptions(
     public AnalyzeOptions withPackagePath(Path p) {
         return new AnalyzeOptions(p, ghidraHome, outputDir, llmEnabled, llmMode, llmConfig, jadxHome,
                 assessmentEnabled, extraPackagePrefixes, maxEnrichFunctions, decompiler, ascHome, maxAscClasses,
-                decompileThreads);
+                decompileThreads, iosLight);
     }
 
     public static Builder builder() { return new Builder(); }
@@ -65,6 +67,7 @@ public record AnalyzeOptions(
         private Path ascHome;
         private int maxAscClasses = 0;
         private int decompileThreads = 8;
+        private boolean iosLight;
 
         public Builder ipaPath(Path p)      { this.ipaPath = p; return this; }
         /** Preferred alias — same as {@link #ipaPath(Path)}. */
@@ -91,13 +94,15 @@ public record AnalyzeOptions(
         public Builder maxAscClasses(int n) { this.maxAscClasses = n; return this; }
         /** Parallel ASC getclass workers. */
         public Builder decompileThreads(int n) { this.decompileThreads = n; return this; }
+        /** iOS only: light scan without Ghidra (strings + symbols + plist rules). */
+        public Builder iosLight(boolean b) { this.iosLight = b; return this; }
 
         public AnalyzeOptions build() {
             if (ipaPath == null || outputDir == null)
                 throw new IllegalArgumentException("packagePath and outputDir required");
             return new AnalyzeOptions(ipaPath, ghidraHome, outputDir, llmEnabled, llmMode, llmConfig,
                     jadxHome, assessmentEnabled, extraPackagePrefixes, maxEnrichFunctions,
-                    decompiler, ascHome, maxAscClasses, decompileThreads);
+                    decompiler, ascHome, maxAscClasses, decompileThreads, iosLight);
         }
     }
 }

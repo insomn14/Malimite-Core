@@ -40,6 +40,8 @@ class ScanDetail(ScanMeta):
     has_sarif: bool = False
     has_html: bool = False
     has_log: bool = False
+    scan_mode: Optional[str] = None
+    rules_not_evaluated: Optional[list] = None
 
 
 class FunctionItem(BaseModel):
