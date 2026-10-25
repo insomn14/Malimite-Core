@@ -254,6 +254,22 @@ public class SqliteStore implements AutoCloseable {
         }
     }
 
+    /** Batch variant for bulk ingest: one transaction instead of a commit per row. Rows: {address, value, segment, label}. */
+    public void insertMachoStrings(List<String[]> rows, String executableName) {
+        String sql = "INSERT INTO MachoStrings(address,value,segment,label,ExecutableName) VALUES(?,?,?,?,?)";
+        try (PreparedStatement p = conn.prepareStatement(sql)) {
+            for (String[] r : rows) {
+                p.setString(1, r[0]); p.setString(2, r[1]); p.setString(3, r[2]); p.setString(4, r[3]);
+                p.setString(5, executableName);
+                p.addBatch();
+            }
+            p.executeBatch();
+            conn.commit();
+        } catch (SQLException e) {
+            log.error("insertMachoStrings failed", e);
+        }
+    }
+
     public void insertMachoString(String address, String value, String segment,
                                    String label, String executableName) {
         String sql = "INSERT INTO MachoStrings(address,value,segment,label,ExecutableName) VALUES(?,?,?,?,?)";

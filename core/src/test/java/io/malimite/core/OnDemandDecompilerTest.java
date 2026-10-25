@@ -76,6 +76,9 @@ class OnDemandDecompilerTest {
         // headless has no such options: 12.x would treat them as import paths, 11.x rejects them
         for (String flag : new String[] {"-enableAnalyzer", "-disableAnalyzer", "-skipAnalysisPrompt"})
             assertFalse(imp.contains(flag), flag);
+        // iOS skips auto-analysis (a 100MB Mach-O needs >6GB with it); the option must precede -import
+        var lazy = GhidraOnDemand.importCmd(cfg, Path.of("/p"), "proj", Path.of("/bin/App"), true);
+        assertEquals(java.util.List.of("/opt/ghidra/support/analyzeHeadless", "/p", "proj", "-noanalysis", "-import", "/bin/App"), lazy);
         var proc = GhidraOnDemand.processCmd(cfg, Path.of("/p"), "proj", "App", Path.of("/s"), Path.of("/s/out.txt"), "main");
         assertTrue(proc.containsAll(java.util.List.of("-process", "App", "-noanalysis", "-readOnly", "DecompileOne.java", "main")));
         assertFalse(proc.contains("-import"));

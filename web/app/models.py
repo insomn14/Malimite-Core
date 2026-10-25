@@ -41,6 +41,8 @@ class ScanDetail(ScanMeta):
     has_html: bool = False
     has_log: bool = False
     has_package: bool = False
+    scan_mode: Optional[str] = None
+    rules_not_evaluated: Optional[list] = None
 
 
 class FunctionItem(BaseModel):
