@@ -111,7 +111,7 @@ public final class GhidraOnDemand {
             }
             log.info("Ghidra on-demand: importing + analyzing {} (first request for this scan; may take minutes)", binary);
             try {
-                run(importCmd(cfg, projDir, projName, binary), IMPORT_TIMEOUT_MIN, "ghidra import");
+                run(importCmd(cfg, projDir, projName, binary, !android), IMPORT_TIMEOUT_MIN, "ghidra import");
             } catch (Exception e) {
                 OnDemandDecompiler.deleteTree(projDir);  // never keep a half-built project
                 throw e;
@@ -138,7 +138,17 @@ public final class GhidraOnDemand {
      * No -deleteProject: this project is kept.
      */
     static List<String> importCmd(CoreConfig cfg, Path projDir, String projName, Path binary) {
-        return List.of(cfg.analyzeHeadlessPath().toString(), projDir.toString(), projName, "-import", binary.toString());
+        return importCmd(cfg, projDir, projName, binary, false);
+    }
+
+    /**
+     * @param skipAnalysis iOS only: a 100MB+ Mach-O needs >6GB under auto-analysis, but imports in ~40s / ~2.5GB
+     *                     without it. DecompileOne then disassembles just the requested functions.
+     */
+    static List<String> importCmd(CoreConfig cfg, Path projDir, String projName, Path binary, boolean skipAnalysis) {
+        return skipAnalysis
+                ? List.of(cfg.analyzeHeadlessPath().toString(), projDir.toString(), projName, "-noanalysis", "-import", binary.toString())
+                : List.of(cfg.analyzeHeadlessPath().toString(), projDir.toString(), projName, "-import", binary.toString());
     }
 
     static List<String> processCmd(CoreConfig cfg, Path projDir, String projName, String program,

@@ -45,7 +45,7 @@ public class MalimiteAnalyzer {
         String scanId = UUID.randomUUID().toString();
         log.info("scan={} platform=IOS package={} out={}", scanId, opts.packagePath(), opts.outputDir());
 
-        if (opts.ghidraHome() == null)
+        if (opts.ghidraHome() == null && !opts.iosLight())
             throw new IllegalArgumentException("ghidraHome required for iOS (.ipa) analysis");
 
         IpaValidator.validate(opts.packagePath());
@@ -78,9 +78,15 @@ public class MalimiteAnalyzer {
             parseResources(rp, extraction.appBundleDir());
             provision = parseMobileProvision(extraction.appBundleDir());
 
-            CoreConfig config = CoreConfig.fromEnv(opts.ghidraHome());
-            GhidraRunner runner = new GhidraRunner(execName, config, store);
-            runner.decompile(execPath, opts.outputDir().toString(), macho);
+            if (opts.iosLight()) {
+                log.info("iOS light scan: skipping Ghidra; DECOMPILED rules {} are not evaluated", lightSkippedRuleIds());
+                MachoLightIngest.ingestStrings(Path.of(execPath), store, execName);
+                MachoLightIngest.ingestImports(Path.of(execPath), store, execName);
+            } else {
+                CoreConfig config = CoreConfig.fromEnv(opts.ghidraHome());
+                GhidraRunner runner = new GhidraRunner(execName, config, store);
+                runner.decompile(execPath, opts.outputDir().toString(), macho);
+            }
 
             store.insertResourceString(
                     "MachOSecurityFlags",
@@ -102,7 +108,7 @@ public class MalimiteAnalyzer {
             }
 
             runAssessmentIfEnabled(opts, store, execName, PackagePlatform.IOS);
-            runLlmIfEnabled(opts, store, execName, macho.isSwift(), PackagePlatform.IOS, scope);
+            if (!opts.iosLight()) runLlmIfEnabled(opts, store, execName, macho.isSwift(), PackagePlatform.IOS, scope);
         }
 
         saveScanJsonIos(opts.outputDir().resolve("scan.json"), scanId, info, macho, opts, dbPath, provision);
@@ -319,6 +325,13 @@ public class MalimiteAnalyzer {
         }
     }
 
+    /** iOS rules that match decompiled pseudocode: a light scan has none, so it reports these as not evaluated. */
+    static List<String> lightSkippedRuleIds() {
+        return VulnerabilityCatalog.RULES.stream()
+                .filter(r -> PackagePlatform.IOS.matchesRule(r.platform()) && r.target() == VulnerabilityRule.Target.DECOMPILED)
+                .map(VulnerabilityRule::id).toList();
+    }
+
     private void saveScanJsonIos(Path target, String scanId, InfoPlist info,
                                  Macho macho, AnalyzeOptions opts, Path dbPath,
                                  MobileProvision.ProvisionInfo provision) {
@@ -336,6 +349,8 @@ public class MalimiteAnalyzer {
             meta.put("ipaPath", opts.packagePath().toString());
             meta.put("packagePath", opts.packagePath().toString());
             putScopeMeta(meta, opts);
+            meta.put("scanMode", opts.iosLight() ? "light" : "full");
+            if (opts.iosLight()) meta.put("rulesNotEvaluated", lightSkippedRuleIds());
             if (provision != null) {
                 meta.put("bundleTeamId", provision.teamId());
                 meta.put("provisioningProfile", provision.profileName());
