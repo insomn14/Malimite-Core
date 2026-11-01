@@ -32,13 +32,30 @@ _TRIAGE_COLUMNS = [
     ("UpdatedAt",         "INTEGER"),
 ]
 
+# Columns added for the "AI Fix" feature: LLM-rewritten report text, stored as reversible
+# overrides (never touch Description/Evidence/PocSteps/Remediation). Risk (severity/CVSS)
+# reuses the triage OverrideSeverity/OverrideCvssScore columns above; AiFixSeverityWasAi
+# records whether THIS AI fix is the one that last wrote them, so a revert never clobbers a
+# human's own manual triage override on severity/CVSS. Mirrors SqliteStore.java's createTables().
+_AI_FIX_COLUMNS = [
+    ("OverrideDescription", "TEXT"),
+    ("OverrideEvidence",    "TEXT"),
+    ("OverridePocSteps",    "TEXT"),
+    ("OverrideRemediation", "TEXT"),
+    ("AiFixStatus",         "TEXT DEFAULT 'none'"),
+    ("AiFixProvider",       "TEXT"),
+    ("AiFixModel",          "TEXT"),
+    ("AiFixAt",             "INTEGER"),
+    ("AiFixSeverityWasAi",  "TEXT"),
+]
+
 
 async def _ensure_triage_columns(db) -> None:
-    """ALTER TABLE Vulnerabilities to add any missing triage columns."""
+    """ALTER TABLE Vulnerabilities to add any missing triage / AI-fix columns."""
     async with db.execute("PRAGMA table_info(Vulnerabilities)") as cur:
         rows = await cur.fetchall()
     existing = {r[1].lower() for r in rows}  # column names (case-insensitive)
-    for col, decl in _TRIAGE_COLUMNS:
+    for col, decl in _TRIAGE_COLUMNS + _AI_FIX_COLUMNS:
         if col.lower() not in existing:
             try:
                 await db.execute(f"ALTER TABLE Vulnerabilities ADD COLUMN {col} {decl}")
@@ -298,7 +315,9 @@ async def get_vulnerabilities(db_path: str, executable: str) -> list[dict]:
                       AffectedType, AffectedName, Evidence, EvidenceLocation,
                       PocSteps, Remediation, ReferenceUrl,
                       COALESCE(Status,'open'), OverrideSeverity, OverrideCvssScore,
-                      OverrideNote, UpdatedAt
+                      OverrideNote, UpdatedAt,
+                      OverrideDescription, OverrideEvidence, OverridePocSteps, OverrideRemediation,
+                      COALESCE(AiFixStatus,'none'), AiFixProvider, AiFixModel, AiFixAt
                FROM Vulnerabilities WHERE ExecutableName=?
                ORDER BY
                  CASE WHEN COALESCE(Status,'open') IN ('false_positive','fixed') THEN 1 ELSE 0 END,
@@ -321,6 +340,8 @@ async def get_vulnerabilities(db_path: str, executable: str) -> list[dict]:
         cvss = r[5] or 0.0
         override_sev = r[16]
         override_cvss = r[17]
+        description, evidence, poc_steps, remediation = r[7], r[10], r[12], r[13]
+        override_description, override_evidence, override_poc_steps, override_remediation = r[20], r[21], r[22], r[23]
         out.append({
             "id":                 r[0],
             "rule_id":            r[1],
@@ -329,13 +350,13 @@ async def get_vulnerabilities(db_path: str, executable: str) -> list[dict]:
             "severity":           sev,
             "cvss_score":         cvss,
             "cwe":                r[6],
-            "description":        r[7],
+            "description":        description,
             "affected_type":      r[8],
             "affected_name":      r[9],
-            "evidence":           r[10],
+            "evidence":           evidence,
             "evidence_location":  r[11],
-            "poc_steps":          r[12],
-            "remediation":        r[13],
+            "poc_steps":          poc_steps,
+            "remediation":        remediation,
             "reference_url":      r[14],
             # triage fields
             "status":             r[15],
@@ -347,8 +368,32 @@ async def get_vulnerabilities(db_path: str, executable: str) -> list[dict]:
             "effective_severity": override_sev or sev,
             "effective_cvss_score": override_cvss if override_cvss is not None else cvss,
             "is_false_positive":  (r[15] == "false_positive"),
+            # AI Fix fields — LLM-rewritten report text, stored as reversible overrides
+            "override_description": override_description,
+            "override_evidence":    override_evidence,
+            "override_poc_steps":   override_poc_steps,
+            "override_remediation": override_remediation,
+            "ai_fix_status":    r[24],
+            "ai_fix_provider":  r[25],
+            "ai_fix_model":     r[26],
+            "ai_fix_at":        r[27],
+            # derived: effective text after AI Fix override (falls back to the original)
+            "effective_description": override_description or description,
+            "effective_evidence":    override_evidence or evidence,
+            "effective_poc_steps":   override_poc_steps or poc_steps,
+            "effective_remediation": override_remediation or remediation,
+            "is_ai_fixed": (r[24] == "applied"),
         })
     return out
+
+
+async def get_vulnerability_row(db_path: str, executable: str, vuln_id: int) -> Optional[dict]:
+    """Single row by id, same shape as get_vulnerabilities()'s entries, or None if not found."""
+    rows = await get_vulnerabilities(db_path, executable)
+    for r in rows:
+        if r["id"] == vuln_id:
+            return r
+    return None
 
 
 async def update_vulnerability_triage(
@@ -379,6 +424,77 @@ async def update_vulnerability_triage(
     async with aiosqlite.connect(db_path) as db:
         await _ensure_triage_columns(db)
         async with db.execute(sql, args) as cur:
+            await db.commit()
+            return cur.rowcount > 0
+
+
+async def update_vulnerability_ai_fix(
+    db_path: str,
+    vuln_id: int,
+    *,
+    description: str | None = None,
+    evidence: str | None = None,
+    poc_steps: str | None = None,
+    remediation: str | None = None,
+    severity: str | None = None,
+    cvss_score: float | None = None,
+    provider: str,
+    model: str,
+) -> bool:
+    """Applies an LLM "AI Fix": each non-empty text field is stored as an Override* column,
+    never touching the original Description/Evidence/PocSteps/Remediation — always reversible
+    via revert_vulnerability_ai_fix(). Risk (severity/cvss_score) reuses the triage
+    OverrideSeverity/OverrideCvssScore columns; AiFixSeverityWasAi is set only when THIS call
+    wrote them, so a later revert never clobbers a human's own manual triage override.
+    Mirrors SqliteStore.java's updateVulnerabilityAiFix()."""
+    sets: list[str] = []
+    args: list = []
+    if description:
+        sets.append("OverrideDescription=?"); args.append(description)
+    if evidence:
+        sets.append("OverrideEvidence=?"); args.append(evidence)
+    if poc_steps:
+        sets.append("OverridePocSteps=?"); args.append(poc_steps)
+    if remediation:
+        sets.append("OverrideRemediation=?"); args.append(remediation)
+    if severity:
+        sets.append("OverrideSeverity=?"); args.append(severity)
+        sets.append("AiFixSeverityWasAi=?"); args.append("yes")
+    if cvss_score is not None:
+        sets.append("OverrideCvssScore=?"); args.append(cvss_score)
+    now_ms = int(__import__("time").time() * 1000)
+    sets += ["AiFixStatus=?", "AiFixProvider=?", "AiFixModel=?", "AiFixAt=?", "UpdatedAt=?"]
+    args += ["applied", provider, model, now_ms, now_ms]
+
+    sql = f"UPDATE Vulnerabilities SET {', '.join(sets)} WHERE id=?"
+    args.append(vuln_id)
+
+    async with aiosqlite.connect(db_path) as db:
+        await _ensure_triage_columns(db)
+        async with db.execute(sql, args) as cur:
+            await db.commit()
+            return cur.rowcount > 0
+
+
+async def revert_vulnerability_ai_fix(db_path: str, vuln_id: int) -> bool:
+    """Reverts an AI Fix: clears the four field overrides and, only when THIS AI fix was the
+    one that wrote severity/CVSS (AiFixSeverityWasAi='yes'), also clears those two triage
+    columns — a human's own manual triage override is left untouched. Mirrors
+    SqliteStore.java's revertVulnerabilityAiFix()."""
+    sql = """UPDATE Vulnerabilities SET
+                OverrideDescription = NULL,
+                OverrideEvidence = NULL,
+                OverridePocSteps = NULL,
+                OverrideRemediation = NULL,
+                OverrideSeverity = CASE WHEN AiFixSeverityWasAi='yes' THEN NULL ELSE OverrideSeverity END,
+                OverrideCvssScore = CASE WHEN AiFixSeverityWasAi='yes' THEN NULL ELSE OverrideCvssScore END,
+                AiFixSeverityWasAi = NULL,
+                AiFixStatus = 'reverted',
+                UpdatedAt = ?
+              WHERE id=?"""
+    async with aiosqlite.connect(db_path) as db:
+        await _ensure_triage_columns(db)
+        async with db.execute(sql, (int(__import__("time").time() * 1000), vuln_id)) as cur:
             await db.commit()
             return cur.rowcount > 0
 

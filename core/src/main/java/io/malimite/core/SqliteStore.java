@@ -155,6 +155,20 @@ public class SqliteStore implements AutoCloseable {
             addColumnIfMissing(s, "Vulnerabilities", "UpdatedAt",         "INTEGER");
             // OFFENSIVE mode LLM exploitability verdict (JSON) per finding.
             addColumnIfMissing(s, "Vulnerabilities", "LlmExploitability", "TEXT");
+            // AI Fix: LLM-rewritten report fields, stored as overrides (never touches the
+            // original Description/Evidence/PocSteps/Remediation columns) so a fix is always
+            // reversible. Risk (severity/CVSS) reuses the existing triage OverrideSeverity /
+            // OverrideCvssScore columns — AiFixSeverityWasAi records whether THIS AI fix is the
+            // one that last wrote them, so revert never clobbers a human's manual triage override.
+            addColumnIfMissing(s, "Vulnerabilities", "OverrideDescription",  "TEXT");
+            addColumnIfMissing(s, "Vulnerabilities", "OverrideEvidence",     "TEXT");
+            addColumnIfMissing(s, "Vulnerabilities", "OverridePocSteps",     "TEXT");
+            addColumnIfMissing(s, "Vulnerabilities", "OverrideRemediation",  "TEXT");
+            addColumnIfMissing(s, "Vulnerabilities", "AiFixStatus",          "TEXT DEFAULT 'none'");
+            addColumnIfMissing(s, "Vulnerabilities", "AiFixProvider",        "TEXT");
+            addColumnIfMissing(s, "Vulnerabilities", "AiFixModel",           "TEXT");
+            addColumnIfMissing(s, "Vulnerabilities", "AiFixAt",              "INTEGER");
+            addColumnIfMissing(s, "Vulnerabilities", "AiFixSeverityWasAi",   "TEXT");
             // Decompiler origin: JADX (Android Java) vs GHIDRA (iOS Mach-O / Android .so)
             addColumnIfMissing(s, "Functions", "Origin", "TEXT DEFAULT 'GHIDRA'");
             s.execute("""
@@ -654,7 +668,9 @@ public class SqliteStore implements AutoCloseable {
                 SELECT id, RuleId, Title, Category, Severity, CvssScore, Cwe, Description,
                        AffectedType, AffectedName, Evidence, EvidenceLocation,
                        PocSteps, Remediation, ReferenceUrl,
-                       Status, OverrideSeverity, OverrideCvssScore, OverrideNote, UpdatedAt
+                       Status, OverrideSeverity, OverrideCvssScore, OverrideNote, UpdatedAt,
+                       OverrideDescription, OverrideEvidence, OverridePocSteps, OverrideRemediation,
+                       AiFixStatus, AiFixProvider, AiFixModel, AiFixAt
                 FROM Vulnerabilities WHERE ExecutableName=?
                 ORDER BY
                     CASE WHEN COALESCE(Status,'open') IN ('false_positive','fixed') THEN 1 ELSE 0 END,
@@ -697,6 +713,17 @@ public class SqliteStore implements AutoCloseable {
                     row.put("override_note",     rs.getString("OverrideNote"));
                     long updated = rs.getLong("UpdatedAt");
                     row.put("updated_at",        rs.wasNull() ? null : updated);
+                    // AI Fix overrides (field-level rewrite; reversible, never touches originals above)
+                    row.put("override_description", rs.getString("OverrideDescription"));
+                    row.put("override_evidence",     rs.getString("OverrideEvidence"));
+                    row.put("override_poc_steps",    rs.getString("OverridePocSteps"));
+                    row.put("override_remediation",  rs.getString("OverrideRemediation"));
+                    String aiFixStatus = rs.getString("AiFixStatus");
+                    row.put("ai_fix_status",   aiFixStatus == null ? "none" : aiFixStatus);
+                    row.put("ai_fix_provider", rs.getString("AiFixProvider"));
+                    row.put("ai_fix_model",    rs.getString("AiFixModel"));
+                    long aiFixAt = rs.getLong("AiFixAt");
+                    row.put("ai_fix_at", rs.wasNull() ? null : aiFixAt);
                     out.add(row);
                 }
             }
@@ -704,6 +731,14 @@ public class SqliteStore implements AutoCloseable {
             log.error("getVulnerabilities failed", e);
         }
         return out;
+    }
+
+    /** Single row by id (same shape as {@link #getVulnerabilities}), or null if not found. */
+    public Map<String, Object> getVulnerability(String executableName, long id) {
+        for (Map<String, Object> row : getVulnerabilities(executableName)) {
+            if (row.get("id") instanceof Long rid && rid == id) return row;
+        }
+        return null;
     }
 
     /** Store the OFFENSIVE-mode LLM exploitability verdict (JSON) for a finding. */
@@ -750,6 +785,117 @@ public class SqliteStore implements AutoCloseable {
             return rows > 0;
         } catch (SQLException e) {
             log.error("updateVulnerabilityTriage failed", e);
+            return false;
+        }
+    }
+
+    /**
+     * Applies an LLM "AI Fix" to one vulnerability: each non-null text field is stored as an
+     * {@code Override*} column, never touching the original {@code Description}/{@code Evidence}/
+     * {@code PocSteps}/{@code Remediation} — a fix is always reversible via
+     * {@link #revertVulnerabilityAiFix}. Risk (severity/CVSS) reuses the triage
+     * {@code OverrideSeverity}/{@code OverrideCvssScore} columns so it participates in the same
+     * effective-value logic as manual triage; {@code AiFixSeverityWasAi} is set only when THIS
+     * call wrote them, so a later revert never clobbers a human's manual override.
+     *
+     * @param executableName scan executable, scopes the WHERE clause like the rest of this store
+     * @param id              vulnerability row id
+     * @param overrideDescription nullable/blank-to-skip
+     * @param overrideEvidence    nullable/blank-to-skip
+     * @param overridePocSteps    nullable/blank-to-skip
+     * @param overrideRemediation nullable/blank-to-skip
+     * @param overrideSeverity    nullable; when non-blank also marks AiFixSeverityWasAi='yes'
+     * @param overrideCvssScore   nullable
+     * @param provider            LLM provider id used for this fix (audit trail)
+     * @param model               LLM model id used for this fix (audit trail)
+     * @return true if a row was updated
+     */
+    public boolean updateVulnerabilityAiFix(String executableName, long id,
+                                             String overrideDescription,
+                                             String overrideEvidence,
+                                             String overridePocSteps,
+                                             String overrideRemediation,
+                                             String overrideSeverity,
+                                             Double overrideCvssScore,
+                                             String provider,
+                                             String model) {
+        List<String> sets = new ArrayList<>();
+        List<Object> args = new ArrayList<>();
+        if (overrideDescription != null && !overrideDescription.isBlank()) {
+            sets.add("OverrideDescription=?"); args.add(overrideDescription);
+        }
+        if (overrideEvidence != null && !overrideEvidence.isBlank()) {
+            sets.add("OverrideEvidence=?"); args.add(overrideEvidence);
+        }
+        if (overridePocSteps != null && !overridePocSteps.isBlank()) {
+            sets.add("OverridePocSteps=?"); args.add(overridePocSteps);
+        }
+        if (overrideRemediation != null && !overrideRemediation.isBlank()) {
+            sets.add("OverrideRemediation=?"); args.add(overrideRemediation);
+        }
+        if (overrideSeverity != null && !overrideSeverity.isBlank()) {
+            sets.add("OverrideSeverity=?"); args.add(overrideSeverity);
+            sets.add("AiFixSeverityWasAi=?"); args.add("yes");
+        }
+        if (overrideCvssScore != null) {
+            sets.add("OverrideCvssScore=?"); args.add(overrideCvssScore);
+        }
+        sets.add("AiFixStatus=?");   args.add("applied");
+        sets.add("AiFixProvider=?"); args.add(provider);
+        sets.add("AiFixModel=?");    args.add(model);
+        sets.add("AiFixAt=?");       args.add(System.currentTimeMillis());
+        sets.add("UpdatedAt=?");     args.add(System.currentTimeMillis());
+
+        String sql = "UPDATE Vulnerabilities SET " + String.join(",", sets)
+                + " WHERE id=? AND ExecutableName=?";
+        try (PreparedStatement p = conn.prepareStatement(sql)) {
+            int i = 1;
+            for (Object a : args) {
+                if (a instanceof String s) p.setString(i, s);
+                else if (a instanceof Double d) p.setDouble(i, d);
+                else if (a instanceof Long l) p.setLong(i, l);
+                i++;
+            }
+            p.setLong(i++, id);
+            p.setString(i, executableName);
+            int rows = p.executeUpdate();
+            conn.commit();
+            return rows > 0;
+        } catch (SQLException e) {
+            log.error("updateVulnerabilityAiFix failed", e);
+            return false;
+        }
+    }
+
+    /**
+     * Reverts an AI Fix: clears the four field overrides and, only when THIS AI fix was the one
+     * that wrote severity/CVSS ({@code AiFixSeverityWasAi='yes'}), also clears those two triage
+     * columns — a human's own manual triage override (via {@link #updateVulnerabilityTriage}) is
+     * left untouched. Status/note set by manual triage are never affected either.
+     */
+    public boolean revertVulnerabilityAiFix(String executableName, long id) {
+        String sql = """
+                UPDATE Vulnerabilities SET
+                    OverrideDescription = NULL,
+                    OverrideEvidence = NULL,
+                    OverridePocSteps = NULL,
+                    OverrideRemediation = NULL,
+                    OverrideSeverity = CASE WHEN AiFixSeverityWasAi='yes' THEN NULL ELSE OverrideSeverity END,
+                    OverrideCvssScore = CASE WHEN AiFixSeverityWasAi='yes' THEN NULL ELSE OverrideCvssScore END,
+                    AiFixSeverityWasAi = NULL,
+                    AiFixStatus = 'reverted',
+                    UpdatedAt = ?
+                WHERE id=? AND ExecutableName=?
+                """;
+        try (PreparedStatement p = conn.prepareStatement(sql)) {
+            p.setLong(1, System.currentTimeMillis());
+            p.setLong(2, id);
+            p.setString(3, executableName);
+            int rows = p.executeUpdate();
+            conn.commit();
+            return rows > 0;
+        } catch (SQLException e) {
+            log.error("revertVulnerabilityAiFix failed", e);
             return false;
         }
     }

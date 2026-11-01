@@ -6,21 +6,27 @@ import java.util.Set;
 /** Known DeepSeek chat model identifiers (OpenAI-compatible API). */
 public final class DeepSeekModels {
 
-    /** Fast default — DeepSeek-V4-Flash, 1M context. */
-    public static final String V4_FLASH = "deepseek-v4-flash";
+    /** Fast default — DeepSeek-V4.1-Flash, 1M context. Official API id as of the current
+     * DeepSeek /models catalog (superseded "deepseek-v4-flash", kept below for back-compat). */
+    public static final String FLASH = "deepseek-flash";
+
+    /** Pre-V4.1 id for the Flash model; still accepted by the API, kept for callers/configs
+     * pinned to the old identifier. Not in {@link #ALL} to avoid duplicating the Flash entry
+     * in UI catalogs — {@link #resolve} still passes it through unchanged if supplied. */
+    public static final String V4_FLASH_LEGACY = "deepseek-v4-flash";
 
     /** Higher quality — DeepSeek-V4-Pro. */
     public static final String V4_PRO = "deepseek-v4-pro";
 
-    /** Legacy alias for V4-Flash non-thinking mode (deprecated 2026-07-24). */
+    /** Legacy alias for Flash non-thinking mode (deprecated 2026-07-24). */
     public static final String CHAT = "deepseek-chat";
 
-    /** Legacy alias for V4-Flash thinking mode (deprecated 2026-07-24). */
+    /** Legacy alias for Flash thinking mode (deprecated 2026-07-24). */
     public static final String REASONER = "deepseek-reasoner";
 
-    public static final String DEFAULT = V4_FLASH;
+    public static final String DEFAULT = FLASH;
 
-    public static final List<String> ALL = List.of(V4_FLASH, V4_PRO, CHAT, REASONER);
+    public static final List<String> ALL = List.of(FLASH, V4_PRO, CHAT, REASONER);
 
     private static final Set<String> KNOWN = Set.copyOf(ALL);
 
