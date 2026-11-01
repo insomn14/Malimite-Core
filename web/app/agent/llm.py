@@ -22,8 +22,8 @@ from . import anthropic_oauth
 _log = logging.getLogger("malimite")
 
 PROVIDERS = ("claude", "claude-oauth", "openai", "deepseek", "ollama")
-_DEFAULT_MODEL = {"claude": "claude-sonnet-4-6", "claude-oauth": "claude-sonnet-4-6",
-                  "openai": "gpt-4o-mini", "deepseek": "deepseek-v4-flash", "ollama": "llama3.1"}
+_DEFAULT_MODEL = {"claude": "claude-sonnet-5", "claude-oauth": "claude-sonnet-5",
+                  "openai": "gpt-4o-mini", "deepseek": "deepseek-flash", "ollama": "llama3.1"}
 _KEY_ENV = {"claude": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
 TRUNCATED = frozenset({"length", "max_tokens"})  # stop reasons meaning "cut off by the output limit" (openai-compat / anthropic)
 

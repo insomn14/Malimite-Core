@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import db, offensive_phases, scanner
+from . import db, finding_fix, offensive_phases, scanner
 from .agent import anthropic_oauth, loop as agent_loop, ondemand, store as chat_store
 from .agent.llm import LlmError, resolve_llm
 from .agent.tools import Ctx, valid_class_name
@@ -512,6 +512,121 @@ async def patch_vulnerability(
     # the new triage state. Failures are non-fatal — the live UI still works.
     regenerated = await scanner.regenerate_report(scan_id)
     return {"updated": True, "report_regenerated": regenerated}
+
+
+# ── AI Fix (per-finding Description/Evidence/Risk/PoC/Remediation rewrite) ────────────────────
+
+class AiFixRequest(BaseModel):
+    """All fields optional: provider/model override the scan default (same pattern as the
+    AI Assistant chat tab); fields restricts which parts of the finding are rewritten."""
+    provider: Optional[str] = None   # override; must be in agent.llm.PROVIDERS
+    model: Optional[str] = None
+    fields: Optional[list[str]] = Field(
+        default=None,
+        description="Subset of description|evidence|risk|poc_steps|remediation; default = all")
+
+
+def _source_snippet_for(row: dict) -> Optional[str]:
+    """Best-effort decompiled-code context for the LLM prompt. Only FUNCTION findings carry a
+    usable evidence_location ('Class.function' or bare 'function' — see VulnerabilityScanner.java
+    / LlmEnricher.java); other affected types (STRING/RESOURCE/BINARY/PLIST) have no single
+    function to attach, so this returns None and the fix proceeds from the finding text alone."""
+    if (row.get("affected_type") or "").upper() != "FUNCTION":
+        return None
+    location = row.get("evidence_location") or ""
+    if not location:
+        return None
+    if "." in location:
+        class_name, _, function_name = location.rpartition(".")
+    else:
+        class_name, function_name = location, None
+    if not class_name:
+        return None
+    return class_name, function_name  # resolved to code by the caller (needs db_path/exe)
+
+
+@app.post("/api/v1/scans/{scan_id}/vulnerabilities/{vuln_id}/ai-fix")
+async def ai_fix_vulnerability(
+    request: Request,
+    scan_id: str,
+    vuln_id: int,
+    req: AiFixRequest = Body(default_factory=AiFixRequest),
+):
+    """Calls the configured LLM to rewrite Description/Evidence/Risk/PoC/Remediation for one
+    finding. Results are stored as reversible overrides (see db.update_vulnerability_ai_fix) —
+    the original scanned fields are never modified. Shares the chat rate limit with the AI
+    Assistant: both spend the same server-side LLM quota."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    _chat_rate_limit()
+
+    row = await db.get_vulnerability_row(db_path, exe, vuln_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Vulnerability not found")
+
+    if req.fields:
+        bad = [f for f in req.fields if f not in finding_fix.FIXABLE_FIELDS]
+        if bad:
+            raise HTTPException(status_code=422,
+                detail=f"fields must be a subset of {list(finding_fix.FIXABLE_FIELDS)}; got {bad}")
+
+    detail = scanner.get_scan_detail(scan_id)
+    try:
+        cfg = resolve_llm(detail.llm_provider, detail.llm_model, req.provider, req.model)
+    except LlmError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    source_snippet = None
+    loc = _source_snippet_for(row)
+    if loc:
+        class_name, function_name = loc
+        try:
+            rows = await db.get_source(db_path, exe, class_name, function_name)
+            if rows:
+                source_snippet = rows[0]["code"]
+        except Exception:
+            source_snippet = None  # best-effort only; the fix still proceeds from finding text
+
+    try:
+        fix = await finding_fix.fix_finding(cfg, row, source_snippet, req.fields)
+    except LlmError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    risk = fix.get("risk") or {}
+    ok = await db.update_vulnerability_ai_fix(
+        db_path, vuln_id,
+        description=fix.get("description"),
+        evidence=fix.get("evidence"),
+        poc_steps=fix.get("poc_steps"),
+        remediation=fix.get("remediation"),
+        severity=risk.get("severity"),
+        cvss_score=risk.get("cvss"),
+        provider=cfg.provider,
+        model=cfg.model,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Vulnerability not found")
+
+    regenerated = await scanner.regenerate_report(scan_id)
+    updated = await db.get_vulnerability_row(db_path, exe, vuln_id)
+    return {"updated": True, "report_regenerated": regenerated, "vulnerability": updated}
+
+
+@app.post("/api/v1/scans/{scan_id}/vulnerabilities/{vuln_id}/ai-fix/revert")
+async def revert_ai_fix_vulnerability(request: Request, scan_id: str, vuln_id: int):
+    """Clears a previously applied AI Fix, restoring the original scanned fields. A human's own
+    manual triage override (status/severity/CVSS/note) is left untouched — see
+    db.revert_vulnerability_ai_fix for the exact precedence rule."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+
+    ok = await db.revert_vulnerability_ai_fix(db_path, vuln_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Vulnerability not found")
+
+    regenerated = await scanner.regenerate_report(scan_id)
+    updated = await db.get_vulnerability_row(db_path, exe, vuln_id)
+    return {"updated": True, "report_regenerated": regenerated, "vulnerability": updated}
 
 
 def _learned_rules_path(platform: str) -> str:

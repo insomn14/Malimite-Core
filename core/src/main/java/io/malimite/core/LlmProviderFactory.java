@@ -44,13 +44,13 @@ public final class LlmProviderFactory {
             case "claude" -> {
                 String key = cfg.get("ANTHROPIC_API_KEY");
                 if (key == null || key.isBlank()) throw new IllegalStateException("ANTHROPIC_API_KEY missing");
-                log.info("LLM provider: Claude model={}", model.isBlank() ? "claude-sonnet-4-6" : model);
+                log.info("LLM provider: Claude model={}", model.isBlank() ? "claude-sonnet-5" : model);
                 yield new ClaudeProvider(key, model, maxTokens);
             }
             // Uses a Claude Pro/Max OAuth session (see AnthropicOAuthLogin) instead of
             // a pay-per-token API key. Requires 'malimite claude-login' to have run once.
             case "claude-oauth" -> {
-                log.info("LLM provider: Claude (OAuth) model={}", model.isBlank() ? "claude-sonnet-4-6" : model);
+                log.info("LLM provider: Claude (OAuth) model={}", model.isBlank() ? "claude-sonnet-5" : model);
                 yield new ClaudeOAuthProvider(model, maxTokens);
             }
             case "deepseek" -> {

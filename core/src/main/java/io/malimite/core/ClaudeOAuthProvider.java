@@ -83,7 +83,7 @@ public class ClaudeOAuthProvider implements LlmProvider {
     private volatile AnthropicOAuthCredentials cached;
 
     public ClaudeOAuthProvider(String model, int maxTokens) {
-        this.model     = (model == null || model.isBlank()) ? "claude-sonnet-4-6" : model;
+        this.model     = (model == null || model.isBlank()) ? "claude-sonnet-5" : model;
         this.maxTokens = maxTokens;
         this.http      = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
 

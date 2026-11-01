@@ -35,7 +35,8 @@ class HtmlReporterTest {
                         "1. extract strings\n2. find key",
                         "Use Keychain",
                         "https://example.com/mstg",
-                        "open", null, null, null)),
+                        "open", null, null, null,
+                        null, null, null, null, "none", null, null)),
                 "/tmp/test.sqlite",
                 "IOS"
         );
@@ -124,7 +125,8 @@ class HtmlReporterTest {
                 "MEDIUM", 5.3, "CWE-693", "...", "BINARY", "TestApp",
                 "...", "Whole binary", "1. step", "Fix this",
                 "https://example.com",
-                "false_positive", null, null, "Reviewer says: not applicable to enterprise app");
+                "false_positive", null, null, "Reviewer says: not applicable to enterprise app",
+                null, null, null, null, "none", null, null);
 
         var report = new AnalysisReport(
                 "fp-test-id", "TestApp", "com.example.test", true, false,
@@ -157,7 +159,8 @@ class HtmlReporterTest {
                 "CRITICAL", 9.1, "CWE-798", "Test", "STRING", "0x1234",
                 "key=abcdef", "0x1234", "steps", "remediation",
                 "https://example.com",
-                "open", "LOW", 3.0, "Server-side key, not exploitable client-side");
+                "open", "LOW", 3.0, "Server-side key, not exploitable client-side",
+                null, null, null, null, "none", null, null);
 
         var report = new AnalysisReport(
                 "ov-test", "TestApp", "com.example.test", true, false,
@@ -188,7 +191,8 @@ class HtmlReporterTest {
                 "CRITICAL", 9.1, "CWE-295", "ATS disabled", "RESOURCE", "Info.plist",
                 "NSAllowsArbitraryLoads=true", "Info.plist", "steps", "remediation",
                 "https://example.com",
-                "accepted_risk", "INFO", 0.0, "Accepted for lab app");
+                "accepted_risk", "INFO", 0.0, "Accepted for lab app",
+                null, null, null, null, "none", null, null);
 
         var report = new AnalysisReport(
                 "info-test", "FreshCart", "com.example.freshcart", true, false,
@@ -205,6 +209,47 @@ class HtmlReporterTest {
                 "INFO tile should reflect effective severity");
         assertTrue(html.contains("badge-info'>INFO</span>"),
                 "vuln card should show INFO badge");
+    }
+
+    @Test void aiFixOverridesRenderInsteadOfOriginalTextFields(@TempDir Path tmp) throws Exception {
+        var fixed = new AnalysisReport.VulnerabilityRecord(
+                5L, "MSTG-STORAGE-1", "Hardcoded API key", "STORAGE",
+                "CRITICAL", 9.1, "CWE-798",
+                "Original terse description", "STRING", "0x1234",
+                "original evidence snippet", "0x1234",
+                "original poc", "original remediation",
+                "https://example.com/mstg",
+                "open", null, null, null,
+                "AI-rewritten description with full context",
+                "AI-rewritten evidence excerpt",
+                "1. AI step one\n2. AI step two",
+                "AI-rewritten remediation guidance",
+                "applied", "deepseek", "deepseek-v4-flash");
+
+        var report = new AnalysisReport(
+                "aifix-test", "TestApp", "com.example.test", true, false,
+                List.of("ARM64"), 1000L, 1, 1, 0,
+                Map.of(), List.of(), List.of(), "TEAM", "Profile", "2026-12-31",
+                List.of(), List.of(fixed), "/tmp/test.sqlite", "IOS");
+
+        String html = Files.readString(HtmlReporter.generate(report, tmp));
+
+        assertTrue(html.contains("AI-rewritten description with full context"),
+                "AI Fix description override should be rendered");
+        assertTrue(html.contains("AI-rewritten evidence excerpt"),
+                "AI Fix evidence override should be rendered");
+        assertTrue(html.contains("AI step one"),
+                "AI Fix PoC override should be rendered");
+        assertTrue(html.contains("AI-rewritten remediation guidance"),
+                "AI Fix remediation override should be rendered");
+        assertFalse(html.contains("Original terse description"),
+                "original description must not appear once an AI Fix override is applied");
+        assertFalse(html.contains("original evidence snippet"),
+                "original evidence must not appear once an AI Fix override is applied");
+        assertTrue(html.contains("rewritten by AI Fix"),
+                "AI Fix provenance note should be shown to the reviewer");
+        assertTrue(html.contains("deepseek"),
+                "AI Fix provider should be noted");
     }
 
     @Test void androidReportShowsPlatformNotObjectiveC(@TempDir Path tmp) throws Exception {
@@ -278,7 +323,8 @@ class HtmlReporterTest {
         var fp = new AnalysisReport.VulnerabilityRecord(
                 1L, "RULE-1", "Title", "CODE", "HIGH", 8.0, "CWE-1", "d",
                 "FUNCTION", "foo", "ev", "pkg.foo", "poc", "fix", "https://x",
-                "false_positive", null, null, null);
+                "false_positive", null, null, null,
+                null, null, null, null, "none", null, null);
         var otherAsset = finding(3L, "RULE-1", "Title", "CODE", "LOW", 2.0,
                 "FUNCTION", "bar", "pkg.bar");
 
@@ -298,7 +344,8 @@ class HtmlReporterTest {
                 id, ruleId, title, category, severity, cvss, "CWE-89",
                 "desc", type, name, "evidence", location,
                 "1. step", "remediation", "https://example.com",
-                "open", null, null, null);
+                "open", null, null, null,
+                null, null, null, null, "none", null, null);
     }
 
     private static int countOccurrences(String haystack, String needle) {

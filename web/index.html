@@ -132,6 +132,16 @@ input[type=file]{display:none}
 .badge-fixed{background:#dcfce7;color:#166534}
 .badge-open{background:#dbeafe;color:#1e40af}
 
+/* AI Fix */
+.badge-aifix{background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe}
+.vuln-card.is-ai-fixed{box-shadow:inset 3px 0 0 #8b5cf6}
+.vuln-card.is-overridden.is-ai-fixed{box-shadow:inset 3px 0 0 var(--accent),inset 6px 0 0 #8b5cf6}
+.vuln-status-strip-ai{background:#f5f3ff;color:#6d28d9}
+.aifix-panel{background:var(--bg);border-radius:6px;padding:.8rem;margin-top:.85rem}
+.aifix-status{font-size:.78rem;color:var(--muted);margin-bottom:.7rem;line-height:1.5}
+.aifix-fields{display:flex;flex-wrap:wrap;gap:.5rem .9rem}
+.aifix-field{display:flex;align-items:center;gap:.3rem;font-size:.78rem;font-weight:500;color:var(--text)}
+
 /* table */
 .tbl-wrap{width:100%;max-width:100%;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse;font-size:.8rem}
@@ -560,23 +570,41 @@ const LLM_MODEL_CATALOG = {
     {value:'o3-mini', label:'o3-mini (reasoning)'},
   ],
   claude: [
-    {value:'claude-sonnet-5-5', label:'Claude Sonnet 5.5 (balanced, default)'},
-    {value:'claude-opus-5-5', label:'Claude Opus 5.5 (most capable)'},
-    {value:'claude-haiku-5-5', label:'Claude Haiku 5.5 (fast, cheap)'},
+    {value:'claude-sonnet-5', label:'Claude Sonnet 5 (balanced, default)'},
+    {value:'claude-opus-5', label:'Claude Opus 5 (most capable)'},
+    {value:'claude-fable-5', label:'Claude Fable 5'},
+    {value:'claude-haiku-4-5', label:'Claude Haiku 4.5 (fast, cheap)'},
+    {value:'claude-sonnet-5-5', label:'Claude Sonnet 5.5'},
+    {value:'claude-opus-5-5', label:'Claude Opus 5.5'},
+    {value:'claude-fable-5-1', label:'Claude Fable 5.1'},
+    {value:'claude-haiku-5-5', label:'Claude Haiku 5.5'},
+    {value:'claude-opus-4-8', label:'Claude Opus 4.8'},
+    {value:'claude-opus-4-7', label:'Claude Opus 4.7'},
+    {value:'claude-opus-4-6', label:'Claude Opus 4.6'},
+    {value:'claude-sonnet-4-6', label:'Claude Sonnet 4.6'},
   ],
   // Same Messages API, same model lineup as the API-key 'claude' provider above —
   // only the auth mechanism (OAuth bearer token vs x-api-key) differs. Mirrors
-  // ClaudeOAuthProvider.java's own default ("claude-sonnet-4-6" when unset) as
+  // ClaudeOAuthProvider.java's own default ("claude-sonnet-5" when unset) as
   // the first/default entry rather than silently diverging from what the
   // backend actually falls back to.
   'claude-oauth': [
-    {value:'claude-sonnet-4-6', label:'Claude Sonnet 4.6 (balanced, default)'},
-    {value:'claude-opus-5-5', label:'Claude Opus 5.5 (most capable)'},
-    {value:'claude-haiku-5-5', label:'Claude Haiku 5.5 (fast, cheap)'},
+    {value:'claude-sonnet-5', label:'Claude Sonnet 5 (balanced, default)'},
+    {value:'claude-opus-5', label:'Claude Opus 5 (most capable)'},
+    {value:'claude-fable-5', label:'Claude Fable 5'},
+    {value:'claude-haiku-4-5', label:'Claude Haiku 4.5 (fast, cheap)'},
+    {value:'claude-sonnet-5-5', label:'Claude Sonnet 5.5'},
+    {value:'claude-opus-5-5', label:'Claude Opus 5.5'},
+    {value:'claude-fable-5-1', label:'Claude Fable 5.1'},
+    {value:'claude-haiku-5-5', label:'Claude Haiku 5.5'},
+    {value:'claude-opus-4-8', label:'Claude Opus 4.8'},
+    {value:'claude-opus-4-7', label:'Claude Opus 4.7'},
+    {value:'claude-opus-4-6', label:'Claude Opus 4.6'},
+    {value:'claude-sonnet-4-6', label:'Claude Sonnet 4.6'},
   ],
   deepseek: [
-    {value:'deepseek-v4-flash', label:'deepseek-v4-flash (default, fast)'},
-    {value:'deepseek-v4-pro', label:'deepseek-v4-pro (higher quality)'},
+    {value:'deepseek-flash', label:'deepseek-flash — DeepSeek-V4.1-Flash (default, fast)'},
+    {value:'deepseek-v4-pro', label:'deepseek-v4-pro — DeepSeek-V4-Pro (higher quality)'},
     {value:'deepseek-chat', label:'deepseek-chat (legacy alias)'},
     {value:'deepseek-reasoner', label:'deepseek-reasoner (reasoning)'},
   ],
@@ -3461,11 +3489,18 @@ function renderVulnCard(group, i) {
   const sevClass  = effSev.toLowerCase();
   const status    = (v.status || 'open').toLowerCase();
   const isFp      = status === 'false_positive';
+  const isAiFixed = v.ai_fix_status === 'applied';
+  // AI Fix overrides win over the original scanned text (see db.get_vulnerabilities effective_*).
+  const descText  = v.effective_description ?? v.description;
+  const evText    = v.effective_evidence ?? v.evidence;
+  const pocText   = v.effective_poc_steps ?? v.poc_steps;
+  const remText   = v.effective_remediation ?? v.remediation;
   const assetSearch = assets.map(a => [a.affected_name, a.affected_type, a.evidence_location].filter(Boolean).join(' ')).join(' ');
-  const search    = [v.rule_id, v.title, v.category, effSev, assetSearch, v.evidence, status]
+  const search    = [v.rule_id, v.title, v.category, effSev, assetSearch, evText, status]
     .filter(Boolean).join(' ').toLowerCase();
 
   const statusBadge = status !== 'open' ? `<span class="badge badge-${statusKey(status)}">${statusLabel(status)}</span>` : '';
+  const aiFixBadge = isAiFixed ? `<span class="badge badge-aifix" title="Rewritten by AI Fix">✨ AI-enhanced</span>` : '';
   const locBadge = locCount > 1
     ? `<span class="vuln-loc-count" title="${occCount} occurrence${occCount===1?'':'s'}">${locCount} locations</span>`
     : (occCount > 1 ? `<span class="vuln-loc-count">${occCount} hits</span>` : '');
@@ -3474,9 +3509,14 @@ function renderVulnCard(group, i) {
       ${overridden ? `<span><span class="label">Override:</span> ${esc(v.override_severity)} (originally ${esc(origSev)})</span>` : ''}
       ${v.override_note ? `<span>· ${esc(v.override_note)}</span>` : ''}
     </div>` : '';
+  const aiFixStrip = isAiFixed ? `
+    <div class="vuln-status-strip vuln-status-strip-ai">
+      <span>✨ <span class="label">AI Fix applied</span>${v.ai_fix_provider ? ` by ${esc(v.ai_fix_provider)}${v.ai_fix_model ? '/' + esc(v.ai_fix_model) : ''}` : ''}</span>
+      <span>· Description/Evidence/PoC/Remediation and/or Risk above may be AI-rewritten.</span>
+    </div>` : '';
 
   return `
-    <div class="vuln-card ${isFp?'is-fp':''} ${overridden?'is-overridden':''}"
+    <div class="vuln-card ${isFp?'is-fp':''} ${overridden?'is-overridden':''} ${isAiFixed?'is-ai-fixed':''}"
          id="vuln-${v.id}" data-severity="${escAttr(effSev)}" data-status="${escAttr(status)}" data-search="${escAttr(search)}"
          data-rule-id="${escAttr(v.rule_id||'')}" data-rep-id="${v.id}">
       <div class="vuln-head" onclick="toggleVuln(${i})">
@@ -3486,6 +3526,7 @@ function renderVulnCard(group, i) {
           <span class="vuln-id mono">${esc(v.rule_id||'')}</span>
           <span class="vuln-title">${esc(v.title||'')}</span>
           ${statusBadge}
+          ${aiFixBadge}
           ${locBadge}
         </div>
         <div class="vuln-head-r">
@@ -3495,9 +3536,10 @@ function renderVulnCard(group, i) {
       </div>
       <div class="vuln-body" id="vbody-${i}" hidden>
         ${overrideStrip}
+        ${aiFixStrip}
         <div class="vuln-section">
           <div class="vuln-section-title">Description</div>
-          <p>${esc(fieldOr(v.description, 'No description provided for this finding.'))}</p>
+          <p>${esc(fieldOr(descText, 'No description provided for this finding.'))}</p>
         </div>
         <div class="grid-2">
           <div class="vuln-section">
@@ -3518,15 +3560,15 @@ function renderVulnCard(group, i) {
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Evidence</div>
-          <pre class="vuln-code">${esc(fieldOr(v.evidence, '(no evidence captured)'))}</pre>
+          <pre class="vuln-code">${esc(fieldOr(evText, '(no evidence captured)'))}</pre>
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Proof of Concept (steps to reproduce)</div>
-          <pre class="vuln-poc">${esc(fieldOr(v.poc_steps, 'No PoC provided.'))}</pre>
+          <pre class="vuln-poc">${esc(fieldOr(pocText, 'No PoC provided.'))}</pre>
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Remediation</div>
-          <p>${esc(fieldOr(v.remediation, 'No remediation guidance provided.'))}</p>
+          <p>${esc(fieldOr(remText, 'No remediation guidance provided.'))}</p>
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Reference</div>
@@ -3535,6 +3577,13 @@ function renderVulnCard(group, i) {
             : (String(v.reference_url).startsWith('http')
                 ? `<a href="${escAttr(v.reference_url)}" target="_blank" rel="noopener">${esc(v.reference_url)}</a>`
                 : `<span>${esc(v.reference_url)}</span>`)}</p>
+        </div>
+        <div class="vuln-section">
+          <div class="vuln-section-title" style="display:flex;justify-content:space-between;align-items:center">
+            <span>✨ AI Fix <em style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(applies to finding #${v.id})</em></span>
+            <button class="btn-link" onclick="toggleAiFix(${v.id})">${isAiFixed ? 'Manage' : 'Run'}</button>
+          </div>
+          <div id="aifix-${v.id}" hidden>${renderAiFixPanel(v)}</div>
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -3559,6 +3608,143 @@ function statusLabel(s) {
        : s === 'fixed'          ? 'Fixed'
        : 'Open';
 }
+
+/* ── AI Fix (per-finding Description/Evidence/Risk/PoC/Remediation rewrite) ── */
+
+const AI_FIX_FIELDS = [
+  {key: 'description', label: 'Description'},
+  {key: 'evidence',    label: 'Evidence'},
+  {key: 'risk',        label: 'Risk (severity/CVSS)'},
+  {key: 'poc_steps',   label: 'Proof of Concept'},
+  {key: 'remediation', label: 'Remediation'},
+];
+
+function renderAiFixPanel(v) {
+  const isAiFixed = v.ai_fix_status === 'applied';
+  const statusLine = isAiFixed
+    ? `<div class="aifix-status">✨ Applied${v.ai_fix_provider ? ` by <strong>${esc(v.ai_fix_provider)}</strong>${v.ai_fix_model ? '/' + esc(v.ai_fix_model) : ''}` : ''}${v.ai_fix_at ? ` on ${new Date(v.ai_fix_at).toLocaleString()}` : ''}.</div>`
+    : `<div class="aifix-status">Not yet AI-fixed. The LLM will rewrite the fields below, grounded in this finding (and decompiled source when available), and store them as reversible overrides — the original scanned text is never changed.</div>`;
+  const fieldChecks = AI_FIX_FIELDS.map(f =>
+    `<label class="aifix-field"><input type="checkbox" name="fields" value="${f.key}" checked/> ${f.label}</label>`
+  ).join('');
+  return `
+    <div class="aifix-panel">
+      ${statusLine}
+      <form class="triage-form" onsubmit="return false">
+        <label>LLM Provider
+          <select id="aifix-provider-${v.id}" onchange="onAiFixProviderChange(${v.id})">
+            <option value="">Scan default</option>
+            <option value="claude">claude</option><option value="claude-oauth">claude (OAuth)</option>
+            <option value="openai">openai</option><option value="deepseek">deepseek</option>
+            <option value="ollama">ollama</option>
+          </select>
+        </label>
+        <label>Model override (optional)
+          <select id="aifix-model-select-${v.id}" hidden onchange="onAiFixModelSelectChange(${v.id})"></select>
+          <input type="text" id="aifix-model-${v.id}" placeholder="leave empty for provider default"/>
+        </label>
+        <div class="full">
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:.3rem">Fields to rewrite</div>
+          <div class="aifix-fields" id="aifix-fields-${v.id}">${fieldChecks}</div>
+        </div>
+        <div class="triage-actions full">
+          <button class="btn btn-primary btn-sm" type="button" onclick="runAiFix(${v.id})">✨ Run AI Fix</button>
+          ${isAiFixed ? `<button class="btn btn-ghost btn-sm" type="button" onclick="revertAiFix(${v.id})">Revert to original</button>` : ''}
+          <button class="btn btn-ghost btn-sm" type="button" onclick="toggleAiFix(${v.id})">Close</button>
+          <span class="triage-msg" id="aifix-msg-${v.id}"></span>
+        </div>
+      </form>
+    </div>`;
+}
+
+window.toggleAiFix = function(id) {
+  const el = document.getElementById('aifix-'+id);
+  if (el) el.hidden = !el.hidden;
+};
+
+/* Same dropdown-with-Custom-escape-hatch pattern as the upload form / AI Assistant chat bar
+   (see onProviderChange/onChatProviderChange), parametrized by finding id since several AI Fix
+   panels can be open on the same Vulnerabilities page at once. */
+window.onAiFixProviderChange = function(id) {
+  const provider = document.getElementById(`aifix-provider-${id}`)?.value || '';
+  const modelSelect = document.getElementById(`aifix-model-select-${id}`);
+  const modelEl = document.getElementById(`aifix-model-${id}`);
+  if (!modelSelect || !modelEl) return;
+  const catalog = LLM_MODEL_CATALOG[provider === 'claude-oauth' ? 'claude' : provider];
+  if (catalog) {
+    modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('')
+      + `<option value="${LLM_MODEL_CUSTOM}">Custom (type model name)…</option>`;
+    modelSelect.value = catalog[0].value;
+    modelSelect.hidden = false;
+    modelEl.hidden = true;
+    modelEl.value = '';
+  } else {
+    // ollama or "Scan default": no fixed catalog, plain text as before.
+    modelSelect.hidden = true;
+    modelEl.hidden = false;
+  }
+};
+
+window.onAiFixModelSelectChange = function(id) {
+  const modelSelect = document.getElementById(`aifix-model-select-${id}`);
+  const modelEl = document.getElementById(`aifix-model-${id}`);
+  if (!modelSelect || !modelEl) return;
+  const custom = modelSelect.value === LLM_MODEL_CUSTOM;
+  modelEl.hidden = !custom;
+  if (custom) { modelEl.value = ''; modelEl.focus(); }
+};
+
+window.runAiFix = async function(id) {
+  const msg = document.getElementById('aifix-msg-'+id);
+  const provider = document.getElementById(`aifix-provider-${id}`).value;
+  const modelSelect = document.getElementById(`aifix-model-select-${id}`);
+  const modelInput = document.getElementById(`aifix-model-${id}`);
+  // Dropdown is shown for providers with a known catalog, unless "Custom…" was chosen.
+  const model = (modelSelect && !modelSelect.hidden && modelSelect.value !== LLM_MODEL_CUSTOM)
+    ? modelSelect.value
+    : modelInput.value.trim();
+  const checked = Array.from(document.querySelectorAll(`#aifix-fields-${id} input:checked`)).map(c => c.value);
+  if (!checked.length) {
+    msg.textContent = 'Select at least one field to rewrite.';
+    msg.className = 'triage-msg err';
+    return;
+  }
+  const body = { fields: checked };
+  if (provider) body.provider = provider;
+  if (model) body.model = model;
+  msg.textContent = 'Generating… this can take a moment.'; msg.className = 'triage-msg';
+  try {
+    const scanId = location.hash.split('/')[2];
+    const r = await fetch(`/api/v1/scans/${scanId}/vulnerabilities/${id}/ai-fix`, {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) { const txt = await r.text(); throw new Error(txt); }
+    msg.textContent = 'Applied · refreshing…';
+    setTimeout(() => router(), 400);
+  } catch(e) {
+    msg.textContent = 'Error: ' + (e.message || e).slice(0, 300);
+    msg.className = 'triage-msg err';
+  }
+};
+
+window.revertAiFix = async function(id) {
+  const msg = document.getElementById('aifix-msg-'+id);
+  if (msg) { msg.textContent = 'Reverting…'; msg.className = 'triage-msg'; }
+  try {
+    const scanId = location.hash.split('/')[2];
+    const r = await fetch(`/api/v1/scans/${scanId}/vulnerabilities/${id}/ai-fix/revert`, {
+      method: 'POST',
+      headers: headers(),
+    });
+    if (!r.ok) { const txt = await r.text(); throw new Error(txt); }
+    if (msg) msg.textContent = 'Reverted · refreshing…';
+    setTimeout(() => router(), 400);
+  } catch(e) {
+    if (msg) { msg.textContent = 'Error: ' + (e.message || e).slice(0, 300); msg.className = 'triage-msg err'; }
+  }
+};
 
 function renderTriageForm(v) {
   const cur = (v.status || 'open');

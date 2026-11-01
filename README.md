@@ -34,6 +34,7 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 - [CI/CD integration](#cicd-integration)
 - [Detection engines](#detection-engines)
 - [Triage workflow](#triage-workflow)
+- [AI Fix](#ai-fix)
 - [Configuration](#configuration)
 - [Project structure](#project-structure)
 - [Testing](#testing)
@@ -86,6 +87,7 @@ Malimite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 | **Security Assessment** | Controls inventory (obfuscation, SSL pinning, root/Frida detection, FLAG_SECURE, …) — separate from vulnerability findings |
 | **Self-learning rules** | LLM `detection_regex` validated and persisted per platform (`learned_rules.json` / `learned_rules_android.json`) |
 | **Triage workflow** | Mark false positive / accepted risk / fixed; override severity & CVSS |
+| **AI Fix** | Per-finding LLM rewrite of Description/Evidence/Risk/PoC/Remediation, stored as reversible overrides |
 | **HTML reports** | Vulnerability-centric layout with evidence, PoC, remediation, MASTG/MSTG references; unique issues grouped by `rule_id` |
 | **SARIF 2.1** | Native integration with GitHub Code Scanning and other SARIF consumers |
 | **Multiple ingress paths** | Web UI, REST API, Slack bot, CLI, watch-folder daemon, CI templates |
@@ -263,6 +265,8 @@ Drop an `.ipa`, `.apk` or `.xapk` on the upload page (enable **Security Assessme
 | `GET` | `/api/v1/scans/{id}/vulnerabilities` | List findings |
 | `GET` | `/api/v1/scans/{id}/assessments` | Security Assessment controls inventory |
 | `PATCH` | `/api/v1/scans/{id}/vulnerabilities/{vuln_id}` | Triage (status, severity override) |
+| `POST` | `/api/v1/scans/{id}/vulnerabilities/{vuln_id}/ai-fix` | AI Fix — LLM-rewrite Description/Evidence/Risk/PoC/Remediation |
+| `POST` | `/api/v1/scans/{id}/vulnerabilities/{vuln_id}/ai-fix/revert` | Revert an applied AI Fix |
 | `GET` | `/api/v1/scans/{id}/report` | HTML report |
 | `GET` | `/api/v1/scans/{id}/sarif` | SARIF download |
 | `GET` | `/api/v1/scans/{id}/functions` | Browse decompiled functions |
@@ -404,6 +408,18 @@ Security reviewers can adjust findings without re-scanning:
 | `override_note` | free text | Shown in audit trail |
 
 Reports (`report.html`, `findings.sarif`) regenerate automatically after each triage update.
+
+---
+
+## AI Fix
+
+Every finding in the **Vulnerabilities** tab has an **✨ AI Fix** action: it calls the configured LLM to rewrite **Description**, **Evidence**, **Risk** (severity/CVSS), **Proof of Concept**, and **Remediation** for that specific finding, grounded in the finding itself and (when the finding is a `FUNCTION` affected type) the decompiled source code it was found in.
+
+- **Reversible, never destructive.** Rewritten text is stored as `Override*` columns (`OverrideDescription`/`OverrideEvidence`/`OverridePocSteps`/`OverrideRemediation`) — the original scanned fields are **never modified**. Risk reuses the same `OverrideSeverity`/`OverrideCvssScore` columns as manual triage; a per-finding flag (`AiFixSeverityWasAi`) tracks whether the AI (not a human) last wrote them, so clicking **Revert to original** never clobbers a reviewer's own manual triage override.
+- **Field selection.** Pick which of Description / Evidence / Risk / PoC / Remediation to rewrite — the rest are left untouched. A field the LLM has nothing better to say about is also left untouched (placeholder text like `...` or `N/A` is dropped).
+- **Provider.** Uses the scan's configured LLM provider/model by default, overridable per click — same pattern as the AI Assistant chat's provider dropdown. Shares the server's chat rate limit (`CHAT_RATE_PER_MIN`): both spend the same LLM quota.
+- **Everywhere, not just the live UI.** `report.html` and the live Vulnerabilities tab both render the AI-rewritten text when present (falling back to the original), with a small "✨ AI-enhanced" note naming the provider that made the change.
+- **API:** `POST /api/v1/scans/{id}/vulnerabilities/{vuln_id}/ai-fix` (body: optional `provider`, `model`, `fields`), `POST .../ai-fix/revert`.
 
 ---
 

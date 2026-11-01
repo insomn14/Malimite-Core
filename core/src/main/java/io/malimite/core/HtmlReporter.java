@@ -622,6 +622,12 @@ public final class HtmlReporter {
                 h.append(" &middot; note: ").append(esc(v.overrideNote()));
             h.append("</div>");
         }
+        if (v.isAiFixed()) {
+            h.append("<div style='font-size:.72rem;color:var(--muted);margin-bottom:.5rem;font-style:italic'>")
+             .append("✨ Description/Evidence/PoC/Remediation rewritten by AI Fix")
+             .append(notBlank(v.aiFixProvider()) ? " (" + esc(v.aiFixProvider()) + ")" : "")
+             .append(" — reviewer can revert in the live app.</div>");
+        }
 
         // sub-meta
         h.append("<div class='vuln-meta' style='margin-bottom:.7rem'>");
@@ -632,11 +638,11 @@ public final class HtmlReporter {
         if (v.cwe() != null && !v.cwe().isBlank()) h.append("<span class='chip'>").append(esc(v.cwe())).append("</span>");
         h.append("</div>");
 
-        // description
-        if (notBlank(v.description())) {
+        // description (AI Fix override wins when present)
+        if (notBlank(v.effectiveDescription())) {
             h.append("<div class='vuln-section'>");
             h.append("<div class='vuln-section-title'>Description</div>");
-            h.append("<p>").append(esc(v.description())).append("</p>");
+            h.append("<p>").append(esc(v.effectiveDescription())).append("</p>");
             h.append("</div>");
         }
 
@@ -650,23 +656,23 @@ public final class HtmlReporter {
 
         h.append("<div class='vuln-section'>");
         h.append("<div class='vuln-section-title'>Evidence</div>");
-        h.append("<pre class='code'>").append(esc(v.evidence() == null ? "(no evidence captured)" : v.evidence())).append("</pre>");
+        h.append("<pre class='code'>").append(esc(notBlank(v.effectiveEvidence()) ? v.effectiveEvidence() : "(no evidence captured)")).append("</pre>");
         h.append("</div>");
         h.append("</div>");
 
-        // PoC steps
-        if (notBlank(v.pocSteps())) {
+        // PoC steps (AI Fix override wins when present)
+        if (notBlank(v.effectivePocSteps())) {
             h.append("<div class='vuln-section'>");
             h.append("<div class='vuln-section-title'>Proof of Concept &mdash; steps to reproduce</div>");
-            h.append("<pre class='code poc'>").append(esc(v.pocSteps())).append("</pre>");
+            h.append("<pre class='code poc'>").append(esc(v.effectivePocSteps())).append("</pre>");
             h.append("</div>");
         }
 
-        // remediation
-        if (notBlank(v.remediation())) {
+        // remediation (AI Fix override wins when present)
+        if (notBlank(v.effectiveRemediation())) {
             h.append("<div class='vuln-section'>");
             h.append("<div class='vuln-section-title'>Remediation</div>");
-            h.append("<p>").append(esc(v.remediation())).append("</p>");
+            h.append("<p>").append(esc(v.effectiveRemediation())).append("</p>");
             h.append("</div>");
         }
 

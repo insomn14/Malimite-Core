@@ -136,7 +136,14 @@ public final class ReportBuilder {
                                 (String) m.get("status"),
                                 (String) m.get("override_severity"),
                                 m.get("override_cvss_score") instanceof Number ocn ? ocn.doubleValue() : null,
-                                (String) m.get("override_note")))
+                                (String) m.get("override_note"),
+                                (String) m.get("override_description"),
+                                (String) m.get("override_evidence"),
+                                (String) m.get("override_poc_steps"),
+                                (String) m.get("override_remediation"),
+                                (String) m.get("ai_fix_status"),
+                                (String) m.get("ai_fix_provider"),
+                                (String) m.get("ai_fix_model")))
                         .toList();
 
         List<AnalysisReport.AssessmentRecord> assessments =

@@ -30,7 +30,7 @@ public class ClaudeProvider implements LlmProvider {
 
     public ClaudeProvider(String apiKey, String model, int maxTokens) {
         this.apiKey    = apiKey;
-        this.model     = model.isBlank() ? "claude-sonnet-4-6" : model;
+        this.model     = model.isBlank() ? "claude-sonnet-5" : model;
         this.maxTokens = maxTokens;
         this.http      = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
     }

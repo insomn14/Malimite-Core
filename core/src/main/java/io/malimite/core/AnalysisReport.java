@@ -105,15 +105,47 @@ public record AnalysisReport(
             String status,              // open | false_positive | accepted_risk | fixed
             String overrideSeverity,    // nullable
             Double overrideCvssScore,   // nullable
-            String overrideNote         // nullable
+            String overrideNote,        // nullable
+            // AI Fix fields — LLM-rewritten report text, stored as reversible overrides;
+            // never replace description/evidence/pocSteps/remediation above.
+            String overrideDescription, // nullable
+            String overrideEvidence,    // nullable
+            String overridePocSteps,    // nullable
+            String overrideRemediation, // nullable
+            String aiFixStatus,         // none | applied | reverted
+            String aiFixProvider,       // nullable
+            String aiFixModel           // nullable
     ) {
-        /** Severity after triage override. */
+        /** Severity after triage/AI-fix override. */
         public String effectiveSeverity() {
             return overrideSeverity != null && !overrideSeverity.isBlank() ? overrideSeverity : severity;
         }
-        /** CVSS after triage override. */
+        /** CVSS after triage/AI-fix override. */
         public double effectiveCvssScore() {
             return overrideCvssScore != null ? overrideCvssScore : cvssScore;
+        }
+        /** Description after AI Fix override, falling back to the original. */
+        public String effectiveDescription() {
+            return notBlank(overrideDescription) ? overrideDescription : description;
+        }
+        /** Evidence after AI Fix override, falling back to the original. */
+        public String effectiveEvidence() {
+            return notBlank(overrideEvidence) ? overrideEvidence : evidence;
+        }
+        /** Proof-of-concept steps after AI Fix override, falling back to the original. */
+        public String effectivePocSteps() {
+            return notBlank(overridePocSteps) ? overridePocSteps : pocSteps;
+        }
+        /** Remediation guidance after AI Fix override, falling back to the original. */
+        public String effectiveRemediation() {
+            return notBlank(overrideRemediation) ? overrideRemediation : remediation;
+        }
+        /** True if an AI Fix is currently applied (not reverted) to this finding. */
+        public boolean isAiFixed() {
+            return "applied".equalsIgnoreCase(aiFixStatus);
+        }
+        private static boolean notBlank(String s) {
+            return s != null && !s.isBlank();
         }
         public boolean isFalsePositive() {
             return "false_positive".equalsIgnoreCase(status);
