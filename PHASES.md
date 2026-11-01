@@ -1,19 +1,20 @@
 # Malimite-Core — Development Phases
 
-> Last updated: 2026-10-12 — reflects actual codebase state, not the original planning baseline.
+> Last updated: 2026-11-02 — reflects actual codebase state, not the original planning baseline.
 
 ## Current State (Baseline)
 
 | Layer | Status |
 |---|---|
 | **Core analysis engine** (`core/`) | ✅ Production — Ghidra (iOS Mach-O + Android arm64 `.so`), JADX (Android DEX), MASTG/MSTG scanners, Assessment, LLM, SARIF/HTML |
-| CLI (`cli/`) | ✅ Production — fat JAR with `--llm`, `--sarif`, `--html`, `--assessment`, `--fail-on`; IPA + APK |
-| Web UI + REST (`web/`) | ✅ Production — FastAPI + SPA; IPA/APK upload; Assessment tab; unique vuln counts by `rule_id` |
-| Slack bot (`bot/python/`) | ⚠️ Works, not hardened — Socket Mode; `.ipa` / `.apk`; runs the CLI itself. No user allowlist, no concurrency cap, no tests; counts raw occurrences (not unique issues); no `JADX_HOME`/ASC settings. See *Chat bots* below |
+| CLI (`cli/`) | ✅ Production — fat JAR with `--llm` (incl. `claude-oauth`), `--sarif`, `--html`, `--assessment`, `--fail-on`, `--ios-light`, `--decompiler asc`, `claude-login` subcommand; IPA + APK |
+| Web UI + REST (`web/`) | ✅ Production — FastAPI + SPA; IPA/APK upload; Assessment tab; Functions Explorer (file tree + source viewer); unique vuln counts by `rule_id`; Triage + AI Fix overrides |
+| Slack bot (`bot/python/`) | ⚠️ Works, not hardened — Socket Mode; `.ipa` / `.apk`; runs the CLI itself. No user allowlist, no concurrency cap, no tests; counts raw occurrences (not unique issues); no `JADX_HOME`/ASC settings; no `claude-oauth` mentioned in its own README. See *Chat bots* below |
 | Watcher (`watcher/`) | ✅ Complete — inotify drop-folder daemon (`.ipa` / `.apk`) |
 | Docker: web image (`deploy/web.Dockerfile`) | ✅ Ghidra 12.0.4 + font libs + JADX; runs as uid 10001; port bound to `127.0.0.1` by default. Full iOS scan verified end to end |
 | Docker: legacy stack (`deploy/Dockerfile`, compose api/worker/watcher/bot) | ⚠️ Still Ghidra 11.1.2, which rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`): Ghidra scans are expected to fail there. Not updated |
-| AI Assistant (`web/app/agent/`) | ✅ Merged to `main` (PR #1). Tools: scan data, assessments, manifest, on-demand ASC/JADX/Ghidra. Verified with DeepSeek; Claude/OpenAI parsers only against recorded/fake streams |
+| AI Assistant (`web/app/agent/`) | ✅ Merged to `main` (PR #1). Tools: scan data, assessments, manifest, `recommend_hook_targets` (Frida), on-demand ASC/JADX/Ghidra. Verified with DeepSeek; Claude/OpenAI parsers only against recorded/fake streams. `claude-oauth` provider added (PR #5) |
+| AI Fix (`web/app/finding_fix.py` + `web/app/main.py`) | ✅ Merged to `main`. Per-finding LLM rewrite of Description/Evidence/Risk/PoC/Remediation stored as reversible `Override*` columns; never touches original scanned text; revert endpoint restores it. Shares the AI Assistant's rate limit and LLM provider resolution |
 | GitHub / GitLab / Bitbucket CI | ✅ Complete — SARIF upload wired (stock templates are IPA-oriented; image includes JADX) |
 | Legacy Javalin API (`api/`) | ⚠️ Legacy — superseded by `web/`; kept for Docker-compose compat |
 | Legacy Worker / Java bots (Telegram, Discord, Slack-Java) | ⚠️ Legacy — upload to `POST /api/v1/scans` (compatible with the Python web API) and reply with the `scan_id` only: no results, no polling, no tests |
@@ -21,7 +22,7 @@
 | Security hardening (Phase 7) | ⚠️ Started — see Phase 7 |
 | Enterprise scale (Phase 8) | ❌ Not started |
 
-Unit tests in `core/` and `cli/` (210) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM, SARIF/HTML, learned-rule quality gates and on-demand decompilation; `web/tests/` (97, stdlib `unittest`) cover the AI Assistant. Both suites run on every pull request and on `main` (`.github/workflows/ci.yml`: Java on JDK 17 and 21, Python on 3.12). **A real-IPA/APK scan does not run on CI yet** (it needs Ghidra / JADX on the runner).
+Unit tests in `core/` and `cli/` (219) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM providers (incl. Claude OAuth), SARIF/HTML (incl. triage and AI Fix overrides), learned-rule quality gates and on-demand decompilation; `web/tests/` (152, stdlib `unittest`/`pytest`-compatible) cover the AI Assistant, Functions tab routes, triage, and AI Fix. Both suites run on every pull request and on `main` (`.github/workflows/ci.yml`: Java on JDK 17 and 21, Python on 3.12). **A real-IPA/APK scan does not run on CI yet** (it needs Ghidra / JADX on the runner).
 
 ---
 
@@ -224,6 +225,25 @@ Assessment results appear in CLI/HTML/web without mixing into vulnerability seve
 
 ---
 
+## Phase 5e — AI Fix
+**Status: ✅ Complete**
+
+**Goal:** Let a reviewer ask the LLM to rewrite one finding's report text (Description, Evidence, Risk, Proof of Concept, Remediation) without losing the original scanned data or re-running the scan.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 5e.1 | Reversible override storage | ✅ | `SqliteStore`: 9 new `Vulnerabilities` columns (`OverrideDescription`/`Evidence`/`PocSteps`/`Remediation`, `AiFixStatus`/`Provider`/`Model`/`At`, `AiFixSeverityWasAi`). Risk reuses the existing triage `OverrideSeverity`/`OverrideCvssScore` columns; `AiFixSeverityWasAi` ensures a revert never clobbers a human's own manual triage override |
+| 5e.2 | Report-layer effective values | ✅ | `AnalysisReport.VulnerabilityRecord.effectiveDescription()`/`effectiveEvidence()`/`effectivePocSteps()`/`effectiveRemediation()`/`isAiFixed()`, consumed by `HtmlReporter` and the Python `db.get_vulnerabilities()` (`SarifExporter` does not read the `Vulnerabilities` table, so it was left untouched) |
+| 5e.3 | LLM call | ✅ | `web/app/finding_fix.py`: single-shot prompt + robust JSON extraction + sanitation, grounded in the finding and (for `FUNCTION` findings) its decompiled source; reuses `agent/llm.py`'s `resolve_llm`/`chat_step` — no new LLM client |
+| 5e.4 | REST endpoints | ✅ | `POST /api/v1/scans/{id}/vulnerabilities/{vuln_id}/ai-fix` and `.../ai-fix/revert`; shares the AI Assistant's chat rate limit (`CHAT_RATE_PER_MIN`) |
+| 5e.5 | Web UI | ✅ | Per-finding ✨ AI Fix panel: field checkboxes (Description/Evidence/Risk/PoC/Remediation), provider+model dropdown (same `LLM_MODEL_CATALOG` as the upload form and AI Assistant), "AI-enhanced" badge, Revert to original |
+| 5e.6 | Tests | ✅ | `SqliteStoreAiFixTest`, an `HtmlReporterTest` case, `test_ai_fix_route.py` (endpoint + unit tests for the JSON extractor) |
+
+### Deliverable
+A reviewer clicks ✨ AI Fix on a finding, picks a provider/model and which fields to rewrite, and the LLM-generated text appears in the live Vulnerabilities tab and `report.html` with a visible provenance note — fully reversible. **Met.**
+
+---
+
 ## Phase 6 — Observability
 **Status: ❌ Not started — NEXT MAJOR PHASE**
 
@@ -302,8 +322,9 @@ Phase 3   █████████░  Analysis Depth          ~90%   [cross-
 Phase 4   ████████░░  LLM Integration         ~85%   [async job + Redis cache in analyzer]
 Phase 5   ██████████  CI/CD & Reporting       100%   ✅ DONE
 Phase 5b  ██████████  Security Assessment     100%   ✅ DONE
-Phase 5c  █████████░  AI Assistant            ~90%   [merged in PR #1; 5c.6–5c.9 open]
+Phase 5c  █████████░  AI Assistant            ~90%   [merged in PR #1; hook-target + claude-oauth added; 5c.6–5c.9 open]
 Phase 5d  ███████░░░  Detection quality       ~70%   [wider corpus needed]
+Phase 5e  ██████████  AI Fix                  100%   ✅ DONE
 Phase 6   ░░░░░░░░░░  Observability             0%   ← NEXT MAJOR PHASE
 Phase 7   ███░░░░░░░  Security & Hardening     ~30%   [started: 7.1, 7.2, 7.4, 7.5, 7.8 partial]
 Phase 8   ░░░░░░░░░░  Scale & Enterprise        0%
@@ -363,7 +384,7 @@ Priority: zip-bomb guard in validators (7.3) and rate limiting (7.2) before JWT 
 | Bot: reply with progress updates during polling | bot/python | ❌ Open | ~4h |
 | GitHub Actions: matrix scan (multiple IPAs/APKs) | `.github/` | ❌ Open | ~2h |
 | Add `Content-Security-Policy` headers to web UI | web | ❌ Open | ~1h |
-| Update stale `core/README.md` checklist | core | ❌ Open | ~15m |
+| Update stale `core/README.md` checklist | core | ✅ Done | — |
 | `@objc` entry-point detection in `GhidraRunner` | core | ❌ Open | ~4h |
 
 ---
@@ -379,5 +400,10 @@ Priority: zip-bomb guard in validators (7.3) and rate limiting (7.2) before JWT 
 | Platform-aware LLM + learned rules | `core/` | `learned_rules.json` / `learned_rules_android.json`; hollow `...` rejected |
 | Unique vulnerability counting | `web/` + `HtmlReporter` | Grouped by `rule_id` |
 | Vulnerability triage workflow | `core/` + `web/` | Status, severity override, CVSS override, reviewer notes |
+| AI Fix | `core/` + `web/` | Per-finding LLM rewrite of Description/Evidence/Risk/PoC/Remediation, reversible overrides, see Phase 5e |
+| Functions Explorer | `web/` | JADX-GUI-style file tree + source viewer + outline + on-demand decompile for the Functions tab |
+| iOS light scan mode (`--ios-light`) | `core/` + `cli/` | Skips Ghidra, scans strings/symbols/plist only; for binaries too large for Ghidra auto-analysis |
+| Claude Pro/Max OAuth LLM provider (`claude-oauth`) | `core/` + `cli/` + `web/` | `malimite claude-login` subcommand (interactive PKCE, `--import`, or pasted tokens); no separately-billed `ANTHROPIC_API_KEY` |
+| Claude/DeepSeek model catalog refresh | `web/` + `core/` | Default Claude model is now Sonnet 5 (was 4.6); DeepSeek's official Flash id is now `deepseek-flash` (was `deepseek-v4-flash`, still accepted) |
 | Python Slack bot (Socket Mode) | `bot/python/` | Supersedes Java bot module; IPA + APK |
 | FastAPI web service | `web/` | Primary deployment; runs CLI as subprocess |
