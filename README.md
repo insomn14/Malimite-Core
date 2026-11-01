@@ -30,6 +30,8 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 - [Quick start](#quick-start)
 - [Web UI & REST API](#web-ui--rest-api)
 - [AI Assistant](#ai-assistant)
+  - [Functions tab (Functions Explorer)](#functions-tab-functions-explorer)
+  - [Claude Pro/Max OAuth](#claude-promax-oauth-no-separately-billed-api-key)
 - [Slack bot](#slack-bot)
 - [CI/CD integration](#cicd-integration)
 - [Detection engines](#detection-engines)
@@ -159,14 +161,14 @@ Only Java 17 or newer is required to launch the CLI; Ghidra and/or JADX are
 still required for the package types described in [Prerequisites](#prerequisites).
 
 ```bash
-VERSION=0.1.0
+VERSION=0.3.0   # see https://github.com/insomn14/Malimite-Core/releases for the latest
 curl -fLO "https://github.com/insomn14/Malimite-Core/releases/download/v${VERSION}/malimite-cli-${VERSION}.jar"
 curl -fLO "https://github.com/insomn14/Malimite-Core/releases/download/v${VERSION}/malimite-cli-${VERSION}.jar.sha256"
 sha256sum --check "malimite-cli-${VERSION}.jar.sha256"
 java -jar "malimite-cli-${VERSION}.jar" --version
 ```
 
-Each pushed semantic-version tag such as `v0.1.0` is built and tested by
+Each pushed semantic-version tag such as `v0.3.0` is built and tested by
 GitHub Actions before the JAR and its SHA-256 checksum are attached to the
 release.
 
@@ -283,6 +285,7 @@ After a scan finishes, the web UI shows an **AI Assistant** tab: a chat with an 
 | `get_assessments` | The Security Assessment inventory (root/jailbreak, Frida, anti-debug, pinning, FLAG_SECURE, obfuscation, ...). Reports `UNKNOWN` as unknown and warns when a bytecode VM may hide checks; says so when a scan has no Assessment |
 | `get_manifest` | App configuration: Android package/SDK/debuggable/backup, permissions, components (with `exported`), deep links, native libs; iOS bundle/team/provisioning, Info.plist, entitlements, Mach-O flags. Overview first, then paged sections with a substring filter. Server paths are never exposed |
 | `decompile` | Fresh single-class decompile: `asc` (Android, fast), `jadx` (Android), `ghidra` (iOS Mach-O, or Android `.so` via `lib`). Results are cached |
+| `recommend_hook_targets` | Recon-only, deterministic (no extra LLM call) ranking of symbols worth a Frida hook for AUTHORIZED pentest work, built from this scan's vulnerabilities and Security Assessment (SSL pinning, root/jailbreak, anti-debug, crypto/keychain). Confidence: HIGH (known symbol + call graph) / MEDIUM (known symbol only) / LOW (assessment text only) |
 
 - **Config:** uses the scan's LLM provider/model by default (overridable per chat). The API key comes from the **server's** `web/.env` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`, or `OLLAMA_BASE_URL`), never from a per-upload key. Optional: `CHAT_MAX_TURNS`, `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_CONTINUATIONS`, `CHAT_TOOL_CAP`, `HEAVY_CONCURRENCY`, `GHIDRA_ONDEMAND_TIMEOUT`. An answer cut off by the output limit is continued automatically and shown (and saved) as one message (default 5400).
 - **Storage:** chat history and the decompile cache live in `<scan-dir>/chat.sqlite`; the scan database is opened read-only.
@@ -292,6 +295,29 @@ After a scan finishes, the web UI shows an **AI Assistant** tab: a chat with an 
 - **Access control:** the chat spends the server's LLM quota. Set `API_KEY` (UI field "API Key", header `X-Api-Key`; compared in constant time). `deploy/web-compose.yml` publishes the port on `127.0.0.1` only; set `MALIMITE_BIND=0.0.0.0` together with `API_KEY` to expose it. Chat requests are capped globally (`CHAT_RATE_PER_MIN`, default 30). The server logs a warning at startup when `API_KEY` is empty.
 - **Container:** the web image runs as an unprivileged user (uid 10001). Its entrypoint chowns an existing root-owned scan volume once, then drops privileges. Decompiler subprocesses get an allowlisted environment (no LLM or API keys).
 - **Stored keys:** a per-upload LLM key is only used while the scan runs and is no longer written to `meta.json`; older plaintext keys are removed at startup.
+
+### Functions tab (Functions Explorer)
+
+A JADX-GUI-style browser for everything a scan decompiled: a resizable, searchable file tree on the left (classes grouped by package, methods under each class) and a source viewer on the right with syntax highlighting, an outline dropdown to jump to a method, and cross-tab links (e.g. a STORAGE finding's "Affected" asset jumps straight to its source). Code already stored by the scan opens instantly; a **Decompile** button triggers a fresh on-demand decompile (`asc`/`jadx` for Android classes) when nothing is stored yet or a second opinion is wanted, sharing its cache with the AI Assistant's `decompile` tool. Each open file gets its own tab so you can compare several classes/functions side by side. Backed by `GET /api/v1/scans/{id}/classes`, `GET /api/v1/scans/{id}/source`, and `POST /api/v1/scans/{id}/decompile`.
+
+### Claude Pro/Max OAuth (no separately-billed API key)
+
+`llm-provider`/`LLM_PROVIDER` also accepts **`claude-oauth`**: authorizes Messages API requests against a Claude Pro/Max subscription instead of a pay-per-token `ANTHROPIC_API_KEY`. Used the same way as any other provider — CLI `--llm --llm-provider claude-oauth`, the web upload form, the AI Assistant provider dropdown, and AI Fix's provider override all accept it.
+
+Sign in once with the bundled subcommand:
+
+```bash
+# Interactive (needs a browser on this machine) — same Authorization Code + PKCE flow Claude Code itself uses
+java -jar cli/target/malimite-cli.jar claude-login
+
+# Or import an already-completed `claude /login` session (no browser needed here)
+java -jar cli/target/malimite-cli.jar claude-login --import
+
+# Or paste a token triplet read from another machine
+java -jar cli/target/malimite-cli.jar claude-login --access-token=... --refresh-token=... --expires-at-ms=...
+```
+
+Credentials are stored at `~/.malimite/anthropic-oauth.json` and refreshed automatically by whichever consumer uses them (the Java CLI during a scan, or the Python web service for chat/AI Fix) — both the Java `ClaudeOAuthProvider` and Python `agent/anthropic_oauth.py` read/write the same file. In Docker (`deploy/web-compose.yml`) this maps to a dedicated `~/.malimite-docker` mount (not `~/.malimite` directly, since the container runs as a different uid); the container has no browser, so sign in on the **host** first, then run [`sync-claude-oauth.sh`](sync-claude-oauth.sh) to copy the result in — the web UI's "Import from Claude Code CLI" button and `claude-login --import` both auto-detect it. A session this far along from a local `claude /login` can also just be imported directly with `CLAUDE_CODE_CREDENTIALS_PATH` pointed at its credentials file.
 
 ---
 
@@ -389,8 +415,9 @@ A learned rule is a lead written by an LLM after reading one function, so it is 
 
 | Model | Use case |
 |-------|----------|
-| `deepseek-v4-flash` | Default — fast, 1M context |
-| `deepseek-v4-pro` | Higher quality analysis |
+| `deepseek-flash` | Default — DeepSeek-V4.1-Flash, fast, 1M context |
+| `deepseek-v4-pro` | DeepSeek-V4-Pro, higher quality analysis |
+| `deepseek-v4-flash` | Legacy id for the Flash model — still accepted |
 | `deepseek-chat` | Legacy alias (deprecated 2026-07) |
 | `deepseek-reasoner` | Chain-of-thought reasoning |
 
@@ -435,16 +462,31 @@ malimite [OPTIONS] <ipa|apk|xapk>
       --sarif              Write findings.sarif
       --html               Write report.html
       --llm                Enable LLM enrichment
-      --llm-provider=<x>   openai | claude | deepseek | ollama
+      --llm-provider=<x>   openai | claude | claude-oauth | deepseek | ollama
       --llm-mode=<x>       fast | summarize | fast_scan   (Fast Scan, first-party)
                            full | find_vulns | full_scan  (Full Scan, includes 3rd-party)
                            auto_fix                       (first-party reconstruct)
                            offensive                      (first-party + security SDKs; requires --llm)
       --include-package=<p> Extra first-party Java package prefix (repeatable)
       --llm-model=<x>      Override default model per provider
+      --max-enrich-functions=<n>
+                           Cap functions the LLM enricher inspects (0 = no cap; env MAX_ENRICH_FUNCTIONS)
+      --decompiler=<x>     Android decompiler backend: jadx (default) | asc — Droid ASC, on-demand,
+                           zero-preprocessing (env MALIMITE_DECOMPILER)
+      --asc-home=<dir>     Droid ASC checkout dir — runs `python -m droidasc` (else env ASC_HOME, else PATH)
+      --max-asc-classes=<n> Cap classes the ASC backend decompiles (0 = no cap; env MAX_ASC_CLASSES)
+      --decompile-threads=<n>
+                           Parallel ASC getclass workers (default 8; env DECOMPILE_THREADS)
+      --ios-light          iOS only: skip Ghidra, scan strings/imported symbols/plist only (no pseudocode;
+                           pseudocode-based rules report "not evaluated"). For binaries too large for
+                           Ghidra auto-analysis (env MALIMITE_IOS_LIGHT)
       --assessment / --no-assessment
                            Security-controls Assessment (default: on)
       --fail-on=<severity> Exit 1 if findings ≥ HIGH|MEDIUM|LOW
+
+malimite claude-login [OPTIONS]
+                           Sign in with your Claude account (OAuth) for --llm-provider claude-oauth —
+                           see "Claude Pro/Max OAuth" below for the three sign-in modes
 ```
 
 ### Environment variables
@@ -456,15 +498,19 @@ malimite [OPTIONS] <ipa|apk|xapk>
 | `MALIMITE_LEARNED_RULES` / `MALIMITE_LEARNED_RULES_IOS` | iOS learned-rules JSON (default `~/.malimite/learned_rules.json`) |
 | `MALIMITE_LEARNED_RULES_ANDROID` | Android learned-rules JSON (default `~/.malimite/learned_rules_android.json`) |
 | `MALIMITE_LEARNED_MAX_SEVERITY` | Highest severity an LLM-learned rule may report (`CRITICAL`…`INFO`, default `MEDIUM`) |
-| `LLM_PROVIDER` | `openai` · `claude` · `deepseek` · `ollama` · `none` |
+| `LLM_PROVIDER` | `openai` · `claude` · `claude-oauth` (Claude Pro/Max subscription, no API key — see [Claude Pro/Max OAuth](#claude-promax-oauth-no-separately-billed-api-key)) · `deepseek` · `ollama` · `none` |
 | `OPENAI_API_KEY` | OpenAI API key |
-| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `ANTHROPIC_API_KEY` | Anthropic API key (only for `claude`; `claude-oauth` needs no key, it uses `malimite claude-login`'s stored session) |
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `DEEPSEEK_BASE_URL` | Default `https://api.deepseek.com` |
 | `OLLAMA_BASE_URL` | Default `http://localhost:11434` |
 | `LLM_MODEL` / `LLM_MAX_TOKENS` | Override provider defaults |
+| `MALIMITE_IOS_LIGHT` | iOS only: same as `--ios-light` — skip Ghidra, scan strings/symbols/plist only |
+| `ASC_HOME` / `MAX_ASC_CLASSES` / `DECOMPILE_THREADS` / `MALIMITE_DECOMPILER` | Android Droid ASC decompiler backend settings — same as `--asc-home` / `--max-asc-classes` / `--decompile-threads` / `--decompiler` |
+| `MAX_ENRICH_FUNCTIONS` | Same as `--max-enrich-functions` |
 | `SCAN_DIR` | Web service scan output directory |
 | `API_KEY` | Optional `X-Api-Key` for web API |
+| `CLAUDE_CODE_CREDENTIALS_PATH` | Where `claude-login --import` and the web UI's "Import from Claude Code CLI" look for an already-completed `claude /login` session (default `~/.claude/.credentials.json`) |
 
 ---
 
@@ -489,10 +535,12 @@ Malimite-Core/
 ## Testing
 
 ```bash
-mvn test -pl core
+mvn test -pl core,cli                            # 219 tests: Java core + CLI
+python -m unittest discover web/tests             # 152 tests: FastAPI web service
+# or: cd web && source .venv/bin/activate && pytest tests/
 ```
 
-Unit tests in `core/` cover IPA/APK validation & extraction, Android manifest/NSC ingest, Assessment scanner, MASTG catalogs, LLM providers, SARIF schema, HTML reporter (including triage severity overrides and unique `rule_id` grouping), and platform-scoped learned-rules persistence.
+Unit tests in `core/` cover IPA/APK validation & extraction, Android manifest/NSC ingest, Assessment scanner, MASTG catalogs, LLM providers (including Claude OAuth), SARIF schema, HTML reporter (triage overrides, AI Fix overrides, unique `rule_id` grouping), and platform-scoped learned-rules persistence. `web/tests/` covers the AI Assistant agent loop/tools, AI Fix endpoints, triage, Functions tab routes, upload handling, and scan lifecycle. Both suites run on every pull request and on `main`.
 
 ---
 
@@ -503,7 +551,11 @@ See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 - ✅ Core Ghidra pipeline, MSTG/MASTG scanner, LLM, SARIF/HTML, CI templates
 - ✅ Android APK analysis (JADX or Droid ASC for DEX + optional Ghidra arm64 `.so`)
 - ✅ Security Assessment mode (PRESENT / PARTIAL / ABSENT / UNKNOWN), aware of bytecode-VM obfuscation
-- ✅ AI Assistant: chat over the scan with tools, on-demand ASC / JADX / Ghidra decompilation
+- ✅ AI Assistant: chat over the scan with tools, on-demand ASC / JADX / Ghidra decompilation, Frida hook-target recommendations
+- ✅ Functions Explorer: JADX-GUI-style file tree + source viewer for everything a scan decompiled
+- ✅ Claude Pro/Max OAuth as an LLM provider — no separately-billed `ANTHROPIC_API_KEY` required
+- ✅ iOS light scan mode (`--ios-light`): strings/symbols/plist only, for binaries too large for Ghidra auto-analysis
+- ✅ Triage workflow and AI Fix: reviewer overrides and LLM-rewritten finding text, both reversible and both reflected in `report.html`
 - ✅ Detection quality: quality gates for LLM-learned rules, relevance preconditions for absence findings
 - ✅ Hardened web image: Ghidra 12.0.4, unprivileged user, loopback-only by default, API key + rate limit
 - 🔄 Closure items: real-IPA/APK integration test and Python tests on CI, cross-reference REST API

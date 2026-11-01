@@ -55,8 +55,9 @@ Required:
 - `MALIMITE_CLI_JAR` = path to the built fat JAR (default `../../cli/target/malimite-cli.jar`)
 
 Optional LLM enrichment:
-- `LLM_PROVIDER=deepseek` + `DEEPSEEK_API_KEY=sk-…` (models: `deepseek-v4-flash`, `deepseek-v4-pro`, `deepseek-chat`, `deepseek-reasoner`)
+- `LLM_PROVIDER=deepseek` + `DEEPSEEK_API_KEY=sk-…` (models: `deepseek-flash` default, `deepseek-v4-pro`, `deepseek-chat`, `deepseek-reasoner`; the pre-V4.1 id `deepseek-v4-flash` is still accepted)
 - `LLM_PROVIDER=claude` + `ANTHROPIC_API_KEY=sk-ant-…`, or
+- `LLM_PROVIDER=claude-oauth` — Claude Pro/Max subscription, **no API key**. Run `java -jar ../../cli/target/malimite-cli.jar claude-login` once on the bot host first (see the root [`README.md`](../../README.md#claude-promax-oauth-no-separately-billed-api-key)); the bot just needs `LLM_PROVIDER=claude-oauth` in `.env`, or
 - `LLM_PROVIDER=openai` + `OPENAI_API_KEY=sk-…`, or
 - `LLM_PROVIDER=ollama` (local — set `OLLAMA_BASE_URL` if not localhost)
 

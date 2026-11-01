@@ -56,7 +56,7 @@ Python (MIT), python-dotenv (BSD 3-Clause).
 
 | Library | License | Role |
 |---|---|---|
-| [highlight.js](https://github.com/highlightjs/highlight.js) 11.12.0 | BSD 3-Clause | Syntax highlighting in the Functions tab's source viewer. Self-hosted (not loaded from a CDN) so the web UI keeps working on an offline/air-gapped network; see `web/vendor/hljs/LICENSE`. |
+| [highlight.js](https://github.com/highlightjs/highlight.js) 11.12.0 | BSD 3-Clause | Syntax highlighting in the Functions tab's source viewer. Self-hosted (not loaded from a CDN) so the web UI keeps working on an offline/air-gapped network; see `web/vendor/hljs/LICENSE`. Core plus 8 language grammars: Java, Kotlin, Objective-C, Swift, C, C++, JSON, XML (`web/vendor/hljs/languages/`). |
 
 ## Services (not bundled)
 
