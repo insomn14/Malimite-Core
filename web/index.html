@@ -142,6 +142,146 @@ input[type=file]{display:none}
 .aifix-fields{display:flex;flex-wrap:wrap;gap:.5rem .9rem}
 .aifix-field{display:flex;align-items:center;gap:.3rem;font-size:.78rem;font-weight:500;color:var(--text)}
 
+/* Auto Enhance (bulk AI Fix modal) */
+.vuln-toolbar{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin:-.35rem 0 1rem}
+.vuln-toolbar p{margin:0;font-size:.75rem;color:var(--muted)}
+.btn-ae{background:#eef0ff;color:var(--accent);border:1px solid #c7d0ff}.btn-ae:hover{background:#e0e5ff}
+.ae-banner{display:flex;align-items:center;gap:.6rem;background:#f5f3ff;border:1px solid #ddd6fe;color:#5b21b6;border-radius:var(--radius);padding:.5rem .8rem;font-size:.8rem;margin-bottom:.9rem}
+.ae-overlay{position:fixed;inset:0;background:rgba(17,24,39,.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:1.25rem}
+.ae-modal{background:var(--surface);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.28);width:min(820px,100%);max-height:calc(100vh - 2.5rem);display:flex;flex-direction:column;overflow:hidden}
+.ae-head{display:flex;gap:.8rem;align-items:flex-start;padding:1.2rem 1.4rem .3rem}
+.ae-icon{width:40px;height:40px;border-radius:50%;background:#eef0ff;color:var(--accent);display:flex;align-items:center;justify-content:center;flex:none}
+.ae-icon svg{width:22px;height:22px}
+.ae-title{font-size:1.3rem;font-weight:700;line-height:1.25}
+.ae-sub{color:var(--muted);font-size:.85rem;margin-top:.15rem}
+.ae-x{margin-left:auto;width:32px;height:32px;border:none;background:none;color:var(--muted);font-size:1.4rem;line-height:1;cursor:pointer;border-radius:6px;flex:none}
+.ae-x:hover{background:var(--bg);color:var(--text)}
+.ae-body{padding:.7rem 1.4rem 1rem;overflow:auto;flex:1;min-height:0}
+.ae-llm{display:grid;grid-template-columns:1fr 1fr auto;gap:.8rem;align-items:end}
+.ae-llm label{display:flex;flex-direction:column;gap:.3rem;font-size:.8rem;font-weight:500;min-width:0}
+.ae-llm select,.ae-llm input,.ae-tools select,.ae-tools input{padding:.5rem .65rem;border:1px solid var(--border);border-radius:8px;font:inherit;font-size:.85rem;background:var(--surface);color:var(--text);min-width:0}
+.ae-model-row{display:flex;gap:.4rem;min-width:0}.ae-model-row>*{flex:1 1 0;min-width:0}
+.ae-pill{background:#eef0ff;color:var(--accent);border-radius:999px;padding:.55rem 1rem;font-weight:600;font-size:.8rem;white-space:nowrap}
+.ae-tabs{display:flex;gap:1.6rem;border-bottom:1px solid var(--border);margin:1rem 0 .8rem}
+.ae-tab{padding:.55rem .3rem;cursor:pointer;color:var(--muted);font:inherit;font-weight:500;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:none}
+.ae-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.ae-count{background:#eef0ff;color:var(--accent);border-radius:999px;padding:0 .45rem;font-size:.72rem;margin-left:.35rem;font-weight:600}
+.ae-tools{display:flex;gap:.5rem;align-items:center;margin-bottom:.6rem;flex-wrap:wrap}
+.ae-tools input[type=search]{flex:1 1 220px}
+.ae-check-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .7rem;border:1px solid var(--border);border-radius:8px;font-size:.82rem;cursor:pointer;background:var(--surface)}
+.ae-table-wrap{border:1px solid var(--border);border-radius:8px;max-height:300px;overflow:auto}
+table.ae-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.ae-table th{position:sticky;top:0;z-index:1;background:#f3f4f6;text-align:left;font-weight:600;padding:.5rem .6rem;font-size:.78rem;white-space:nowrap;text-transform:none;letter-spacing:0;color:var(--text)}
+.ae-table td{padding:.5rem .6rem;border-top:1px solid var(--border);vertical-align:middle}
+.ae-table tr{cursor:pointer}.ae-table tr:hover td{background:#fafbff}
+.ae-table tr.sel td{background:#f3f5ff}
+.ae-table td.c,.ae-table th.c{text-align:center}
+.ae-table .ae-rule{display:block;font-size:.7rem;color:var(--muted);font-family:ui-monospace,monospace}
+.ae-chev{border:none;background:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:0 .2rem}
+.ae-chev:hover{color:var(--accent)}
+.ae-empty{padding:1.2rem;text-align:center;color:var(--muted);font-size:.82rem}
+.ae-fields-box{background:#f7f8ff;border:1px solid var(--border);border-radius:10px;padding:.8rem .9rem;margin-top:.9rem}
+.ae-fields-title{font-weight:600;font-size:.88rem;display:flex;align-items:center;gap:.45rem}
+.ae-fields-title svg{width:16px;height:16px;color:var(--muted)}
+.ae-fields-sub{font-size:.75rem;color:var(--muted);margin:.1rem 0 .65rem}
+.ae-fields{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.5rem}
+.ae-field{position:relative;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.6rem .55rem .55rem 1.9rem;cursor:pointer;min-width:0}
+.ae-field input{position:absolute;left:.6rem;top:.65rem}
+.ae-field.on{border-color:#c7d0ff;box-shadow:0 0 0 1px #c7d0ff}
+.ae-field svg{width:16px;height:16px;color:var(--text);display:block;margin-bottom:.3rem}
+.ae-field-t{font-weight:600;font-size:.8rem}
+.ae-field-d{font-size:.7rem;color:var(--muted);line-height:1.35}
+.ae-note{background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12;border-radius:8px;padding:.55rem .8rem;font-size:.78rem;margin-top:.8rem;display:flex;gap:.5rem;align-items:center}
+.ae-foot{display:flex;align-items:center;gap:.6rem;padding:.9rem 1.4rem;border-top:1px solid var(--border)}
+.ae-foot-info{margin-right:auto;color:var(--muted);font-size:.8rem}
+.ae-foot .btn{padding:.55rem 1.1rem;font-size:.85rem}
+.ae-foot .btn:disabled{opacity:.5;cursor:not-allowed}
+.ae-err{color:var(--red);font-size:.78rem}
+.ae-live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:.4rem;vertical-align:middle;animation:aePulse 1.2s ease-in-out infinite}
+@keyframes aePulse{50%{opacity:.25}}
+@keyframes aeSpin{to{transform:rotate(360deg)}}
+/* Activity Log: run summary */
+.ae-run-box{border:1px solid #dfe3ff;border-radius:12px;overflow:hidden;margin-bottom:1rem}
+.ae-run-banner{display:flex;align-items:center;gap:.8rem;padding:.75rem .9rem;background:#eef0ff}
+.ae-run-banner.is-done{background:#ecfdf3}.ae-run-banner.is-partial{background:#fff7ed}
+.ae-run-banner.is-cancelled,.ae-run-banner.is-cancelling{background:#f3f4f6}.ae-run-banner.is-error{background:#fef2f2}
+.ae-run-icon{width:38px;height:38px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;flex:none;color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.is-done .ae-run-icon{color:var(--green)}.is-partial .ae-run-icon{color:var(--medium)}.is-error .ae-run-icon{color:var(--red)}
+.is-cancelled .ae-run-icon,.is-cancelling .ae-run-icon{color:var(--muted)}
+.ae-run-icon svg{width:20px;height:20px}
+.ae-run-icon.spin svg{animation:aeSpin 1.4s linear infinite}
+.ae-run-text{min-width:0;flex:1}
+.ae-run-title{font-weight:700;font-size:.92rem}
+.ae-run-sub{font-size:.78rem;color:var(--muted);margin-top:.1rem}
+.ae-cancel{display:inline-flex;align-items:center;gap:.45rem;border:1px solid var(--accent);color:var(--accent);background:#fff;border-radius:8px;padding:.45rem .8rem;font:inherit;font-size:.8rem;font-weight:600;cursor:pointer;flex:none}
+.ae-cancel:hover{background:#f5f7ff}
+.ae-stop{width:10px;height:10px;border-radius:2px;background:var(--accent)}
+.ae-stats{display:grid;grid-template-columns:auto auto auto 1fr;align-items:center;background:var(--surface)}
+.ae-stat{display:flex;align-items:center;gap:.65rem;padding:.8rem 1rem;border-left:1px solid var(--border);min-width:0}
+.ae-stat:first-child{border-left:0}
+.ae-stat-val{font-size:1.05rem;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.ae-stat-lbl{font-size:.75rem;color:var(--muted)}
+.ae-ring{width:40px;height:40px;transform:rotate(-90deg);flex:none}
+.ae-ring circle{fill:none;stroke-width:4.5}
+.ae-ring-bg{stroke:#e8ebff}.ae-ring-ok{stroke:var(--accent);stroke-linecap:round;transition:stroke-dasharray .4s}.ae-ring-fail{stroke:var(--red)}
+.ae-stat-ico{width:24px;height:24px;color:var(--text);flex:none}.ae-stat-ico.is-fail{color:var(--red)}
+.ae-stat-ico svg{width:24px;height:24px}
+.ae-stat-bar{gap:.8rem}
+.ae-bar{flex:1;height:8px;background:#e8ebff;border-radius:99px;overflow:hidden}
+.ae-bar>div{height:100%;background:var(--accent);border-radius:99px;transition:width .4s}
+.ae-bar-pct{font-size:.8rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+/* Activity Log: timeline */
+.ae-act-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:.2rem 0 .7rem}
+.ae-act-title{font-weight:700;font-size:1rem}
+.ae-sort select{border:none;background:none;font:inherit;font-size:.82rem;font-weight:600;color:var(--text);cursor:pointer;padding:.2rem}
+.ae-tl{position:relative;padding-left:2.1rem}
+.ae-tl::before{content:'';position:absolute;left:.72rem;top:.6rem;bottom:.6rem;width:2px;background:#e5e7eb}
+.ae-tl-item{position:relative;margin-bottom:.6rem}
+.ae-tl-mark{position:absolute;left:-2.1rem;top:.7rem;width:1.45rem;height:1.45rem;display:flex;align-items:center;justify-content:center;background:var(--surface);border-radius:50%}
+.ae-tl-mark svg{width:1.45rem;height:1.45rem}
+.ae-tl-mark.is-applied{color:var(--accent)}.ae-tl-mark.is-failed{color:var(--red)}.ae-tl-mark.is-cancelled{color:var(--muted)}
+.ae-dot{width:10px;height:10px;border-radius:50%;border:2px solid #cbd5e1;background:var(--surface)}
+.ae-spinner{width:16px;height:16px;border:2.5px solid #dfe3ff;border-top-color:var(--accent);border-radius:50%;animation:aeSpin .8s linear infinite}
+.ae-tl-card{border:1px solid var(--border);border-radius:10px;padding:.7rem .85rem;background:var(--surface)}
+.ae-tl-card.is-failed{border-color:#fecaca}
+.ae-tl-top{display:flex;align-items:flex-start;gap:.75rem}
+.ae-tl-main{flex:1;min-width:0}
+.ae-tl-title{font-weight:600;font-size:.88rem;line-height:1.35}
+.ae-tl-sub{font-size:.76rem;color:var(--muted);margin-top:.1rem}
+.ae-st-pill{flex:none;border-radius:999px;padding:.15rem .6rem;font-size:.72rem;font-weight:600;white-space:nowrap}
+.ae-st-pill.is-applied{background:#dcfce7;color:#15803d}.ae-st-pill.is-failed{background:#fee2e2;color:#b91c1c}
+.ae-st-pill.is-running{background:#e0e7ff;color:#4338ca}.ae-st-pill.is-pending{background:#f3f4f6;color:var(--muted)}
+.ae-st-pill.is-cancelled{background:#f3f4f6;color:#4b5563}.ae-st-pill.is-partial{background:#fef3c7;color:#92400e}
+.ae-tl-dur{flex:none;width:3.6rem;text-align:right;font-size:.8rem;color:var(--text);font-variant-numeric:tabular-nums;padding-top:.1rem}
+.ae-tl-more{flex:none;display:inline-flex;align-items:center;gap:.2rem;border:none;background:none;color:var(--accent);font:inherit;font-size:.78rem;font-weight:500;cursor:pointer;padding:.1rem 0}
+.ae-caret svg{width:14px;height:14px;display:block;transition:transform .15s}.ae-caret.up svg{transform:rotate(180deg)}
+.ae-tl-upd{display:flex;align-items:center;gap:.35rem;font-size:.8rem;margin-top:.45rem;flex-wrap:wrap}
+.ae-tl-upd svg{width:15px;height:15px;color:var(--green);flex:none}
+.ae-tl-upd.is-muted{color:var(--muted);font-style:italic}
+.ae-tl-err{display:flex;align-items:center;gap:.5rem;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:.5rem .6rem;margin-top:.55rem;font-size:.8rem;color:#7f1d1d}
+.ae-tl-err>svg{width:16px;height:16px;color:var(--red);flex:none}
+.ae-tl-err>span{flex:1;min-width:0}
+.ae-tl-skip{display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:var(--muted);margin-top:.45rem}
+.ae-tl-skip>span{flex:1}
+.ae-retry{display:inline-flex;align-items:center;gap:.35rem;flex:none;border:1px solid var(--border);background:var(--surface);border-radius:7px;padding:.3rem .6rem;font:inherit;font-size:.76rem;font-weight:600;color:var(--text);cursor:pointer}
+.ae-retry:hover{border-color:var(--accent);color:var(--accent)}.ae-retry:disabled{opacity:.6;cursor:wait}
+.ae-retry svg{width:14px;height:14px}
+.ae-tl-details{margin-top:.6rem;border-top:1px dashed var(--border);padding-top:.55rem;display:flex;flex-direction:column;gap:.45rem}
+.ae-chg-k{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.ae-chg-v{font-size:.8rem;white-space:pre-wrap;word-break:break-word;background:#f9fafb;border-radius:6px;padding:.4rem .55rem;margin-top:.15rem}
+.ae-chg-none{font-size:.8rem;color:var(--muted)}
+.ae-chg-meta{font-size:.72rem;color:var(--muted)}
+.ae-empty-lg{display:flex;flex-direction:column;align-items:center;gap:.35rem;padding:2rem 1rem}
+.ae-empty-lg svg{width:28px;height:28px;color:var(--accent)}
+.ae-run{border:1px solid var(--border);border-radius:10px;margin-bottom:.7rem;padding:0 .8rem}
+.ae-run>summary{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.7rem 0;cursor:pointer;font-size:.84rem;list-style:none}
+.ae-run>summary::-webkit-details-marker{display:none}
+.ae-run[open]>summary{border-bottom:1px solid var(--border);margin-bottom:.7rem}
+.ae-run-meta{color:var(--muted);font-size:.75rem}
+.ae-fulllog svg{width:15px;height:15px}
+.ae-foot-info .ae-fulllog{color:var(--text)}
+@media(max-width:720px){.ae-llm{grid-template-columns:1fr}.ae-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.ae-table .hide-sm{display:none}.ae-stats{grid-template-columns:1fr 1fr}.ae-stat:nth-child(3){border-left:0}.ae-stat-bar{grid-column:1/-1;border-left:0}.ae-tl-top{flex-wrap:wrap}.ae-tl-dur{width:auto}}
+
 /* table */
 .tbl-wrap{width:100%;max-width:100%;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse;font-size:.8rem}
@@ -3402,11 +3542,16 @@ async function tabVulnerabilities(el, id, detail) {
         <div class="stat"><div class="stat-val" style="color:var(--yellow)">${counts.MEDIUM||0}</div><div class="stat-label">Medium</div></div>
         <div class="stat"><div class="stat-val" style="color:var(--low)">${counts.LOW||0}</div><div class="stat-label">Low</div></div>
       </div>
-      <p style="font-size:.75rem;color:var(--muted);margin:-.35rem 0 1rem">
-        ${groups.length} unique issue${groups.length===1?'':'s'}
-        · ${findings.length} occurrence${findings.length===1?'':'s'}
-        · summary counts unique open/active issues
-      </p>`;
+      <div class="vuln-toolbar">
+        <p>
+          ${groups.length} unique issue${groups.length===1?'':'s'}
+          · ${findings.length} occurrence${findings.length===1?'':'s'}
+          · summary counts unique open/active issues
+        </p>
+        <button class="btn btn-ae btn-sm" type="button" onclick="openAutoEnhance()"
+                title="Run AI Fix over many findings at once">✨ Auto Enhance</button>
+      </div>
+      <div id="ae-banner-slot"></div>`;
 
     // Filter bar (severity + status + free-text search)
     const fpCount = groups.filter(g => (g.representative.status || '') === 'false_positive').length;
@@ -3436,6 +3581,7 @@ async function tabVulnerabilities(el, id, detail) {
 
     const cards = groups.map((g, i) => renderVulnCard(g, i)).join('');
     el.innerHTML = totals + filter + '<div id="vuln-list">' + cards + '</div>';
+    aeBindScan(id, detail, groups);
 
     document.getElementById('vuln-list').addEventListener('click', ev => {
       const a = ev.target.closest('.aff-view-link');
@@ -3744,6 +3890,640 @@ window.revertAiFix = async function(id) {
     if (msg) { msg.textContent = 'Error: ' + (e.message || e).slice(0, 300); msg.className = 'triage-msg err'; }
   }
 };
+
+/* ── Auto Enhance: bulk AI Fix over many findings, run as a server-side job ──
+   POST /scans/{id}/auto-enhance starts it; the modal polls /auto-enhance/jobs/{job_id}.
+   The job keeps running if the modal (or the whole tab) is closed — reopening the modal, or
+   coming back to the Vulnerabilities tab, picks the live job up again via GET /auto-enhance. */
+
+const AE_ICONS = {
+  sparkle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
+  sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>',
+  description: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
+  evidence: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
+  risk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M12 8v5M12 16h0" stroke-linecap="round"/></svg>',
+  poc_steps: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>',
+  remediation: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  checkFilled: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 7v6M12 16.5v.01"/></svg>',
+  alertFilled: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M12 7v6M12 16.6v.01" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  stopCircle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9.5"/><rect x="8.5" y="8.5" width="7" height="7" rx="1" fill="currentColor" stroke="none"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3.5 2"/></svg>',
+  chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+};
+
+const AE_FIELDS = [
+  {key: 'description', title: 'Description',      desc: 'Improve clarity and provide better context.'},
+  {key: 'evidence',    title: 'Evidence',         desc: 'Enhance evidence with more details.'},
+  {key: 'risk',        title: 'Risk Analysis',    desc: 'Strengthen risk assessment.'},
+  {key: 'poc_steps',   title: 'Proof of Concept', desc: 'Add reproducible steps.'},
+  {key: 'remediation', title: 'Remediation',      desc: 'Suggest actionable fixes.'},
+];
+
+const AE_PROVIDERS = [
+  {value: '',             label: 'Scan default'},
+  {value: 'openai',       label: 'OpenAI'},
+  {value: 'claude',       label: 'Claude (API key)'},
+  {value: 'claude-oauth', label: 'Claude (Pro/Max OAuth)'},
+  {value: 'deepseek',     label: 'DeepSeek'},
+  {value: 'ollama',       label: 'Ollama'},
+];
+
+const AE = {
+  scanId: null, detail: null, groups: [],
+  selected: new Set(), fields: new Set(AE_FIELDS.map(f => f.key)),
+  tab: 'select', q: '', sev: '', provider: '', model: '', customModel: '',
+  job: null, history: [], poll: null, tick: null, open: false, error: '',
+  sort: 'newest', logView: 'latest', expanded: new Set(), busy: new Set(),
+};
+
+function aeRows() {
+  return AE.groups.map(g => {
+    const v = g.representative;
+    return {
+      id: v.id, rule_id: v.rule_id || '', title: v.title || '',
+      sev: String(v.effective_severity || v.override_severity || v.severity || 'INFO').toUpperCase(),
+      cvss: Number(v.effective_cvss_score ?? v.cvss_score ?? 0),
+      category: v.category || '', status: (v.status || 'open').toLowerCase(),
+      fixed: v.ai_fix_status === 'applied', occ: g.occurrences.length,
+    };
+  }).sort((a, b) => (SEV_RANK[b.sev] || 0) - (SEV_RANK[a.sev] || 0) || b.cvss - a.cvss);
+}
+
+function aeVisibleRows() {
+  const q = AE.q.trim().toLowerCase();
+  return aeRows().filter(r =>
+    (!AE.sev || r.sev === AE.sev) &&
+    (!q || `${r.title} ${r.rule_id} ${r.category} ${r.id}`.toLowerCase().includes(q)));
+}
+
+function aeRunning() { return AE.job && (AE.job.state === 'queued' || AE.job.state === 'running'); }
+
+function aeModelValue() {
+  return AE.model === LLM_MODEL_CUSTOM ? AE.customModel.trim() : AE.model;
+}
+
+/* Called on every Vulnerabilities tab render: remembers the scan for the modal and shows a
+   banner when a job started earlier (maybe from another tab) is still running. */
+function aeBindScan(scanId, detail, groups) {
+  if (AE.scanId !== scanId) {
+    aeStopPoll();
+    Object.assign(AE, {selected: new Set(), job: null, history: [], q: '', sev: '', error: '', tab: 'select'});
+  }
+  AE.scanId = scanId; AE.detail = detail; AE.groups = groups;
+  api(`/scans/${scanId}/auto-enhance`).then(o => {
+    if (AE.scanId !== scanId) return;
+    AE.history = o.history || [];
+    if (o.active) { AE.job = o.active; aeStartPoll(); }
+    aeRenderBanner();
+    if (AE.open) aeRender();
+  }).catch(() => {});
+}
+
+function aeRenderBanner() {
+  const slot = document.getElementById('ae-banner-slot');
+  if (!slot) return;
+  if (!aeRunning() || AE.open) { slot.innerHTML = ''; return; }
+  const j = AE.job;
+  slot.innerHTML = `<div class="ae-banner">✨ Auto Enhance running — ${j.completed}/${j.total} findings processed
+    <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="openAutoEnhance('log')">View progress</button></div>`;
+}
+
+window.openAutoEnhance = function(tab) {
+  if (!AE.scanId) return;
+  AE.open = true; AE.error = '';
+  AE.tab = tab || (aeRunning() ? 'log' : AE.tab || 'select');
+  if (!AE.provider && AE.detail?.llm_provider && AE_PROVIDERS.some(p => p.value === AE.detail.llm_provider)) {
+    AE.provider = AE.detail.llm_provider;
+    const cat = LLM_MODEL_CATALOG[AE.provider];
+    AE.model = cat ? (cat.some(m => m.value === AE.detail.llm_model) ? AE.detail.llm_model : cat[0].value) : '';
+    AE.customModel = cat ? '' : (AE.detail.llm_model || '');
+  }
+  let ov = document.getElementById('ae-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'ae-overlay';
+    ov.className = 'ae-overlay';
+    ov.addEventListener('mousedown', e => { if (e.target === ov) closeAutoEnhance(); });
+    document.body.appendChild(ov);
+    document.addEventListener('keydown', aeOnKey);
+  }
+  aeRender();
+  aeRenderBanner();
+  // refresh the activity log / live job in the background
+  api(`/scans/${AE.scanId}/auto-enhance`).then(o => {
+    AE.history = o.history || [];
+    if (o.active) { AE.job = o.active; aeStartPoll(); if (!tab) AE.tab = 'log'; }
+    if (AE.open) aeRender();
+  }).catch(() => {});
+};
+
+function aeOnKey(e) { if (e.key === 'Escape' && AE.open) closeAutoEnhance(); }
+
+window.closeAutoEnhance = function() {
+  AE.open = false;
+  aeStopTick();
+  document.getElementById('ae-overlay')?.remove();
+  document.removeEventListener('keydown', aeOnKey);
+  aeRenderBanner();
+};
+
+function aeStatusCell(r) {
+  if (r.fixed) return '<span class="badge badge-aifix">✨ AI-enhanced</span>';
+  if (r.status !== 'open') return `<span class="badge badge-${statusKey(r.status)}">${statusLabel(r.status)}</span>`;
+  return '<span style="color:var(--muted)">—</span>';
+}
+
+function aeSelectPane() {
+  const rows = aeVisibleRows();
+  const selectable = rows.filter(r => !r.fixed);
+  const allSel = selectable.length > 0 && selectable.every(r => AE.selected.has(r.id));
+  const sevOpt = (v, l) => `<option value="${v}" ${AE.sev === v ? 'selected' : ''}>${l}</option>`;
+  const body = rows.length ? rows.map(r => `
+      <tr class="${AE.selected.has(r.id) ? 'sel' : ''}" onclick="aeToggleRow(event, ${r.id})">
+        <td class="c"><input type="checkbox" ${AE.selected.has(r.id) ? 'checked' : ''} aria-label="Select ${escAttr(r.title)}"></td>
+        <td>${esc(r.title)}<span class="ae-rule">${esc(r.rule_id)}${r.occ > 1 ? ` · ${r.occ} occurrences` : ''}</span></td>
+        <td><span class="badge badge-${r.sev.toLowerCase()}">${esc(r.sev)}</span></td>
+        <td class="c">${r.cvss.toFixed(1)}</td>
+        <td class="hide-sm">${esc(r.category)}</td>
+        <td class="hide-sm">${aeStatusCell(r)}</td>
+        <td class="c"><button class="ae-chev" title="Show this finding in the list" onclick="aeJumpTo(event, ${r.id})">›</button></td>
+      </tr>`).join('')
+    : `<tr><td colspan="7" class="ae-empty">No findings match the current filter.</td></tr>`;
+  const fieldCards = AE_FIELDS.map(f => `
+      <label class="ae-field ${AE.fields.has(f.key) ? 'on' : ''}">
+        <input type="checkbox" ${AE.fields.has(f.key) ? 'checked' : ''} onchange="aeToggleField('${f.key}', this.checked)">
+        ${AE_ICONS[f.key]}
+        <div class="ae-field-t">${f.title}</div>
+        <div class="ae-field-d">${f.desc}</div>
+      </label>`).join('');
+  return `
+    <div class="ae-tools">
+      <input type="search" id="ae-q" placeholder="Search findings by title or ID" value="${escAttr(AE.q)}" oninput="aeSetQuery(this.value)">
+      <select onchange="aeSetSev(this.value)">
+        ${sevOpt('', 'All severities')}${sevOpt('CRITICAL', 'Critical')}${sevOpt('HIGH', 'High')}${sevOpt('MEDIUM', 'Medium')}${sevOpt('LOW', 'Low')}${sevOpt('INFO', 'Info')}
+      </select>
+      <label class="ae-check-btn" title="Selects every visible finding that is not AI-enhanced yet">
+        <input type="checkbox" ${allSel ? 'checked' : ''} onchange="aeSelectAll(this.checked)"> Select all
+      </label>
+      <button class="btn btn-ghost" type="button" onclick="aeClear()">Clear</button>
+    </div>
+    <div class="ae-table-wrap">
+      <table class="ae-table">
+        <thead><tr>
+          <th class="c"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="aeSelectAll(this.checked)" aria-label="Select all"></th>
+          <th>Finding</th><th>Severity</th><th class="c">CVSS</th><th class="hide-sm">Category</th><th class="hide-sm">Status</th><th></th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    <div class="ae-fields-box">
+      <div class="ae-fields-title">${AE_ICONS.sliders} Fields to enhance</div>
+      <div class="ae-fields-sub">Choose which AI-generated sections to update for every selected finding.</div>
+      <div class="ae-fields">${fieldCards}</div>
+    </div>
+    <div class="ae-note">⚠️ Original scanner output is preserved; AI changes are saved as reversible overrides.</div>`;
+}
+
+const AE_FIELD_TITLE = Object.fromEntries(AE_FIELDS.map(f => [f.key, f.title]));
+const AE_ITEM_STATE = {
+  pending:   {label: 'Queued',    cls: 'pending'},
+  running:   {label: 'Enhancing', cls: 'running'},
+  applied:   {label: 'Completed', cls: 'applied'},
+  failed:    {label: 'Failed',    cls: 'failed'},
+  cancelled: {label: 'Skipped',   cls: 'cancelled'},
+};
+
+/* The live/just-finished job first, then the persisted history without its duplicate. */
+function aeRuns() {
+  const runs = AE.job ? [AE.job] : [];
+  for (const h of AE.history) if (!AE.job || h.job_id !== AE.job.job_id) runs.push(h);
+  return runs;
+}
+
+function aeFmtClock(ms) {
+  const t = Math.max(0, Math.round((ms || 0) / 1000));
+  const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), sec = t % 60;
+  return [h, m, sec].map(n => String(n).padStart(2, '0')).join(':');
+}
+
+function aeFmtDur(ms) {
+  if (ms == null) return '';
+  const t = Math.max(0, Math.round(ms / 1000));
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}s`;
+}
+
+function aeElapsed(run) {
+  if (!run.started_at) return 0;
+  const end = (run.state === 'queued' || run.state === 'running') ? Date.now() : (run.finished_at || Date.now());
+  return end - run.started_at;
+}
+
+function aeSortedItems(run) {
+  const items = [...(run.items || [])];
+  const rank = it => it.state === 'running' ? 1 : it.state === 'pending' ? 2 : 0;
+  const t = it => it.finished_at || it.started_at || 0;
+  if (AE.sort === 'oldest') {
+    return items.sort((x, y) => rank(x) - rank(y) || t(x) - t(y));
+  }
+  // newest first: live work on top, then most recently finished, queued last
+  const rnk = it => it.state === 'running' ? 0 : it.state === 'pending' ? 2 : 1;
+  return items.sort((x, y) => rnk(x) - rnk(y) || t(y) - t(x));
+}
+
+function aeRunBanner(run) {
+  const busy = run.state === 'queued' || run.state === 'running';
+  const n = run.total, who = `${esc(run.provider)}/${esc(run.model)}`;
+  const when = run.finished_at ? new Date(run.finished_at).toLocaleString() : '';
+  let kind, title, sub, action = '';
+  if (busy && run.cancel_requested) {
+    kind = 'cancelling'; title = 'Cancelling batch…';
+    sub = 'Findings already in progress will finish; the rest are being skipped.';
+  } else if (busy) {
+    kind = 'running'; title = 'AI Enhancement in Progress';
+    sub = `Processing ${n} selected finding${n === 1 ? '' : 's'} with ${who}. This may take a few minutes…`;
+    action = `<button class="ae-cancel" type="button" onclick="aeCancel('${run.job_id}')"><span class="ae-stop"></span>Cancel Batch</button>`;
+  } else if (run.state === 'cancelled') {
+    kind = 'cancelled'; title = 'Batch cancelled';
+    sub = `${run.succeeded} of ${n} enhanced with ${who} before it was stopped · ${when}`;
+  } else if (run.state === 'error') {
+    kind = 'error'; title = 'Batch stopped unexpectedly';
+    sub = esc(run.error || 'Unknown error');
+  } else if (run.failed) {
+    kind = 'partial'; title = 'AI Enhancement finished with errors';
+    sub = `${run.succeeded} of ${n} enhanced with ${who} · ${when} — retry the failed findings below.`;
+  } else if (run.cancelled) {
+    kind = 'partial'; title = 'AI Enhancement finished — some findings skipped';
+    sub = `${run.succeeded} of ${n} enhanced with ${who} · ${when} — ${run.cancelled} skipped, retry them below.`;
+  } else {
+    kind = 'done'; title = 'AI Enhancement Complete';
+    sub = `${run.succeeded} of ${n} finding${n === 1 ? '' : 's'} enhanced with ${who} · ${when}`;
+  }
+  const icon = busy ? AE_ICONS.refresh : kind === 'done' ? AE_ICONS.check : kind === 'cancelled' ? AE_ICONS.stopCircle : AE_ICONS.alert;
+  return `
+    <div class="ae-run-banner is-${kind}">
+      <div class="ae-run-icon ${busy ? 'spin' : ''}">${icon}</div>
+      <div class="ae-run-text"><div class="ae-run-title">${title}</div><div class="ae-run-sub">${sub}</div></div>
+      ${action}
+    </div>`;
+}
+
+function aeRunStats(run) {
+  const total = run.total || 0;
+  const processed = (run.succeeded || 0) + (run.failed || 0);  // skipped (cancelled) findings were never processed
+  const pct = total ? Math.round(processed / total * 100) : 0;
+  const r = 15, c = 2 * Math.PI * r, done = total ? (run.succeeded || 0) / total : 0;
+  const failPart = total ? (run.failed || 0) / total : 0;
+  return `
+    <div class="ae-stats">
+      <div class="ae-stat ae-stat-ring">
+        <svg viewBox="0 0 40 40" class="ae-ring">
+          <circle cx="20" cy="20" r="${r}" class="ae-ring-bg"/>
+          <circle cx="20" cy="20" r="${r}" class="ae-ring-ok" stroke-dasharray="${(done * c).toFixed(2)} ${c.toFixed(2)}"/>
+          <circle cx="20" cy="20" r="${r}" class="ae-ring-fail" stroke-dasharray="${(failPart * c).toFixed(2)} ${c.toFixed(2)}"
+                  stroke-dashoffset="${(-done * c).toFixed(2)}"/>
+        </svg>
+        <div><div class="ae-stat-val">${run.succeeded || 0} / ${total}</div><div class="ae-stat-lbl">Completed</div></div>
+      </div>
+      <div class="ae-stat">
+        <span class="ae-stat-ico is-fail">${AE_ICONS.alert}</span>
+        <div><div class="ae-stat-val">${run.failed || 0}</div><div class="ae-stat-lbl">Failed</div></div>
+      </div>
+      <div class="ae-stat">
+        <span class="ae-stat-ico">${AE_ICONS.clock}</span>
+        <div><div class="ae-stat-val" data-ae-elapsed="${run.job_id}">${aeFmtClock(aeElapsed(run))}</div><div class="ae-stat-lbl">Elapsed Time</div></div>
+      </div>
+      <div class="ae-stat ae-stat-bar">
+        <div class="ae-bar"><div style="width:${pct}%"></div></div>
+        <span class="ae-bar-pct">${pct}%</span>
+      </div>
+    </div>`;
+}
+
+function aeTimeline(run) {
+  const items = aeSortedItems(run);
+  if (!items.length) return '<div class="ae-empty">No findings in this run.</div>';
+  const canRetry = !(run.cancel_requested && (run.state === 'running' || run.state === 'queued'));
+  return `<div class="ae-tl">${items.map(it => {
+    const st = AE_ITEM_STATE[it.state] || AE_ITEM_STATE.pending;
+    const key = `${run.job_id}:${it.vuln_id}`;
+    const open = AE.expanded.has(key);
+    const mark = it.state === 'applied' ? AE_ICONS.checkFilled
+               : it.state === 'failed' ? AE_ICONS.alertFilled
+               : it.state === 'running' ? '<span class="ae-spinner"></span>'
+               : it.state === 'cancelled' ? AE_ICONS.stopCircle : '<span class="ae-dot"></span>';
+    const meta = [it.rule_id, it.category ? it.category.charAt(0) + it.category.slice(1).toLowerCase() : '']
+      .filter(Boolean).map(esc).join(' · ');
+    const fieldsTxt = (it.updated_fields || []).map(k => AE_FIELD_TITLE[k] || k).join(', ');
+    const retrying = AE.busy.has(key);
+    const retryBtn = canRetry && (it.state === 'failed' || it.state === 'cancelled')
+      ? `<button class="ae-retry" type="button" ${retrying ? 'disabled' : ''} onclick="aeRetry('${run.job_id}', ${it.vuln_id})">${AE_ICONS.refresh}${retrying ? 'Retrying…' : 'Retry Finding'}</button>` : '';
+    let line = '';
+    if (it.state === 'applied' && it.updated_fields === undefined) {
+      line = `<div class="ae-tl-upd">${AE_ICONS.checkFilled}<strong>Enhanced</strong></div>`;  // pre-detail log entry
+    } else if (it.state === 'applied') {
+      line = fieldsTxt
+        ? `<div class="ae-tl-upd">${AE_ICONS.checkFilled}<strong>Updated:</strong>&nbsp;${esc(fieldsTxt)}</div>`
+        : `<div class="ae-tl-upd is-muted">No field needed changes.</div>`;
+    } else if (it.state === 'failed') {
+      line = `<div class="ae-tl-err">${AE_ICONS.alertFilled}<span><strong>Error:</strong> ${esc(it.error || 'Unknown error')}</span>${retryBtn}</div>`;
+    } else if (it.state === 'cancelled') {
+      line = `<div class="ae-tl-skip"><span>Skipped — the batch was cancelled before this finding started.</span>${retryBtn}</div>`;
+    } else if (it.state === 'running') {
+      line = `<div class="ae-tl-upd is-muted">Rewriting ${esc((run.fields || []).map(k => AE_FIELD_TITLE[k] || k).join(', '))}…</div>`;
+    } else {
+      line = `<div class="ae-tl-upd is-muted">Waiting in queue…</div>`;
+    }
+    const changes = it.changes || {};
+    const details = open ? `
+      <div class="ae-tl-details">
+        ${Object.keys(changes).length
+          ? (it.updated_fields || Object.keys(changes)).map(k => `
+              <div class="ae-chg"><div class="ae-chg-k">${esc(AE_FIELD_TITLE[k] || k)}</div><div class="ae-chg-v">${esc(changes[k] || '')}</div></div>`).join('')
+          : `<div class="ae-chg-none">${it.state === 'applied' ? 'Field details were not recorded for this run.' : 'No changes were written — the original scanned text is unchanged.'}</div>`}
+        <div class="ae-chg-meta">Finding #${it.vuln_id}${it.severity ? ` · ${esc(it.severity)}` : ''}${it.attempts > 1 ? ` · attempt ${it.attempts}` : ''}${it.finished_at ? ` · ${new Date(it.finished_at).toLocaleTimeString()}` : ''}
+          · <a href="#" onclick="aeJumpTo(event, ${it.vuln_id})">Show finding</a></div>
+      </div>` : '';
+    return `
+      <div class="ae-tl-item">
+        <div class="ae-tl-mark is-${st.cls}">${mark}</div>
+        <div class="ae-tl-card ${it.state === 'failed' ? 'is-failed' : ''}">
+          <div class="ae-tl-top">
+            <div class="ae-tl-main">
+              <div class="ae-tl-title">${esc(it.title || ('Finding #' + it.vuln_id))}</div>
+              <div class="ae-tl-sub">${meta}</div>
+            </div>
+            <span class="ae-st-pill is-${st.cls}">${st.label}</span>
+            <span class="ae-tl-dur">${aeFmtDur(it.duration_ms)}</span>
+            <button class="ae-tl-more" type="button" onclick="aeToggleDetails('${key}')">View Details
+              <span class="ae-caret ${open ? 'up' : ''}">${AE_ICONS.chevron}</span></button>
+          </div>
+          ${line}
+          ${details}
+        </div>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+function aeLogPane() {
+  const runs = aeRuns();
+  if (!runs.length) {
+    return `<div class="ae-empty ae-empty-lg">${AE_ICONS.sparkle}<div><strong>No AI enhancement activity yet</strong></div>
+      <div>Select findings and click <em>Run Auto Enhance</em> — progress and results will appear here.</div></div>`;
+  }
+  if (AE.logView === 'full') {
+    return `
+      <div class="ae-act-head"><div class="ae-act-title">Full Activity Log <span class="ae-count">${runs.length} run${runs.length === 1 ? '' : 's'}</span></div>
+        ${aeSortSelect()}</div>
+      ${runs.map((run, i) => `
+        <details class="ae-run" ${i === 0 ? 'open' : ''}>
+          <summary>
+            ${aeRunPill(run)}
+            <strong>${run.succeeded || 0}/${run.total} enhanced</strong>
+            <span class="ae-run-meta">${new Date(run.finished_at || run.created_at).toLocaleString()} · ${esc(run.provider)}/${esc(run.model)}
+              · ${aeFmtClock(aeElapsed(run))} · ${esc((run.fields || []).map(k => AE_FIELD_TITLE[k] || k).join(', '))}</span>
+          </summary>
+          ${aeTimeline(run)}
+        </details>`).join('')}`;
+  }
+  const run = runs[0];
+  return `
+    <div class="ae-run-box">
+      ${aeRunBanner(run)}
+      ${aeRunStats(run)}
+    </div>
+    <div class="ae-act-head"><div class="ae-act-title">AI Enhancement Activity</div>${aeSortSelect()}</div>
+    ${aeTimeline(run)}`;
+}
+
+function aeRunPill(run) {
+  const busy = run.state === 'running' || run.state === 'queued';
+  const [cls, label] = busy ? ['running', 'Running']
+    : run.state === 'cancelled' ? ['cancelled', 'Cancelled']
+    : run.state === 'error' ? ['failed', 'Error']
+    : (run.failed || run.cancelled) ? ['partial', 'Partial'] : ['applied', 'Completed'];
+  return `<span class="ae-st-pill is-${cls}">${label}</span>`;
+}
+
+function aeSortSelect() {
+  return `<label class="ae-sort"><select onchange="aeSetSort(this.value)">
+      <option value="newest" ${AE.sort === 'newest' ? 'selected' : ''}>Newest First</option>
+      <option value="oldest" ${AE.sort === 'oldest' ? 'selected' : ''}>Oldest First</option>
+    </select></label>`;
+}
+
+function aeRender() {
+  const ov = document.getElementById('ae-overlay');
+  if (!ov) return;
+  const prevFocus = document.activeElement?.id;
+  const caret = prevFocus === 'ae-q' ? document.activeElement.selectionStart : null;
+  const scrolls = ['.ae-body', '.ae-table-wrap'].map(s => ov.querySelector(s)?.scrollTop || 0);
+  const total = AE.groups.length;
+  const latestRun = aeRuns()[0];
+  const catalog = LLM_MODEL_CATALOG[AE.provider];
+  const modelCtl = catalog
+    ? `<span class="ae-model-row"><select onchange="aeSetModel(this.value)">
+         ${catalog.map(m => `<option value="${escAttr(m.value)}" ${AE.model === m.value ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
+         <option value="${LLM_MODEL_CUSTOM}" ${AE.model === LLM_MODEL_CUSTOM ? 'selected' : ''}>Custom (type model name)…</option>
+       </select>
+       ${AE.model === LLM_MODEL_CUSTOM ? `<input type="text" placeholder="model name" value="${escAttr(AE.customModel)}" oninput="AE.customModel=this.value">` : ''}</span>`
+    : `<input type="text" placeholder="${AE.provider ? 'model name' : 'scan default model'}" value="${escAttr(AE.customModel)}"
+              oninput="AE.customModel=this.value" ${AE.provider ? '' : 'disabled'}>`;
+  const scanDefault = AE.detail?.llm_provider && AE.detail.llm_provider !== 'none'
+    ? `Scan default (${AE.detail.llm_provider}${AE.detail.llm_model ? '/' + AE.detail.llm_model : ''})` : 'Scan default';
+
+  const nSel = AE.selected.size, nFields = AE.fields.size;
+  const runBtn = `<button class="btn btn-primary" type="button" onclick="aeRunFromAnyTab()"
+        ${(aeRunning() || (AE.tab === 'select' && (!nSel || !nFields))) ? 'disabled' : ''}
+        title="${aeRunning() ? 'A batch is already running for this scan' : ''}">
+        ${AE_ICONS.sparkle.replace('<svg ', '<svg width="15" height="15" ')} Run Auto Enhance</button>`;
+  let footInfo, actions;
+  if (AE.tab === 'log') {
+    footInfo = aeRuns().length ? `<button class="btn btn-ghost ae-fulllog" type="button" onclick="aeToggleFullLog()">
+        ${AE_ICONS.description}${AE.logView === 'full' ? 'Back to Latest Run' : 'View Full Log'}</button>` : '';
+    actions = `<button class="btn btn-ghost" type="button" onclick="closeAutoEnhance()">Close</button>${runBtn}`;
+  } else {
+    footInfo = aeRunning()
+      ? 'A batch is running — follow it in the Activity Log tab.'
+      : `${nSel} finding${nSel === 1 ? '' : 's'} selected · ${nFields} field${nFields === 1 ? '' : 's'} per finding`;
+    actions = `<button class="btn btn-ghost" type="button" onclick="closeAutoEnhance()">Cancel</button>${runBtn}`;
+  }
+
+  ov.innerHTML = `
+    <div class="ae-modal" role="dialog" aria-modal="true" aria-labelledby="ae-title">
+      <div class="ae-head">
+        <div class="ae-icon">${AE_ICONS.sparkle}</div>
+        <div>
+          <div class="ae-title" id="ae-title">Auto Enhanced</div>
+          <div class="ae-sub">Improve finding write-ups with AI while preserving original scan evidence.</div>
+        </div>
+        <button class="ae-x" type="button" aria-label="Close" onclick="closeAutoEnhance()">×</button>
+      </div>
+      <div class="ae-body">
+        <div class="ae-llm">
+          <label>LLM Provider
+            <select onchange="aeSetProvider(this.value)" ${aeRunning() ? 'disabled' : ''}>
+              ${AE_PROVIDERS.map(p => `<option value="${p.value}" ${AE.provider === p.value ? 'selected' : ''}>${p.value ? p.label : esc(scanDefault)}</option>`).join('')}
+            </select>
+          </label>
+          <label>Model ${modelCtl}</label>
+          <div class="ae-pill">🗄 ${total} finding${total === 1 ? '' : 's'} available</div>
+        </div>
+        <div class="ae-tabs" role="tablist">
+          <button class="ae-tab ${AE.tab === 'select' ? 'active' : ''}" role="tab" onclick="aeSetTab('select')">
+            Select Findings<span class="ae-count">${total}</span></button>
+          <button class="ae-tab ${AE.tab === 'log' ? 'active' : ''}" role="tab" onclick="aeSetTab('log')">
+            Activity Log<span class="ae-count">${latestRun ? (latestRun.items || []).length : 0}</span>
+            ${aeRunning() ? '<span class="ae-live-dot" title="Running"></span>' : ''}</button>
+        </div>
+        ${AE.tab === 'log' ? aeLogPane() : aeSelectPane()}
+        ${AE.error ? `<div class="ae-err" style="margin-top:.6rem">${esc(AE.error)}</div>` : ''}
+      </div>
+      <div class="ae-foot">
+        <span class="ae-foot-info">${footInfo}</span>
+        ${actions}
+      </div>
+    </div>`;
+  ['.ae-body', '.ae-table-wrap'].forEach((s, i) => {
+    const el = ov.querySelector(s);
+    if (el) el.scrollTop = scrolls[i];
+  });
+  if (prevFocus === 'ae-q') {
+    const q = document.getElementById('ae-q');
+    if (q) { q.focus(); if (caret != null) q.setSelectionRange(caret, caret); }
+  }
+  aeSyncTick();
+}
+
+/* Elapsed Time ticks every second while a batch runs, without re-rendering the modal. */
+function aeSyncTick() {
+  const need = AE.open && AE.tab === 'log' && aeRunning();
+  if (need && !AE.tick) {
+    AE.tick = setInterval(() => {
+      if (!AE.job) return;
+      document.querySelectorAll(`[data-ae-elapsed="${AE.job.job_id}"]`)
+        .forEach(el => { el.textContent = aeFmtClock(aeElapsed(AE.job)); });
+    }, 1000);
+  } else if (!need) aeStopTick();
+}
+function aeStopTick() { if (AE.tick) { clearInterval(AE.tick); AE.tick = null; } }
+
+window.aeSetSort = v => { AE.sort = v; aeRender(); };
+window.aeToggleFullLog = () => { AE.logView = AE.logView === 'full' ? 'latest' : 'full'; aeRender(); };
+window.aeToggleDetails = key => { AE.expanded.has(key) ? AE.expanded.delete(key) : AE.expanded.add(key); aeRender(); };
+window.aeRunFromAnyTab = () => {
+  if (!AE.selected.size || !AE.fields.size) {
+    AE.tab = 'select';
+    AE.error = AE.selected.size ? 'Choose at least one field to enhance.' : 'Select at least one finding to enhance.';
+    return aeRender();
+  }
+  aeRun();
+};
+
+window.aeCancel = async function(jobId) {
+  try {
+    AE.job = await api(`/scans/${AE.scanId}/auto-enhance/jobs/${jobId}/cancel`, {method: 'POST'});
+  } catch (e) { AE.error = 'Could not cancel: ' + (e.message || e); }
+  aeRender();
+};
+
+window.aeRetry = async function(jobId, vulnId) {
+  const key = `${jobId}:${vulnId}`;
+  AE.busy.add(key); AE.error = ''; aeRender();
+  try {
+    AE.job = await api(`/scans/${AE.scanId}/auto-enhance/jobs/${jobId}/items/${vulnId}/retry`, {method: 'POST'});
+    AE.logView = 'latest';
+    aeStartPoll();
+  } catch (e) {
+    AE.error = 'Could not retry: ' + (e.message || e);
+  } finally {
+    AE.busy.delete(key);
+    aeRender();
+  }
+};
+
+window.aeSetQuery = q => { AE.q = q; aeRender(); };
+window.aeSetSev = s => { AE.sev = s; aeRender(); };
+window.aeSetTab = t => { AE.tab = t; AE.error = ''; aeRender(); };
+window.aeSetModel = m => { AE.model = m; if (m !== LLM_MODEL_CUSTOM) AE.customModel = ''; aeRender(); };
+window.aeSetProvider = p => {
+  AE.provider = p;
+  const cat = LLM_MODEL_CATALOG[p];
+  AE.model = cat ? cat[0].value : '';
+  AE.customModel = '';
+  aeRender();
+};
+window.aeToggleField = (k, on) => { on ? AE.fields.add(k) : AE.fields.delete(k); aeRender(); };
+window.aeToggleRow = (ev, id) => {
+  if (ev.target.closest('.ae-chev')) return;
+  AE.selected.has(id) ? AE.selected.delete(id) : AE.selected.add(id);
+  aeRender();
+};
+window.aeSelectAll = on => {
+  // Only findings not yet AI-enhanced; a re-run stays an explicit per-row choice.
+  for (const r of aeVisibleRows()) if (!r.fixed) on ? AE.selected.add(r.id) : AE.selected.delete(r.id);
+  aeRender();
+};
+window.aeClear = () => { AE.selected.clear(); aeRender(); };
+window.aeJumpTo = (ev, id) => {
+  ev.stopPropagation();
+  closeAutoEnhance();
+  const card = document.getElementById('vuln-' + id);
+  if (!card) return;
+  card.style.display = '';
+  const body = card.querySelector('.vuln-body');
+  if (body && body.hidden) card.querySelector('.vuln-head')?.click();
+  card.scrollIntoView({behavior: 'smooth', block: 'start'});
+};
+
+window.aeRun = async function() {
+  if (!AE.selected.size || !AE.fields.size) return;
+  const body = {vuln_ids: [...AE.selected], fields: AE_FIELDS.map(f => f.key).filter(k => AE.fields.has(k))};
+  if (AE.provider) body.provider = AE.provider;
+  const model = aeModelValue();
+  if (AE.provider && model) body.model = model;
+  AE.error = '';
+  try {
+    const job = await api(`/scans/${AE.scanId}/auto-enhance`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+    });
+    AE.job = job;
+    AE.tab = 'log';
+    AE.logView = 'latest';
+    AE.selected.clear();
+    aeRender();
+    aeStartPoll();
+  } catch (e) {
+    AE.error = 'Could not start Auto Enhance: ' + (e.message || e);
+    aeRender();
+  }
+};
+
+function aeStopPoll() { if (AE.poll) { clearInterval(AE.poll); AE.poll = null; } }
+
+function aeStartPoll() {
+  aeStopPoll();
+  const scanId = AE.scanId;
+  AE.poll = setInterval(async () => {
+    if (!AE.job || AE.scanId !== scanId) return aeStopPoll();
+    try {
+      const j = await api(`/scans/${scanId}/auto-enhance/jobs/${AE.job.job_id}`);
+      AE.job = j;
+      if (!aeRunning()) {
+        aeStopPoll();
+        const o = await api(`/scans/${scanId}/auto-enhance`).catch(() => null);
+        if (o) AE.history = o.history || [];
+        // Re-render the cards underneath (and the modal's Status column, via aeBindScan) so the
+        // new AI-enhanced badges show up right away; the modal overlay lives outside the routed view.
+        if (location.hash.includes(scanId)) router();
+      }
+      if (AE.open) aeRender();
+      aeRenderBanner();
+    } catch (_) { /* transient — keep polling */ }
+  }, 1500);
+}
 
 function renderTriageForm(v) {
   const cur = (v.status || 'open');
