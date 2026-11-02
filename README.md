@@ -37,6 +37,7 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 - [Detection engines](#detection-engines)
 - [Triage workflow](#triage-workflow)
 - [AI Fix](#ai-fix)
+- [Auto Enhance](#auto-enhance)
 - [HTML Report](#html-report)
 - [Configuration](#configuration)
 - [Project structure](#project-structure)
@@ -91,6 +92,7 @@ Malimite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 | **Self-learning rules** | LLM `detection_regex` validated and persisted per platform (`learned_rules.json` / `learned_rules_android.json`) |
 | **Triage workflow** | Mark false positive / accepted risk / fixed; override severity & CVSS |
 | **AI Fix** | Per-finding LLM rewrite of Description/Evidence/Risk/PoC/Remediation, stored as reversible overrides |
+| **Auto Enhance** | Bulk AI Fix: runs across many selected findings as a server-side background job, with live progress, Cancel Batch, and per-finding Retry |
 | **HTML reports** | Vulnerability-centric layout with evidence, PoC, remediation, MASTG/MSTG references; unique issues grouped by `rule_id` |
 | **SARIF 2.1** | Native integration with GitHub Code Scanning and other SARIF consumers |
 | **Multiple ingress paths** | Web UI, REST API, Slack bot, CLI, watch-folder daemon, CI templates |
@@ -270,6 +272,11 @@ Drop an `.ipa`, `.apk` or `.xapk` on the upload page (enable **Security Assessme
 | `PATCH` | `/api/v1/scans/{id}/vulnerabilities/{vuln_id}` | Triage (status, severity override) |
 | `POST` | `/api/v1/scans/{id}/vulnerabilities/{vuln_id}/ai-fix` | AI Fix — LLM-rewrite Description/Evidence/Risk/PoC/Remediation |
 | `POST` | `/api/v1/scans/{id}/vulnerabilities/{vuln_id}/ai-fix/revert` | Revert an applied AI Fix |
+| `POST` | `/api/v1/scans/{id}/auto-enhance` | Auto Enhance — start a bulk AI Fix job over many findings |
+| `GET` | `/api/v1/scans/{id}/auto-enhance` | Active job (if any) + this scan's Activity Log, newest first |
+| `GET` | `/api/v1/scans/{id}/auto-enhance/jobs/{job_id}` | Poll one job's live/persisted progress |
+| `POST` | `/api/v1/scans/{id}/auto-enhance/jobs/{job_id}/cancel` | Cancel Batch — skip findings not started yet |
+| `POST` | `/api/v1/scans/{id}/auto-enhance/jobs/{job_id}/items/{vuln_id}/retry` | Retry one failed/cancelled finding inside the same run |
 | `GET` | `/api/v1/scans/{id}/report` | HTML report |
 | `GET` | `/api/v1/scans/{id}/sarif` | SARIF download |
 | `GET` | `/api/v1/scans/{id}/functions` | Browse decompiled functions |
@@ -451,6 +458,21 @@ Every finding in the **Vulnerabilities** tab has an **✨ AI Fix** action: it ca
 
 ---
 
+## Auto Enhance
+
+The **✨ Auto Enhance** button on the Vulnerabilities tab runs AI Fix across many findings at once instead of one at a time — pick findings from a searchable/filterable table, choose which fields to rewrite, and the server works through them as a background job while you watch live progress in the **Activity Log** tab.
+
+- **Reuses AI Fix exactly.** Each finding goes through the same `finding_fix.fix_finding` call and the same reversible `Override*` columns as the per-finding action — nothing about how a rewrite is stored or reverted changes; Auto Enhance only adds the "run this over N findings" orchestration on top.
+- **Server-side job, not a browser loop.** `POST /api/v1/scans/{id}/auto-enhance` starts a background job (`web/app/auto_enhance.py`) that keeps running even if the modal or the browser tab is closed — reopening the Vulnerabilities tab (or the modal) picks the live job back up via polling. The report is regenerated **once** at the end of the run, not once per finding.
+- **One job per scan at a time.** Starting a second run while one is active returns `409`; this prevents two jobs racing to write overrides on the same findings.
+- **Live Activity Log.** A progress ring, failed count, elapsed-time clock, and a per-finding timeline (status, duration, which fields were actually updated, or the provider's error message) update roughly every 1.5s. **View Details** on any finished item shows the exact rewritten text per field. **View Full Log** lists every past run for the scan, newest first.
+- **Cancel Batch.** Findings already being rewritten finish normally (nothing is left half-written); everything still queued is marked `cancelled` and skipped.
+- **Retry Finding.** Re-runs one failed or cancelled finding with the run's original provider/model/fields — inside the *same* Activity Log entry rather than starting a new run.
+- **Rate limit.** An entire Auto Enhance run counts as **one** hit against the shared `CHAT_RATE_PER_MIN` limit (not one hit per finding); concurrency *within* a run is capped separately by `AUTO_ENHANCE_CONCURRENCY` (default 2 parallel LLM calls).
+- **API:** `POST /api/v1/scans/{id}/auto-enhance` (body: `vuln_ids`, optional `provider`/`model`/`fields`) · `GET .../auto-enhance` (active job + history) · `GET .../auto-enhance/jobs/{job_id}` (poll one job) · `POST .../jobs/{job_id}/cancel` · `POST .../jobs/{job_id}/items/{vuln_id}/retry`.
+
+---
+
 ## HTML Report
 
 `report.html` is a formal, bilingual (Indonesian/English) Vulnerability Assessment document — not just a technical dashboard — generated as a single self-contained file: cover page, executive summary, risk rating scale, findings (grouped by unique `rule_id`, each with affected assets/evidence/PoC/remediation), MASVS category mapping, a Security Assessment section (and, for Android, an AndroidManifest.xml summary: `debuggable`/`allowBackup`/cleartext traffic/Network Security Config/exported components), a glossary of every abbreviation the report uses (MASVS, MASTG, CVSS, CWE, SLA, LLM, the `MAL-<n>` finding-id prefix, etc.), and an approval sign-off sheet.
@@ -523,6 +545,8 @@ malimite claude-login [OPTIONS]
 | `MAX_ENRICH_FUNCTIONS` | Same as `--max-enrich-functions` |
 | `SCAN_DIR` | Web service scan output directory |
 | `API_KEY` | Optional `X-Api-Key` for web API |
+| `CHAT_RATE_PER_MIN` | Shared rate limit for chat, AI Fix, and Auto Enhance (default 30/min; an Auto Enhance run counts once, not per finding) |
+| `AUTO_ENHANCE_CONCURRENCY` | Parallel LLM calls within one Auto Enhance run (default 2) |
 | `CLAUDE_CODE_CREDENTIALS_PATH` | Where `claude-login --import` and the web UI's "Import from Claude Code CLI" look for an already-completed `claude /login` session (default `~/.claude/.credentials.json`) |
 
 ---
@@ -549,11 +573,11 @@ Malimite-Core/
 
 ```bash
 mvn test -pl core,cli                            # 232 tests: Java core + CLI
-python -m unittest discover web/tests             # 152 tests: FastAPI web service
+python -m unittest discover web/tests             # 173 tests: FastAPI web service
 # or: cd web && source .venv/bin/activate && pytest tests/
 ```
 
-Unit tests in `core/` cover IPA/APK validation & extraction, Android manifest/NSC ingest, Assessment scanner, MASTG catalogs, LLM providers (including Claude OAuth), SARIF schema, HTML reporter (triage overrides, AI Fix overrides, unique `rule_id` grouping), and platform-scoped learned-rules persistence. `web/tests/` covers the AI Assistant agent loop/tools, AI Fix endpoints, triage, Functions tab routes, upload handling, and scan lifecycle. Both suites run on every pull request and on `main`.
+Unit tests in `core/` cover IPA/APK validation & extraction, Android manifest/NSC ingest, Assessment scanner, MASTG catalogs, LLM providers (including Claude OAuth), SARIF schema, HTML reporter (triage overrides, AI Fix overrides, unique `rule_id` grouping), and platform-scoped learned-rules persistence. `web/tests/` covers the AI Assistant agent loop/tools, AI Fix endpoints, Auto Enhance (job runner, cancel, retry, routes), triage, Functions tab routes, upload handling, and scan lifecycle. Both suites run on every pull request and on `main`.
 
 ---
 
@@ -570,6 +594,7 @@ See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 - ✅ iOS light scan mode (`--ios-light`): strings/symbols/plist only, for binaries too large for Ghidra auto-analysis
 - ✅ Triage workflow and AI Fix: reviewer overrides and LLM-rewritten finding text, both reversible and both reflected in `report.html`
 - ✅ `report.html` rewritten as a formal, bilingual (ID/EN) Vulnerability Assessment document — cover page, risk rating scale, MASVS mapping, approval sheet, glossary, Android manifest summary, print/PDF-ready
+- ✅ Auto Enhance: bulk AI Fix as a server-side background job with live Activity Log, Cancel Batch, and per-finding Retry
 - ✅ Detection quality: quality gates for LLM-learned rules, relevance preconditions for absence findings
 - ✅ Hardened web image: Ghidra 12.0.4, unprivileged user, loopback-only by default, API key + rate limit
 - 🔄 Closure items: real-IPA/APK integration test and Python tests on CI, cross-reference REST API

@@ -1,6 +1,6 @@
 # Malimite-Core — Development Phases
 
-> Last updated: 2026-11-02 — reflects actual codebase state, not the original planning baseline. Revised same day: `report.html` rewritten as a formal bilingual VA document, CLI log timestamps, and a Claude thinking-response fix.
+> Last updated: 2026-11-03 — reflects actual codebase state, not the original planning baseline. Revised 2026-11-02: `report.html` rewritten as a formal bilingual VA document, CLI log timestamps, and a Claude thinking-response fix. Revised 2026-11-03: Auto Enhance (bulk AI Fix as a background job).
 
 ## Current State (Baseline)
 
@@ -8,13 +8,14 @@
 |---|---|
 | **Core analysis engine** (`core/`) | ✅ Production — Ghidra (iOS Mach-O + Android arm64 `.so`), JADX (Android DEX), MASTG/MSTG scanners, Assessment, LLM, SARIF/HTML |
 | CLI (`cli/`) | ✅ Production — fat JAR with `--llm` (incl. `claude-oauth`), `--sarif`, `--html`, `--assessment`, `--fail-on`, `--ios-light`, `--decompiler asc`, `claude-login` subcommand; IPA + APK |
-| Web UI + REST (`web/`) | ✅ Production — FastAPI + SPA; IPA/APK upload; Assessment tab; Functions Explorer (file tree + source viewer); unique vuln counts by `rule_id`; Triage + AI Fix overrides |
+| Web UI + REST (`web/`) | ✅ Production — FastAPI + SPA; IPA/APK upload; Assessment tab; Functions Explorer (file tree + source viewer); unique vuln counts by `rule_id`; Triage + AI Fix overrides; Auto Enhance (bulk AI Fix background job) |
 | Slack bot (`bot/python/`) | ⚠️ Works, not hardened — Socket Mode; `.ipa` / `.apk`; runs the CLI itself. No user allowlist, no concurrency cap, no tests; counts raw occurrences (not unique issues); no `JADX_HOME`/ASC settings; no `claude-oauth` mentioned in its own README. See *Chat bots* below |
 | Watcher (`watcher/`) | ✅ Complete — inotify drop-folder daemon (`.ipa` / `.apk`) |
 | Docker: web image (`deploy/web.Dockerfile`) | ✅ Ghidra 12.0.4 + font libs + JADX; runs as uid 10001; port bound to `127.0.0.1` by default. Full iOS scan verified end to end |
 | Docker: legacy stack (`deploy/Dockerfile`, compose api/worker/watcher/bot) | ⚠️ Still Ghidra 11.1.2, which rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`): Ghidra scans are expected to fail there. Not updated |
 | AI Assistant (`web/app/agent/`) | ✅ Merged to `main` (PR #1). Tools: scan data, assessments, manifest, `recommend_hook_targets` (Frida), on-demand ASC/JADX/Ghidra. Verified with DeepSeek; Claude/OpenAI parsers only against recorded/fake streams. `claude-oauth` provider added (PR #5) |
 | AI Fix (`web/app/finding_fix.py` + `web/app/main.py`) | ✅ Merged to `main`. Per-finding LLM rewrite of Description/Evidence/Risk/PoC/Remediation stored as reversible `Override*` columns; never touches original scanned text; revert endpoint restores it. Shares the AI Assistant's rate limit and LLM provider resolution |
+| Auto Enhance (`web/app/auto_enhance.py` + `web/app/main.py`) | ✅ Merged to `main`. Bulk AI Fix as a server-side background job over many findings at once (reuses `finding_fix.fix_finding` per finding); live progress, Cancel Batch, per-finding Retry, Activity Log persisted per scan. One job per scan at a time; counts once against the shared rate limit regardless of finding count |
 | GitHub / GitLab / Bitbucket CI | ✅ Complete — SARIF upload wired (stock templates are IPA-oriented; image includes JADX) |
 | Legacy Javalin API (`api/`) | ⚠️ Legacy — superseded by `web/`; kept for Docker-compose compat |
 | Legacy Worker / Java bots (Telegram, Discord, Slack-Java) | ⚠️ Legacy — upload to `POST /api/v1/scans` (compatible with the Python web API) and reply with the `scan_id` only: no results, no polling, no tests |
@@ -22,7 +23,7 @@
 | Security hardening (Phase 7) | ⚠️ Started — see Phase 7 |
 | Enterprise scale (Phase 8) | ❌ Not started |
 
-Unit tests in `core/` and `cli/` (232) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM providers (incl. Claude OAuth and the thinking-response regression), SARIF/HTML (incl. triage and AI Fix overrides, the VA report's JSON data contract, and a JSON-escaping regression), learned-rule quality gates and on-demand decompilation; `web/tests/` (152, stdlib `unittest`/`pytest`-compatible) cover the AI Assistant, Functions tab routes, triage, and AI Fix. Both suites run on every pull request and on `main` (`.github/workflows/ci.yml`: Java on JDK 17 and 21, Python on 3.12). **A real-IPA/APK scan does not run on CI yet** (it needs Ghidra / JADX on the runner).
+Unit tests in `core/` and `cli/` (232) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM providers (incl. Claude OAuth and the thinking-response regression), SARIF/HTML (incl. triage and AI Fix overrides, the VA report's JSON data contract, and a JSON-escaping regression), learned-rule quality gates and on-demand decompilation; `web/tests/` (173, stdlib `unittest`/`pytest`-compatible) cover the AI Assistant, Functions tab routes, triage, AI Fix, and Auto Enhance (job runner concurrency/cancel/retry, routes). Both suites run on every pull request and on `main` (`.github/workflows/ci.yml`: Java on JDK 17 and 21, Python on 3.12). **A real-IPA/APK scan does not run on CI yet** (it needs Ghidra / JADX on the runner).
 
 ---
 
@@ -265,6 +266,28 @@ A reviewer clicks ✨ AI Fix on a finding, picks a provider/model and which fiel
 
 ---
 
+## Phase 5g — Auto Enhance
+**Status: ✅ Complete**
+
+**Goal:** Let a reviewer run AI Fix across many findings at once instead of clicking it one finding at a time, without blocking the browser and without a report regeneration per finding.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 5g.1 | Shared per-finding apply | ✅ | `web/app/auto_enhance.py`'s `apply_ai_fix_to_row()` extracted from the per-finding AI Fix endpoint's body so both the single-finding route and the bulk job call the exact same LLM-call + reversible-override-write logic; the per-finding route itself is otherwise unchanged (same 18 existing tests still pass) |
+| 5g.2 | Background job runner | ✅ | In-process job registry (`_JOBS`/`_RUNTIME`, keyed by a short job id) with bounded concurrency (`asyncio.Semaphore`, default 2, `AUTO_ENHANCE_CONCURRENCY`); the report is regenerated **once** after the whole batch, not once per finding. One active job per scan (`_ACTIVE_BY_SCAN`) — a second start attempt gets `409` |
+| 5g.3 | Per-item detail | ✅ | Each item tracks state (`pending`/`running`/`applied`/`failed`/`cancelled`), duration, attempt count, which fields the LLM actually rewrote, and the rewritten text itself (`_changes_from_fix`, clipped to 2000 chars) — enough for the UI's View Details panel without re-reading the database |
+| 5g.4 | Cancel Batch | ✅ | `request_cancel()` sets a flag items check right before they start their LLM call: findings already mid-call finish normally (nothing half-written), everything still queued is marked `cancelled` and skipped — no abrupt task cancellation |
+| 5g.5 | Retry Finding | ✅ | `retry_item()` re-runs one `failed`/`cancelled` item with the run's original provider/model/fields, inside the *same* job/Activity Log entry (not a new run) — queues into a still-running job, or transparently reopens a finished one and regenerates the report again if the retry succeeds. Refused (`409`) while a cancel is in progress, so a retry can't un-cancel a batch mid-stop |
+| 5g.6 | Activity Log persistence | ✅ | Every finished run appended to `<scan_dir>/auto_enhance_log.json` (capped at 50 entries), survives a server restart; `GET .../auto-enhance` returns the active job (if any) plus history so reopening the modal — even from a different browser tab — picks the live run back up |
+| 5g.7 | REST endpoints | ✅ | `POST /api/v1/scans/{id}/auto-enhance` (202, starts a job), `GET .../auto-enhance` (overview), `GET .../auto-enhance/jobs/{job_id}` (poll, falls back to the persisted log after a restart), `POST .../jobs/{job_id}/cancel`, `POST .../jobs/{job_id}/items/{vuln_id}/retry`. One `_chat_rate_limit()` hit per **run**, not per finding |
+| 5g.8 | Web UI | ✅ | "✨ Auto Enhance" button on the Vulnerabilities tab opens a modal: provider/model pickers, a searchable/filterable findings table with Select all/Clear, a Fields-to-enhance picker, and an **Activity Log** tab with a progress ring, elapsed-time clock, per-finding timeline, Cancel Batch, Retry Finding, View Details, and View Full Log across runs |
+| 5g.9 | Tests | ✅ | `test_auto_enhance.py` (21 new: job runner concurrency/cancel/retry/persistence, all 7 route cases) |
+
+### Deliverable
+A reviewer selects any number of findings, picks which fields to rewrite, and clicks Run Auto Enhance; the batch runs on the server with live progress, can be cancelled mid-run without losing in-flight work, and any failure can be retried individually without re-running the whole batch. Verified end to end in-browser against a real scan (`dvba_v1.1.0.apk`) with DeepSeek: a 4-finding run, a mid-run cancel (2 completed / 2 skipped), a successful retry of a skipped finding, and a deliberately-invalid-model run to exercise the failed/error path. **Met.**
+
+---
+
 ## Phase 6 — Observability
 **Status: ❌ Not started — NEXT MAJOR PHASE**
 
@@ -347,6 +370,7 @@ Phase 5c  █████████░  AI Assistant            ~90%   [merged
 Phase 5d  ███████░░░  Detection quality       ~70%   [wider corpus needed]
 Phase 5e  ██████████  AI Fix                  100%   ✅ DONE
 Phase 5f  ██████████  VA Report Overhaul      100%   ✅ DONE
+Phase 5g  ██████████  Auto Enhance            100%   ✅ DONE
 Phase 6   ░░░░░░░░░░  Observability             0%   ← NEXT MAJOR PHASE
 Phase 7   ███░░░░░░░  Security & Hardening     ~30%   [started: 7.1, 7.2, 7.4, 7.5, 7.8 partial]
 Phase 8   ░░░░░░░░░░  Scale & Enterprise        0%
