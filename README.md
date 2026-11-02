@@ -37,6 +37,7 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 - [Detection engines](#detection-engines)
 - [Triage workflow](#triage-workflow)
 - [AI Fix](#ai-fix)
+- [HTML Report](#html-report)
 - [Configuration](#configuration)
 - [Project structure](#project-structure)
 - [Testing](#testing)
@@ -224,7 +225,7 @@ at 2 GiB.
 
 | File | Purpose |
 |---|---|
-| `report.html` | Human-readable security report |
+| `report.html` | Bilingual VA report — see [HTML Report](#html-report) |
 | `findings.sarif` | Machine-readable for Code Scanning / DefectDojo |
 | `*.sqlite` | Full decompilation + findings database |
 | `scan.json` | Bundle metadata summary |
@@ -450,6 +451,18 @@ Every finding in the **Vulnerabilities** tab has an **✨ AI Fix** action: it ca
 
 ---
 
+## HTML Report
+
+`report.html` is a formal, bilingual (Indonesian/English) Vulnerability Assessment document — not just a technical dashboard — generated as a single self-contained file: cover page, executive summary, risk rating scale, findings (grouped by unique `rule_id`, each with affected assets/evidence/PoC/remediation), MASVS category mapping, a Security Assessment section (and, for Android, an AndroidManifest.xml summary: `debuggable`/`allowBackup`/cleartext traffic/Network Security Config/exported components), a glossary of every abbreviation the report uses (MASVS, MASTG, CVSS, CWE, SLA, LLM, the `MAL-<n>` finding-id prefix, etc.), and an approval sign-off sheet.
+
+- **Bilingual by design.** A language toggle (ID / EN / ID+EN side-by-side) switches every label and heading; finding text sourced from the MASTG catalog or an LLM stays in its original language (English) since those fields accept plain strings, not just the template's `{"id":"…","en":"…"}` bilingual shape.
+- **Print/PDF-ready.** The template's own "Print PDF" button opens the browser print dialog with A4 margins and page breaks between sections already set up — no separate PDF export step.
+- **Picked by platform automatically.** iOS scans get `core/src/main/resources/report-template/va-report-ios.html`'s layout, Android scans get `va-report-android.html`'s (manifest section, DEX/APK-specific glossary entries); both share the same JSON data contract documented at the top of each file.
+- **No administrative fields to fill in.** Client name, document number, classification, and sign-off names render as `—` placeholders (`Prepared by` defaults to "Malimite automated scan") — Malimite has no UI for that metadata today, so a reviewer fills them in after export if the report is going into a formal deliverable.
+- Requires a network connection to render with its intended fonts (Google Fonts' IBM Plex Sans/Mono, loaded via `<link>`, not vendored) — falls back to the system sans-serif/monospace stack offline.
+
+---
+
 ## Configuration
 
 ### CLI flags
@@ -535,7 +548,7 @@ Malimite-Core/
 ## Testing
 
 ```bash
-mvn test -pl core,cli                            # 219 tests: Java core + CLI
+mvn test -pl core,cli                            # 232 tests: Java core + CLI
 python -m unittest discover web/tests             # 152 tests: FastAPI web service
 # or: cd web && source .venv/bin/activate && pytest tests/
 ```
@@ -556,6 +569,7 @@ See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 - ✅ Claude Pro/Max OAuth as an LLM provider — no separately-billed `ANTHROPIC_API_KEY` required
 - ✅ iOS light scan mode (`--ios-light`): strings/symbols/plist only, for binaries too large for Ghidra auto-analysis
 - ✅ Triage workflow and AI Fix: reviewer overrides and LLM-rewritten finding text, both reversible and both reflected in `report.html`
+- ✅ `report.html` rewritten as a formal, bilingual (ID/EN) Vulnerability Assessment document — cover page, risk rating scale, MASVS mapping, approval sheet, glossary, Android manifest summary, print/PDF-ready
 - ✅ Detection quality: quality gates for LLM-learned rules, relevance preconditions for absence findings
 - ✅ Hardened web image: Ghidra 12.0.4, unprivileged user, loopback-only by default, API key + rate limit
 - 🔄 Closure items: real-IPA/APK integration test and Python tests on CI, cross-reference REST API
