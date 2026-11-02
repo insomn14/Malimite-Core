@@ -71,8 +71,43 @@ public class GhidraRunner {
     }
 
     public void decompile(String executableFilePath, String projectDirectoryPath, BinaryIdentity identity) {
-        log.info("Starting Ghidra decompilation: {} (objcAnalyzer={})",
-                executableFilePath, identity.enableObjectiveCAnalyzer());
+        boolean objcAnalyzer = identity.enableObjectiveCAnalyzer();
+        try {
+            runOnce(executableFilePath, projectDirectoryPath, identity, objcAnalyzer);
+        } catch (OomKillDetected oom) {
+            if (!objcAnalyzer) {
+                // Already running the lighter profile — nothing left to fall back to.
+                throw new RuntimeException("Ghidra decompilation failed: " + oom.getMessage(), oom);
+            }
+            log.warn("Ghidra was OOM-killed with the Objective-C analyzer enabled ({}). "
+                    + "Retrying once with the Objective-C analyzer disabled — classes/functions ingested "
+                    + "from this retry will be less complete for ObjC-heavy code, but Swift/C decompilation "
+                    + "and string extraction are unaffected.", oom.getMessage());
+            try {
+                runOnce(executableFilePath, projectDirectoryPath, identity, false);
+                log.warn("Retry without the Objective-C analyzer succeeded. Consider raising this host's "
+                        + "memory limit (e.g. systemd MemoryMax=) or GHIDRA_MAX_MEM so future scans of "
+                        + "similarly large binaries don't need this fallback.");
+            } catch (Exception retryFailure) {
+                throw new RuntimeException(
+                        "Ghidra decompilation failed on first attempt (OOM-killed, objcAnalyzer=true): "
+                                + oom.getMessage()
+                                + " | retry without Objective-C analyzer also failed: " + retryFailure.getMessage(),
+                        retryFailure);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Ghidra decompilation failed: " + describeFailure(e), e);
+        }
+    }
+
+    /** Thrown internally when a Ghidra subprocess exit is diagnosed as an OOM-kill, to drive the one-shot retry. */
+    private static final class OomKillDetected extends RuntimeException {
+        OomKillDetected(String message) { super(message); }
+    }
+
+    private void runOnce(String executableFilePath, String projectDirectoryPath, BinaryIdentity identity,
+                          boolean objcAnalyzer) throws IOException, InterruptedException {
+        log.info("Starting Ghidra decompilation: {} (objcAnalyzer={})", executableFilePath, objcAnalyzer);
 
         ServerSocket serverSocket = openServerSocket();
         List<String> activeLibs = identity.libraryPrefixes();
@@ -80,8 +115,7 @@ public class GhidraRunner {
 
         try (ServerSocket ss = serverSocket) {
             Process ghidra = launchGhidra(
-                    executableFilePath, projectDirectoryPath, ss.getLocalPort(), libsArg,
-                    identity.enableObjectiveCAnalyzer());
+                    executableFilePath, projectDirectoryPath, ss.getLocalPort(), libsArg, objcAnalyzer);
             streamGhidraOutput(ghidra);
 
             ss.setSoTimeout(ACCEPT_POLL_MS);
@@ -111,14 +145,21 @@ public class GhidraRunner {
             ghidra.waitFor();
             log.info("Ghidra decompilation complete");
 
+        } catch (OomOnAccept oom) {
+            log.error("Ghidra subprocess was OOM-killed: {}", oom.getMessage());
+            throw new OomKillDetected(oom.getMessage());
         } catch (Exception e) {
-            String detail = e.getMessage();
-            String scriptHint = summarizeCapturedErrors();
-            if (scriptHint != null && !scriptHint.isBlank())
-                detail = detail + " | ghidra-script: " + scriptHint;
             log.error("Ghidra decompilation failed", e);
-            throw new RuntimeException("Ghidra decompilation failed: " + detail, e);
+            throw e;
         }
+    }
+
+    private String describeFailure(Exception e) {
+        String detail = e.getMessage();
+        String scriptHint = summarizeCapturedErrors();
+        if (scriptHint != null && !scriptHint.isBlank())
+            detail = detail + " | ghidra-script: " + scriptHint;
+        return detail;
     }
 
     // ── connection watchdog ──────────────────────────────────────────────────
@@ -158,14 +199,15 @@ public class GhidraRunner {
                     int rc;
                     try { rc = ghidra.exitValue(); }
                     catch (IllegalThreadStateException x) { rc = -1; }
-                    String hint = (rc == 0)
-                            ? "post-script likely failed before connecting (missing org.json, bad script args, "
-                              + "or socket error). If the log shows Import succeeded, this is NOT a Mach-O "
-                              + "parse failure — check DumpClassData / [ghidra-output] for script errors."
-                            : "most likely Mach-O parse/import failure; check the [ghidra-output] ERROR lines.";
-                    throw new IOException(
-                            "Ghidra subprocess exited with rc=" + rc + " before " + phase +
-                            " connection — " + hint);
+                    String hint = diagnoseExit(rc);
+                    String message = "Ghidra subprocess exited with rc=" + rc + " before " + phase +
+                            " connection — " + hint;
+                    if (rc == SIGNAL_EXIT_BASE + SIGKILL) {
+                        // Let the caller decide whether to retry with a lighter analyzer profile
+                        // instead of surfacing this as a generic Mach-O parse failure.
+                        throw new OomOnAccept(message);
+                    }
+                    throw new IOException(message);
                 }
                 if (System.currentTimeMillis() > deadline) {
                     log.error("Timed out after {} min waiting for Ghidra {} connection",
@@ -177,6 +219,99 @@ public class GhidraRunner {
                 }
                 // else: still alive, still within deadline → keep polling
             }
+        }
+    }
+
+    /**
+     * Raised when the Ghidra subprocess exited with rc=137 (SIGKILL) during the accept phase —
+     * almost always an OOM-kill (confirmed via cgroup {@code memory.events} when available).
+     * Kept as an {@link IOException} subtype so existing catch sites still work unless they
+     * specifically want to branch on "was this an OOM" (see {@link #decompile}).
+     */
+    static final class OomOnAccept extends IOException {
+        OomOnAccept(String message) { super(message); }
+    }
+
+    /** Exit code a shell reports when a process is killed by signal N (POSIX: 128+N). */
+    private static final int SIGNAL_EXIT_BASE = 128;
+    private static final int SIGKILL = 9;
+
+    /**
+     * Build a diagnostic hint for a Ghidra subprocess exit code, distinguishing:
+     * <ul>
+     *   <li>rc=0 — post-script never dialed back despite the process exiting cleanly
+     *       (classpath/script bug, not an import failure)</li>
+     *   <li>rc=137 (128+SIGKILL) with corroborating cgroup {@code memory.events} —
+     *       OOM-killed by the kernel/cgroup, <em>not</em> a Mach-O parse failure</li>
+     *   <li>rc=137 without cgroup evidence (e.g. macOS, or cgroups v1) — still flagged
+     *       as "likely killed (OOM or external signal)" rather than asserting parse failure</li>
+     *   <li>anything else — the original Mach-O parse/import failure hypothesis</li>
+     * </ul>
+     */
+    static String diagnoseExit(int rc) {
+        if (rc == 0) {
+            return "post-script likely failed before connecting (missing org.json, bad script args, "
+                    + "or socket error). If the log shows Import succeeded, this is NOT a Mach-O "
+                    + "parse failure — check DumpClassData / [ghidra-output] for script errors.";
+        }
+        if (rc == SIGNAL_EXIT_BASE + SIGKILL) {
+            CgroupOomStatus oom = readCgroupOomStatus();
+            if (oom.observed()) {
+                return "process was SIGKILLed and this cgroup's memory.events shows " + oom.oomKillCount()
+                        + " OOM kill(s) (memory.max=" + oom.memoryMaxDescription() + ") — "
+                        + "this is an out-of-memory kill, NOT a Mach-O parse/import failure. "
+                        + "The binary/analyzer combination needs more memory (raise the service's "
+                        + "MemoryMax, e.g. systemd MemoryMax=) or a lighter analyzer profile "
+                        + "(e.g. disable the Objective-C analyzer for very large binaries).";
+            }
+            return "process was SIGKILLed (rc=137). No cgroup memory.events evidence was available on this "
+                    + "host to confirm OOM, but SIGKILL is far more consistent with an OOM-kill (by the "
+                    + "kernel or a memory-limited cgroup/container) than a Mach-O parse failure — check "
+                    + "`dmesg`/`journalctl -k` for \"Out of memory\" / \"Killed process\" around this time "
+                    + "before assuming the binary itself is malformed.";
+        }
+        return "most likely Mach-O parse/import failure; check the [ghidra-output] ERROR lines.";
+    }
+
+    /** Minimal snapshot of what we could learn from this process's cgroup v2 memory controller. */
+    record CgroupOomStatus(boolean observed, long oomKillCount, String memoryMaxDescription) {
+        static CgroupOomStatus unavailable() { return new CgroupOomStatus(false, 0, "unknown"); }
+    }
+
+    /**
+     * Best-effort read of {@code /sys/fs/cgroup/.../memory.events} and {@code memory.max} for
+     * <em>this</em> process's own cgroup (Ghidra runs as a child, so it shares it). Cgroups v1,
+     * non-Linux hosts, or missing read permission all degrade gracefully to "unavailable" —
+     * this is a diagnostic aid, never a hard requirement for reporting the failure.
+     */
+    static CgroupOomStatus readCgroupOomStatus() {
+        try {
+            String selfCgroup = Files.readString(Path.of("/proc/self/cgroup")).strip();
+            // cgroup v2 single-hierarchy line looks like "0::/user.slice/.../malimite-web.service"
+            String relative = selfCgroup.substring(selfCgroup.indexOf("/"));
+            Path base = Path.of("/sys/fs/cgroup" + relative);
+
+            Path eventsFile = base.resolve("memory.events");
+            if (!Files.isReadable(eventsFile)) return CgroupOomStatus.unavailable();
+
+            long oomKill = 0;
+            for (String line : Files.readAllLines(eventsFile)) {
+                String[] parts = line.trim().split("\\s+");
+                if (parts.length == 2 && "oom_kill".equals(parts[0])) {
+                    oomKill = Long.parseLong(parts[1]);
+                }
+            }
+
+            String maxDesc = "unknown";
+            Path maxFile = base.resolve("memory.max");
+            if (Files.isReadable(maxFile)) {
+                String raw = Files.readString(maxFile).strip();
+                maxDesc = "max".equals(raw) ? "unlimited" : (Long.parseLong(raw) / (1024 * 1024)) + "MiB";
+            }
+
+            return new CgroupOomStatus(oomKill > 0, oomKill, maxDesc);
+        } catch (Exception e) {
+            return CgroupOomStatus.unavailable();
         }
     }
 
@@ -234,6 +369,25 @@ public class GhidraRunner {
                     + "If DumpClassData fails with osgi.ee=UNKNOWN, install Temurin 21 and set GHIDRA_JAVA_HOME.",
                     Runtime.version().feature());
         }
+
+        // analyzeHeadless's own launch.sh hardcodes MAXMEM=2G and builds "-Xmx${MAXMEM}" into
+        // VMARGS_FROM_LAUNCH_SH, placed *before* any pass-thru caller args on the final java
+        // command line. We cannot append to that command line without patching the vendored
+        // Ghidra script, but JAVA_TOOL_OPTIONS is read by the JVM at startup and -Xmx given
+        // there wins over an earlier -Xmx on the actual command line — see
+        // https://docs.oracle.com/en/java/javase/21/docs/specs/man/java.html (JAVA_TOOL_OPTIONS).
+        // This raises Ghidra's heap ceiling (default 4096 MB here vs Ghidra's stock 2048 MB)
+        // for large Swift/ObjC binaries without modifying vendor files. The JVM prints one
+        // "Picked up JAVA_TOOL_OPTIONS" line to stderr (redirected into our [ghidra-output] log).
+        int maxMemMb = config.ghidraMaxMemMb();
+        String existingToolOpts = pb.environment().get("JAVA_TOOL_OPTIONS");
+        String xmxOpt = "-Xmx" + maxMemMb + "m";
+        pb.environment().put("JAVA_TOOL_OPTIONS",
+                existingToolOpts == null || existingToolOpts.isBlank()
+                        ? xmxOpt
+                        : existingToolOpts + " " + xmxOpt);
+        log.info("Ghidra heap ceiling: {} MB (override with GHIDRA_MAX_MEM env var)", maxMemMb);
+
         log.info("Launching: {}", String.join(" ", pb.command()));
         return pb.start();
     }
@@ -293,12 +447,55 @@ public class GhidraRunner {
         }
     }
 
+    /**
+     * Recurring Ghidra analyzer exceptions that are noisy but non-fatal (the binary still
+     * decompiles) — known issues in Ghidra's own analyzers, not something Malimite can fix.
+     * Each pattern's first occurrence (and its full stack trace) is still logged verbatim;
+     * every later line matching the same pattern is counted and suppressed instead, with a
+     * one-line summary emitted when the Ghidra subprocess exits. This is what made this
+     * exact failure's analysis.log balloon to 74 KB of "Unsupported Objective C type
+     * encoding: ]" stack traces for scan 039733fe-9923-47e1-89cc-28127f57f0cf.
+     */
+    private static final String[] KNOWN_NOISY_GHIDRA_ERRORS = {
+            "Unsupported Objective C type encoding",
+    };
+
+    private final Map<String, Integer> noisyErrorCounts = new java.util.concurrent.ConcurrentHashMap<>();
+
     private void streamGhidraOutput(Process process) {
         Thread t = new Thread(() -> {
+            // Tracks whether the line(s) we're currently reading are stack-trace continuation
+            // lines ("\tat ...") belonging to an *already-summarized* (2nd+) noisy exception —
+            // only those get suppressed; the first full exception+trace is always logged.
+            String[] suppressingPattern = {null};
             try (BufferedReader r = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = r.readLine()) != null) {
-                    log.info("Ghidra: {}", line);
+                    if (suppressingPattern[0] != null) {
+                        if (isStackTraceContinuation(line)) {
+                            continue; // part of the exception we're already counting — drop it
+                        }
+                        suppressingPattern[0] = null; // trace ended; fall through to normal handling
+                    }
+
+                    String noisyPattern = matchNoisyHeader(line);
+                    if (noisyPattern != null) {
+                        int seen = noisyErrorCounts.merge(noisyPattern, 1, Integer::sum);
+                        if (seen == 1) {
+                            log.info("Ghidra: {}", line); // first occurrence: log header + full trace below
+                        } else {
+                            if (seen == 2) {
+                                log.info("Ghidra: (further \"{}\" occurrences will be counted, not logged "
+                                        + "line-by-line — known non-fatal Ghidra ObjC analyzer limitation)",
+                                        noisyPattern);
+                            }
+                            suppressingPattern[0] = noisyPattern;
+                            continue; // drop this header line and its upcoming trace
+                        }
+                    } else {
+                        log.info("Ghidra: {}", line);
+                    }
+
                     if (line.contains("SCRIPT ERROR") || line.contains("osgi.ee")
                             || line.contains("ClassNotFoundException: DumpClassData")
                             || line.contains("GhidraScriptLoadException")) {
@@ -306,12 +503,31 @@ public class GhidraRunner {
                         while (ghidraErrors.size() > 8) ghidraErrors.pollFirst();
                     }
                 }
+                logNoisyErrorSummary();
             } catch (IOException e) {
                 log.warn("Error reading Ghidra stdout", e);
+                logNoisyErrorSummary();
             }
         }, "ghidra-output");
         t.setDaemon(true);
         t.start();
+    }
+
+    private static boolean isStackTraceContinuation(String line) {
+        return line.startsWith("\tat ") || line.isBlank() || line.equals(" ");
+    }
+
+    private static String matchNoisyHeader(String line) {
+        for (String pattern : KNOWN_NOISY_GHIDRA_ERRORS) {
+            if (line.contains(pattern)) return pattern;
+        }
+        return null;
+    }
+
+    private void logNoisyErrorSummary() {
+        noisyErrorCounts.forEach((pattern, count) ->
+                log.info("Ghidra: suppressed {} total occurrence(s) of known non-fatal error \"{}\" "
+                        + "(full trace shown once above)", count, pattern));
     }
 
     private String summarizeCapturedErrors() {

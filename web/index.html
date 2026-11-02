@@ -495,10 +495,9 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 .chat-msg hr{border:0;border-top:1px solid var(--border);margin:.7rem 0}
 .chat-msg blockquote{margin:.4rem 0;padding:.2rem .7rem;border-left:3px solid var(--border);color:var(--muted)}
 .chat-tbl{overflow-x:auto;margin:.5rem 0}
-.chat-tbl table{border-collapse:collapse;font-size:.78rem;min-width:100%}
-.chat-tbl th,.chat-tbl td{border:1px solid var(--border);padding:.3rem .5rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}
-.chat-tbl td:first-child,.chat-tbl th:first-child{white-space:nowrap}
-.chat-tbl th{background:var(--bg);font-weight:600}
+.chat-tbl table{border-collapse:collapse;font-size:.78rem;width:max-content;max-width:none;table-layout:auto}
+.chat-tbl th,.chat-tbl td{border:1px solid var(--border);padding:.3rem .5rem;text-align:left;vertical-align:top;overflow-wrap:break-word;max-width:28rem}
+.chat-tbl th{background:var(--bg);font-weight:600;white-space:nowrap}
 .chat-user p{margin:.1rem 0}
 .chat-card{padding:1rem}
 .chat-bar{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem}

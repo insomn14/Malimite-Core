@@ -14,19 +14,44 @@ import java.util.List;
  *   GHIDRA_JAVA_HOME — optional JDK 17/21 home for analyzeHeadless (avoid Java 23+/25)
  *   EXTRA_LIBS       — optional comma-separated library prefixes to add
  *   REMOVE_LIBS      — optional comma-separated library prefixes to remove
+ *   GHIDRA_MAX_MEM   — optional Ghidra analyzeHeadless JVM heap size in MB (default 4096;
+ *                      Ghidra's own analyzeHeadless script default is 2048, which is too
+ *                      small for large Swift/ObjC iOS binaries with many embedded
+ *                      frameworks — see scan 039733fe-9923-47e1-89cc-28127f57f0cf, where
+ *                      the subprocess was OOM-killed by the host cgroup during ObjC +
+ *                      String Extraction analysis)
  */
 public class CoreConfig {
+
+    private static final int DEFAULT_GHIDRA_MAX_MEM_MB = 4096;
 
     private final Path ghidraHome;
     private final List<String> addedLibraries;
     private final List<String> removedLibraries;
     private final String osType;
+    private final int ghidraMaxMemMb;
 
     public CoreConfig(Path ghidraHome) {
         this.ghidraHome      = ghidraHome;
         this.osType          = System.getProperty("os.name", "").toLowerCase();
         this.addedLibraries  = parseList(System.getenv("EXTRA_LIBS"));
         this.removedLibraries = parseList(System.getenv("REMOVE_LIBS"));
+        this.ghidraMaxMemMb  = parseMaxMemMb(System.getenv("GHIDRA_MAX_MEM"));
+    }
+
+    private static int parseMaxMemMb(String raw) {
+        if (raw == null || raw.isBlank()) return DEFAULT_GHIDRA_MAX_MEM_MB;
+        try {
+            int mb = Integer.parseInt(raw.strip());
+            return mb > 0 ? mb : DEFAULT_GHIDRA_MAX_MEM_MB;
+        } catch (NumberFormatException e) {
+            return DEFAULT_GHIDRA_MAX_MEM_MB;
+        }
+    }
+
+    /** Heap size (MB) to request for the Ghidra analyzeHeadless subprocess's JVM. */
+    public int ghidraMaxMemMb() {
+        return ghidraMaxMemMb;
     }
 
     /** Resolves GHIDRA_HOME from the supplied path or falls back to the GHIDRA_HOME env var. */
