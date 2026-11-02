@@ -1,0 +1,505 @@
+<!doctype html>
+<!--
+  MALIMITE — Vulnerability Assessment Report Template · ANDROID / APK (Bilingual ID/EN)
+  ======================================================================
+  CARA PAKAI / HOW TO USE
+  Tool cukup mengganti isi blok script ber-id "report-data" (lihat komentar HTML persis
+  di atas blok tersebut) dengan JSON hasil scan. Seluruh halaman dirender dari data tersebut
+  (tanpa template engine). The tool only needs to replace the JSON inside the script block
+  with id "report-data" (see the HTML comment right above it). The whole page renders from
+  it — no template engine.
+  PENTING / IMPORTANT: escape "</" menjadi "<\/" saat serialisasi JSON (mis. evidence berisi
+  "</script>") agar blok data tidak terputus. Python: json.dumps(d).replace("</", "<\\/")
+
+  KONTRAK DATA / DATA CONTRACT (semua field opsional kecuali yang bertanda *)
+  meta:      report_title, doc_number, classification, client, version, generated*, scan_id*,
+             duration_ms, tool_version, period_start, period_end,
+             prepared_by[], reviewed_by[], approved_by[], history[{version,date,author,change}]
+  app:       package_name*, platform*, app_name, executable, version_name, version_code, language,
+             universal, min_sdk, target_sdk, signing_schemes (mis. "v2, v3"), cert_sha256,
+             apk_sha256, classes, functions, strings
+  manifest:  debuggable (bool), allow_backup (bool), uses_cleartext_traffic (bool),
+             network_security_config (string), permissions[string],
+             components[{type: activity|service|receiver|provider, name, exported (bool), permission}]
+             Nilai null/kosong otomatis disembunyikan. Null/empty values are hidden automatically.
+  summary:   occurrences, executive_note (string | {id,en})
+  controls:  [{group, name, status: PRESENT|PARTIAL|ABSENT|UNKNOWN, signal, detail, rule, confidence}]
+  findings*: [{id, severity: CRITICAL|HIGH|MEDIUM|LOW|INFO, cvss, cvss_vector, title, rule,
+              source: MASTG|LLM, category, cwe, masvs, description, affected[{name,type,location}],
+              evidence, poc[], remediation, reference, status: OPEN|IN_PROGRESS|FIXED|ACCEPTED|FALSE_POSITIVE}]
+  code_surface: {entry_points[], entry_points_count, classes[{name, fn}]}
+  strings_sample: [{address, segment, value}], strings_total
+  Teks bebas (title, description, remediation, executive_note) boleh string atau {"id":"…","en":"…"}.
+  Free text fields accept a string or {"id":"…","en":"…"}.
+  Jumlah per severity/kategori dihitung otomatis dari findings. Counts are computed from findings.
+-->
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Malimite VA Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f5f7; --paper:#ffffff; --ink:#1b1f27; --muted:#5d6675; --faint:#8b93a1; --line:#e2e5ea; --soft:#f7f8fa;
+  --brand:#2f3a8f; --brand-soft:#eceefb;
+  --crit:#9b1c31; --crit-bg:#fbe9ec; --high:#c62828; --high-bg:#fdecec; --med:#b8650a; --med-bg:#fdf3e4;
+  --low:#1f5fbf; --low-bg:#e8f0fc; --info:#4b5563; --info-bg:#eef0f3;
+  --ok:#17803d; --ok-bg:#e6f5ec; --code:#f3f4f7;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1218; --paper:#161a22; --ink:#e6e8ec; --muted:#a2a9b6; --faint:#77808f; --line:#2a303b; --soft:#1b2029;
+    --brand:#9aa6ff; --brand-soft:#232846;
+    --crit:#ff7a8f; --crit-bg:#3a1820; --high:#ff8a80; --high-bg:#3a1c1c; --med:#f0b25a; --med-bg:#382a15;
+    --low:#7fb0ff; --low-bg:#172840; --info:#b5bcc8; --info-bg:#232833; --ok:#6fd492; --ok-bg:#16301f; --code:#1d222c;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1218; --paper:#161a22; --ink:#e6e8ec; --muted:#a2a9b6; --faint:#77808f; --line:#2a303b; --soft:#1b2029;
+  --brand:#9aa6ff; --brand-soft:#232846;
+  --crit:#ff7a8f; --crit-bg:#3a1820; --high:#ff8a80; --high-bg:#3a1c1c; --med:#f0b25a; --med-bg:#382a15;
+  --low:#7fb0ff; --low-bg:#172840; --info:#b5bcc8; --info-bg:#232833; --ok:#6fd492; --ok-bg:#16301f; --code:#1d222c;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 "IBM Plex Sans",system-ui,sans-serif}
+code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+a{color:var(--brand)}
+/* language switching */
+body[data-lang="id"] .l-en, body[data-lang="id"] .l-sep{display:none}
+body[data-lang="en"] .l-id, body[data-lang="en"] .l-sep{display:none}
+body[data-lang="both"] .l-en{color:var(--faint);font-weight:inherit}
+.l-sep{color:var(--faint)}
+/* toolbar */
+.toolbar{position:sticky;top:0;z-index:5;display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap;
+  padding:10px 16px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.toolbar .lbl{font-size:12px;color:var(--muted);margin-right:4px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button,.btn{font:inherit;font-size:12px;padding:6px 12px;border:0;background:var(--paper);color:var(--ink);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
+.btn{border:1px solid var(--line);border-radius:8px}
+/* layout */
+.wrap{max-width:960px;margin:0 auto;padding:24px 16px 64px}
+.page{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:32px 36px;margin-bottom:20px}
+@media (max-width:640px){.page{padding:20px 16px}}
+h1{font-size:30px;line-height:1.2;margin:6px 0 4px}
+h2{font-size:19px;margin:0 0 14px;padding-bottom:10px;border-bottom:2px solid var(--brand);display:flex;gap:10px;align-items:baseline}
+h2 .num{color:var(--brand)}
+h3{font-size:15px;margin:22px 0 8px}
+p{margin:0 0 10px}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)} .small{font-size:12px}
+/* cover */
+.cover{border-top:6px solid var(--brand)}
+.brand-mark{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.brand-mark svg{width:28px;height:28px;color:var(--brand);flex:none}
+.brand-mark .word{font-size:17px;font-weight:700;letter-spacing:.02em;color:var(--ink)}
+.cover .app{font-size:16px;color:var(--muted)}
+.cover-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 24px;margin-top:28px}
+.kv{display:flex;flex-direction:column}.kv .k{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+.kv .v{font-weight:500;word-break:break-word}
+.badge-class{display:inline-block;margin-top:24px;padding:6px 12px;border:1.5px solid var(--high);color:var(--high);border-radius:6px;font-weight:700;font-size:12px;letter-spacing:.08em}
+/* tables */
+.tw{overflow-x:auto;margin:6px 0 14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--soft);font-weight:600;font-size:12px;color:var(--muted)}
+td.k{width:34%;color:var(--muted)}
+td.c,th.c{text-align:center}
+/* severity */
+.sev{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+.sev.CRITICAL{background:var(--crit-bg);color:var(--crit)} .sev.HIGH{background:var(--high-bg);color:var(--high)}
+.sev.MEDIUM{background:var(--med-bg);color:var(--med)} .sev.LOW{background:var(--low-bg);color:var(--low)}
+.sev.INFO{background:var(--info-bg);color:var(--info)}
+.st{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;background:var(--info-bg);color:var(--info)}
+.st.PRESENT,.st.FIXED{background:var(--ok-bg);color:var(--ok)} .st.ABSENT,.st.OPEN{background:var(--high-bg);color:var(--high)}
+.st.PARTIAL,.st.IN_PROGRESS{background:var(--med-bg);color:var(--med)}
+.tag{display:inline-block;padding:1px 7px;border:1px solid var(--line);border-radius:5px;font-size:11px;color:var(--muted);margin-right:4px}
+.tag.LLM{border-color:var(--med);color:var(--med)}
+/* stat cards */
+.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:8px 0 18px}
+@media (max-width:700px){.stats{grid-template-columns:repeat(3,1fr)}}
+.stat{border:1px solid var(--line);border-radius:10px;padding:12px}
+.stat .n{font-size:28px;font-weight:700;line-height:1}
+.stat .t{font-size:11px;font-weight:700;letter-spacing:.05em;margin-top:6px}
+.stat.CRITICAL .n,.stat.CRITICAL .t{color:var(--crit)} .stat.HIGH .n,.stat.HIGH .t{color:var(--high)}
+.stat.MEDIUM .n,.stat.MEDIUM .t{color:var(--med)} .stat.LOW .n,.stat.LOW .t{color:var(--low)}
+.stat.INFO .n,.stat.INFO .t{color:var(--info)} .stat.TOTAL .n,.stat.TOTAL .t{color:var(--brand)}
+.posture{display:flex;gap:16px;align-items:center;padding:14px 16px;border-radius:10px;background:var(--soft);border-left:5px solid var(--brand);margin-bottom:16px}
+.posture .r{font-size:20px;font-weight:700}
+.bars{display:grid;gap:6px;margin:6px 0 14px}
+.bar{display:grid;grid-template-columns:120px 1fr 32px;gap:10px;align-items:center;font-size:12px}
+.bar .track{height:10px;background:var(--soft);border-radius:5px;overflow:hidden}
+.bar .fill{height:100%;background:var(--brand);border-radius:5px}
+/* findings */
+.finding{border:1px solid var(--line);border-radius:10px;margin:0 0 18px;overflow:hidden;break-inside:avoid-page}
+.f-head{display:flex;gap:10px;align-items:flex-start;padding:14px 16px;background:var(--soft);border-bottom:1px solid var(--line)}
+.f-head .fid{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);white-space:nowrap;padding-top:2px}
+.f-head .ft{font-weight:600;font-size:15px;flex:1}
+.f-body{padding:14px 16px}
+.f-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 16px;margin-bottom:12px}
+.f-sec{margin-top:12px}
+.f-sec .h{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12px;white-space:pre-wrap;word-break:break-word;margin:0}
+ol,ul{margin:0;padding-left:20px}
+.affected{display:flex;flex-wrap:wrap;gap:6px}
+.affected span{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:2px 7px}
+.note{font-size:12px;padding:8px 12px;border-radius:8px;background:var(--med-bg);color:var(--med);margin-top:12px}
+.sign td{height:56px}
+footer{text-align:center;font-size:11px;color:var(--faint);margin-top:8px}
+/* print */
+@media print{
+  @page{size:A4;margin:16mm 14mm}
+  /* Without this, browsers drop background-color on everything except <body>/links when printing
+     or "Save as PDF" — the MASVS-category bar fill (.bar .fill), severity/status badges, the risk
+     posture box, and the affected-asset chips all render colorless otherwise. */
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
+  body{background:#fff;font-size:11.5px}
+  .toolbar{display:none}
+  .wrap{max-width:none;padding:0}
+  /* setiap bab dimulai di halaman baru / every chapter starts on a new page */
+  .page{border:0;border-radius:0;padding:0;margin:0;break-before:page;break-after:auto}
+  .page:first-of-type{break-before:auto}
+  h2,h3,.f-sec .h{break-after:avoid}
+  thead{display:table-header-group}
+  tr,.kv,li{break-inside:avoid}
+  .tw{overflow:visible}
+  .finding{break-inside:avoid}
+  a{color:inherit;text-decoration:none}
+}
+</style>
+</head>
+<body data-lang="both">
+
+<div class="toolbar">
+  <span class="lbl">Bahasa / Language</span>
+  <div class="seg" role="group" aria-label="Language">
+    <button data-lang="id">ID</button><button data-lang="en">EN</button><button data-lang="both" aria-pressed="true">ID + EN</button>
+  </div>
+  <button class="btn" onclick="window.print()">Cetak PDF / Print PDF</button>
+</div>
+
+<main class="wrap" id="app"></main>
+
+<!-- ===== report-data : replaced by Malimite with the scan's JSON payload ===== -->
+<script id="report-data" type="application/json">
+__MALIMITE_REPORT_DATA_JSON__
+</script>
+
+<script>
+(function(){
+"use strict";
+const D = JSON.parse(document.getElementById("report-data").textContent);
+
+/* ---------- i18n ---------- */
+const L = {
+  report:["Laporan Vulnerability Assessment","Vulnerability Assessment Report"],
+  docNo:["Nomor Dokumen","Document No."], client:["Klien","Client"], platform:["Platform","Platform"],
+  period:["Periode Pengujian","Assessment Period"], generated:["Tanggal Laporan","Report Date"],
+  scanId:["ID Pemindaian","Scan ID"], version:["Versi Dokumen","Document Version"], tool:["Alat","Tool"],
+  preparedBy:["Disusun oleh","Prepared by"], reviewedBy:["Direview oleh","Reviewed by"], approvedBy:["Disetujui oleh","Approved by"],
+  docInfo:["Informasi Dokumen","Document Information"], history:["Riwayat Versi","Version History"],
+  date:["Tanggal","Date"], author:["Penulis","Author"], change:["Perubahan","Change"],
+  exec:["Ringkasan Eksekutif","Executive Summary"], posture:["Postur Risiko Keseluruhan","Overall Risk Posture"],
+  findings:["temuan","findings"], unique:["isu unik","unique issues"], occ:["kemunculan","occurrences"],
+  byCat:["Temuan per Kategori MASVS","Findings by MASVS Category"], bySource:["Sumber Deteksi","Detection Source"],
+  keyRec:["Rekomendasi Prioritas","Priority Recommendations"],
+  scope:["Ruang Lingkup & Target","Scope & Target"], bundle:["Paket & Penandatanganan","Package & Signing"],
+  method:["Metodologi","Methodology"], rating:["Klasifikasi Tingkat Risiko","Risk Rating Classification"],
+  level:["Tingkat","Level"], score:["Skor CVSS","CVSS Score"], desc:["Deskripsi","Description"], sla:["SLA Perbaikan","Remediation SLA"],
+  summaryTbl:["Ringkasan Temuan","Findings Summary"], title:["Judul","Title"], category:["Kategori","Category"],
+  source:["Sumber","Source"], status:["Status","Status"],
+  controls:["Penilaian Kontrol Keamanan","Security Controls Assessment"], control:["Kontrol","Control"],
+  detail:["Detail","Detail"], conf:["Keyakinan","Confidence"], group:["Grup","Group"],
+  details:["Detail Temuan","Detailed Findings"], affected:["Komponen Terdampak","Affected Components"],
+  evidence:["Bukti","Evidence"], poc:["Proof of Concept — Langkah Reproduksi","Proof of Concept — Steps to Reproduce"],
+  remediation:["Rekomendasi Perbaikan","Remediation"], reference:["Referensi","Reference"],
+  rule:["Aturan","Rule"], cwe:["CWE","CWE"], masvs:["MASVS","MASVS"],
+  llmNote:["Temuan ini dihasilkan analisis berbasis LLM dan perlu diverifikasi manual sebelum ditindaklanjuti.","This finding was produced by LLM-assisted analysis and requires manual verification before action."],
+  matrix:["Pemetaan MASVS","MASVS Mapping"],
+  appendix:["Lampiran","Appendix"], surface:["Permukaan Kode","Code Surface"], entry:["Entry Points","Entry Points"],
+  classIdx:["Indeks Kelas","Class Index"], fn:["fungsi","functions"], strings:["Sampel String","String Sample"],
+  addr:["Alamat","Address"], seg:["Segmen","Segment"], value:["Nilai","Value"], scanMeta:["Metadata Pemindaian","Scan Metadata"],
+  duration:["Durasi","Duration"], disclaimer:["Batasan & Penafian","Limitations & Disclaimer"],
+  approval:["Lembar Persetujuan","Approval Sheet"], role:["Peran","Role"], name:["Nama","Name"], sign:["Tanda Tangan","Signature"],
+  confidential:["RAHASIA","CONFIDENTIAL"], showing:["menampilkan","showing"], of:["dari","of"],
+  noFindings:["Tidak ada temuan.","No findings."],
+  glossary:["Glosarium Istilah & Singkatan","Glossary of Terms & Abbreviations"],
+  term:["Istilah","Term"], meaning:["Arti / Keterangan","Meaning / Description"]
+};
+const SEV = ["CRITICAL","HIGH","MEDIUM","LOW","INFO"];
+const SEVL = {CRITICAL:["Kritis","Critical"],HIGH:["Tinggi","High"],MEDIUM:["Sedang","Medium"],LOW:["Rendah","Low"],INFO:["Info","Info"]};
+const STL = {OPEN:["Terbuka","Open"],IN_PROGRESS:["Dalam Perbaikan","In Progress"],FIXED:["Diperbaiki","Fixed"],ACCEPTED:["Risiko Diterima","Risk Accepted"],FALSE_POSITIVE:["Positif Palsu","False Positive"],
+  PRESENT:["Ada","Present"],PARTIAL:["Sebagian","Partial"],ABSENT:["Tidak Ada","Absent"],UNKNOWN:["Tidak Diketahui","Unknown"]};
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const bi = (id,en) => id === en ? id : `<span class="l-id">${id}</span><span class="l-sep"> / </span><span class="l-en">${en}</span>`;
+const t = k => L[k] ? bi(L[k][0], L[k][1]) : esc(k);
+const pair = (m,k) => m[k] ? bi(m[k][0], m[k][1]) : esc(k);
+/* inline `code` support for scanner text */
+const fmt = s => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+const tx = v => (v && typeof v === "object") ? bi(fmt(v.id ?? v.en), fmt(v.en ?? v.id)) : fmt(v);
+const link = s => /^https?:\/\//.test(s||"") ? `<a href="${esc(s)}" target="_blank" rel="noopener">${esc(s)}</a>` : esc(s);
+const list = a => (a && a.length) ? a.map(esc).join(", ") : "—";
+const sev = s => `<span class="sev ${esc(s)}">${pair(SEVL,s)}</span>`;
+const st = s => `<span class="st ${esc(s)}">${pair(STL,s)}</span>`;
+const kvRow = (k,v) => (v===undefined||v===null||v==="") ? "" : `<tr><td class="k">${k}</td><td>${v}</td></tr>`;
+
+/* ---------- derived data ---------- */
+const M = D.meta||{}, A = D.app||{}, MF = D.manifest||{};
+A.package_name = A.package_name || A.bundle_id || A.executable;
+const yn = v => v===true ? bi("Ya","Yes") : v===false ? bi("Tidak","No") : "";
+const flag = (v, badWhen) => v===null||v===undefined ? "" : `<span class="st ${v===badWhen?"ABSENT":"PRESENT"}">${yn(v)}</span>`;
+const COMP = MF.components||[], PERMS = MF.permissions||[];
+const exportedCount = COMP.filter(c=>c.exported).length;
+const F = (D.findings||[]).slice().sort((a,b)=>SEV.indexOf(a.severity)-SEV.indexOf(b.severity) || (b.cvss||0)-(a.cvss||0));
+F.forEach((f,i)=>{ f._id = f.id || `MAL-${String(i+1).padStart(2,"0")}`; });
+const cnt = Object.fromEntries(SEV.map(s=>[s, F.filter(f=>f.severity===s).length]));
+const occ = D.summary?.occurrences ?? F.reduce((n,f)=>n+Math.max(1,(f.affected||[]).length),0);
+const byCat = {}; F.forEach(f=>{ byCat[f.category||"OTHER"]=(byCat[f.category||"OTHER"]||0)+1; });
+const bySrc = {}; F.forEach(f=>{ bySrc[f.source||"OTHER"]=(bySrc[f.source||"OTHER"]||0)+1; });
+const C = D.controls||[];
+const cc = s => C.filter(c=>c.status===s).length;
+const postureKey = cnt.CRITICAL ? "CRITICAL" : cnt.HIGH ? "HIGH" : cnt.MEDIUM ? "MEDIUM" : cnt.LOW ? "LOW" : "INFO";
+const postureTxt = {
+  CRITICAL:["Terdapat kerentanan kritis yang harus segera diperbaiki sebelum rilis.","Critical vulnerabilities exist and must be fixed before release."],
+  HIGH:["Terdapat kerentanan tinggi yang perlu diprioritaskan dalam siklus rilis terdekat.","High-risk vulnerabilities require priority remediation in the next release cycle."],
+  MEDIUM:["Tidak ada temuan kritis/tinggi; temuan sedang perlu dijadwalkan perbaikannya.","No critical/high issues; medium findings should be scheduled for remediation."],
+  LOW:["Hanya temuan berisiko rendah; perbaiki sebagai bagian dari hardening.","Only low-risk findings; address them as part of hardening."],
+  INFO:["Tidak ada kerentanan yang dapat dieksploitasi terdeteksi.","No exploitable vulnerabilities detected."]
+}[postureKey];
+const dur = M.duration_ms ? (M.duration_ms < 10000 ? `${(M.duration_ms/1000).toFixed(1)} s` : `${Math.round(M.duration_ms/1000)} s`) : null;
+const title = M.report_title ? tx(M.report_title) : t("report");
+
+/* ---------- sections ---------- */
+let n = 0; const H = k => `<h2><span class="num">${++n}.</span><span>${t(k)}</span></h2>`;
+
+const cover = `
+<section class="page cover">
+  <div class="brand-mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.54,1.46h0.92v0.46h-0.92z M9.25,1.92h0.46v0.46h-0.46z M11.08,1.92h1.83v0.46h-1.83z M14.29,1.92h0.46v0.46h-0.46z M8.79,2.38h0.92v0.46h-0.92z M10.62,2.38h2.75v0.46h-2.75z M14.29,2.38h0.92v0.46h-0.92z M8.33,2.83h1.38v0.46h-1.38z M10.17,2.83h3.67v0.46h-3.67z M14.29,2.83h1.38v0.46h-1.38z M8.33,3.29h7.33v0.46h-7.33z M8.33,3.75h3.21v0.46h-3.21z M12.46,3.75h3.21v0.46h-3.21z M8.33,4.21h2.75v0.46h-2.75z M12.92,4.21h2.75v0.46h-2.75z M8.33,4.67h2.29v0.46h-2.29z M13.38,4.67h2.29v0.46h-2.29z M5.58,5.12h0.46v0.46h-0.46z M8.33,5.12h2.29v0.46h-2.29z M13.38,5.12h2.29v0.46h-2.29z M17.96,5.12h0.46v0.46h-0.46z M5.58,5.58h0.92v0.46h-0.92z M8.79,5.58h2.29v0.46h-2.29z M12.92,5.58h2.29v0.46h-2.29z M17.50,5.58h0.92v0.46h-0.92z M5.12,6.04h1.83v0.46h-1.83z M9.25,6.04h2.29v0.46h-2.29z M12.46,6.04h2.29v0.46h-2.29z M17.04,6.04h1.83v0.46h-1.83z M5.12,6.50h2.29v0.46h-2.29z M9.71,6.50h4.58v0.46h-4.58z M16.58,6.50h2.29v0.46h-2.29z M4.67,6.96h3.21v0.46h-3.21z M10.17,6.96h3.67v0.46h-3.67z M16.12,6.96h3.21v0.46h-3.21z M4.67,7.42h3.67v0.46h-3.67z M10.62,7.42h2.75v0.46h-2.75z M15.67,7.42h3.67v0.46h-3.67z M4.21,7.88h1.83v0.46h-1.83z M6.50,7.88h2.29v0.46h-2.29z M11.08,7.88h1.83v0.46h-1.83z M15.21,7.88h2.29v0.46h-2.29z M17.96,7.88h1.83v0.46h-1.83z M3.75,8.33h1.83v0.46h-1.83z M6.96,8.33h2.29v0.46h-2.29z M11.54,8.33h0.92v0.46h-0.92z M14.75,8.33h2.29v0.46h-2.29z M18.42,8.33h1.83v0.46h-1.83z M3.75,8.79h1.83v0.46h-1.83z M7.42,8.79h2.29v0.46h-2.29z M14.29,8.79h2.29v0.46h-2.29z M18.42,8.79h1.83v0.46h-1.83z M3.29,9.25h2.29v0.46h-2.29z M7.88,9.25h2.29v0.46h-2.29z M13.83,9.25h2.29v0.46h-2.29z M18.42,9.25h2.29v0.46h-2.29z M3.29,9.71h2.75v0.46h-2.75z M8.33,9.71h2.29v0.46h-2.29z M13.38,9.71h2.29v0.46h-2.29z M17.96,9.71h2.75v0.46h-2.75z M2.83,10.17h3.67v0.46h-3.67z M8.79,10.17h2.29v0.46h-2.29z M12.92,10.17h2.29v0.46h-2.29z M17.50,10.17h3.67v0.46h-3.67z M2.83,10.62h1.38v0.46h-1.38z M4.67,10.62h2.29v0.46h-2.29z M9.25,10.62h2.29v0.46h-2.29z M12.46,10.62h2.29v0.46h-2.29z M17.04,10.62h2.29v0.46h-2.29z M19.79,10.62h1.38v0.46h-1.38z M2.38,11.08h1.83v0.46h-1.83z M5.12,11.08h2.29v0.46h-2.29z M9.71,11.08h4.58v0.46h-4.58z M16.58,11.08h2.29v0.46h-2.29z M19.79,11.08h1.83v0.46h-1.83z M1.92,11.54h1.83v0.46h-1.83z M5.58,11.54h2.29v0.46h-2.29z M10.17,11.54h3.67v0.46h-3.67z M16.12,11.54h2.29v0.46h-2.29z M20.25,11.54h1.83v0.46h-1.83z M1.92,12.00h1.83v0.46h-1.83z M5.58,12.00h2.75v0.46h-2.75z M10.62,12.00h2.75v0.46h-2.75z M15.67,12.00h2.75v0.46h-2.75z M20.25,12.00h1.83v0.46h-1.83z M1.46,12.46h1.83v0.46h-1.83z M5.12,12.46h3.67v0.46h-3.67z M11.08,12.46h1.83v0.46h-1.83z M15.21,12.46h3.67v0.46h-3.67z M20.71,12.46h1.83v0.46h-1.83z M1.46,12.92h1.38v0.46h-1.38z M5.12,12.92h4.12v0.46h-4.12z M11.54,12.92h0.92v0.46h-0.92z M14.75,12.92h4.12v0.46h-4.12z M21.17,12.92h1.38v0.46h-1.38z M1.00,13.38h1.83v0.46h-1.83z M4.67,13.38h1.83v0.46h-1.83z M7.42,13.38h2.29v0.46h-2.29z M14.29,13.38h1.83v0.46h-1.83z M17.50,13.38h1.83v0.46h-1.83z M21.17,13.38h1.83v0.46h-1.83z M1.00,13.83h1.83v0.46h-1.83z M4.67,13.83h1.38v0.46h-1.38z M7.88,13.83h2.29v0.46h-2.29z M13.83,13.83h2.29v0.46h-2.29z M17.96,13.83h1.38v0.46h-1.38z M21.17,13.83h1.83v0.46h-1.83z M1.46,14.29h1.38v0.46h-1.38z M4.21,14.29h1.83v0.46h-1.83z M8.33,14.29h2.29v0.46h-2.29z M13.38,14.29h2.29v0.46h-2.29z M17.96,14.29h1.83v0.46h-1.83z M21.17,14.29h1.38v0.46h-1.38z M1.46,14.75h1.38v0.46h-1.38z M3.75,14.75h1.83v0.46h-1.83z M8.79,14.75h2.29v0.46h-2.29z M12.92,14.75h2.29v0.46h-2.29z M18.42,14.75h1.83v0.46h-1.83z M21.17,14.75h1.38v0.46h-1.38z M1.46,15.21h1.83v0.46h-1.83z M3.75,15.21h1.83v0.46h-1.83z M9.25,15.21h2.29v0.46h-2.29z M12.46,15.21h2.29v0.46h-2.29z M18.42,15.21h1.83v0.46h-1.83z M20.71,15.21h1.38v0.46h-1.38z M1.92,15.67h3.21v0.46h-3.21z M9.71,15.67h4.58v0.46h-4.58z M18.88,15.67h3.21v0.46h-3.21z M1.92,16.12h2.75v0.46h-2.75z M10.17,16.12h3.67v0.46h-3.67z M19.33,16.12h2.75v0.46h-2.75z M2.38,16.58h2.29v0.46h-2.29z M10.62,16.58h2.75v0.46h-2.75z M19.33,16.58h2.29v0.46h-2.29z M2.38,17.04h1.83v0.46h-1.83z M8.33,17.04h0.46v0.46h-0.46z M11.08,17.04h1.83v0.46h-1.83z M15.21,17.04h0.46v0.46h-0.46z M19.79,17.04h1.83v0.46h-1.83z M2.83,17.50h1.38v0.46h-1.38z M8.33,17.50h0.92v0.46h-0.92z M11.54,17.50h0.92v0.46h-0.92z M14.75,17.50h0.92v0.46h-0.92z M19.79,17.50h1.38v0.46h-1.38z M2.83,17.96h0.92v0.46h-0.92z M8.33,17.96h1.38v0.46h-1.38z M14.29,17.96h1.38v0.46h-1.38z M20.25,17.96h0.92v0.46h-0.92z M2.83,18.42h0.92v0.46h-0.92z M8.33,18.42h1.83v0.46h-1.83z M13.83,18.42h1.83v0.46h-1.83z M20.25,18.42h0.92v0.46h-0.92z M8.33,18.88h2.29v0.46h-2.29z M13.38,18.88h2.29v0.46h-2.29z M8.79,19.33h2.29v0.46h-2.29z M12.92,19.33h2.29v0.46h-2.29z M9.25,19.79h2.29v0.46h-2.29z M12.46,19.79h2.29v0.46h-2.29z M9.71,20.25h4.58v0.46h-4.58z M10.17,20.71h3.67v0.46h-3.67z M10.62,21.17h2.75v0.46h-2.75z M11.08,21.62h1.83v0.46h-1.83z M11.54,22.08h0.92v0.46h-0.92z"/></svg><span class="word">Malimite</span></div>
+  <div class="eyebrow">Malimite · Mobile Security Assessment · Android</div>
+  <h1>${title}</h1>
+  <div class="app"><span class="mono">${esc(A.package_name)}</span>${A.app_name?` · ${esc(A.app_name)}`:""}${A.version_name?` · v${esc(A.version_name)}${A.version_code?` (${esc(A.version_code)})`:""}`:""} · ${esc(A.platform||"Android")}</div>
+  <div class="cover-grid">
+    <div class="kv"><span class="k">${t("client")}</span><span class="v">${esc(M.client||"—")}</span></div>
+    <div class="kv"><span class="k">${t("docNo")}</span><span class="v">${esc(M.doc_number||"—")}</span></div>
+    <div class="kv"><span class="k">${t("period")}</span><span class="v">${esc(M.period_start||M.generated)}${M.period_end&&M.period_end!==M.period_start?" – "+esc(M.period_end):""}</span></div>
+    <div class="kv"><span class="k">${t("generated")}</span><span class="v">${esc(M.generated)}</span></div>
+    <div class="kv"><span class="k">${t("scanId")}</span><span class="v mono small">${esc(M.scan_id)}</span></div>
+    <div class="kv"><span class="k">${t("version")}</span><span class="v">${esc(M.version||"1.0")}</span></div>
+    <div class="kv"><span class="k">${t("preparedBy")}</span><span class="v">${list(M.prepared_by)}</span></div>
+    <div class="kv"><span class="k">${t("tool")}</span><span class="v">${esc(M.tool_version||"Malimite")}</span></div>
+  </div>
+  <div class="badge-class">${M.classification && M.classification!=="CONFIDENTIAL" ? esc(M.classification) : t("confidential")}</div>
+  ${(M.history&&M.history.length)?`<h3>${t("history")}</h3><div class="tw"><table><thead><tr><th>${t("version")}</th><th>${t("date")}</th><th>${t("author")}</th><th>${t("change")}</th></tr></thead><tbody>
+  ${M.history.map(h=>`<tr><td>${esc(h.version)}</td><td>${esc(h.date)}</td><td>${esc(h.author)}</td><td>${tx(h.change)}</td></tr>`).join("")}</tbody></table></div>`:""}
+</section>`;
+
+const maxCat = Math.max(1,...Object.values(byCat));
+const topF = F.filter(f=>f.severity==="CRITICAL"||f.severity==="HIGH").concat(F.filter(f=>f.severity==="MEDIUM")).slice(0,5);
+const exec = `
+<section class="page">
+  ${H("exec")}
+  <p>${bi(
+    `Malimite melakukan analisis statis${bySrc.LLM?" dan analisis berbantuan LLM":""} terhadap aplikasi <b>${esc(A.app_name||A.package_name)}</b> (${esc(A.platform||"Android")}) dan menemukan <b>${F.length} isu unik</b> dengan <b>${occ} kemunculan</b>.`,
+    `Malimite performed static${bySrc.LLM?" and LLM-assisted":""} analysis of <b>${esc(A.app_name||A.package_name)}</b> (${esc(A.platform||"Android")}) and identified <b>${F.length} unique issues</b> across <b>${occ} occurrences</b>.`)}</p>
+  ${D.summary?.executive_note?`<p>${tx(D.summary.executive_note)}</p>`:""}
+  <div class="posture"><div><div class="small muted">${t("posture")}</div><div class="r">${sev(postureKey)}</div></div><div>${bi(postureTxt[0],postureTxt[1])}</div></div>
+  <div class="stats">
+    ${SEV.map(s=>`<div class="stat ${s}"><div class="n">${cnt[s]}</div><div class="t">${pair(SEVL,s)}</div></div>`).join("")}
+    <div class="stat TOTAL"><div class="n">${F.length}</div><div class="t">Total</div></div>
+  </div>
+  <h3>${t("byCat")}</h3>
+  <div class="bars">${Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar"><span>${esc(k)}</span><div class="track"><div class="fill" style="width:${v/maxCat*100}%"></div></div><b>${v}</b></div>`).join("")}</div>
+  <p class="small muted">${t("bySource")}: ${Object.entries(bySrc).map(([k,v])=>`<span class="tag ${esc(k)}">${esc(k)} ${v}</span>`).join(" ")}
+   · ${t("controls")}: ${["PRESENT","PARTIAL","ABSENT","UNKNOWN"].map(s=>`${st(s)} ${cc(s)}`).join(" ")}</p>
+  ${topF.length?`<h3>${t("keyRec")}</h3><ol>${topF.map(f=>`<li><b>${esc(f._id)}</b> ${sev(f.severity)} — ${tx(f.title)}: ${tx(f.remediation)}</li>`).join("")}</ol>`:""}
+</section>`;
+
+const scope = `
+<section class="page">
+  ${H("scope")}
+  <h3>${t("bundle")}</h3>
+  <div class="tw"><table><tbody>
+    ${kvRow("Package Name",`<span class="mono">${esc(A.package_name)}</span>`)}
+    ${kvRow(bi("Nama Aplikasi","App Name"),esc(A.app_name))}${kvRow(t("platform"),esc(A.platform||"Android"))}
+    ${kvRow("Version Name",esc(A.version_name))}${kvRow("Version Code",esc(A.version_code))}
+    ${kvRow(bi("Bahasa Pemrograman","Language"),esc(A.language))}${kvRow("Universal",esc(A.universal))}
+    ${kvRow("minSdkVersion",A.min_sdk!=null?`${esc(A.min_sdk)}${A.min_sdk<24?` <span class="sev MEDIUM">&lt; 24</span>`:""}`:"")}
+    ${kvRow("targetSdkVersion",esc(A.target_sdk))}
+    ${kvRow(bi("Skema Tanda Tangan","Signing Schemes"),esc(A.signing_schemes))}
+    ${kvRow(bi("Sertifikat SHA-256","Certificate SHA-256"),A.cert_sha256?`<span class="mono small">${esc(A.cert_sha256)}</span>`:"")}
+    ${kvRow("APK SHA-256",A.apk_sha256?`<span class="mono small">${esc(A.apk_sha256)}</span>`:"")}
+    ${kvRow(bi("Kelas","Classes"),esc(A.classes))}${kvRow(bi("Fungsi","Functions"),esc(A.functions))}${kvRow("Strings",esc(A.strings))}
+  </tbody></table></div>
+  <h3>${bi("Ringkasan AndroidManifest.xml","AndroidManifest.xml Summary")}</h3>
+  <div class="tw"><table><tbody>
+    ${kvRow("android:debuggable",flag(MF.debuggable,true))}
+    ${kvRow("android:allowBackup",flag(MF.allow_backup,true))}
+    ${kvRow("android:usesCleartextTraffic",flag(MF.uses_cleartext_traffic,true))}
+    ${kvRow("Network Security Config",MF.network_security_config?`<span class="mono small">${esc(MF.network_security_config)}</span>`:"")}
+    ${kvRow(bi("Komponen ter-export","Exported components"),COMP.length?`${exportedCount} ${t("of")} ${COMP.length}`:"")}
+    ${kvRow(bi("Jumlah izin","Permissions"),PERMS.length?esc(PERMS.length):"")}
+  </tbody></table></div>
+  ${COMP.length?`<h3>${bi("Komponen Aplikasi","App Components")}</h3>
+  <div class="tw"><table><thead><tr><th>${bi("Tipe","Type")}</th><th>${t("name")}</th><th>Exported</th><th>Permission</th></tr></thead><tbody>
+  ${COMP.map(c=>`<tr><td class="small">${esc(c.type)}</td><td class="mono small">${esc(c.name)}</td><td>${flag(c.exported,true)}</td><td class="mono small">${c.permission?esc(c.permission):(c.exported?`<span class="st ABSENT">${bi("Tanpa proteksi","Unprotected")}</span>`:"—")}</td></tr>`).join("")}
+  </tbody></table></div>`:""}
+  ${PERMS.length?`<h3>${bi("Izin (Permissions)","Permissions")}</h3><div class="affected">${PERMS.map(p=>`<span>${esc(p)}</span>`).join("")}</div>`:""}
+  <h3>${t("method")}</h3>
+  <p>${bi("Pengujian otomatis oleh Malimite mengacu pada OWASP MASVS v2 dan MASTG, meliputi:","Automated assessment by Malimite, aligned with OWASP MASVS v2 and MASTG, covering:")}</p>
+  <ol>
+    <li>${bi("Ekstraksi APK dan analisis AndroidManifest.xml (komponen ter-export, izin, debuggable, allowBackup, minSdk).","APK extraction and AndroidManifest.xml analysis (exported components, permissions, debuggable, allowBackup, minSdk).")}</li>
+    <li>${bi("Dekompilasi DEX (jadx) serta analisis resource dan Network Security Config.","DEX decompilation (jadx) plus resource and Network Security Config analysis.")}</li>
+    <li>${bi("Pencocokan aturan MASTG pada string, simbol, kode hasil dekompilasi, dan library native (.so).","MASTG rule matching across strings, symbols, decompiled code and native libraries (.so).")}</li>
+    <li>${bi("Inventaris kontrol keamanan (root/emulator detection, Play Integrity, pinning, obfuscation, FLAG_SECURE).","Security control inventory (root/emulator detection, Play Integrity, pinning, obfuscation, FLAG_SECURE).")}</li>
+    ${bySrc.LLM?`<li>${bi("Analisis fungsi berbantuan LLM untuk pola kerentanan pada kode.","LLM-assisted function analysis for vulnerable code patterns.")}</li>`:""}
+    <li>${bi("Penilaian risiko dengan CVSS v3.1 dan pemetaan ke CWE / MASVS.","Risk scoring with CVSS v3.1 and mapping to CWE / MASVS.")}</li>
+  </ol>
+  <h3>${t("disclaimer")}</h3>
+  <ul class="small">
+    <li>${bi("Hasil bersifat statis (best-effort); ketiadaan sinyal tidak membuktikan kontrol benar-benar tidak ada, terutama pada aplikasi yang dipacking.","Results are static and best-effort; absence of signals does not prove a control is missing, especially on packed apps.")}</li>
+    ${bySrc.LLM?`<li>${bi("Temuan berlabel LLM memerlukan verifikasi manual.","Findings labelled LLM require manual verification.")}</li>`:""}
+    <li>${bi("Hasil hanya berlaku untuk build yang dipindai pada tanggal laporan.","Results apply only to the scanned build as of the report date.")}</li>
+  </ul>
+</section>`;
+
+const rating = `
+<section class="page flow">
+  ${H("rating")}
+  <div class="tw"><table><thead><tr><th>${t("level")}</th><th>${t("score")}</th><th>${t("desc")}</th><th>${t("sla")}</th></tr></thead><tbody>
+    <tr><td>${sev("CRITICAL")}</td><td>9.0–10.0</td><td>${bi("Mudah dieksploitasi, berdampak langsung pada data/akun secara luas.","Easily exploitable with broad direct impact on data or accounts.")}</td><td>${bi("≤ 7 hari","≤ 7 days")}</td></tr>
+    <tr><td>${sev("HIGH")}</td><td>7.0–8.9</td><td>${bi("Dampak signifikan; eksploitasi mungkin butuh kondisi tertentu.","Significant impact; exploitation may need specific conditions.")}</td><td>${bi("≤ 14 hari","≤ 14 days")}</td></tr>
+    <tr><td>${sev("MEDIUM")}</td><td>4.0–6.9</td><td>${bi("Dampak terbatas atau butuh akses/interaksi tambahan.","Limited impact or requires additional access/interaction.")}</td><td>${bi("≤ 30 hari","≤ 30 days")}</td></tr>
+    <tr><td>${sev("LOW")}</td><td>0.1–3.9</td><td>${bi("Dampak kecil; bagian dari defense in depth.","Minor impact; defense-in-depth item.")}</td><td>${bi("≤ 90 hari","≤ 90 days")}</td></tr>
+    <tr><td>${sev("INFO")}</td><td>0.0</td><td>${bi("Observasi / praktik terbaik.","Observation / best practice.")}</td><td>${bi("Sesuai roadmap","Per roadmap")}</td></tr>
+  </tbody></table></div>
+</section>`;
+
+const summary = `
+<section class="page">
+  ${H("summaryTbl")}
+  ${F.length?`<div class="tw"><table><thead><tr><th>ID</th><th>${t("title")}</th><th>${t("category")}</th><th>${t("source")}</th><th class="c">CVSS</th><th>${t("level")}</th><th>${t("status")}</th></tr></thead><tbody>
+  ${F.map(f=>`<tr><td class="mono small"><a href="#${esc(f._id)}">${esc(f._id)}</a></td><td>${tx(f.title)}${(f.affected||[]).length>1?` <span class="muted small">(${f.affected.length}×)</span>`:""}</td><td>${esc(f.category)}</td><td><span class="tag ${esc(f.source)}">${esc(f.source)}</span></td><td class="c">${esc(f.cvss)}</td><td>${sev(f.severity)}</td><td>${st(f.status||"OPEN")}</td></tr>`).join("")}
+  </tbody></table></div>`:`<p>${t("noFindings")}</p>`}
+  <h3>${t("controls")}</h3>
+  <p class="small muted">${bi("Inventaris statis kontrol proteksi; tidak dihitung dalam total kerentanan.","Static inventory of protections; not counted in vulnerability totals.")}</p>
+  <div class="tw"><table><thead><tr><th>${t("group")}</th><th>${t("control")}</th><th>${t("status")}</th><th>${t("detail")}</th><th>${t("conf")}</th></tr></thead><tbody>
+  ${C.map(c=>`<tr><td class="small">${esc(c.group)}</td><td>${esc(c.name)}<div class="mono small muted">${esc(c.rule||"")}</div></td><td>${st(c.status)}</td><td class="small">${esc(c.detail||"")}${c.signal?`<div class="mono muted">${esc(c.signal)}</div>`:""}</td><td class="small">${esc(c.confidence||"")}</td></tr>`).join("")}
+  </tbody></table></div>
+</section>`;
+
+const details = `
+<section class="page flow">
+  ${H("details")}
+  ${F.map(f=>`
+  <article class="finding" id="${esc(f._id)}">
+    <div class="f-head"><span class="fid">${esc(f._id)}</span><span class="ft">${tx(f.title)}</span>${sev(f.severity)}</div>
+    <div class="f-body">
+      <div class="f-meta">
+        <div class="kv"><span class="k">CVSS</span><span class="v">${esc(f.cvss)}${f.cvss_vector?` <span class="mono small muted">${esc(f.cvss_vector)}</span>`:""}</span></div>
+        <div class="kv"><span class="k">${t("rule")}</span><span class="v mono small">${esc(f.rule)}</span></div>
+        <div class="kv"><span class="k">${t("source")}</span><span class="v"><span class="tag ${esc(f.source)}">${esc(f.source)}</span></span></div>
+        <div class="kv"><span class="k">${t("category")}</span><span class="v">${esc(f.category)}</span></div>
+        <div class="kv"><span class="k">CWE</span><span class="v">${f.cwe?`<a href="https://cwe.mitre.org/data/definitions/${esc(String(f.cwe).replace(/\D/g,""))}.html" target="_blank" rel="noopener">${esc(f.cwe)}</a>`:"—"}</span></div>
+        <div class="kv"><span class="k">MASVS</span><span class="v">${esc(f.masvs||"—")}</span></div>
+        <div class="kv"><span class="k">${t("status")}</span><span class="v">${st(f.status||"OPEN")}</span></div>
+      </div>
+      <div class="f-sec"><div class="h">${t("desc")}</div><p>${tx(f.description)}</p></div>
+      <div class="f-sec"><div class="h">${t("affected")} (${(f.affected||[]).length})</div>
+        <div class="affected">${(f.affected||[]).map(a=>`<span title="${esc(a.type||"")} ${esc(a.location||"")}">${esc(a.name)}${a.type?` · ${esc(a.type)}`:""}</span>`).join("")}</div></div>
+      ${f.evidence?`<div class="f-sec"><div class="h">${t("evidence")}</div><pre>${esc(f.evidence)}</pre></div>`:""}
+      ${(f.poc||[]).length?`<div class="f-sec"><div class="h">${t("poc")}</div><ol>${f.poc.map(p=>`<li>${tx(p)}</li>`).join("")}</ol></div>`:""}
+      <div class="f-sec"><div class="h">${t("remediation")}</div><p>${tx(f.remediation)}</p></div>
+      ${f.reference?`<div class="f-sec"><div class="h">${t("reference")}</div><p class="small">${link(f.reference)}</p></div>`:""}
+      ${f.source==="LLM"?`<div class="note">${t("llmNote")}</div>`:""}
+    </div>
+  </article>`).join("")}
+</section>`;
+
+const masvsCats = ["MASVS-STORAGE","MASVS-CRYPTO","MASVS-AUTH","MASVS-NETWORK","MASVS-PLATFORM","MASVS-CODE","MASVS-RESILIENCE","MASVS-PRIVACY"];
+const masvsRow = c => { const fs = F.filter(f=>(f.masvs||"").startsWith(c)); return `<tr><td class="mono small">${c}</td>${SEV.map(s=>`<td class="c">${fs.filter(f=>f.severity===s).length||""}</td>`).join("")}<td class="c"><b>${fs.length||""}</b></td><td class="small">${fs.map(f=>`<a href="#${esc(f._id)}">${esc(f._id)}</a>`).join(", ")||"—"}</td></tr>`; };
+const masvs = `
+<section class="page flow">
+  ${H("matrix")}
+  <div class="tw"><table><thead><tr><th>MASVS</th>${SEV.map(s=>`<th class="c">${pair(SEVL,s)}</th>`).join("")}<th class="c">Total</th><th>ID</th></tr></thead>
+  <tbody>${masvsCats.map(masvsRow).join("")}</tbody></table></div>
+</section>`;
+
+const cs = D.code_surface||{}, SS = D.strings_sample||[];
+/* Only terms this report's own text actually uses — keep this list tight rather than exhaustive. */
+const GLOSSARY = [
+  ["VA", "Vulnerability Assessment — proses identifikasi, klasifikasi, dan pemeringkatan kerentanan keamanan secara sistematis.", "Vulnerability Assessment — the systematic process of identifying, classifying, and ranking security weaknesses."],
+  ["OWASP", "Open Worldwide Application Security Project — organisasi nirlaba yang menerbitkan standar dan panduan keamanan aplikasi.", "Open Worldwide Application Security Project — a nonprofit publishing application-security standards and guidance."],
+  ["MASVS", "OWASP Mobile Application Security Verification Standard — standar kontrol keamanan baku untuk aplikasi mobile; setiap temuan dipetakan ke kategori kontrolnya (mis. MASVS-NETWORK).", "OWASP Mobile Application Security Verification Standard — the baseline security-control standard for mobile apps; each finding is mapped to its control category (e.g. MASVS-NETWORK)."],
+  ["MASTG", "OWASP Mobile Application Security Testing Guide — panduan teknis pengujian yang menjabarkan setiap kontrol MASVS menjadi kasus uji (mis. MASTG-TEST-0339).", "OWASP Mobile Application Security Testing Guide — the technical testing guide that breaks each MASVS control into concrete test cases (e.g. MASTG-TEST-0339)."],
+  ["MSTG", "Nama lama dari MASTG (Mobile Security Testing Guide); masih dipakai sebagai ID aturan pada katalog deteksi versi lama.", "The former name of MASTG (Mobile Security Testing Guide); still used as the rule id in older detection-catalog entries."],
+  ["CVSS", "Common Vulnerability Scoring System — sistem penilaian 0.0–10.0 untuk mengukur tingkat keparahan teknis suatu kerentanan.", "Common Vulnerability Scoring System — a 0.0–10.0 score measuring a vulnerability's technical severity."],
+  ["CWE", "Common Weakness Enumeration — katalog standar untuk jenis kelemahan perangkat lunak (mis. CWE-89: SQL Injection).", "Common Weakness Enumeration — a standard catalog of software weakness types (e.g. CWE-89: SQL Injection)."],
+  ["SLA", "Service Level Agreement — target batas waktu perbaikan yang disarankan berdasarkan tingkat keparahan temuan (lihat tabel Skala Penilaian Risiko).", "Service Level Agreement — the suggested remediation deadline based on a finding's severity (see the Risk Rating Scale table)."],
+  ["LLM", "Large Language Model — model AI yang digunakan Malimite untuk analisis tambahan; temuan bersumber LLM selalu memerlukan verifikasi manual.", "Large Language Model — the AI model Malimite uses for supplementary analysis; LLM-sourced findings always require manual verification."],
+  ["MAL", "Prefiks ID unik setiap temuan dalam laporan ini (mis. MAL-1), diikuti nomor baris temuan pada basis data pemindaian — bukan nomor urut keparahan.", "The unique-id prefix for every finding in this report (e.g. MAL-1), followed by that finding's row number in the scan database — not a severity ranking."],
+  ["APK", "Android Package — format berkas instalasi aplikasi Android yang dipindai Malimite.", "Android Package — the Android application installation file format Malimite scans."],
+  ["DEX", "Dalvik Executable — format bytecode hasil kompilasi kode Java/Kotlin yang dijalankan di Android Runtime (ART).", "Dalvik Executable — the compiled Java/Kotlin bytecode format run by the Android Runtime (ART)."],
+  ["NSC", "Network Security Config — berkas konfigurasi XML Android yang mengatur kepercayaan sertifikat TLS dan lalu lintas cleartext per domain.", "Network Security Config — an Android XML configuration file controlling per-domain TLS trust and cleartext traffic."],
+  ["SHA-256", "Fungsi hash kriptografis yang menghasilkan sidik jari 256-bit suatu berkas, dipakai untuk memverifikasi integritas.", "A cryptographic hash function producing a 256-bit fingerprint of a file, used to verify integrity."]
+];
+const glossaryRows = GLOSSARY.map(([term,idDesc,enDesc])=>`<tr><td class="mono small">${esc(term)}</td><td>${bi(idDesc,enDesc)}</td></tr>`).join("");
+const appendix = `
+<section class="page flow">
+  ${H("appendix")}
+  <h3>A. ${t("scanMeta")}</h3>
+  <div class="tw"><table><tbody>
+    ${kvRow(t("scanId"),`<span class="mono small">${esc(M.scan_id)}</span>`)}${kvRow(t("generated"),esc(M.generated))}
+    ${kvRow(t("duration"),esc(dur))}${kvRow(t("tool"),esc(M.tool_version||"Malimite"))}
+  </tbody></table></div>
+  <h3>B. ${t("surface")}</h3>
+  <p class="small muted">${esc(A.classes ?? (cs.classes||[]).length)} ${bi("kelas","classes")} · ${esc(A.functions??"")} ${t("fn")} · ${esc(cs.entry_points_count ?? (cs.entry_points||[]).length)} entry points · ${esc(D.strings_total ?? A.strings ?? "")} strings</p>
+  ${(cs.entry_points||[]).length?`<div class="affected" style="margin-bottom:10px">${cs.entry_points.map(e=>`<span>${esc(e)}</span>`).join("")}</div>`:""}
+  ${(cs.classes||[]).length?`<div class="tw"><table><thead><tr><th>${t("classIdx")}</th><th class="c">${t("fn")}</th></tr></thead><tbody>${cs.classes.map(c=>`<tr><td class="mono small">${esc(c.name)}</td><td class="c">${esc(c.fn)}</td></tr>`).join("")}</tbody></table></div>`:""}
+  ${SS.length?`<h3>C. ${t("strings")} <span class="small muted">(${t("showing")} ${SS.length} ${t("of")} ${esc(D.strings_total??SS.length)})</span></h3>
+  <div class="tw"><table><thead><tr><th>${t("addr")}</th><th>${t("seg")}</th><th>${t("value")}</th></tr></thead><tbody>
+  ${SS.map(s=>`<tr><td class="mono small">${esc(s.address)}</td><td class="mono small">${esc(s.segment)}</td><td class="mono small">${esc(s.value)}</td></tr>`).join("")}</tbody></table></div>`:""}
+  <h3>D. ${t("reference")}</h3>
+  <ul class="small">
+    <li><a href="https://mas.owasp.org/MASVS/" target="_blank" rel="noopener">OWASP MASVS</a></li>
+    <li><a href="https://mas.owasp.org/MASTG/" target="_blank" rel="noopener">OWASP MASTG</a></li>
+    <li><a href="https://owasp.org/www-project-mobile-top-10/" target="_blank" rel="noopener">OWASP Mobile Top 10</a></li>
+    <li><a href="https://www.first.org/cvss/calculator/3.1" target="_blank" rel="noopener">FIRST CVSS v3.1 Calculator</a></li>
+  </ul>
+  <h3>E. ${t("glossary")}</h3>
+  <div class="tw"><table><thead><tr><th>${t("term")}</th><th>${t("meaning")}</th></tr></thead>
+  <tbody>${glossaryRows}</tbody></table></div>
+</section>`;
+
+const signRows = [["preparedBy",M.prepared_by],["reviewedBy",M.reviewed_by],["approvedBy",M.approved_by]];
+const approval = `
+<section class="page flow sign">
+  ${H("approval")}
+  <div class="tw"><table><thead><tr><th>${t("role")}</th><th>${t("name")}</th><th>${t("sign")}</th><th>${t("date")}</th></tr></thead><tbody>
+  ${signRows.map(([k,v])=>`<tr><td>${t(k)}</td><td>${list(v)}</td><td></td><td></td></tr>`).join("")}
+  </tbody></table></div>
+  <footer>Generated by Malimite · scan id ${esc(M.scan_id)}${dur?` · ${esc(dur)}`:""}</footer>
+</section>`;
+
+document.getElementById("app").innerHTML = cover + exec + scope + rating + summary + details + masvs + appendix + approval;
+document.title = `Malimite VA Report (Android) — ${A.package_name||""}`;
+
+/* language toggle */
+const btns = document.querySelectorAll(".seg button");
+const setLang = l => {
+  document.body.dataset.lang = l;
+  document.documentElement.lang = l === "en" ? "en" : "id";
+  btns.forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.lang===l)));
+  try{ localStorage.setItem("malimite-lang", l); }catch(e){}
+};
+btns.forEach(b=>b.addEventListener("click",()=>setLang(b.dataset.lang)));
+let saved = null; try{ saved = localStorage.getItem("malimite-lang"); }catch(e){}
+const qp = new URLSearchParams(location.search).get("lang");
+setLang(qp || saved || "both");
+})();
+</script>
+</body>
+</html>

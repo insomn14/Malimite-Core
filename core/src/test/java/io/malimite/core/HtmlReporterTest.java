@@ -1,14 +1,43 @@
 package io.malimite.core;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Since HtmlReporter.TEMPLATE_VERSION 5+, the report is a bilingual VA template (see
+ * core/src/main/resources/report-template/) rendered client-side from one injected JSON blob —
+ * so most assertions here parse that JSON back out of the generated HTML and check it directly,
+ * rather than grepping for HTML fragments the template's own JS may phrase differently over time.
+ * A handful of tests still check the raw HTML file for things the JSON contract itself can't
+ * express (the file exists, the stale-detection meta tag, which platform template was picked).
+ */
 class HtmlReporterTest {
+
+    private static final Pattern DATA_BLOCK = Pattern.compile(
+            "<script id=\"report-data\" type=\"application/json\">\\n(.*?)\\n</script>", Pattern.DOTALL);
+
+    /** Parses the JSON this class's own buildReportJson() would have produced, round-tripped
+     * through the actual generated HTML file — exercises the real injection path end to end. */
+    private static JSONObject renderedData(AnalysisReport r, Path tmp) throws Exception {
+        String html = Files.readString(HtmlReporter.generate(r, tmp));
+        Matcher m = DATA_BLOCK.matcher(html);
+        assertTrue(m.find(), "report-data script block must be present in the generated HTML");
+        // The injector escapes "</" to "<\/" so a literal "</script>" in finding text can't break
+        // the block early — undo that before parsing, same as the template's own JS does.
+        String json = m.group(1).replace("<\\/", "</");
+        return new JSONObject(json);
+    }
 
     private static AnalysisReport sampleReport() {
         return new AnalysisReport(
@@ -46,20 +75,78 @@ class HtmlReporterTest {
         Path html = HtmlReporter.generate(sampleReport(), tmp);
         assertTrue(Files.exists(html));
         String content = Files.readString(html);
-        assertTrue(content.startsWith("<!DOCTYPE html>"));
+        assertTrue(content.startsWith("<!doctype html>"));
     }
 
-    @Test void embedsCurrentTemplateVersion(@TempDir Path tmp) throws Exception {
+    /** Regression test for a real bug: injecting the serialized JSON into the template via
+     * {@code String.replace(CharSequence, CharSequence)} wrapped in {@code Matcher.quoteReplacement()}
+     * silently doubled every backslash already present in the JSON (quoteReplacement is only
+     * meaningful for replaceAll/replaceFirst's regex-replacement syntax, not plain replace()).
+     * A Mach-O string containing a literal double-quote — e.g. the real string value
+     * {@code "/usr/lib/dyld"}, quotes included — gets escaped once to {@code \"} by JSONObject;
+     * the bug then escaped that backslash again, corrupting the embedded JSON
+     * ({@code \"} → {@code \\"}) so the browser's own {@code JSON.parse} threw a SyntaxError on
+     * every report containing such a string. See generate()'s injection comment for the fix. */
+    @Test void stringValueContainingLiteralQuotesSurvivesTheRoundTrip(@TempDir Path tmp) throws Exception {
+        var report = new AnalysisReport(
+                "quote-test", "TestApp", "com.example.test", true, false,
+                List.of("ARM64"), 1000L, 1, 1, 1,
+                Map.of(), List.of(new AnalysisReport.StringEntry(
+                        "0x1000", "\"/usr/lib/dyld\"", "__TEXT", null)),
+                List.of(), null, null, null,
+                List.of(), List.of(), "/tmp/test.sqlite", "IOS");
+
+        JSONObject data = renderedData(report, tmp);
+        String value = data.getJSONArray("strings_sample").getJSONObject(0).getString("value");
+        assertEquals("\"/usr/lib/dyld\"", value, "embedded quotes must round-trip exactly, not gain extra backslashes");
+    }
+
+    /** Same regression, with a backslash-and-quote combination (common in escaped paths found in
+     * real binaries) to make sure the fix isn't narrowly specific to a bare leading/trailing quote. */
+    @Test void stringValueContainingBackslashQuoteCombinationSurvivesTheRoundTrip(@TempDir Path tmp) throws Exception {
+        // Runtime value: path="C:\Program Files\App"  (one backslash per separator).
+        String withBackslashes = "path=\"C:\\Program Files\\App\"";
+        var report = new AnalysisReport(
+                "backslash-test", "TestApp", "com.example.test", true, false,
+                List.of("ARM64"), 1000L, 1, 1, 1,
+                Map.of(), List.of(new AnalysisReport.StringEntry(
+                        "0x1000", withBackslashes, "__TEXT", null)),
+                List.of(), null, null, null,
+                List.of(), List.of(), "/tmp/test.sqlite", "IOS");
+
+        JSONObject data = renderedData(report, tmp);
+        String value = data.getJSONArray("strings_sample").getJSONObject(0).getString("value");
+        assertEquals(withBackslashes, value);
+    }
+
+    @Test void embedsCurrentTemplateVersionNearTheTopOfTheFile(@TempDir Path tmp) throws Exception {
         String content = Files.readString(HtmlReporter.generate(sampleReport(), tmp));
-        assertTrue(content.contains(
-                "<meta name=\"malimite-report-template\" content=\""
-                        + HtmlReporter.TEMPLATE_VERSION + "\">"),
-                "report must embed TEMPLATE_VERSION for stale-detection");
-        assertTrue(content.contains("affected-list") || content.contains("Affected ("),
-                "grouped affected-assets layout expected");
+        String meta = "<meta name=\"malimite-report-template\" content=\"" + HtmlReporter.TEMPLATE_VERSION + "\">";
+        assertTrue(content.contains(meta), "report must embed TEMPLATE_VERSION for stale-detection");
+        // web/app/main.py's _html_template_stale() only reads the first 4096 bytes — this is the
+        // other half of that contract, locked in here so a template edit can't silently push the
+        // meta tag out of that window again (see HtmlReporter.generate()'s injection comment).
+        int idx = content.indexOf(meta);
+        assertTrue(idx >= 0 && idx < 4096,
+                "template-version meta tag must stay within the first 4096 bytes, was at " + idx);
     }
 
-    @Test void rendersAssessmentSection(@TempDir Path tmp) throws Exception {
+    @Test void picksAndroidTemplateForAndroidPlatform(@TempDir Path tmp) throws Exception {
+        var report = new AnalysisReport(
+                "android-test", "com.example.app", "com.example.app", false, false,
+                List.of(), 1000L, 1, 1, 0,
+                Map.of(), List.of(), List.of(), null, null, null,
+                List.of(), List.of(), "/tmp/test.sqlite", "ANDROID");
+        String html = Files.readString(HtmlReporter.generate(report, tmp));
+        assertTrue(html.contains("ANDROID / APK"), "Android template's own header comment should be present");
+    }
+
+    @Test void picksIosTemplateForIosPlatform(@TempDir Path tmp) throws Exception {
+        String html = Files.readString(HtmlReporter.generate(sampleReport(), tmp));
+        assertFalse(html.contains("ANDROID / APK"), "iOS platform must not render the Android template");
+    }
+
+    @Test void rendersAssessmentControls(@TempDir Path tmp) throws Exception {
         var assess = new AnalysisReport.AssessmentRecord(
                 1L, "ASSESS-FLAG-SECURE", "FLAG_SECURE", "UI_PRIVACY",
                 "PRESENT", "HIGH", "addFlags(FLAG_SECURE)", "signal=ui", "ANDROID");
@@ -68,58 +155,56 @@ class HtmlReporterTest {
                 List.of("arm64-v8a"), 100L, 1, 1, 0,
                 Map.of(), List.of(), List.of(), null, null, null,
                 List.of(), List.of(), "/tmp/t.sqlite", "ANDROID", List.of(assess));
-        String html = Files.readString(HtmlReporter.generate(report, tmp));
-        assertTrue(html.contains("Security Controls Assessment"));
-        assertTrue(html.contains("ASSESS-FLAG-SECURE"));
-        assertTrue(html.contains("badge-present") || html.contains("PRESENT"));
-        assertEquals("4", HtmlReporter.TEMPLATE_VERSION);
-    }
 
-    @Test void omitsRawLlmFindingsSection(@TempDir Path tmp) throws Exception {
-        var llmFinding = new AnalysisReport.LlmFinding(
-                "didFinishLaunching", "AppDelegate", "deep",
-                "CRITICAL: hardcoded credential in binary");
-        var report = new AnalysisReport(
-                "llm-raw-test", "TestApp", "com.example.test", true, false,
-                List.of("ARM64"), 1000L, 1, 1, 0,
-                Map.of(), List.of(), List.of(), "TEAM", "Profile", "2026-12-31",
-                List.of(llmFinding),
-                List.of(),
-                "/tmp/test.sqlite", "IOS");
-
-        String html = Files.readString(HtmlReporter.generate(report, tmp));
-        assertFalse(html.contains("Raw LLM Findings"),
-                "Raw LLM Findings section must not appear in the HTML report");
-        assertFalse(html.contains("vulnerabilities above are already distilled"),
-                "raw-LLM distillation note must not appear");
+        JSONArray controls = renderedData(report, tmp).getJSONArray("controls");
+        assertEquals(1, controls.length());
+        JSONObject c = controls.getJSONObject(0);
+        assertEquals("ASSESS-FLAG-SECURE", c.getString("rule"));
+        assertEquals("FLAG_SECURE", c.getString("name"));
+        assertEquals("UI_PRIVACY", c.getString("group"));
+        assertEquals("PRESENT", c.getString("status"));
+        assertEquals("HIGH", c.getString("confidence"));
     }
 
     @Test void containsBundleId(@TempDir Path tmp) throws Exception {
-        String content = Files.readString(HtmlReporter.generate(sampleReport(), tmp));
-        assertTrue(content.contains("com.example.test"));
+        JSONObject data = renderedData(sampleReport(), tmp);
+        assertEquals("com.example.test", data.getJSONObject("app").getString("bundle_id"));
     }
 
     @Test void containsEntryPoint(@TempDir Path tmp) throws Exception {
-        String content = Files.readString(HtmlReporter.generate(sampleReport(), tmp));
-        assertTrue(content.contains("didFinishLaunchingWithOptions"));
+        JSONObject data = renderedData(sampleReport(), tmp);
+        JSONArray eps = data.getJSONObject("code_surface").getJSONArray("entry_points");
+        assertEquals(1, eps.length());
+        assertEquals("AppDelegate.application:didFinishLaunchingWithOptions:", eps.getString(0));
     }
 
     @Test void containsTeamId(@TempDir Path tmp) throws Exception {
-        String content = Files.readString(HtmlReporter.generate(sampleReport(), tmp));
-        assertTrue(content.contains("TEAM123"));
+        JSONObject data = renderedData(sampleReport(), tmp);
+        assertEquals("TEAM123", data.getJSONObject("app").getString("team_id"));
     }
 
-    @Test void rendersVulnerabilitiesAsFirstClassSection(@TempDir Path tmp) throws Exception {
-        String content = Files.readString(HtmlReporter.generate(sampleReport(), tmp));
-        assertTrue(content.contains("MSTG-STORAGE-1"),    "rule ID should appear");
-        assertTrue(content.contains("Hardcoded API key"), "title should appear");
-        assertTrue(content.contains("CVSS 9.1"),          "CVSS score should appear");
-        assertTrue(content.contains("CWE-798"),           "CWE should appear");
-        assertTrue(content.contains("api_key=abcdef"),    "evidence should appear");
-        assertTrue(content.contains("Use Keychain"),      "remediation should appear");
+    @Test void rendersFindingCoreFields(@TempDir Path tmp) throws Exception {
+        JSONArray findings = renderedData(sampleReport(), tmp).getJSONArray("findings");
+        assertEquals(1, findings.length());
+        JSONObject f = findings.getJSONObject(0);
+        assertEquals("MSTG-STORAGE-1", f.getString("rule"));
+        assertEquals("Hardcoded API key", f.getString("title"));
+        assertEquals(9.1, f.getDouble("cvss"), 0.001);
+        assertEquals("CWE-798", f.getString("cwe"));
+        assertEquals("api_key=abcdef", f.getString("evidence"));
+        assertEquals("Use Keychain", f.getString("remediation"));
+        assertEquals("MASTG", f.getString("source"));
+        assertEquals("MASVS-STORAGE", f.getString("masvs"));
+        assertEquals("OPEN", f.getString("status"));
+        // "1. extract strings\n2. find key" → two PoC steps, numbering stripped (template owns
+        // its own step numbering in the rendered <ol>).
+        JSONArray poc = f.getJSONArray("poc");
+        assertEquals(2, poc.length());
+        assertEquals("extract strings", poc.getString(0));
+        assertEquals("find key", poc.getString(1));
     }
 
-    @Test void falsePositiveExcludedFromActiveSectionButShownAsSuppressed(@TempDir Path tmp) throws Exception {
+    @Test void falsePositiveExcludedFromFindingsJson(@TempDir Path tmp) throws Exception {
         var fpFinding = new AnalysisReport.VulnerabilityRecord(
                 2L, "MSTG-RESILIENCE-1", "No jailbreak detection", "RESILIENCE",
                 "MEDIUM", 5.3, "CWE-693", "...", "BINARY", "TestApp",
@@ -136,24 +221,13 @@ class HtmlReporterTest {
                 List.of(fpFinding),
                 "/tmp/test.sqlite", "IOS");
 
-        String html = Files.readString(HtmlReporter.generate(report, tmp));
-
-        // The card MUST NOT appear in the main vulnerability list
-        // (because that section iterates only active findings)
-        // — verify by checking the Risk Posture total
-        assertTrue(html.contains("0 findings detected") || html.contains("No vulnerabilities detected"),
-                "false-positive should not contribute to active findings count");
-
-        // It MUST appear in the Suppressed Findings section instead
-        assertTrue(html.contains("Suppressed Findings"),
-                "suppressed section should be rendered");
-        assertTrue(html.contains("False Positive"),
-                "false positive label should appear in suppressed list");
-        assertTrue(html.contains("Reviewer says: not applicable"),
-                "reviewer note should appear");
+        JSONObject data = renderedData(report, tmp);
+        assertEquals(0, data.getJSONArray("findings").length(),
+                "false-positive findings must not appear in the exported report at all");
+        assertEquals(0, data.getJSONObject("summary").getInt("occurrences"));
     }
 
-    @Test void overrideSeverityShownInsteadOfOriginal(@TempDir Path tmp) throws Exception {
+    @Test void overrideSeverityUsedAsEffectiveSeverity(@TempDir Path tmp) throws Exception {
         var overridden = new AnalysisReport.VulnerabilityRecord(
                 3L, "MSTG-STORAGE-1", "Hardcoded API key", "STORAGE",
                 "CRITICAL", 9.1, "CWE-798", "Test", "STRING", "0x1234",
@@ -168,21 +242,9 @@ class HtmlReporterTest {
                 Map.of(), List.of(), List.of(), "TEAM", "Profile", "2026-12-31",
                 List.of(), List.of(overridden), "/tmp/test.sqlite", "IOS");
 
-        String html = Files.readString(HtmlReporter.generate(report, tmp));
-
-        // Effective severity (LOW) used in the card badge, not CRITICAL
-        // The override-note hint should be rendered
-        assertTrue(html.contains("Severity overridden"),
-                "should signal the override to readers");
-        assertTrue(html.contains("Server-side key"),
-                "override note should appear");
-        assertTrue(html.contains("CVSS 3.0"),
-                "effective CVSS (override) should be used");
-        // Risk Posture dashboard must use effective severity, not original
-        assertFalse(html.contains("sev-critical'><div class='v'>1</div>"),
-                "CRITICAL tile must not count overridden finding");
-        assertTrue(html.contains("sev-low'><div class='v'>1</div>"),
-                "LOW tile should reflect effective severity");
+        JSONObject f = renderedData(report, tmp).getJSONArray("findings").getJSONObject(0);
+        assertEquals("LOW", f.getString("severity"), "effective (overridden) severity must be exported, not the original CRITICAL");
+        assertEquals(3.0, f.getDouble("cvss"), 0.001, "effective (overridden) CVSS must be exported");
     }
 
     @Test void riskPostureUsesEffectiveSeverityWhenDowngradedToInfo(@TempDir Path tmp) throws Exception {
@@ -200,18 +262,15 @@ class HtmlReporterTest {
                 Map.of(), List.of(), List.of(), "TEAM", "Profile", "2026-12-31",
                 List.of(), List.of(downgraded), "/tmp/test.sqlite", "IOS");
 
-        String html = Files.readString(HtmlReporter.generate(report, tmp));
-
-        assertFalse(html.contains("sev-critical'><div class='v'>1</div>"),
-                "downgraded CRITICAL→INFO must not appear in Risk Posture");
-        assertTrue(html.contains("1 finding"), "accepted_risk finding still counts in total");
-        assertTrue(html.contains("sev-info'><div class='v'>1</div>"),
-                "INFO tile should reflect effective severity");
-        assertTrue(html.contains("badge-info'>INFO</span>"),
-                "vuln card should show INFO badge");
+        JSONObject data = renderedData(report, tmp);
+        assertEquals(1, data.getJSONArray("findings").length(),
+                "accepted_risk findings still count (only false_positive/fixed are excluded)");
+        JSONObject f = data.getJSONArray("findings").getJSONObject(0);
+        assertEquals("INFO", f.getString("severity"));
+        assertEquals("ACCEPTED", f.getString("status"));
     }
 
-    @Test void aiFixOverridesRenderInsteadOfOriginalTextFields(@TempDir Path tmp) throws Exception {
+    @Test void aiFixOverridesUsedAsEffectiveTextFields(@TempDir Path tmp) throws Exception {
         var fixed = new AnalysisReport.VulnerabilityRecord(
                 5L, "MSTG-STORAGE-1", "Hardcoded API key", "STORAGE",
                 "CRITICAL", 9.1, "CWE-798",
@@ -224,7 +283,7 @@ class HtmlReporterTest {
                 "AI-rewritten evidence excerpt",
                 "1. AI step one\n2. AI step two",
                 "AI-rewritten remediation guidance",
-                "applied", "deepseek", "deepseek-v4-flash");
+                "applied", "deepseek", "deepseek-flash");
 
         var report = new AnalysisReport(
                 "aifix-test", "TestApp", "com.example.test", true, false,
@@ -232,24 +291,19 @@ class HtmlReporterTest {
                 Map.of(), List.of(), List.of(), "TEAM", "Profile", "2026-12-31",
                 List.of(), List.of(fixed), "/tmp/test.sqlite", "IOS");
 
-        String html = Files.readString(HtmlReporter.generate(report, tmp));
-
-        assertTrue(html.contains("AI-rewritten description with full context"),
-                "AI Fix description override should be rendered");
-        assertTrue(html.contains("AI-rewritten evidence excerpt"),
-                "AI Fix evidence override should be rendered");
-        assertTrue(html.contains("AI step one"),
-                "AI Fix PoC override should be rendered");
-        assertTrue(html.contains("AI-rewritten remediation guidance"),
-                "AI Fix remediation override should be rendered");
-        assertFalse(html.contains("Original terse description"),
-                "original description must not appear once an AI Fix override is applied");
-        assertFalse(html.contains("original evidence snippet"),
-                "original evidence must not appear once an AI Fix override is applied");
-        assertTrue(html.contains("rewritten by AI Fix"),
-                "AI Fix provenance note should be shown to the reviewer");
-        assertTrue(html.contains("deepseek"),
-                "AI Fix provider should be noted");
+        JSONObject f = renderedData(report, tmp).getJSONArray("findings").getJSONObject(0);
+        assertEquals("AI-rewritten description with full context", f.getString("description"));
+        assertEquals("AI-rewritten evidence excerpt", f.getString("evidence"));
+        assertEquals("AI-rewritten remediation guidance", f.getString("remediation"));
+        JSONArray poc = f.getJSONArray("poc");
+        assertEquals("AI step one", poc.getString(0));
+        assertEquals("AI step two", poc.getString(1));
+        // The original text must not leak through anywhere once an AI Fix override is applied.
+        String flat = f.toString();
+        assertFalse(flat.contains("Original terse description"));
+        assertFalse(flat.contains("original evidence snippet"));
+        assertFalse(flat.contains("original poc"));
+        assertFalse(flat.contains("original remediation"));
     }
 
     @Test void androidReportShowsPlatformNotObjectiveC(@TempDir Path tmp) throws Exception {
@@ -259,22 +313,44 @@ class HtmlReporterTest {
                 Map.of(), List.of(), List.of(), null, null, null,
                 List.of(), List.of(), "/tmp/test.sqlite", "ANDROID");
 
-        String html = Files.readString(HtmlReporter.generate(report, tmp));
-        assertTrue(html.contains("Android"), "platform should be Android");
-        assertTrue(html.contains("Java/Kotlin (DEX)"), "language should be DEX stack");
-        assertFalse(html.contains("Objective-C"), "must not mislabel Android as Objective-C");
+        JSONObject app = renderedData(report, tmp).getJSONObject("app");
+        assertEquals("Android", app.getString("platform"));
+        assertEquals("Java/Kotlin (DEX)", app.getString("language"));
     }
 
-    @Test void vulnerabilitiesAppearBeforeStringsSection(@TempDir Path tmp) throws Exception {
-        String content = Files.readString(HtmlReporter.generate(sampleReport(), tmp));
-        int vulnIdx    = content.indexOf("MSTG-STORAGE-1");
-        int stringsIdx = content.indexOf("String Sample");
-        assertTrue(vulnIdx > 0, "vuln section must be present");
-        assertTrue(stringsIdx > vulnIdx,
-                "Vulnerabilities must be rendered before the optional strings sample");
+    @Test void androidManifestFieldsExportedWhenPresent(@TempDir Path tmp) throws Exception {
+        var manifest = new AnalysisReport.AndroidManifestInfo(
+                false, true, true, "res/xml/network_security_config.xml",
+                List.of("android.permission.INTERNET", "android.permission.CAMERA"),
+                List.of(new AnalysisReport.AndroidManifestInfo.Component(
+                        "activity", "com.example.MainActivity", true, null)));
+        var report = new AnalysisReport(
+                "android-manifest-test", "com.example.app", "com.example.app", false, false,
+                List.of(), 1000L, 1, 1, 0,
+                Map.of(), List.of(), List.of(), null, null, null,
+                List.of(), List.of(), "/tmp/test.sqlite", "ANDROID", List.of(), manifest);
+
+        JSONObject data = renderedData(report, tmp);
+        assertTrue(data.has("manifest"), "manifest section must be present when AndroidManifestInfo is populated");
+        JSONObject m = data.getJSONObject("manifest");
+        assertFalse(m.getBoolean("debuggable"));
+        assertTrue(m.getBoolean("allow_backup"));
+        assertTrue(m.getBoolean("uses_cleartext_traffic"));
+        assertEquals("res/xml/network_security_config.xml", m.getString("network_security_config"));
+        assertEquals(2, m.getJSONArray("permissions").length());
+        JSONObject comp = m.getJSONArray("components").getJSONObject(0);
+        assertEquals("activity", comp.getString("type"));
+        assertEquals("com.example.MainActivity", comp.getString("name"));
+        assertTrue(comp.getBoolean("exported"));
+        assertFalse(comp.has("permission"), "null permission must be omitted, not sent as an empty string");
     }
 
-    @Test void groupsDuplicateRuleIdIntoOneCardWithUniqueAssets(@TempDir Path tmp) throws Exception {
+    @Test void manifestSectionAbsentForIos(@TempDir Path tmp) throws Exception {
+        JSONObject data = renderedData(sampleReport(), tmp);
+        assertFalse(data.has("manifest"), "iOS reports must not carry an Android manifest section");
+    }
+
+    @Test void groupsDuplicateRuleIdIntoOneFindingWithUniqueAssets(@TempDir Path tmp) throws Exception {
         var a1 = finding(10L, "MASTG-TEST-0339", "SQL Injection in Content Providers", "CODE",
                 "HIGH", 8.1, "FUNCTION", "DBHelper", "com.example.DBHelper.DBHelper");
         var a2 = finding(11L, "MASTG-TEST-0339", "SQL Injection in Content Providers", "CODE",
@@ -293,28 +369,21 @@ class HtmlReporterTest {
                 Map.of(), List.of(), List.of(), null, null, null,
                 List.of(), List.of(a1, a2, a3, aDup, other), "/tmp/test.sqlite", "ANDROID");
 
-        String html = Files.readString(HtmlReporter.generate(report, tmp));
+        JSONArray findings = renderedData(report, tmp).getJSONArray("findings");
+        assertEquals(2, findings.length(), "two unique issues (0339 + 0364), not five raw rows");
 
-        // Two unique issues (0339 + 0364), not five raw rows
-        assertEquals(2, countOccurrences(html, "class='vuln "),
-                "one card per unique rule_id");
-        assertEquals(1, countOccurrences(html, "MASTG-TEST-0339"),
-                "MASTG-TEST-0339 should appear once as a grouped card");
-        assertEquals(1, countOccurrences(html, "MASTG-TEST-0364"));
-        assertTrue(html.contains("Affected (3 unique)"),
-                "affected section should report unique asset count");
-        assertTrue(html.contains("3 locations"),
-                "multi-asset card should show location count badge");
-        assertTrue(html.contains("DBHelper"));
-        assertTrue(html.contains("onCreate"));
-        assertTrue(html.contains("addUser"));
-        // Risk posture counts unique issues, not raw duplicates
-        assertTrue(html.contains("2 findings detected"),
-                "summary total must count unique grouped issues");
-        assertTrue(html.contains("sev-high'><div class='v'>2</div>"),
-                "HIGH tile should count 2 unique issues, not 5 rows");
-        assertTrue(html.contains("unique open/active issues"),
-                "should note that summary uses unique-issue counting");
+        JSONObject grouped = findings.getJSONObject(0).getString("rule").equals("MASTG-TEST-0339")
+                ? findings.getJSONObject(0) : findings.getJSONObject(1);
+        assertEquals(3, grouped.getJSONArray("affected").length(), "3 unique assets, dup collapsed");
+
+        var names = new java.util.HashSet<String>();
+        for (int i = 0; i < grouped.getJSONArray("affected").length(); i++) {
+            names.add(grouped.getJSONArray("affected").getJSONObject(i).getString("name"));
+        }
+        assertEquals(java.util.Set.of("DBHelper", "onCreate", "addUser"), names);
+
+        int occurrences = renderedData(report, tmp).getJSONObject("summary").getInt("occurrences");
+        assertEquals(5, occurrences, "summary occurrences counts raw rows, not deduped assets");
     }
 
     @Test void groupFindingsByRuleDedupesAssetsAndPicksOpenRepresentative() {
@@ -346,14 +415,5 @@ class HtmlReporterTest {
                 "1. step", "remediation", "https://example.com",
                 "open", null, null, null,
                 null, null, null, null, "none", null, null);
-    }
-
-    private static int countOccurrences(String haystack, String needle) {
-        int count = 0, from = 0;
-        while ((from = haystack.indexOf(needle, from)) >= 0) {
-            count++;
-            from += needle.length();
-        }
-        return count;
     }
 }

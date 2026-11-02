@@ -53,9 +53,12 @@ public final class ReportBuilder {
         String profName   = optStr(meta, "provisioningProfile");
         String profExpiry = optStr(meta, "provisioningExpiry");
 
+        AnalysisReport.AndroidManifestInfo androidManifest =
+                "ANDROID".equalsIgnoreCase(platform) ? parseAndroidManifest(meta) : null;
+
         try (SqliteStore store = new SqliteStore(dbPath)) {
             return build(store, scanId, execName, bundleId, isSwift, isUniv,
-                    archs, durationMs, dbPath, teamId, profName, profExpiry, platform);
+                    archs, durationMs, dbPath, teamId, profName, profExpiry, platform, androidManifest);
         }
     }
 
@@ -91,6 +94,26 @@ public final class ReportBuilder {
             String provisioningProfile,
             String provisioningExpiry,
             String platform) {
+        return build(store, scanId, bundleExecutable, bundleIdentifier, isSwift, isUniversal,
+                architectures, durationMs, dbPath, bundleTeamId, provisioningProfile,
+                provisioningExpiry, platform, null);
+    }
+
+    public static AnalysisReport build(
+            SqliteStore store,
+            String scanId,
+            String bundleExecutable,
+            String bundleIdentifier,
+            boolean isSwift,
+            boolean isUniversal,
+            List<String> architectures,
+            long durationMs,
+            String dbPath,
+            String bundleTeamId,
+            String provisioningProfile,
+            String provisioningExpiry,
+            String platform,
+            AnalysisReport.AndroidManifestInfo androidManifest) {
 
         Map<String, List<String>> classes = store.getClassesAndFunctions(bundleExecutable);
         int fnCount  = store.getFunctionCount(bundleExecutable);
@@ -167,13 +190,54 @@ public final class ReportBuilder {
                 classes.size(), fnCount, strCount,
                 classes, strings, entryPoints,
                 bundleTeamId, provisioningProfile, provisioningExpiry,
-                llmFindings, vulnerabilities, dbPath, platform, assessments
+                llmFindings, vulnerabilities, dbPath, platform, assessments, androidManifest
         );
     }
 
     private static String optStr(JsonObject o, String key) {
         var el = o.get(key);
         return (el == null || el.isJsonNull()) ? null : el.getAsString();
+    }
+
+    /** Reads the Android manifest facts MalimiteAnalyzer wrote into scan.json's top-level fields
+     * (not nested — see saveScanJsonAndroid) into {@link AnalysisReport.AndroidManifestInfo}. */
+    private static AnalysisReport.AndroidManifestInfo parseAndroidManifest(JsonObject meta) {
+        Boolean debuggable = optBool(meta, "debuggable");
+        Boolean allowBackup = optBool(meta, "allowBackup");
+        Boolean cleartext = optBool(meta, "usesCleartextTraffic");
+        String nsc = optStr(meta, "networkSecurityConfig");
+
+        List<String> permissions = new ArrayList<>();
+        JsonArray permArr = meta.getAsJsonArray("permissions");
+        if (permArr != null) permArr.forEach(e -> { if (!e.isJsonNull()) permissions.add(e.getAsString()); });
+
+        List<AnalysisReport.AndroidManifestInfo.Component> components = new ArrayList<>();
+        JsonArray compArr = meta.getAsJsonArray("components");
+        if (compArr != null) {
+            compArr.forEach(e -> {
+                if (e.isJsonNull() || !e.isJsonObject()) return;
+                JsonObject c = e.getAsJsonObject();
+                components.add(new AnalysisReport.AndroidManifestInfo.Component(
+                        optStr(c, "type"), optStr(c, "name"),
+                        c.has("exported") && !c.get("exported").isJsonNull() && c.get("exported").getAsBoolean(),
+                        optStr(c, "permission")));
+            });
+        }
+
+        // Nothing at all parsed (very old scan.json predating this field, or Assessment-disabled
+        // scan that skipped manifest parsing entirely) — report no manifest rather than an
+        // all-nulls one, so the VA report's Manifest section renders as "not evaluated".
+        if (debuggable == null && allowBackup == null && cleartext == null && nsc == null
+                && permissions.isEmpty() && components.isEmpty()) {
+            return null;
+        }
+        return new AnalysisReport.AndroidManifestInfo(
+                debuggable, allowBackup, cleartext, nsc, permissions, components);
+    }
+
+    private static Boolean optBool(JsonObject o, String key) {
+        var el = o.get(key);
+        return (el == null || el.isJsonNull()) ? null : el.getAsBoolean();
     }
 
     /** Use directory basename as the public scan id when it looks like a UUID. */
