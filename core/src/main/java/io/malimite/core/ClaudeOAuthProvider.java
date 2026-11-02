@@ -97,18 +97,21 @@ public class ClaudeOAuthProvider implements LlmProvider {
 
     @Override
     public String complete(String systemPrompt, String userMessage) throws LlmException {
-        JSONArray systemArray = new JSONArray()
-                .put(new JSONObject().put("type", "text").put("text", CLAUDE_CODE_IDENTITY))
-                .put(new JSONObject().put("type", "text").put("text", systemPrompt));
+        return complete(systemPrompt, userMessage, true);
+    }
 
-        JSONObject body = new JSONObject()
-                .put("model", model)
-                .put("max_tokens", maxTokens)
-                .put("system", systemArray)
-                .put("messages", new JSONArray()
-                        .put(new JSONObject()
-                                .put("role", "user")
-                                .put("content", userMessage)));
+    /**
+     * @param requestThinkingDisabled whether to ask the API to turn extended thinking off for
+     *                                this call (see the class-level note above {@link #buildBody}).
+     *                                {@code false} on the one allowed retry after the API rejects
+     *                                {@code thinking: {"type": "disabled"}} with HTTP 400 for a
+     *                                model that does not accept that value (e.g. Claude Fable,
+     *                                Claude Opus 5.5 — see https://platform.claude.com/docs/en/build-with-claude/thinking,
+     *                                "Configuring thinking" table).
+     */
+    private String complete(String systemPrompt, String userMessage, boolean requestThinkingDisabled)
+            throws LlmException {
+        JSONObject body = buildBody(systemPrompt, userMessage, requestThinkingDisabled);
 
         Exception lastFailure = null;
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -145,6 +148,13 @@ public class ClaudeOAuthProvider implements LlmProvider {
                 throw new LlmException("Claude OAuth request unauthorized (401). " +
                         "Token may have been revoked — run 'malimite claude-login' again. Body: " + httpResp.body());
             }
+            // Claude Fable/Mythos and Claude Opus 5.5 reject thinking:{"type":"disabled"} with a 400
+            // instead of silently ignoring it (see buildBody's javadoc). Retried once, uncounted
+            // against MAX_RETRIES, with that field dropped — the model's own thinking default applies.
+            if (status == 400 && requestThinkingDisabled && looksLikeUnsupportedThinkingDisabled(httpResp.body())) {
+                log.info("Model {} rejected thinking:disabled; retrying once without it", model);
+                return complete(systemPrompt, userMessage, false);
+            }
             if (RETRYABLE_STATUS.contains(status) && attempt < MAX_RETRIES) {
                 lastFailure = new LlmException("HTTP " + status + ": " + truncate(httpResp.body(), 200));
                 sleepBackoff(attempt, httpResp);
@@ -176,9 +186,7 @@ public class ClaudeOAuthProvider implements LlmProvider {
                 if (resp.has("error")) {
                     throw new LlmException("Claude error: " + resp.getJSONObject("error").optString("message"));
                 }
-                return resp.getJSONArray("content")
-                           .getJSONObject(0)
-                           .getString("text");
+                return extractText(resp.getJSONArray("content"), resp.optString("stop_reason", ""));
             } catch (LlmException e) {
                 throw e;
             } catch (Exception e) {
@@ -191,6 +199,69 @@ public class ClaudeOAuthProvider implements LlmProvider {
         // Unreachable: the loop above always returns or throws before exhausting MAX_RETRIES+1 iterations.
         throw new LlmException("Claude OAuth request failed after " + MAX_RETRIES + " retries",
                 lastFailure instanceof LlmException ? lastFailure.getCause() : lastFailure);
+    }
+
+    /**
+     * Builds the Messages API request body. Thinking (extended reasoning) is on by default on
+     * Claude 5+ models and its tokens count against {@code max_tokens} just like the visible
+     * answer — on a short {@code max_tokens} budget like this provider's (scan enrichment default
+     * 4096, see LlmProviderFactory), a model can spend the whole budget thinking and return zero
+     * {@code text} blocks (observed directly: HTTP 200, {@code content[0].type == "thinking"}, no
+     * {@code text} block at all). {@code requestThinkingDisabled} asks the API to turn thinking off
+     * ({@code thinking: {"type": "disabled"}}) so the budget goes to the answer instead; a few
+     * model families (Claude Fable/Mythos, Claude Opus 5.5) reject that value with HTTP 400, in
+     * which case {@link #complete(String, String, boolean)} retries once with it omitted.
+     * See https://platform.claude.com/docs/en/build-with-claude/thinking ("Configuring thinking").
+     */
+    private JSONObject buildBody(String systemPrompt, String userMessage, boolean requestThinkingDisabled) {
+        JSONArray systemArray = new JSONArray()
+                .put(new JSONObject().put("type", "text").put("text", CLAUDE_CODE_IDENTITY))
+                .put(new JSONObject().put("type", "text").put("text", systemPrompt));
+
+        JSONObject body = new JSONObject()
+                .put("model", model)
+                .put("max_tokens", maxTokens)
+                .put("system", systemArray)
+                .put("messages", new JSONArray()
+                        .put(new JSONObject()
+                                .put("role", "user")
+                                .put("content", userMessage)));
+        if (requestThinkingDisabled) {
+            body.put("thinking", new JSONObject().put("type", "disabled"));
+        }
+        return body;
+    }
+
+    /** Best-effort detection of a 400 caused specifically by an unsupported thinking value, so a
+     * genuinely malformed request (bad model id, bad max_tokens, ...) still fails immediately
+     * instead of being masked by a pointless retry. Package-private: shared with {@link ClaudeProvider}. */
+    static boolean looksLikeUnsupportedThinkingDisabled(String body) {
+        String lower = body == null ? "" : body.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("thinking") && (lower.contains("disabled") || lower.contains("not supported")
+                || lower.contains("not compatible") || lower.contains("invalid"));
+    }
+
+    /**
+     * Returns the text of the first {@code text} content block. Anthropic's content array can
+     * start with {@code thinking}/{@code redacted_thinking} blocks before the answer (see
+     * {@link #buildBody}'s javadoc) — index 0 is not reliably the answer. Throws a clear,
+     * diagnosable error (naming the {@code stop_reason} and block types actually seen) when no
+     * {@code text} block is present at all, e.g. the model exhausted {@code max_tokens} on
+     * thinking even with it requested off.
+     */
+    static String extractText(JSONArray content, String stopReason) {
+        java.util.List<String> typesSeen = new java.util.ArrayList<>();
+        for (int i = 0; i < content.length(); i++) {
+            JSONObject block = content.getJSONObject(i);
+            String type = block.optString("type", "?");
+            typesSeen.add(type);
+            if ("text".equals(type)) {
+                return block.getString("text");
+            }
+        }
+        throw new LlmException("Claude response had no 'text' content block (stop_reason=" + stopReason +
+                ", block types seen: " + typesSeen + "). The model may have spent its entire max_tokens " +
+                "budget on extended thinking — see LLM_MAX_TOKENS in the README.");
     }
 
     /** Sleeps the delay for one retry, honoring the provider's Retry-After[-ms] header when present. */
