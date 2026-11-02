@@ -37,6 +37,21 @@ public class ClaudeProvider implements LlmProvider {
 
     @Override
     public String complete(String systemPrompt, String userMessage) throws LlmException {
+        return complete(systemPrompt, userMessage, true);
+    }
+
+    /**
+     * @param requestThinkingDisabled see {@link ClaudeOAuthProvider}'s identical parameter —
+     *                                this provider hits the same Messages API and the same
+     *                                "thinking burns the whole max_tokens budget" failure mode.
+     *                                {@code false} on the one allowed retry after the API rejects
+     *                                {@code thinking: {"type": "disabled"}} with HTTP 400 for a
+     *                                model that does not accept that value (Claude Fable/Mythos,
+     *                                Claude Opus 5.5 — see
+     *                                https://platform.claude.com/docs/en/build-with-claude/thinking).
+     */
+    private String complete(String systemPrompt, String userMessage, boolean requestThinkingDisabled)
+            throws LlmException {
         // System prompt with cache_control — Anthropic caches this across calls
         JSONArray systemArray = new JSONArray().put(new JSONObject()
                 .put("type", "text")
@@ -51,6 +66,9 @@ public class ClaudeProvider implements LlmProvider {
                         .put(new JSONObject()
                                 .put("role", "user")
                                 .put("content", userMessage)));
+        if (requestThinkingDisabled) {
+            body.put("thinking", new JSONObject().put("type", "disabled"));
+        }
         try {
             HttpRequest req = HttpRequest.newBuilder(URI.create(API_URL))
                     .header("x-api-key", apiKey)
@@ -59,13 +77,16 @@ public class ClaudeProvider implements LlmProvider {
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8))
                     .build();
-            String raw = http.send(req, HttpResponse.BodyHandlers.ofString()).body();
-            JSONObject resp = new JSONObject(raw);
+            HttpResponse<String> httpResp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (httpResp.statusCode() == 400 && requestThinkingDisabled
+                    && ClaudeOAuthProvider.looksLikeUnsupportedThinkingDisabled(httpResp.body())) {
+                log.info("Model {} rejected thinking:disabled; retrying once without it", model);
+                return complete(systemPrompt, userMessage, false);
+            }
+            JSONObject resp = new JSONObject(httpResp.body());
             if (resp.has("error"))
                 throw new LlmException("Claude error: " + resp.getJSONObject("error").optString("message"));
-            return resp.getJSONArray("content")
-                       .getJSONObject(0)
-                       .getString("text");
+            return ClaudeOAuthProvider.extractText(resp.getJSONArray("content"), resp.optString("stop_reason", ""));
         } catch (LlmException e) {
             throw e;
         } catch (Exception e) {
