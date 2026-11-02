@@ -48,9 +48,12 @@ public record AnalysisReport(
         String platform,
 
         /** Security-controls inventory (empty when Assessment disabled). */
-        List<AssessmentRecord> assessments
+        List<AssessmentRecord> assessments,
+
+        /** Android manifest facts for the VA report's Manifest section (null on iOS or legacy reports). */
+        AndroidManifestInfo androidManifest
 ) {
-    /** Backward-compatible ctor for tests that omit assessments. */
+    /** Backward-compatible ctor for tests that omit assessments and the Android manifest. */
     public AnalysisReport(
             String scanId, String bundleExecutable, String bundleIdentifier,
             boolean isSwift, boolean isUniversal, List<String> architectures, long durationMs,
@@ -62,7 +65,22 @@ public record AnalysisReport(
         this(scanId, bundleExecutable, bundleIdentifier, isSwift, isUniversal, architectures,
                 durationMs, classCount, functionCount, stringCount, classes, strings, entryPoints,
                 bundleTeamId, provisioningProfile, provisioningExpiry, llmFindings, vulnerabilities,
-                dbPath, platform, List.of());
+                dbPath, platform, List.of(), null);
+    }
+
+    /** Backward-compatible ctor for tests that omit the Android manifest. */
+    public AnalysisReport(
+            String scanId, String bundleExecutable, String bundleIdentifier,
+            boolean isSwift, boolean isUniversal, List<String> architectures, long durationMs,
+            int classCount, int functionCount, int stringCount,
+            Map<String, List<String>> classes, List<StringEntry> strings, List<String> entryPoints,
+            String bundleTeamId, String provisioningProfile, String provisioningExpiry,
+            List<LlmFinding> llmFindings, List<VulnerabilityRecord> vulnerabilities,
+            String dbPath, String platform, List<AssessmentRecord> assessments) {
+        this(scanId, bundleExecutable, bundleIdentifier, isSwift, isUniversal, architectures,
+                durationMs, classCount, functionCount, stringCount, classes, strings, entryPoints,
+                bundleTeamId, provisioningProfile, provisioningExpiry, llmFindings, vulnerabilities,
+                dbPath, platform, assessments, null);
     }
 
     /** A single extracted Mach-O string. */
@@ -70,6 +88,21 @@ public record AnalysisReport(
 
     /** A single LLM enrichment result for one function. */
     public record LlmFinding(String functionName, String className, String mode, String finding) {}
+
+    /** Android manifest facts surfaced in the VA report's Manifest section. All fields except
+     * {@code permissions}/{@code components} may be {@code null} when AndroidManifestParser could
+     * not determine them (e.g. no {@code uses-sdk cleartextTraffic} attribute present). */
+    public record AndroidManifestInfo(
+            Boolean debuggable,
+            Boolean allowBackup,
+            Boolean usesCleartextTraffic,
+            String networkSecurityConfig,
+            List<String> permissions,
+            List<Component> components
+    ) {
+        /** One manifest-declared activity/service/receiver/provider. */
+        public record Component(String type, String name, boolean exported, String permission) {}
+    }
 
     /** One security-control assessment row. */
     public record AssessmentRecord(

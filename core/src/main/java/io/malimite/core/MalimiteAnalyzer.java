@@ -386,6 +386,9 @@ public class MalimiteAnalyzer {
             meta.put("debuggable", manifest.debuggable());
             meta.put("allowBackup", manifest.allowBackup());
             meta.put("usesCleartextTraffic", manifest.usesCleartextTraffic());
+            meta.put("networkSecurityConfig", manifest.networkSecurityConfig());
+            meta.put("permissions", manifest.permissions());
+            meta.put("components", manifest.components());
             meta.put("isSwift", false);
             meta.put("isUniversal", false);
             meta.put("architectures", abis);

@@ -830,7 +830,7 @@ async def get_report(request: Request, scan_id: str):
 
 
 # Must match HtmlReporter.TEMPLATE_VERSION — bump both when the HTML layout changes.
-_HTML_REPORT_TEMPLATE_VERSION = "4"
+_HTML_REPORT_TEMPLATE_VERSION = "7"
 _HTML_REPORT_TEMPLATE_META = (
     f'<meta name="malimite-report-template" content="{_HTML_REPORT_TEMPLATE_VERSION}">'
 )
@@ -841,8 +841,10 @@ def _html_template_stale(html_path: Path) -> bool:
     if not html_path.exists():
         return True
     try:
-        # Template meta is near the top of the file; avoid reading huge reports fully.
-        head = html_path.read_text(encoding="utf-8", errors="replace")[:2048]
+        # Template meta is near the top of the file; avoid reading huge reports fully. The VA
+        # report template (HtmlReporter TEMPLATE_VERSION >= "5") carries a long data-contract
+        # comment before <head>, pushing the meta tag past 2048 bytes — 4096 covers it with margin.
+        head = html_path.read_text(encoding="utf-8", errors="replace")[:4096]
     except OSError:
         return True
     return _HTML_REPORT_TEMPLATE_META not in head
