@@ -1,6 +1,6 @@
 # Malimite-Core — Development Phases
 
-> Last updated: 2026-11-02 — reflects actual codebase state, not the original planning baseline.
+> Last updated: 2026-11-02 — reflects actual codebase state, not the original planning baseline. Revised same day: `report.html` rewritten as a formal bilingual VA document, CLI log timestamps, and a Claude thinking-response fix.
 
 ## Current State (Baseline)
 
@@ -22,7 +22,7 @@
 | Security hardening (Phase 7) | ⚠️ Started — see Phase 7 |
 | Enterprise scale (Phase 8) | ❌ Not started |
 
-Unit tests in `core/` and `cli/` (219) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM providers (incl. Claude OAuth), SARIF/HTML (incl. triage and AI Fix overrides), learned-rule quality gates and on-demand decompilation; `web/tests/` (152, stdlib `unittest`/`pytest`-compatible) cover the AI Assistant, Functions tab routes, triage, and AI Fix. Both suites run on every pull request and on `main` (`.github/workflows/ci.yml`: Java on JDK 17 and 21, Python on 3.12). **A real-IPA/APK scan does not run on CI yet** (it needs Ghidra / JADX on the runner).
+Unit tests in `core/` and `cli/` (232) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM providers (incl. Claude OAuth and the thinking-response regression), SARIF/HTML (incl. triage and AI Fix overrides, the VA report's JSON data contract, and a JSON-escaping regression), learned-rule quality gates and on-demand decompilation; `web/tests/` (152, stdlib `unittest`/`pytest`-compatible) cover the AI Assistant, Functions tab routes, triage, and AI Fix. Both suites run on every pull request and on `main` (`.github/workflows/ci.yml`: Java on JDK 17 and 21, Python on 3.12). **A real-IPA/APK scan does not run on CI yet** (it needs Ghidra / JADX on the runner).
 
 ---
 
@@ -160,7 +160,7 @@ MALIMITE_LEARNED_RULES_ANDROID                        # → ~/.malimite/learned_
 |---|---|---|---|
 | 5.1 | SARIF 2.1 output | ✅ | `SarifExporter.java` → `findings.sarif` |
 | 5.2 | GitHub Actions SARIF upload | ✅ | `upload-sarif@v3` active in `.github/workflows/ipa-scan.yml` |
-| 5.3 | HTML report | ✅ | `HtmlReporter.java` — vuln-centric layout + Assessment section + unique `rule_id` grouping |
+| 5.3 | HTML report | ✅ | `HtmlReporter.java` — bilingual (ID/EN) formal VA document template (cover, risk rating, MASVS mapping, Assessment section, Android manifest summary, glossary, approval sheet), unique `rule_id` grouping; see Phase 5f |
 | 5.4 | Exit code policy | ✅ | CLI `--fail-on=HIGH|MEDIUM|LOW` |
 | 5.5 | GitLab CI template | ✅ | `.gitlab/malimite.yml` |
 | 5.6 | Bitbucket Pipelines template | ✅ | `bitbucket-pipelines.yml` |
@@ -241,6 +241,27 @@ Assessment results appear in CLI/HTML/web without mixing into vulnerability seve
 
 ### Deliverable
 A reviewer clicks ✨ AI Fix on a finding, picks a provider/model and which fields to rewrite, and the LLM-generated text appears in the live Vulnerabilities tab and `report.html` with a visible provenance note — fully reversible. **Met.**
+
+---
+
+## Phase 5f — VA Report Overhaul & Scan Reliability
+**Status: ✅ Complete**
+
+**Goal:** Replace `report.html`'s compact technical-dashboard layout with a formal, bilingual (ID/EN) Vulnerability Assessment document suitable for a client deliverable, and fix two scan-reliability issues found while investigating it.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 5f.1 | VA report templates | ✅ | `core/src/main/resources/report-template/va-report-{ios,android}.html` — self-contained HTML+JS, not Java string-building: a single `<script type="application/json">` data block renders cover page, executive summary, risk rating scale, findings (grouped by `rule_id`), MASVS mapping, Security Assessment, Android manifest summary, glossary, and an approval sheet, with an ID/EN language toggle. Logo inlined as SVG in the cover (no separate asset, keeps the report portable) |
+| 5f.2 | `HtmlReporter.java` rewrite | ✅ | From an HTML string-builder into a JSON serializer + template injector; picks the iOS/Android template by platform, maps `AnalysisReport` into the templates' documented data contract, keeps existing triage/AI-Fix effective-value and `rule_id`-grouping semantics. `TEMPLATE_VERSION` bumped 4→7 across this work's revisions (kept in sync with `web/app/main.py`) so every on-disk `report.html` auto-regenerates via the existing `ReportRenderer` staleness check |
+| 5f.3 | Android manifest data | ✅ | `AnalysisReport.AndroidManifestInfo` (`debuggable`/`allowBackup`/`usesCleartextTraffic`/`networkSecurityConfig`/`permissions`/`components`) — `AndroidManifestParser` already extracted these but they weren't threaded through to the report; now saved in `scan.json` (`MalimiteAnalyzer`) and read back (`ReportBuilder`) |
+| 5f.4 | Print/PDF color fix | ✅ | `print-color-adjust:exact` in both templates' `@media print` — without it, "Save as PDF" silently drops `background-color` from everything but `<body>`/links, so the MASVS-category bar chart, severity/status badges, and the risk-posture box rendered colorless in print even though they look correct on screen |
+| 5f.5 | JSON-escaping bug fix | ✅ | The template-data injector wrapped `String.replace(CharSequence,CharSequence)` in `Matcher.quoteReplacement()`, which is meaningless outside `replaceAll`/`replaceFirst`'s regex-replacement syntax — it silently doubled every backslash already in the serialized JSON. A Mach-O string containing a literal quote (`"/usr/lib/dyld"`, quotes included) corrupted the embedded JSON enough to throw a `SyntaxError` in the browser's own `JSON.parse`. Fixed with plain `replace()`; two regression tests added |
+| 5f.6 | CLI log timestamps | ✅ | `cli/src/main/resources/simplelogger.properties` — every log line now gets an `HH:mm:ss.SSS` prefix; slf4j-simple previously ran on its bare default (no timestamp), making it impossible to tell how long a step took from `analysis.log` / the web UI's Log tab |
+| 5f.7 | Claude thinking-response fix | ✅ | `ClaudeOAuthProvider`/`ClaudeProvider`: Claude 5+ models run extended thinking by default (no `thinking` request param needed) and its tokens count against the same `max_tokens` as the visible answer — on scan enrichment's 4096 default, a model could spend the whole budget thinking and return no `text` block at all. Both providers now send `thinking:{"type":"disabled"}`, retrying once without it if a model family rejects that value (HTTP 400); `extractText()` scans for the first `text` block instead of assuming index 0 |
+| 5f.8 | Tests | ✅ | `HtmlReporterTest` rewritten to parse the injected JSON back out of the generated HTML and assert against it directly (18→20 tests); `ClaudeOAuthProviderTest` (8 new); `SimpleLoggerConfigTest` (1 new) |
+
+### Deliverable
+`report.html` is a document a reviewer can hand to a client as-is (after filling in the `—` administrative placeholders): cover, executive summary, risk scale, findings, MASVS mapping, glossary, approval sheet, print-to-PDF with correct colors. Verified end to end against real iOS and Android scans in-browser with zero console errors. **Met.**
 
 ---
 
@@ -325,6 +346,7 @@ Phase 5b  ██████████  Security Assessment     100%   ✅ DON
 Phase 5c  █████████░  AI Assistant            ~90%   [merged in PR #1; hook-target + claude-oauth added; 5c.6–5c.9 open]
 Phase 5d  ███████░░░  Detection quality       ~70%   [wider corpus needed]
 Phase 5e  ██████████  AI Fix                  100%   ✅ DONE
+Phase 5f  ██████████  VA Report Overhaul      100%   ✅ DONE
 Phase 6   ░░░░░░░░░░  Observability             0%   ← NEXT MAJOR PHASE
 Phase 7   ███░░░░░░░  Security & Hardening     ~30%   [started: 7.1, 7.2, 7.4, 7.5, 7.8 partial]
 Phase 8   ░░░░░░░░░░  Scale & Enterprise        0%

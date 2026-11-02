@@ -18,7 +18,7 @@ live here is long finished; see [`PHASES.md`](../PHASES.md) for the full develop
 | **Security Assessment** | `AssessmentScanner`, `AssessmentCatalog`, `AssessmentResult`, `AssessmentStatus` (PRESENT/PARTIAL/ABSENT/UNKNOWN controls inventory, separate from vulnerability findings) |
 | **LLM providers** | `LlmProvider` (interface), `LlmProviderFactory`, `OpenAiProvider`, `ClaudeProvider`, `ClaudeOAuthProvider` (+ `AnthropicOAuthCredentials` / `AnthropicOAuthLogin` for `malimite claude-login`), `DeepSeekProvider` / `DeepSeekModels`, `OllamaProvider`, `LlmEnricher` (per-function enrichment + AI Fix's prompt infra is on the Python side, see `web/app/finding_fix.py`), `LlmMode`, `LlmCache`, `LearnedRulesStore` |
 | **Persistence** | `SqliteStore` (the `analysis.sqlite` schema: classes, functions, strings, vulnerabilities incl. triage/AI-Fix overrides, LLM findings, assessments) |
-| **Reporting** | `ReportBuilder` (assembles `AnalysisReport` from `SqliteStore`), `HtmlReporter` (`report.html`), `SarifExporter` (`findings.sarif`), `ReportRenderer` (CLI entry for regenerating reports without a full re-scan) |
+| **Reporting** | `ReportBuilder` (assembles `AnalysisReport` from `SqliteStore`), `HtmlReporter` (`report.html` — a bilingual VA document rendered client-side from the templates in `src/main/resources/report-template/`, picked by platform), `SarifExporter` (`findings.sarif`), `ReportRenderer` (CLI entry for regenerating reports without a full re-scan) |
 | **Platform** | `PackagePlatform` (IOS/ANDROID), `CoreConfig` (env var / system property resolution) |
 
 ## Public API
