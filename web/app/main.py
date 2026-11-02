@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import db, finding_fix, offensive_phases, scanner
+from . import auto_enhance, db, finding_fix, offensive_phases, scanner
 from .agent import anthropic_oauth, loop as agent_loop, ondemand, store as chat_store
 from .agent.llm import LlmError, resolve_llm
 from .agent.tools import Ctx, valid_class_name
@@ -526,23 +526,12 @@ class AiFixRequest(BaseModel):
         description="Subset of description|evidence|risk|poc_steps|remediation; default = all")
 
 
-def _source_snippet_for(row: dict) -> Optional[str]:
-    """Best-effort decompiled-code context for the LLM prompt. Only FUNCTION findings carry a
-    usable evidence_location ('Class.function' or bare 'function' — see VulnerabilityScanner.java
-    / LlmEnricher.java); other affected types (STRING/RESOURCE/BINARY/PLIST) have no single
-    function to attach, so this returns None and the fix proceeds from the finding text alone."""
-    if (row.get("affected_type") or "").upper() != "FUNCTION":
-        return None
-    location = row.get("evidence_location") or ""
-    if not location:
-        return None
-    if "." in location:
-        class_name, _, function_name = location.rpartition(".")
-    else:
-        class_name, function_name = location, None
-    if not class_name:
-        return None
-    return class_name, function_name  # resolved to code by the caller (needs db_path/exe)
+def _validate_fix_fields(fields: Optional[list[str]]) -> None:
+    if fields:
+        bad = [f for f in fields if f not in finding_fix.FIXABLE_FIELDS]
+        if bad:
+            raise HTTPException(status_code=422,
+                detail=f"fields must be a subset of {list(finding_fix.FIXABLE_FIELDS)}; got {bad}")
 
 
 @app.post("/api/v1/scans/{scan_id}/vulnerabilities/{vuln_id}/ai-fix")
@@ -564,11 +553,7 @@ async def ai_fix_vulnerability(
     if not row:
         raise HTTPException(status_code=404, detail="Vulnerability not found")
 
-    if req.fields:
-        bad = [f for f in req.fields if f not in finding_fix.FIXABLE_FIELDS]
-        if bad:
-            raise HTTPException(status_code=422,
-                detail=f"fields must be a subset of {list(finding_fix.FIXABLE_FIELDS)}; got {bad}")
+    _validate_fix_fields(req.fields)
 
     detail = scanner.get_scan_detail(scan_id)
     try:
@@ -576,35 +561,11 @@ async def ai_fix_vulnerability(
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    source_snippet = None
-    loc = _source_snippet_for(row)
-    if loc:
-        class_name, function_name = loc
-        try:
-            rows = await db.get_source(db_path, exe, class_name, function_name)
-            if rows:
-                source_snippet = rows[0]["code"]
-        except Exception:
-            source_snippet = None  # best-effort only; the fix still proceeds from finding text
-
     try:
-        fix = await finding_fix.fix_finding(cfg, row, source_snippet, req.fields)
+        fix = await auto_enhance.apply_ai_fix_to_row(db_path, exe, cfg, row, req.fields)
     except LlmError as e:
         raise HTTPException(status_code=502, detail=str(e))
-
-    risk = fix.get("risk") or {}
-    ok = await db.update_vulnerability_ai_fix(
-        db_path, vuln_id,
-        description=fix.get("description"),
-        evidence=fix.get("evidence"),
-        poc_steps=fix.get("poc_steps"),
-        remediation=fix.get("remediation"),
-        severity=risk.get("severity"),
-        cvss_score=risk.get("cvss"),
-        provider=cfg.provider,
-        model=cfg.model,
-    )
-    if not ok:
+    if fix is None:
         raise HTTPException(status_code=404, detail="Vulnerability not found")
 
     regenerated = await scanner.regenerate_report(scan_id)
@@ -627,6 +588,147 @@ async def revert_ai_fix_vulnerability(request: Request, scan_id: str, vuln_id: i
     regenerated = await scanner.regenerate_report(scan_id)
     updated = await db.get_vulnerability_row(db_path, exe, vuln_id)
     return {"updated": True, "report_regenerated": regenerated, "vulnerability": updated}
+
+
+# ── Auto Enhance (bulk AI Fix over many findings, as a background job) ──────────────────────
+
+class AutoEnhanceRequest(BaseModel):
+    vuln_ids: list[int] = Field(min_length=1, description="Finding ids to enhance (one per unique issue)")
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    fields: Optional[list[str]] = Field(
+        default=None,
+        description="Subset of description|evidence|risk|poc_steps|remediation; default = all")
+
+
+@app.post("/api/v1/scans/{scan_id}/auto-enhance", status_code=202)
+async def start_auto_enhance(request: Request, scan_id: str, req: AutoEnhanceRequest):
+    """Starts a background job that runs AI Fix on every listed finding (same reversible
+    overrides as the per-finding endpoint), regenerating the report once at the end. Counts as
+    ONE hit against the shared chat/AI Fix rate limit; the job itself paces its LLM calls with
+    settings.auto_enhance_concurrency. One job per scan at a time (409 while one is running)."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    _validate_fix_fields(req.fields)
+
+    ids = list(dict.fromkeys(req.vuln_ids))  # dedupe, keep order
+    if len(ids) > auto_enhance.MAX_FINDINGS_PER_JOB:
+        raise HTTPException(status_code=422,
+            detail=f"At most {auto_enhance.MAX_FINDINGS_PER_JOB} findings per Auto Enhance run")
+
+    running = auto_enhance.active_job_id(scan_id)
+    if running:
+        raise HTTPException(status_code=409,
+            detail=f"An Auto Enhance job is already running for this scan ({running})")
+
+    detail = scanner.get_scan_detail(scan_id)
+    try:
+        cfg = resolve_llm(detail.llm_provider, detail.llm_model, req.provider, req.model)
+    except LlmError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    all_rows = {r["id"]: r for r in await db.get_vulnerabilities(db_path, exe)}
+    missing = [i for i in ids if i not in all_rows]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Unknown vulnerability id(s): {missing[:20]}")
+    rows = [all_rows[i] for i in ids]
+
+    _chat_rate_limit()
+    fields = [f for f in (req.fields or list(finding_fix.FIXABLE_FIELDS))]
+    job = auto_enhance.create_job(scan_id, cfg, fields, rows)
+    auto_enhance.start_job_task(
+        job, cfg=cfg, db_path=db_path, exe=exe, rows=rows,
+        scan_dir=settings.scan_dir / scan_id,
+        regenerate=scanner.regenerate_report,
+        concurrency=settings.auto_enhance_concurrency,
+    )
+    return auto_enhance.public_view(job)
+
+
+@app.get("/api/v1/scans/{scan_id}/auto-enhance")
+async def auto_enhance_overview(request: Request, scan_id: str):
+    """The currently running job (if any) plus this scan's Activity Log, newest first."""
+    _check_auth(request)
+    _require_db(scan_id)
+    jid = auto_enhance.active_job_id(scan_id)
+    active = auto_enhance.get_job(jid) if jid else None
+    return {
+        "active": auto_enhance.public_view(active) if active else None,
+        "history": auto_enhance.read_activity_log(settings.scan_dir / scan_id),
+    }
+
+
+@app.get("/api/v1/scans/{scan_id}/auto-enhance/jobs/{job_id}")
+async def auto_enhance_job(request: Request, scan_id: str, job_id: str):
+    """Live progress for one job; falls back to the persisted Activity Log after a restart."""
+    _check_auth(request)
+    _require_db(scan_id)
+    job = _find_job(scan_id, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Auto Enhance job not found")
+    return auto_enhance.public_view(job)
+
+
+def _find_job(scan_id: str, job_id: str) -> Optional[dict]:
+    """Live job if still in memory, else its persisted Activity Log entry (after a restart)."""
+    job = auto_enhance.get_job(job_id)
+    if job and job.get("scan_id") == scan_id:
+        return job
+    for entry in auto_enhance.read_activity_log(settings.scan_dir / scan_id):
+        if entry.get("job_id") == job_id:
+            return entry
+    return None
+
+
+@app.post("/api/v1/scans/{scan_id}/auto-enhance/jobs/{job_id}/cancel")
+async def cancel_auto_enhance_job(request: Request, scan_id: str, job_id: str):
+    """Cancel Batch: findings not started yet are skipped; in-flight ones finish normally."""
+    _check_auth(request)
+    _require_db(scan_id)
+    job = auto_enhance.get_job(job_id)
+    if not job or job.get("scan_id") != scan_id:
+        raise HTTPException(status_code=404, detail="Auto Enhance job not found")
+    if job.get("state") not in ("queued", "running"):
+        raise HTTPException(status_code=409, detail="This Auto Enhance job is not running")
+    return auto_enhance.public_view(auto_enhance.request_cancel(job))
+
+
+@app.post("/api/v1/scans/{scan_id}/auto-enhance/jobs/{job_id}/items/{vuln_id}/retry",
+          status_code=202)
+async def retry_auto_enhance_item(request: Request, scan_id: str, job_id: str, vuln_id: int):
+    """Retry Finding: re-runs one failed/cancelled finding inside the same run, with the run's
+    original provider/model/fields. Counts as one hit on the shared AI rate limit."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    job = _find_job(scan_id, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Auto Enhance job not found")
+    item = next((it for it in job.get("items", []) if it.get("vuln_id") == vuln_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Finding is not part of this run")
+    if item.get("state") not in ("failed", "cancelled"):
+        raise HTTPException(status_code=409, detail="Only failed or cancelled findings can be retried")
+    running = auto_enhance.active_job_id(scan_id)
+    if running and running != job_id:
+        raise HTTPException(status_code=409,
+            detail=f"Another Auto Enhance job is running for this scan ({running})")
+    row = await db.get_vulnerability_row(db_path, exe, vuln_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Vulnerability not found")
+    detail = scanner.get_scan_detail(scan_id)
+    try:
+        cfg = resolve_llm(detail.llm_provider, detail.llm_model, job.get("provider"), job.get("model"))
+    except LlmError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    _chat_rate_limit()
+    try:
+        job = auto_enhance.retry_item(
+            job, row, cfg=cfg, db_path=db_path, exe=exe,
+            scan_dir=settings.scan_dir / scan_id, regenerate=scanner.regenerate_report,
+            concurrency=settings.auto_enhance_concurrency)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return auto_enhance.public_view(job)
 
 
 def _learned_rules_path(platform: str) -> str:

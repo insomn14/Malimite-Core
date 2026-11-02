@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     chat_tool_cap: int = 12000          # max chars returned to the model per tool call
     chat_rate_per_min: int = 30         # global cap on chat requests/min: each one spends the server's LLM quota
     heavy_concurrency: int = 1          # concurrent on-demand decompile subprocesses
+    auto_enhance_concurrency: int = 2   # parallel LLM calls inside one Auto Enhance (bulk AI Fix) job
     ghidra_ondemand_timeout: int = 5400  # > Java import cap (60 min) so a big first import can finish
 
     model_config = {"env_file": str(_WEB / ".env"), "env_file_encoding": "utf-8"}
