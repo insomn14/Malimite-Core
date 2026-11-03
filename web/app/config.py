@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # Ghidra 12.0.4 (apt-managed). NOTE: Ghidra 12.1 has a regression with our
     # DumpClassData.java post-script (class loader change) — do not bump until
     # the script is updated to satisfy the new "public class == filename" rule.
-    # some-class IPAs (dyld chained-fixups with null import) fail on BOTH 12.0.4
+    # Some dyld chained-fixups-with-null-import IPAs fail on BOTH 12.0.4
     # and 12.1 — that is a separate upstream Mach-O parser bug.
     ghidra_home: str = "/usr/share/ghidra"
     cli_jar: str = str(_ROOT / "cli/target/malimite-cli.jar")
