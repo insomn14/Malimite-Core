@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from . import auto_enhance, db, finding_fix, offensive_phases, scanner
 from .agent import anthropic_oauth, loop as agent_loop, ondemand, store as chat_store
-from .agent.llm import LlmError, resolve_llm
+from .agent.llm import VISION_CAPABLE_PROVIDERS, LlmError, resolve_llm
 from .agent.tools import Ctx, valid_class_name
 from .config import settings
 from .models import ScanDetail, ScanMeta
@@ -998,9 +998,46 @@ async def get_log(request: Request, scan_id: str, tail: int = 200):
 
 # ── AI assistant (chat agent) ─────────────────────────────────────────────────
 
+_IMAGE_MEDIA_TYPES = frozenset({"image/png", "image/jpeg", "image/webp", "image/gif"})
+
+
+class ChatAttachment(BaseModel):
+    """A text/code file or an image, attached to one chat message.
+
+    Text attachments are inlined into the message as a fenced code block (same as before this
+    field existed, just supporting more than one). Image attachments become a provider-native
+    vision content block — see agent/loop.py's use of `kind` and agent/llm.py's to_openai().
+    """
+    kind: str = Field(pattern="^(text|image)$")
+    name: str = Field(min_length=1, max_length=255)
+    # text attachments: raw file content. image attachments: base64-encoded bytes (no data: prefix).
+    content: str = Field(min_length=1)
+    media_type: Optional[str] = None  # required and validated for kind="image"; ignored for kind="text"
+
+    def validate_against(self, s) -> Optional[str]:
+        """Returns an error message, or None if this attachment is within the configured limits."""
+        if self.kind == "text":
+            if len(self.content) > s.chat_attachment_max_chars:
+                return (f'"{self.name}" is too long ({len(self.content):,} characters, '
+                        f'max {s.chat_attachment_max_chars:,}). Trim it and try again.')
+        else:
+            if self.media_type not in _IMAGE_MEDIA_TYPES:
+                return f'"{self.name}" has an unsupported image type: {self.media_type!r}.'
+            # content is base64; raw byte size is ~3/4 of the encoded string length.
+            approx_bytes = len(self.content) * 3 // 4
+            if approx_bytes > s.chat_attachment_max_image_bytes:
+                return (f'"{self.name}" is too large ({approx_bytes:,} bytes, '
+                        f'max {s.chat_attachment_max_image_bytes:,}). Use a smaller image.')
+        return None
+
+
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
-    message: str = Field(min_length=1, max_length=20000)
+    # Hard ceiling here is a generous upper bound only (Pydantic Field() needs a literal, not a
+    # runtime settings value); the real, operator-configurable limit is
+    # settings.chat_message_max_chars, enforced in chat() below alongside the attachment checks.
+    message: str = Field(default="", max_length=200000)
+    attachments: list[ChatAttachment] = Field(default_factory=list)
     provider: Optional[str] = None   # override; must be in agent.llm.PROVIDERS
     model: Optional[str] = None
 
@@ -1033,6 +1070,22 @@ async def chat(request: Request, scan_id: str, req: ChatRequest):
     _check_auth(request)
     db_path, exe = _require_db(scan_id)
     _chat_rate_limit()
+
+    if not req.message.strip() and not req.attachments:
+        raise HTTPException(status_code=422, detail="Message cannot be empty without at least one attachment")
+    if len(req.message) > settings.chat_message_max_chars:
+        raise HTTPException(status_code=422, detail=(
+            f"Message is too long ({len(req.message):,} characters, "
+            f"max {settings.chat_message_max_chars:,}). Trim it and try again."))
+    if len(req.attachments) > settings.chat_attachment_max_count:
+        raise HTTPException(status_code=422, detail=(
+            f"Too many attachments ({len(req.attachments)}, max {settings.chat_attachment_max_count}). "
+            f"Remove some and try again."))
+    for att in req.attachments:
+        err = att.validate_against(settings)
+        if err:
+            raise HTTPException(status_code=422, detail=err)
+
     detail = scanner.get_scan_detail(scan_id)
     scan_dir = scanner._scan_dir(scan_id)
     chat_db = chat_store.path_for(scan_dir)
@@ -1048,6 +1101,10 @@ async def chat(request: Request, scan_id: str, req: ChatRequest):
                           req.provider, req.model)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if any(a.kind == "image" for a in req.attachments) and cfg.provider not in VISION_CAPABLE_PROVIDERS:
+        raise HTTPException(status_code=422, detail=(
+            f"The '{cfg.provider}' provider does not accept image attachments. "
+            f"Switch provider to one of: {', '.join(sorted(VISION_CAPABLE_PROVIDERS))}."))
     if sess:
         sid = sess["id"]
         if (cfg.provider, cfg.model) != (sess["provider"], sess["model"]):
@@ -1068,7 +1125,8 @@ async def chat(request: Request, scan_id: str, req: ChatRequest):
         _ACTIVE_CHATS.add(sid)
         try:
             yield _sse({"type": "session", "session_id": sid, "provider": cfg.provider, "model": cfg.model})
-            async for ev in agent_loop.run_chat(ctx, chat_db, sid, req.message, cfg):
+            atts = [a.model_dump() for a in req.attachments]
+            async for ev in agent_loop.run_chat(ctx, chat_db, sid, req.message, cfg, attachments=atts):
                 yield _sse(ev)
         except Exception:
             import logging

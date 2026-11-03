@@ -1,7 +1,8 @@
 """Minimal streaming tool-calling clients: Anthropic and OpenAI-compatible (openai/deepseek/ollama).
 
 Neutral message format = Anthropic block lists:
-  {"role": "user"|"assistant", "content": [text | tool_use | tool_result blocks]}
+  {"role": "user"|"assistant", "content": [text | image | tool_use | tool_result blocks]}
+  image block: {"type":"image","source":{"type":"base64","media_type":"image/png","data":"<b64>"}}
 chat_step() yields events: {"type":"text","text"} | {"type":"tool_use","id","name","input"}
                            | {"type":"stop","reason"}
 """
@@ -25,6 +26,13 @@ PROVIDERS = ("claude", "claude-oauth", "openai", "deepseek", "ollama")
 _DEFAULT_MODEL = {"claude": "claude-sonnet-5", "claude-oauth": "claude-sonnet-5",
                   "openai": "gpt-4o-mini", "deepseek": "deepseek-flash", "ollama": "llama3.1"}
 _KEY_ENV = {"claude": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
+# Providers whose chat/completions transport format accepts an image content block at all. This is
+# a provider (wire-format) capability, not a per-model one — DeepSeek's chat models and most
+# Ollama-pulled models (anything that isn't llava/bakllava/moondream/etc.) will still reject or
+# silently ignore an image even though the provider is listed here; there is no reliable way to
+# query "does this exact model support vision" without a provider-specific models API call, so a
+# non-vision model's own error response is left to surface instead of guessing per-model.
+VISION_CAPABLE_PROVIDERS = frozenset({"claude", "claude-oauth", "openai", "ollama"})
 TRUNCATED = frozenset({"length", "max_tokens"})  # stop reasons meaning "cut off by the output limit" (openai-compat / anthropic)
 
 # Transient HTTP statuses worth retrying — same set pi-ai's provider-retry layer uses
@@ -124,6 +132,12 @@ def resolve_llm(scan_provider: str, scan_model: str,
 
 # ── message translation ───────────────────────────────────────────────────────
 
+def _openai_image_part(b: dict) -> dict:
+    src = b["source"]
+    return {"type": "image_url",
+            "image_url": {"url": f"data:{src['media_type']};base64,{src['data']}"}}
+
+
 def to_openai(system: str, messages: list[dict]) -> list[dict]:
     out: list[dict] = [{"role": "system", "content": system}]
     for m in messages:
@@ -141,8 +155,18 @@ def to_openai(system: str, messages: list[dict]) -> list[dict]:
             for b in blocks:
                 if b["type"] == "tool_result":
                     out.append({"role": "tool", "tool_call_id": b["tool_use_id"], "content": b["content"]})
+            images = [b for b in blocks if b["type"] == "image"]
             text = "".join(b["text"] for b in blocks if b["type"] == "text")
-            if text:
+            if images:
+                # OpenAI-compatible vision wire format: content is a list of typed parts, not a
+                # bare string, whenever an image is present (text-only messages keep the plain
+                # string form above — both are valid per-message, they just can't mix here).
+                parts: list[dict] = []
+                if text:
+                    parts.append({"type": "text", "text": text})
+                parts.extend(_openai_image_part(b) for b in images)
+                out.append({"role": "user", "content": parts})
+            elif text:
                 out.append({"role": "user", "content": text})
     return out
 

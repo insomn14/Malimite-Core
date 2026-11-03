@@ -656,9 +656,13 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 .chat-input{display:flex;gap:.5rem;margin-top:.75rem;align-items:flex-end}
 .chat-input textarea{flex:1;min-width:0;padding:.5rem;border:1px solid var(--border);border-radius:var(--radius);font:inherit;resize:vertical}
 .chat-note{margin-top:.5rem;font-size:.7rem;color:var(--muted)}
-.chat-attach-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .55rem;border:1px solid var(--border);border-radius:999px;font-size:.75rem;background:var(--surface);margin-top:.5rem}
+.chat-attachments{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+.chat-attach-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .55rem;border:1px solid var(--border);border-radius:999px;font-size:.75rem;background:var(--surface)}
+.chat-attach-chip img.chat-attach-thumb{width:18px;height:18px;object-fit:cover;border-radius:3px}
 .chat-attach-chip button{border:none;background:none;cursor:pointer;color:var(--muted);font-size:.95rem;line-height:1;padding:0 0 0 .1rem}
 .chat-attach-chip button:hover{color:var(--red)}
+.chat-msg-images{display:flex;flex-wrap:wrap;gap:.4rem;margin:.35rem 0}
+.chat-msg-images img{max-width:220px;max-height:220px;border-radius:6px;border:1px solid var(--border);cursor:zoom-in}
 </style>
 <!-- Vendored, self-hosted (not a CDN) so the Functions tab's syntax highlighting works offline — see THIRD_PARTY_NOTICES.md -->
 <link rel="stylesheet" href="/vendor/hljs/styles/atom-one-dark.min.css"/>
@@ -1890,7 +1894,7 @@ async function renderTab(id, tab, detail) {
 
 /* ── AI Assistant tab ── */
 const chatState = {};
-function chatSt(id) { return chatState[id] || (chatState[id] = {sid: null, fresh: false, sessions: [], ctrl: null, busy: false, attachedFile: null}); }
+function chatSt(id) { return chatState[id] || (chatState[id] = {sid: null, fresh: false, sessions: [], ctrl: null, busy: false, attachedFiles: []}); }
 
 const CHAT_PROMPTS = [
   'Give me a security overview of this app',
@@ -1989,6 +1993,28 @@ function chatAdd(cls, html) {
   return d;
 }
 
+/* Renders the user's own bubble right after Send: their typed text (if any) plus attachment
+   chips — text files as a small label, images as an inline thumbnail. This is a local echo for
+   immediate feedback; chatRenderHistory() re-renders the server's persisted version (same shapes)
+   once the turn completes, so the two must stay visually consistent. */
+function chatAddUserEcho(text, files) {
+  const textHtml = text ? chatMd(text) : '';
+  const imgs = files.filter(f => f.kind === 'image');
+  const textFiles = files.filter(f => f.kind === 'text');
+  let html = textHtml;
+  if (imgs.length) {
+    html += '<div class="chat-msg-images">' + imgs.map(f =>
+      `<img src="data:${esc(f.mediaType)};base64,${f.content}" alt="${escAttr(f.name)}" title="${escAttr(f.name)}">`
+    ).join('') + '</div>';
+  }
+  if (textFiles.length) {
+    html += '<div class="chat-attachments">' + textFiles.map(f =>
+      `<span class="chat-attach-chip">📎 ${esc(f.name)}</span>`
+    ).join('') + '</div>';
+  }
+  return chatAdd('chat-user', html || '&nbsp;');
+}
+
 async function exportChat(id, st, detail) {
   // Local, not tabAssistant's own showErr closure: this function is top-level so other callers
   // besides the chat bar could reuse it later without dragging that closure along.
@@ -2015,7 +2041,9 @@ async function exportChat(id, st, detail) {
   ];
   (data.messages || []).forEach(m => {
     if (m.role === 'user') {
-      const t = m.content.filter(b => b.type === 'text').map(b => b.text).join('');
+      let t = m.content.filter(b => b.type === 'text').map(b => b.text).join('');
+      const imgCount = m.content.filter(b => b.type === 'image').length;
+      if (imgCount) t += (t ? '\n\n' : '') + `_[${imgCount} image${imgCount > 1 ? 's' : ''} attached — not included in this export]_`;
       if (t) lines.push('**User:**', '', t, '');
     } else {
       m.content.forEach(b => {
@@ -2050,7 +2078,14 @@ function chatRenderHistory(messages) {
   messages.forEach(m => {
     if (m.role === 'user') {
       const t = m.content.filter(b => b.type === 'text').map(b => b.text).join('');
-      if (t) chatAdd('chat-user', chatMd(t));
+      const imgs = m.content.filter(b => b.type === 'image');
+      let html = t ? chatMd(t) : '';
+      if (imgs.length) {
+        html += '<div class="chat-msg-images">' + imgs.map(b =>
+          `<img src="data:${esc(b.source.media_type)};base64,${b.source.data}" alt="attached image">`
+        ).join('') + '</div>';
+      }
+      if (html) chatAdd('chat-user', html);
     } else {
       const html = m.content.map(b => b.type === 'text' ? chatMd(b.text)
         : b.type === 'tool_use' ? chatToolHtml(b, results[b.id]) : '').join('');
@@ -2093,10 +2128,10 @@ async function tabAssistant(el, id, detail) {
       </div>
       <div id="chat-msgs" class="chat-msgs"></div>
       <div id="chat-err"></div>
-      <div id="chat-attachment" hidden></div>
+      <div id="chat-attachment" class="chat-attachments" hidden></div>
       <div class="chat-input">
-        <input type="file" id="chat-file" hidden accept=".txt,.md,.markdown,.log,.csv,.json,.yaml,.yml,.xml,.toml,.ini,.cfg,.properties,.gradle,.py,.js,.jsx,.ts,.tsx,.java,.kt,.swift,.m,.mm,.c,.cpp,.h,.hpp,.go,.rs,.rb,.php,.sh,.sql"/>
-        <button class="btn btn-ghost" id="chat-attach" type="button" title="Attach a text/code file (.md, .txt, script…)">📎</button>
+        <input type="file" id="chat-file" hidden multiple accept=".txt,.md,.markdown,.log,.csv,.json,.yaml,.yml,.xml,.toml,.ini,.cfg,.properties,.gradle,.py,.js,.jsx,.ts,.tsx,.java,.kt,.swift,.m,.mm,.c,.cpp,.h,.hpp,.go,.rs,.rb,.php,.sh,.sql,.png,.jpg,.jpeg,.webp,.gif"/>
+        <button class="btn btn-ghost" id="chat-attach" type="button" title="Attach up to 5 text/code files or images">📎</button>
         <textarea id="chat-in" rows="2" placeholder="Ask about a class, function or behavior… (Enter to send, Shift+Enter for newline)"></textarea>
         <button class="btn btn-primary" id="chat-send">Send</button>
         <button class="btn btn-danger" id="chat-stop" style="display:none">Stop</button>
@@ -2154,14 +2189,13 @@ async function tabAssistant(el, id, detail) {
 
   async function send(text) {
     text = (text || '').trim();
-    const att = st.attachedFile;
-    if ((!text && !att) || st.busy) return;
-    const full = att ? (text ? text + '\n\n' : '') + `Attached file: ${att.name}\n\`\`\`\n${att.content}\n\`\`\`` : text;
+    const files = st.attachedFiles;
+    if ((!text && !files.length) || st.busy) return;
     st.busy = true; setBusy(true); showErr('');
     document.querySelectorAll('.chat-hint,.chat-chips').forEach(n => n.remove());
-    chatAdd('chat-user', chatMd(full));
+    const savedInput = $in.value;   // restored below if the request is rejected before streaming starts
+    const echoEl = chatAddUserEcho(text, files);
     $in.value = '';
-    st.attachedFile = null; renderAttachment();
     let bubble = null, buf = '', raf = 0;
     const paint = () => { raf = 0; if (bubble) { bubble.innerHTML = (bubble.dataset.pre || '') + chatMd(buf); const b = document.getElementById('chat-msgs'); if (b) b.scrollTop = b.scrollHeight; } };
     const ensureBubble = () => { if (!bubble) { bubble = chatAdd('chat-ai', ''); buf = ''; } };
@@ -2180,7 +2214,10 @@ async function tabAssistant(el, id, detail) {
     };
     st.ctrl = new AbortController();
     try {
-      const body = {message: full, session_id: st.sid || null,
+      const body = {message: text, session_id: st.sid || null,
+        attachments: files.map(f => f.kind === 'image'
+          ? {kind: 'image', name: f.name, content: f.content, media_type: f.mediaType}
+          : {kind: 'text', name: f.name, content: f.content}),
         provider: document.getElementById('chat-provider')?.value || null,
         model: (() => {
           const sel = document.getElementById('chat-model-select');
@@ -2194,6 +2231,11 @@ async function tabAssistant(el, id, detail) {
         try { const j = JSON.parse(d); if (j && j.detail != null) d = formatApiErrorDetail(j.detail); } catch (_) {}
         throw new Error(d || r.statusText);
       }
+      // Only now — request accepted by the server — is it safe to drop the user's typed text and
+      // attachments. Clearing this any earlier (as the single-attachment version of this code did)
+      // loses the user's attachments/text on every validation error (wrong provider, too-large
+      // file, rate limit, …), forcing them to re-pick files after simply fixing the provider.
+      st.attachedFiles = []; renderAttachment();
       const reader = r.body.getReader(), dec = new TextDecoder();
       let sse = '';
       for (;;) {
@@ -2207,7 +2249,16 @@ async function tabAssistant(el, id, detail) {
         }
       }
     } catch (e) {
-      if (e.name !== 'AbortError') showErr(e.message);
+      if (e.name !== 'AbortError') {
+        showErr(e.message);
+        // The request never reached a successful response, so nothing was persisted server-side —
+        // give the user their text and attachments back instead of silently discarding them, and
+        // remove the local echo bubble (loadSession()'s own "was anything rendered" check in the
+        // finally block below can't tell this stale bubble apart from a real, persisted message).
+        if ($in) $in.value = savedInput;
+        renderAttachment();
+        if (echoEl && echoEl.isConnected) echoEl.remove();
+      }
     } finally {
       if (raf) cancelAnimationFrame(raf);
       paint();
@@ -2220,20 +2271,56 @@ async function tabAssistant(el, id, detail) {
   function renderAttachment() {
     const box = document.getElementById('chat-attachment');
     if (!box) return;
-    const att = st.attachedFile;
-    box.hidden = !att;
-    box.innerHTML = att ? `<span class="chat-attach-chip">📎 ${esc(att.name)} (${att.content.length.toLocaleString()} chars)
-      <button type="button" id="chat-attach-remove" title="Remove attachment">&times;</button></span>` : '';
-    if (att) document.getElementById('chat-attach-remove').onclick = () => { st.attachedFile = null; renderAttachment(); };
+    const files = st.attachedFiles;
+    box.hidden = !files.length;
+    box.innerHTML = files.map((f, i) => f.kind === 'image'
+      ? `<span class="chat-attach-chip" data-idx="${i}">
+          <img class="chat-attach-thumb" src="data:${esc(f.mediaType)};base64,${f.content}" alt="">
+          ${esc(f.name)} <button type="button" data-remove="${i}" title="Remove attachment">&times;</button></span>`
+      : `<span class="chat-attach-chip" data-idx="${i}">📎 ${esc(f.name)} (${f.content.length.toLocaleString()} chars)
+          <button type="button" data-remove="${i}" title="Remove attachment">&times;</button></span>`
+    ).join('');
+    box.querySelectorAll('[data-remove]').forEach(b => {
+      b.onclick = () => { st.attachedFiles.splice(Number(b.dataset.remove), 1); renderAttachment(); };
+    });
   }
 
-  const MAX_ATTACH_CHARS = 15000;   // leaves headroom under the 20000-char message cap for the user's own text
-  document.getElementById('chat-attach').onclick = () => document.getElementById('chat-file').click();
-  document.getElementById('chat-file').onchange = async e => {
-    const file = e.target.files[0];
-    e.target.value = '';   // lets the same file be re-picked later
-    if (!file) return;
-    showErr('');
+  // DeepSeek-Harness-sized limits: generous per-file text cap, a handful of files per message.
+  // Mirrored server-side in Settings.chat_attachment_max_chars/_max_image_bytes/_max_count — the
+  // server is the real gate (these are just fast, friendly client-side feedback).
+  const MAX_ATTACH_CHARS = 50000;
+  const MAX_ATTACH_IMAGE_BYTES = 5 * 1024 * 1024;
+  const MAX_ATTACH_COUNT = 5;
+  const IMAGE_EXT_MEDIA_TYPE = {png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif'};
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(',', 2)[1] || '');
+      r.onerror = () => reject(r.error || new Error('read failed'));
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function addAttachment(file) {
+    if (st.attachedFiles.length >= MAX_ATTACH_COUNT) {
+      showErr(`You can attach at most ${MAX_ATTACH_COUNT} files per message. Remove one first.`);
+      return;
+    }
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const mediaType = file.type && file.type.startsWith('image/') ? file.type : IMAGE_EXT_MEDIA_TYPE[ext];
+    if (mediaType) {
+      if (file.size > MAX_ATTACH_IMAGE_BYTES) {
+        showErr(`"${file.name}" is too large (${file.size.toLocaleString()} bytes, max ${MAX_ATTACH_IMAGE_BYTES.toLocaleString()}). Use a smaller image.`);
+        return;
+      }
+      let b64;
+      try { b64 = await fileToBase64(file); }
+      catch (err) { showErr('Could not read "' + file.name + '": ' + err.message); return; }
+      st.attachedFiles.push({kind: 'image', name: file.name, content: b64, mediaType});
+      renderAttachment();
+      return;
+    }
     let text;
     try { text = await file.text(); }
     catch (err) { showErr('Could not read "' + file.name + '": ' + err.message); return; }
@@ -2242,11 +2329,22 @@ async function tabAssistant(el, id, detail) {
       return;
     }
     if (text.includes('\u0000') || (text.match(/�/g) || []).length > text.length * 0.01) {
-      showErr(`"${file.name}" does not look like a text file.`);
+      showErr(`"${file.name}" does not look like a text file or a supported image type.`);
       return;
     }
-    st.attachedFile = {name: file.name, content: text};
+    st.attachedFiles.push({kind: 'text', name: file.name, content: text});
     renderAttachment();
+  }
+
+  document.getElementById('chat-attach').onclick = () => document.getElementById('chat-file').click();
+  document.getElementById('chat-file').onchange = async e => {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = '';   // lets the same file(s) be re-picked later
+    if (!picked.length) return;
+    showErr('');
+    for (const file of picked) {
+      await addAttachment(file);   // sequential: each call's own error must not be clobbered by the next
+    }
   };
 
   document.getElementById('chat-export').onclick = () => exportChat(id, st, detail);

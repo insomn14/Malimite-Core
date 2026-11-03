@@ -63,15 +63,37 @@ def clip(messages: list[dict], budget: int = HISTORY_BUDGET) -> list[dict]:
     return msgs
 
 
+def _build_user_blocks(user_text: str, attachments: Optional[list]) -> list[dict]:
+    """Turn the typed message plus 0+ attachments into content blocks.
+
+    Text attachments are inlined as a fenced code block appended to the message text (same
+    behavior as the single-attachment feature this replaced, extended to any number of files).
+    Image attachments become their own native `image` blocks, placed after the text block —
+    Anthropic and OpenAI-compatible providers both accept text and images in one user message.
+    """
+    text = user_text or ""
+    for att in attachments or []:
+        if att["kind"] == "text":
+            sep = "\n\n" if text else ""
+            text += f'{sep}Attached file: {att["name"]}\n```\n{att["content"]}\n```'
+    blocks: list[dict] = [{"type": "text", "text": text}] if text else []
+    for att in attachments or []:
+        if att["kind"] == "image":
+            blocks.append({"type": "image", "source": {"type": "base64", "media_type": att["media_type"],
+                                                         "data": att["content"]}})
+    return blocks
+
+
 async def run_chat(
     ctx: Ctx, chat_db: str, sid: str, user_text: str, cfg: LlmCfg, *,
+    attachments: Optional[list] = None,
     step: Optional[Callable] = None,
     run: Callable[[Ctx, str, dict], Awaitable[tuple[bool, str]]] = run_tool,
 ) -> AsyncIterator[dict]:
     step = step or chat_step  # resolved at call time so tests can patch loop.chat_step
     msgs = await store.history(chat_db, sid)
     await store.set_title_if_empty(chat_db, sid, user_text)
-    user = [{"type": "text", "text": user_text}]
+    user = _build_user_blocks(user_text, attachments)
     await store.append(chat_db, sid, "user", user)
     msgs.append({"role": "user", "content": user})
 

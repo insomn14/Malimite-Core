@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from web.app import main, scanner
 from web.app.agent import llm, loop
+from web.app.config import settings
 from web.app.models import ScanDetail
 
 
@@ -90,11 +91,45 @@ class ChatRouteTests(unittest.TestCase):
 
     def test_validation_and_errors(self):
         self.assertEqual(self.client.post("/api/v1/scans/s1/chat", json={"message": ""}).status_code, 422)
-        self.assertEqual(self.client.post("/api/v1/scans/s1/chat", json={"message": "x" * 20001}).status_code, 422)
+        over_limit = settings.chat_message_max_chars + 1
+        self.assertEqual(self.client.post("/api/v1/scans/s1/chat", json={"message": "x" * over_limit}).status_code, 422)
         r = self.client.post("/api/v1/scans/s1/chat", json={"message": "x", "provider": "evil"})
         self.assertEqual(r.status_code, 400)
         r = self.client.post("/api/v1/scans/s1/chat", json={"message": "x", "session_id": "nope"})
         self.assertEqual(r.status_code, 404)
+
+    def test_attachments_validation(self):
+        # too many attachments
+        atts = [{"kind": "text", "name": f"f{i}.txt", "content": "x"} for i in range(6)]
+        r = self.client.post("/api/v1/scans/s1/chat", json={"message": "q", "attachments": atts})
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("Too many attachments", r.json()["detail"])
+
+        # one text attachment over the per-file limit
+        big = "x" * (settings.chat_attachment_max_chars + 1)
+        r = self.client.post("/api/v1/scans/s1/chat",
+                             json={"message": "q", "attachments": [{"kind": "text", "name": "big.txt", "content": big}]})
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("too long", r.json()["detail"])
+
+        # message empty but has an attachment -> allowed (not the "empty message" 422)
+        r = self.client.post("/api/v1/scans/s1/chat",
+                             json={"message": "", "attachments": [{"kind": "text", "name": "a.txt", "content": "hi"}]})
+        self.assertEqual(r.status_code, 200)
+
+        # image attachment with an unsupported media type
+        r = self.client.post("/api/v1/scans/s1/chat", json={"message": "q", "attachments": [
+            {"kind": "image", "name": "a.bmp", "content": "AAAA", "media_type": "image/bmp"}]})
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("unsupported image type", r.json()["detail"])
+
+        # image attachment against a non-vision provider (default scan provider is ollama, which IS
+        # vision-capable at the transport-format level — force a non-vision one explicitly)
+        r = self.client.post("/api/v1/scans/s1/chat", json={
+            "message": "q", "provider": "deepseek",
+            "attachments": [{"kind": "image", "name": "a.png", "content": "AAAA", "media_type": "image/png"}]})
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("does not accept image attachments", r.json()["detail"])
 
     def test_chat_is_rate_limited_globally_with_retry_after(self):
         with patch.object(main.settings, "chat_rate_per_min", 2):

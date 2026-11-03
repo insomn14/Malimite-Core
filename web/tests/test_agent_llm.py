@@ -31,6 +31,32 @@ class TranslateTests(unittest.TestCase):
         self.assertEqual(json.loads(out[2]["tool_calls"][0]["function"]["arguments"]), {"class_name": "a.B"})
         self.assertEqual(out[3], {"role": "tool", "tool_call_id": "t1", "content": "CODE"})
 
+    def test_to_openai_text_only_user_message_stays_a_plain_string(self):
+        convo = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
+        out = llm.to_openai("SYS", convo)
+        self.assertEqual(out[1], {"role": "user", "content": "hi"})
+
+    def test_to_openai_image_becomes_multipart_content_with_data_uri(self):
+        convo = [{"role": "user", "content": [
+            {"type": "text", "text": "what is this"},
+            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "QUJD"}},
+        ]}]
+        out = llm.to_openai("SYS", convo)
+        msg = out[1]
+        self.assertEqual(msg["role"], "user")
+        self.assertIsInstance(msg["content"], list)
+        self.assertEqual(msg["content"][0], {"type": "text", "text": "what is this"})
+        self.assertEqual(msg["content"][1],
+                         {"type": "image_url", "image_url": {"url": "data:image/png;base64,QUJD"}})
+
+    def test_to_openai_image_only_user_message_has_no_text_part(self):
+        convo = [{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "XYZ"}},
+        ]}]
+        out = llm.to_openai("SYS", convo)
+        self.assertEqual(len(out[1]["content"]), 1)
+        self.assertEqual(out[1]["content"][0]["type"], "image_url")
+
 
 class ParserTests(unittest.IsolatedAsyncioTestCase):
     async def test_anthropic_text_and_fragmented_tool_use(self):

@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     chat_max_continuations: int = 8     # auto-continue an answer cut off by the output limit
     chat_tool_cap: int = 12000          # max chars returned to the model per tool call
     chat_rate_per_min: int = 30         # global cap on chat requests/min: each one spends the server's LLM quota
+    chat_message_max_chars: int = 50000     # per-field cap on the user's own typed text (DeepSeek-Harness-sized)
+    chat_attachment_max_chars: int = 50000  # per text/code file attachment
+    chat_attachment_max_image_bytes: int = 5 * 1024 * 1024  # per image attachment, pre-base64 (5 MiB)
+    chat_attachment_max_count: int = 5      # max attachments (text + image combined) per message
     heavy_concurrency: int = 1          # concurrent on-demand decompile subprocesses
     auto_enhance_concurrency: int = 2   # parallel LLM calls inside one Auto Enhance (bulk AI Fix) job
     ghidra_ondemand_timeout: int = 5400  # > Java import cap (60 min) so a big first import can finish

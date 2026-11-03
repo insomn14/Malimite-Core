@@ -261,5 +261,54 @@ class LoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(msgs[0]["content"][0]["content"], "x" * 1000)  # input untouched
 
 
+class BuildUserBlocksTests(unittest.TestCase):
+    def test_text_only_message_is_one_text_block(self):
+        blocks = loop._build_user_blocks("hello", None)
+        self.assertEqual(blocks, [{"type": "text", "text": "hello"}])
+
+    def test_text_attachment_is_inlined_as_a_fenced_code_block(self):
+        blocks = loop._build_user_blocks("look at this",
+            [{"kind": "text", "name": "a.py", "content": "print(1)"}])
+        self.assertEqual(len(blocks), 1)
+        self.assertIn("look at this", blocks[0]["text"])
+        self.assertIn("Attached file: a.py", blocks[0]["text"])
+        self.assertIn("```\nprint(1)\n```", blocks[0]["text"])
+
+    def test_multiple_text_attachments_each_get_their_own_fenced_block(self):
+        blocks = loop._build_user_blocks("", [
+            {"kind": "text", "name": "a.py", "content": "A"},
+            {"kind": "text", "name": "b.py", "content": "B"},
+        ])
+        self.assertEqual(len(blocks), 1)
+        self.assertIn("Attached file: a.py", blocks[0]["text"])
+        self.assertIn("Attached file: b.py", blocks[0]["text"])
+
+    def test_image_attachment_becomes_its_own_block_after_text(self):
+        blocks = loop._build_user_blocks("what is this",
+            [{"kind": "image", "name": "a.png", "content": "QUJD", "media_type": "image/png"}])
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0], {"type": "text", "text": "what is this"})
+        self.assertEqual(blocks[1], {"type": "image",
+                                     "source": {"type": "base64", "media_type": "image/png", "data": "QUJD"}})
+
+    def test_image_only_no_text_produces_no_text_block(self):
+        blocks = loop._build_user_blocks("",
+            [{"kind": "image", "name": "a.png", "content": "QUJD", "media_type": "image/png"}])
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0]["type"], "image")
+
+    def test_multiple_images_each_get_their_own_block(self):
+        blocks = loop._build_user_blocks("", [
+            {"kind": "image", "name": "a.png", "content": "AAA", "media_type": "image/png"},
+            {"kind": "image", "name": "b.png", "content": "BBB", "media_type": "image/jpeg"},
+        ])
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual([b["source"]["data"] for b in blocks], ["AAA", "BBB"])
+
+    def test_empty_message_no_attachments_produces_no_blocks(self):
+        self.assertEqual(loop._build_user_blocks("", None), [])
+        self.assertEqual(loop._build_user_blocks("", []), [])
+
+
 if __name__ == "__main__":
     unittest.main()
