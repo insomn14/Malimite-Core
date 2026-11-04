@@ -31,6 +31,22 @@ _FAST_MODE_ALIASES = frozenset({"summarize", "summary", "fast", "fast_scan", "fa
 _FULL_MODE_ALIASES = frozenset({"find_vulns", "vulns", "vuln", "full", "full_scan", "fullscan"})
 _AUTO_FIX_MODE_ALIASES = frozenset({"auto_fix", "autofix", "fix"})
 
+_RETENTION_INTERVAL_S = 86400  # once a day is plenty for a days-granularity retention policy
+
+
+async def _retention_loop() -> None:
+    """Runs scanner.delete_expired_scans() once a day for as long as the app is up. A no-op loop
+    (returns immediately each time) when scan_retention_days is 0 — still started unconditionally
+    so flipping the setting takes effect on the next tick without a restart being required."""
+    log = logging.getLogger("malimite")
+    while True:
+        try:
+            scanner.delete_expired_scans()
+        except Exception:
+            log.warning("Scan retention sweep failed", exc_info=True)
+        await asyncio.sleep(_RETENTION_INTERVAL_S)
+
+
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     log = logging.getLogger("malimite")
@@ -40,10 +56,22 @@ async def _lifespan(_: FastAPI):
     r = scanner.reap_stale_running_scans()
     if r:
         log.warning("marked %d scan(s) as errored: stuck queued/running from before this restart", r)
+    if settings.scan_retention_days > 0:
+        d = scanner.delete_expired_scans()
+        if d:
+            log.info("Retention: deleted %d expired scan(s) at startup", d)
     if not settings.api_key:
         log.warning("API_KEY is not set: anyone who can reach this port can upload scans, read results and "
                     "spend this server's LLM quota through the AI Assistant. Set API_KEY and/or bind to 127.0.0.1.")
-    yield
+    retention_task = asyncio.create_task(_retention_loop())
+    try:
+        yield
+    finally:
+        retention_task.cancel()
+        try:
+            await retention_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Malimite", version="0.1.0", docs_url="/docs", redoc_url=None, lifespan=_lifespan)

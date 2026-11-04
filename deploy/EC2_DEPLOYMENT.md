@@ -179,64 +179,31 @@ scan directory can't fill the OS disk and crash the service.
 
 ---
 
-## 6. Automated retention (no built-in cleanup — this is new)
+## 6. Automated retention
 
-Malimite-Core has **no automatic retention today** — only a manual `DELETE /api/v1/scans/{id}`
-API call. For a CI-triggered deployment generating scans continuously, add a systemd timer that
-deletes scans older than N days.
-
-```bash
-sudo tee /opt/malimite/app/cleanup-old-scans.sh > /dev/null <<'SCRIPT'
-#!/bin/bash
-# Deletes scan directories older than RETENTION_DAYS (default 30) under SCAN_DIR.
-# Run as the malimite user so file ownership matches the service.
-set -euo pipefail
-SCAN_DIR="${SCAN_DIR:-/mnt/malimite-scans}"
-RETENTION_DAYS="${RETENTION_DAYS:-30}"
-
-find "$SCAN_DIR" -maxdepth 1 -mindepth 1 -type d -mtime "+${RETENTION_DAYS}" -print | while read -r dir; do
-  echo "Removing stale scan: $dir (older than ${RETENTION_DAYS} days)"
-  rm -rf "$dir"
-done
-SCRIPT
-sudo chmod +x /opt/malimite/app/cleanup-old-scans.sh
-sudo chown malimite:malimite /opt/malimite/app/cleanup-old-scans.sh
-```
-
-```ini
-# /etc/systemd/system/malimite-cleanup.service
-[Unit]
-Description=Delete Malimite scan directories older than retention period
-
-[Service]
-Type=oneshot
-User=malimite
-Environment=SCAN_DIR=/mnt/malimite-scans
-Environment=RETENTION_DAYS=30
-ExecStart=/opt/malimite/app/cleanup-old-scans.sh
-```
-
-```ini
-# /etc/systemd/system/malimite-cleanup.timer
-[Unit]
-Description=Run Malimite scan cleanup daily
-
-[Timer]
-OnCalendar=daily
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
+Malimite-web has built-in retention: set `SCAN_RETENTION_DAYS` in `.env` (already templated in
+§7) and the app deletes scan directories older than that on its own — once at startup, then once
+a day for as long as the process runs. **Default is `0` (disabled, keep every scan forever)** —
+for a CI-triggered deployment generating scans continuously, set it explicitly:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now malimite-cleanup.timer
-sudo systemctl list-timers malimite-cleanup.timer   # confirm it's scheduled
+# in /opt/malimite/app/web/.env
+SCAN_RETENTION_DAYS=30
 ```
 
-Adjust `RETENTION_DAYS` to your compliance/audit requirements — if reviewers need longer access to
-historical scans, raise it and grow the EBS volume accordingly instead of shortening retention.
+Restart the service (`sudo systemctl restart malimite-web`) for a changed value to take effect
+immediately; otherwise it's picked up on the next daily sweep regardless. Age is measured from
+each scan's `created_at`, and a scan that's currently `queued`/`running` is never deleted out from
+under its own in-flight CLI subprocess — it ages out on the next sweep once it finishes. Adjust to
+your compliance/audit requirements — if reviewers need longer access to historical scans, raise it
+and grow the EBS volume accordingly instead of shortening retention.
+
+### Alternative: external systemd timer
+
+If you want retention decoupled from the app process (e.g. to run at a specific low-traffic hour
+rather than "once a day from whenever the service last started"), a systemd timer calling the
+same cleanup logic via a plain `find`/`rm -rf` works just as well — the built-in option above is
+simpler to operate (no extra unit files) and is what this guide recommends by default.
 
 ---
 
@@ -250,6 +217,15 @@ CLI_JAR=/opt/malimite/app/malimite-cli.jar
 
 # REQUIRED before exposing this port to anything beyond localhost — see §2/§8.
 API_KEY=CHANGE_ME_TO_A_LONG_RANDOM_VALUE
+
+# How many scans run their Ghidra/JADX subprocess at once — see §1's concurrency warning.
+# Requests beyond this queue (state stays "queued") rather than being rejected.
+MAX_CONCURRENT_SCANS=3
+# How many scans may be STARTED per minute, independent of LLM usage — guards against a
+# misconfigured pipeline retry loop flooding the queue. 0 disables this limit.
+SCAN_RATE_PER_MIN=30
+# Delete scan directories older than this many days — see §6. 0 (default) keeps everything.
+SCAN_RETENTION_DAYS=30
 
 # Optional LLM provider for enrichment-enabled scans (leave LLM_PROVIDER unset/none to
 # skip LLM entirely — the rule-scanner findings covered by the --fail-on gate still work).
@@ -369,12 +345,13 @@ workflow this deployment exists to support.
 
 - **TLS termination** — left to your existing ALB/ACM or nginx+Let's Encrypt conventions; not
   prescribed here since it depends on your organization's certificate management.
-- **`malimite-ci` client script** (the thing CI pipelines actually invoke to upload, poll, and
-  gate the build on severity) — tracked as separate follow-up work, not part of this host-level
-  deployment guide.
 - **Multi-instance / autoscaling** — `SCAN_DIR` and the in-memory job registries (Auto Enhance,
   on-demand decompile) are single-host state; this guide assumes one EC2 instance. Scaling beyond
   one instance would need a shared filesystem (EFS) for `SCAN_DIR` at minimum, and is out of scope
   until volume actually requires it.
 - **Backups** — EBS snapshots of the scan-data volume are the simplest starting point; not
   configured here since retention policy (§6) already bounds how much there is to back up.
+
+For the pipeline side (what CI actually invokes against this server), see
+[`tools/malimite-ci/README.md`](../tools/malimite-ci/README.md) and the "CI/CD integration"
+section of the root [`README.md`](../README.md).

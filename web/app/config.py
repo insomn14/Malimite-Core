@@ -58,6 +58,24 @@ class Settings(BaseSettings):
     auto_enhance_concurrency: int = 2   # parallel LLM calls inside one Auto Enhance (bulk AI Fix) job
     ghidra_ondemand_timeout: int = 5400  # > Java import cap (60 min) so a big first import can finish
 
+    # Full scans (POST /scans): each one spawns its own Ghidra/JADX subprocess with its own JVM
+    # heap, so unbounded concurrency here is the single biggest way to OOM the host — unlike
+    # heavy_concurrency above (cheap on-demand single-function decompiles), a full scan can run
+    # for minutes and use several GB. Requests beyond this limit queue (state stays "queued")
+    # rather than being rejected, so a burst of CI uploads doesn't need its own retry logic.
+    max_concurrent_scans: int = 3
+    # Separate from chat_rate_per_min (LLM quota): this caps raw scan *starts* regardless of LLM
+    # usage, so one team/pipeline can't flood the queue with uploads. 0 disables the limit.
+    scan_rate_per_min: int = 30
+
+    # Scans accumulate on disk with no automatic cleanup otherwise — a single scan can be well
+    # over 1GB (Ghidra project + decompiled source + sqlite), so a server fed continuously by CI
+    # pipelines will eventually fill its disk without this. 0 disables retention entirely (keep
+    # every scan forever — the previous, and still-default-safe, behavior). Checked once at
+    # startup and then on a daily timer (see main.py's lifespan) — not aggressive enough to need
+    # finer-grained scheduling.
+    scan_retention_days: int = 0
+
     model_config = {"env_file": str(_WEB / ".env"), "env_file_encoding": "utf-8"}
 
 

@@ -4,10 +4,14 @@ import json
 import logging
 import os
 import shutil
+import time
 import uuid
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+from fastapi import HTTPException
 
 from .config import settings
 from .models import ScanDetail, ScanMeta
@@ -16,6 +20,39 @@ log = logging.getLogger(__name__)
 
 # Pre-rename default (Mailmite → Malimite). Migrated into settings.scan_dir on access.
 _LEGACY_SCAN_DIRS = (Path("/tmp/mailmite-scans"),)
+
+# ── scan concurrency + rate limiting ────────────────────────────────────────────────────────
+# Full scans spawn a Ghidra/JADX subprocess each — bounded separately from heavy_concurrency
+# (on-demand single-function decompiles, much cheaper). A request beyond max_concurrent_scans
+# still gets a scan_id immediately and queues (state stays "queued" — see create_scan()/_run())
+# rather than being rejected, so pipeline callers (e.g. tools/malimite-ci) don't need their own
+# retry/backoff logic for this specific case.
+_scan_sems: dict = {}           # one Semaphore per running event loop, same pattern as agent/ondemand.py
+_SCAN_START_HITS: deque = deque()  # monotonic timestamps of recent scan starts (global sliding window)
+
+
+def _scan_sem() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    if loop not in _scan_sems:
+        _scan_sems.clear()
+        _scan_sems[loop] = asyncio.Semaphore(max(1, settings.max_concurrent_scans))
+    return _scan_sems[loop]
+
+
+def _check_scan_rate_limit() -> None:
+    """Raises 429 if scans are being started faster than scan_rate_per_min. Separate from
+    chat_rate_per_min (that one guards LLM spend specifically); this guards raw scan starts —
+    a CI pipeline misconfigured to retry in a tight loop shouldn't be able to flood the queue."""
+    if settings.scan_rate_per_min <= 0:
+        return
+    now = time.monotonic()
+    while _SCAN_START_HITS and now - _SCAN_START_HITS[0] > 60:
+        _SCAN_START_HITS.popleft()
+    if len(_SCAN_START_HITS) >= settings.scan_rate_per_min:
+        wait = max(1, int(60 - (now - _SCAN_START_HITS[0])) + 1)
+        raise HTTPException(status_code=429, detail="Too many scans started recently; try again shortly",
+                            headers={"Retry-After": str(wait)})
+    _SCAN_START_HITS.append(now)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -90,6 +127,48 @@ def reap_stale_running_scans() -> int:
     if reaped:
         log.warning("Reaped %d stale queued/running scan(s) left over from a previous process", reaped)
     return reaped
+
+
+def delete_expired_scans(retention_days: Optional[int] = None) -> int:
+    """Deletes every scan directory whose created_at is older than retention_days. A no-op when
+    retention_days is 0/None (the default — keep everything, matching behavior before this
+    existed). Age is measured from created_at, not finished_at/mtime, so a scan stuck in
+    queued/running/error still ages out on schedule rather than lingering forever. Currently
+    running scans (state in queued/running) are skipped even past retention, since deleting a
+    scan's own output directory out from under its in-flight CLI subprocess would corrupt it —
+    they'll be swept on the next run once finished. Returns the number of scans deleted."""
+    days = settings.scan_retention_days if retention_days is None else retention_days
+    if not days or days <= 0:
+        return 0
+    if not settings.scan_dir.exists():
+        return 0
+    cutoff = datetime.now(timezone.utc).timestamp() - (days * 86400)
+    deleted = 0
+    for d in settings.scan_dir.iterdir():
+        if not d.is_dir():
+            continue
+        meta = _read_meta(d.name)
+        if not meta:
+            continue
+        if meta.get("state") in ("queued", "running"):
+            continue
+        created_at = meta.get("created_at")
+        if not created_at:
+            continue
+        try:
+            created_ts = datetime.fromisoformat(created_at).timestamp()
+        except ValueError:
+            continue
+        if created_ts >= cutoff:
+            continue
+        try:
+            shutil.rmtree(d)
+            deleted += 1
+        except OSError:
+            log.warning("Could not delete expired scan directory %s", d, exc_info=True)
+    if deleted:
+        log.info("Retention: deleted %d scan(s) older than %d day(s)", deleted, days)
+    return deleted
 
 
 _PATH_KEYS = ("dbPath", "ipaPath", "packagePath")
@@ -330,6 +409,7 @@ async def create_scan(
     ci_commit_sha: Optional[str] = None,
     ci_triggered_by: Optional[str] = None,
 ) -> ScanMeta:
+    _check_scan_rate_limit()
     migrate_legacy_scan_dirs()
     settings.scan_dir.mkdir(parents=True, exist_ok=True)
     scan_id = str(uuid.uuid4())
@@ -429,31 +509,36 @@ def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
 # ── background runner ─────────────────────────────────────────────────────────
 
 async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
-    meta["state"] = "running"
-    meta["started_at"] = _now()
-    _write_meta(scan_id, meta)
+    # Stays "queued" (the state create_scan() already wrote) while waiting for a concurrency
+    # slot — a scan blocked behind max_concurrent_scans other running scans is NOT "running" yet,
+    # so the web UI and malimite-ci's poll loop both see an honest status instead of a scan that
+    # looks started but whose Ghidra/JADX subprocess hasn't actually been spawned.
+    async with _scan_sem():
+        meta["state"] = "running"
+        meta["started_at"] = _now()
+        _write_meta(scan_id, meta)
 
-    cmd = _cli_cmd(ipa_path, out_dir, meta)
+        cmd = _cli_cmd(ipa_path, out_dir, meta)
 
-    env = dict(os.environ)
-    # Per-request key takes priority over the .env/settings key
-    env.update(llm_env(meta.get("llm_provider", "none"), meta.get("_llm_api_key", "")))
+        env = dict(os.environ)
+        # Per-request key takes priority over the .env/settings key
+        env.update(llm_env(meta.get("llm_provider", "none"), meta.get("_llm_api_key", "")))
 
-    log_path = out_dir / "analysis.log"
-    try:
-        with open(log_path, "w") as log_fh:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=log_fh,
-                stderr=asyncio.subprocess.STDOUT,
-                env=env,
-            )
-            exit_code = await proc.wait()
-    except Exception as exc:
-        log_path.write_text(f"Failed to start CLI: {exc}\n")
-        exit_code = -1
+        log_path = out_dir / "analysis.log"
+        try:
+            with open(log_path, "w") as log_fh:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=log_fh,
+                    stderr=asyncio.subprocess.STDOUT,
+                    env=env,
+                )
+                exit_code = await proc.wait()
+        except Exception as exc:
+            log_path.write_text(f"Failed to start CLI: {exc}\n")
+            exit_code = -1
 
-    meta["state"] = "done" if exit_code == 0 else "error"
-    meta["finished_at"] = _now()
-    meta["exit_code"] = exit_code
-    _write_meta(scan_id, meta)
+        meta["state"] = "done" if exit_code == 0 else "error"
+        meta["finished_at"] = _now()
+        meta["exit_code"] = exit_code
+        _write_meta(scan_id, meta)
