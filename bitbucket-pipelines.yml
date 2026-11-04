@@ -1,47 +1,50 @@
-# Malimite IPA Security Scan — Bitbucket Pipelines
-# Add to your repository root as bitbucket-pipelines.yml or merge the
-# 'malimite-scan' step into your existing pipeline.
+# Malimite Security Scan — Bitbucket Pipelines template
 #
-# Required repository variables (Repository settings → Pipelines → Repository variables):
-#   MALIMITE_IMAGE     — Docker image (default: ghcr.io/malimite/malimite:latest)
-#   GHIDRA_HOME        — path inside container  (default: /opt/ghidra)
-#   LLM_PROVIDER       — openai | claude | ollama | none
-#   OPENAI_API_KEY     — (secured)
-#   ANTHROPIC_API_KEY  — (secured)
-#   IPA_PATH           — relative path to .ipa in repo (default: app.ipa)
+# This file lives in Malimite-Core as a reference. Copy the relevant parts (or the whole
+# 'malimite-scan' step below) into the MOBILE APP repository's own bitbucket-pipelines.yml —
+# this is NOT meant to run inside the Malimite-Core repo itself.
+#
+# Uses tools/malimite-ci (a zero-dependency Python client, stdlib only) to upload a built
+# APK/IPA to a running malimite-web server, wait for the scan, and fail the build if a finding
+# at or above $FAIL_ON is present. The server itself does the actual Ghidra/JADX analysis — see
+# deploy/EC2_DEPLOYMENT.md in Malimite-Core for how to stand one up. This template does NOT run
+# `docker run malimite` locally: no Docker image for a standalone scanner is currently published
+# (see README.md's "CI/CD integration" section for the current status of that approach).
+#
+# Required repository/workspace variables (Repository settings -> Pipelines -> Repository
+# variables; mark MALIMITE_API_KEY as Secured):
+#   MALIMITE_URL       — base URL of the malimite-web server, e.g. http://malimite.internal:7070
+#   MALIMITE_API_KEY    — the server's configured API_KEY (Secured)
+#   APP_PATH            — relative path to the built .apk/.ipa/.xapk in this repo (default: app.apk)
+#   FAIL_ON             — NONE | LOW | MEDIUM | HIGH (default: HIGH)
+#
+# malimite_ci.py auto-detects BITBUCKET_BUILD_NUMBER/BITBUCKET_REPO_FULL_NAME/BITBUCKET_COMMIT
+# and tags the scan with them — no extra configuration needed for that part.
 
-image: atlassian/default-image:4
+image: python:3.12-slim
 
 definitions:
   steps:
     - step: &malimite-scan
-        name: Malimite IPA Security Scan
-        services:
-          - docker
+        name: Malimite Security Scan
         script:
-          - export MALIMITE_IMAGE="${MALIMITE_IMAGE:-ghcr.io/malimite/malimite:latest}"
-          - export IPA="${IPA_PATH:-app.ipa}"
-          - export FAIL_ON="${FAIL_ON:-HIGH}"
-          - export LLM_MODE="${LLM_MODE:-find_vulns}"
-          - mkdir -p malimite-report
+          - APP_PATH="${APP_PATH:-app.apk}"
           - |
-            docker run --rm \
-              -v "$BITBUCKET_CLONE_DIR:/work" \
-              -e GHIDRA_HOME="${GHIDRA_HOME:-/opt/ghidra}" \
-              -e LLM_PROVIDER="${LLM_PROVIDER:-none}" \
-              -e LLM_MODE="$LLM_MODE" \
-              -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
-              -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
-              "$MALIMITE_IMAGE" \
-              malimite "/work/$IPA" \
-                --out /work/malimite-report \
-                --sarif \
-                --html \
-                --llm \
-                --llm-mode "$LLM_MODE" \
-                --fail-on "$FAIL_ON"
+            if [ ! -f "$APP_PATH" ]; then
+              echo "error: $APP_PATH not found — build your app before this step, or set APP_PATH" >&2
+              exit 1
+            fi
+          - curl -fsSL -o malimite_ci.py
+              "https://raw.githubusercontent.com/insomn14/Malimite-Core/main/tools/malimite-ci/malimite_ci.py"
+          - |
+            python3 malimite_ci.py \
+              --url "$MALIMITE_URL" \
+              --api-key "$MALIMITE_API_KEY" \
+              --file "$APP_PATH" \
+              --fail-on "${FAIL_ON:-HIGH}" \
+              --json-out malimite-result.json
         artifacts:
-          - malimite-report/**
+          - malimite-result.json
 
 pipelines:
   default:

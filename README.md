@@ -72,7 +72,7 @@ Same Ghidra decompilation DNA. Different deployment model.
 | **Output** | In-app browsing | SQLite, HTML report, SARIF 2.1 |
 | **Security rules** | Manual review | Built-in iOS MASTG/MSTG + Android MASTG catalogs + LLM + learned rules |
 | **Triage** | — | Status, severity/CVSS override, reviewer notes |
-| **CI/CD** | Manual | GitHub Actions, GitLab CI, Bitbucket Pipelines |
+| **CI/CD** | Manual | GitHub Actions, GitLab CI, Bitbucket Pipelines, Jenkins |
 | **LLM providers** | OpenAI (upstream) | OpenAI, Claude, **DeepSeek**, Ollama |
 | **License** | Apache 2.0 | Apache 2.0 |
 
@@ -374,15 +374,43 @@ DM the bot an `.ipa`, `.apk` or `.xapk` file → it replies with a severity-sort
 
 ## CI/CD integration
 
-Ready-to-use templates:
+There are two ways to scan a build from a pipeline, depending on whether a `malimite-web` server
+is already running somewhere the pipeline can reach it.
 
-| Platform | File |
+### Recommended: scan via a running `malimite-web` server
+
+**Verified end to end** (see [`tools/malimite-ci/README.md`](tools/malimite-ci/README.md)): a
+pipeline builds the app, then calls [`tools/malimite-ci/malimite_ci.py`](tools/malimite-ci/malimite_ci.py) —
+a zero-dependency Python client — to upload it to a `malimite-web` instance, wait for the scan,
+and fail the build on a severity threshold (`--fail-on NONE|LOW|MEDIUM|HIGH`). The scan runs on
+the server (which already has Ghidra/JADX installed), so the CI runner itself needs nothing but
+Python 3.9+.
+
+| Platform | Template |
 |----------|------|
-| GitHub Actions | [`.github/workflows/ipa-scan.yml`](.github/workflows/ipa-scan.yml) |
-| GitLab CI | [`.gitlab/malimite.yml`](.gitlab/malimite.yml) |
 | Bitbucket Pipelines | [`bitbucket-pipelines.yml`](bitbucket-pipelines.yml) |
+| Jenkins | [`Jenkinsfile`](Jenkinsfile) |
 
-GitHub Actions uploads SARIF to the **Security → Code scanning** tab automatically. Stock templates target `.ipa` + Ghidra; for APK scans set `JADX_HOME` (Docker image includes JADX at `/opt/jadx`) alongside `GHIDRA_HOME`. Optional secrets: `LLM_PROVIDER`, `DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`.
+Both templates live at the repo root as **copy-paste references** — paste the relevant step/stage
+into your mobile app repository's own pipeline file, not Malimite-Core's. See
+[`deploy/EC2_DEPLOYMENT.md`](deploy/EC2_DEPLOYMENT.md) for how to stand up the server they point
+at. `malimite-ci` also auto-tags each scan with the pipeline URL/commit SHA it ran from (see
+`ci_pipeline_url`/`ci_commit_sha`/`ci_triggered_by` on `GET /api/v1/scans/{id}`), so a scan
+started by CI is distinguishable from a manual upload when reviewed in the web UI afterward.
+
+### Alternative: a standalone Docker image running the CLI directly
+
+| Platform | File | Status |
+|----------|------|--------|
+| GitHub Actions | [`.github/workflows/ipa-scan.yml`](.github/workflows/ipa-scan.yml) | ⚠️ References a Docker image (`ghcr.io/<owner>/malimite:latest`) that **this repository does not currently build or publish** — no workflow does `docker build`/`docker push` for a standalone CLI image. Uploading SARIF to **Security → Code scanning** works once that image exists |
+| GitLab CI | [`.gitlab/malimite.yml`](.gitlab/malimite.yml) | ⚠️ Same assumption — `ghcr.io/malimite/malimite:latest` is a placeholder, not a real published image |
+
+If you need a fully self-contained scanner (no server dependency, e.g. air-gapped CI), build
+[`deploy/Dockerfile`](deploy/Dockerfile) yourself — note it currently ships **Ghidra 11.1.2**,
+which this codebase's scan rejects (`Bad argument: -enableAnalyzer`); it needs the same Ghidra
+12.0.4 upgrade `deploy/web.Dockerfile` already has before IPA scans will succeed from it. This is
+tracked as follow-up work; the server-based approach above is both verified and simpler to
+operate today.
 
 ---
 
