@@ -576,50 +576,75 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .scan-meta{font-size:.75rem;color:var(--muted)}
 .scan-meta span+span::before{content:" · "}
 
-/* all scans */
-.scans-card{overflow:hidden}
-.scans-card-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:1rem}
-.scans-card-head .card-title{margin:0}
-.scans-table{table-layout:fixed}
-.scans-table th:nth-child(1){width:34%}
-.scans-table th:nth-child(2){width:12%}
-.scans-table th:nth-child(3){width:11%}
-.scans-table th:nth-child(4){width:22%}
-.scans-table th:nth-child(5){width:11%}
-.scans-table th:nth-child(6){width:10%}
-.scans-table td{vertical-align:middle}
-.scans-table td:nth-child(2),.scans-table td:nth-child(4),.scans-table td:nth-child(5){white-space:nowrap}
-.scans-table td:last-child{text-align:right}
-.scans-file-link{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
-.scan-sort-button{display:inline-flex;align-items:center;gap:.2rem;border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}
-.scan-sort-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
-.scans-mobile-toolbar,.scans-card-list{display:none}
-.scans-mobile-toolbar{align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem}
-.scans-mobile-toolbar label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.scans-mobile-toolbar select{min-width:0;flex:1;padding:.4rem .6rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font:inherit}
-.scans-direction{flex-shrink:0;justify-content:center;min-width:6.5rem}
-.scans-card-list{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.scans-list-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.8rem 1rem;padding:1rem;background:var(--surface);border-bottom:1px solid var(--border)}
-.scans-list-item:last-child{border-bottom:0}
-.scans-list-main{min-width:0}
-.scans-list-name{display:block;font-weight:650;font-size:.9rem;line-height:1.4;overflow-wrap:anywhere;word-break:break-word}
-.scans-list-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem 1rem;margin-top:.75rem}
-.scans-meta-item{min-width:0}
-.scans-meta-label{display:block;margin-bottom:.1rem;color:var(--muted);font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-.scans-meta-value{display:block;min-width:0;font-size:.78rem;overflow-wrap:anywhere}
-.scans-list-actions{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:.75rem}
-@media(max-width:900px){
-  .scans-desktop{display:none}
-  .scans-mobile-toolbar,.scans-card-list{display:flex}
-  .scans-card-list{flex-direction:column}
+/* ── shared list-page chrome (Scans, Learned Rules) ── */
+.page-wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:1.1rem;min-width:0}
+.page-head{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;min-width:0}
+.page-head-main{display:flex;align-items:center;gap:.8rem;min-width:0;flex:1 1 20rem}
+.page-ico{width:44px;height:44px;border-radius:12px;background:#eef0ff;color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex:none}
+.page-title{font-size:1.4rem;font-weight:750;letter-spacing:-.015em;line-height:1.2}
+.page-sub{color:var(--muted);font-size:.84rem;margin-top:.15rem}
+.page-head-r{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;min-width:0}
+.search-ctl{position:relative;flex:1 1 240px;min-width:0}
+.search-ctl>.ico{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.search-ctl>.ctl{padding-left:2.25rem}
+.seg{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;background:#eceef3;border-radius:11px;min-width:0}
+.seg button{display:inline-flex;align-items:center;gap:.35rem;border:0;background:transparent;padding:.4rem .75rem;border-radius:8px;font:inherit;font-size:.78rem;font-weight:600;color:#4b5563;cursor:pointer;white-space:nowrap}
+.seg button:hover{color:var(--text)}
+.seg button .n{font-size:.68rem;font-weight:700;color:var(--muted);background:rgba(17,24,39,.06);padding:0 .4rem;border-radius:999px;font-variant-numeric:tabular-nums}
+.seg button.active{background:#fff;color:var(--accent);box-shadow:0 1px 3px rgba(16,24,40,.12)}
+.seg button.active .n{background:#eef0ff;color:var(--accent)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.result-line{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}
+.list-head{display:grid;align-items:center;gap:.9rem;padding:0 .7rem .4rem;font-size:.67rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.sort-btn{display:inline-flex;align-items:center;gap:.25rem;border:0;background:transparent;padding:0;font:inherit;font-weight:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;cursor:pointer}
+.sort-btn:hover,.sort-btn.active{color:var(--text)}
+.sort-btn .sort-ind{font-size:.6rem;opacity:0;transition:opacity .1s}
+.sort-btn:hover .sort-ind{opacity:.5}
+.sort-btn.active .sort-ind{opacity:1;color:var(--accent)}
+.sort-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-top:.9rem;font-size:.78rem;color:var(--muted)}
+.pager-btns{display:flex;gap:.3rem;flex-wrap:wrap}
+.pager-btns button{min-width:32px;height:32px;padding:0 .55rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);font:inherit;font-size:.78rem;font-weight:600;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.pager-btns button:hover:not(:disabled){border-color:#c3c6f2;background:#f7f7ff}
+.pager-btns button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.pager-btns button:disabled{opacity:.45;cursor:not-allowed}
+.empty-state{display:flex;flex-direction:column;align-items:center;gap:.4rem;padding:2.5rem 1rem;text-align:center;color:var(--muted);font-size:.86rem}
+.empty-state .es-ico{width:56px;height:56px;border-radius:50%;background:#eef0ff;color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:.35rem}
+.empty-state strong{color:var(--text);font-size:.98rem}
+.empty-state .btn{margin-top:.6rem}
+.mobile-sort{display:none;align-items:center;gap:.4rem}
+.mobile-sort .ctl{height:36px;width:auto}
+
+/* scans list rows (extend the Home .rs-row look) */
+.sl-cols{grid-template-columns:42px minmax(0,1fr) 112px 104px 116px 150px 60px 34px}
+.rs-row.sl-row{grid-template-columns:42px minmax(0,1fr) 112px 104px 116px 150px 60px 34px;grid-template-areas:"icon main mode state find date dur menu"}
+.sl-head>:nth-child(1){grid-column:1/3}
+.sl-mode{grid-area:mode;min-width:0}
+.sl-find{grid-area:find;display:flex;flex-direction:column;gap:.3rem;min-width:0}
+.sl-date{grid-area:date;font-size:.78rem;white-space:nowrap}
+.sl-dur{grid-area:dur;font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sl-row .rs-meta .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem}
+.sl-row .m-only{display:none}
+.chip.mode-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:1000px){
+  .sl-cols,.rs-row.sl-row{grid-template-columns:42px minmax(0,1fr) 104px 116px 140px 34px}
+  .rs-row.sl-row{grid-template-areas:"icon main state find date menu"}
+  .sl-mode,.sl-dur,.sl-head .h-mode,.sl-head .h-dur{display:none}
+}
+@media(max-width:720px){
+  .sl-head{display:none}
+  .mobile-sort{display:flex}
+  .rs-row.sl-row{grid-template-columns:42px auto minmax(0,1fr) 34px;grid-template-areas:"icon main main menu" "icon state find find";row-gap:.45rem;column-gap:.7rem}
+  .sl-date{display:none}
+  .sl-row .m-only{display:inline}
+  .sl-find{flex-direction:row;align-items:center;justify-content:flex-end;gap:.6rem}
+  .sl-find .sev-bar{width:60px;flex:none}
 }
 @media(max-width:520px){
   main{padding:1rem}
   .card{padding:1rem}
-  .scans-card-head{align-items:stretch}
-  .scans-card-head .card-title{flex:1 1 8rem}
-  .scans-list-item{gap:.75rem;padding:.85rem}
-  .scans-list-meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 }
 
 /* progress */
@@ -786,23 +811,70 @@ progress::-webkit-progress-value{background:var(--accent);border-radius:3px}
 }
 
 /* learned rules */
-.learned-paths{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.9rem;font-size:.78rem;color:var(--muted)}
-.learned-paths code{font-size:.75rem;word-break:break-all}
-.learned-paths .path-row{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem}
-.learned-summary{margin:0 0 1rem}
-.learned-plat-strip{display:flex;flex-wrap:wrap;gap:1rem;align-items:center;font-size:.8rem;color:var(--muted);margin:.75rem 0 0;padding:.65rem .85rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)}
-.learned-plat-strip .plat-stat{display:inline-flex;align-items:center;gap:.35rem}
-.learned-plat-strip .plat-n{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
-.regex-cell{max-width:320px}
-.regex-cell .regex-text{display:block;font-family:monospace;font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
-.regex-cell.expanded .regex-text{white-space:pre-wrap;word-break:break-all;overflow:visible;text-overflow:unset}
+.store-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+.store-card{display:flex;align-items:center;gap:.75rem;min-width:0;padding:.75rem .85rem;background:var(--surface);border:1px solid var(--border);border-radius:12px}
+.store-card .plat-tile{width:38px;height:38px;font-size:1.15rem}
+.store-main{min-width:0;flex:1}
+.store-name{font-weight:650;font-size:.85rem}
+.store-path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.7rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.store-count{font-size:.72rem;font-weight:700;white-space:nowrap;padding:.15rem .55rem;border-radius:999px;background:#eef0ff;color:var(--accent)}
+.store-count.missing{background:#f1f2f4;color:var(--muted)}
+.sev-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem}
+.sev-tile{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:.15rem;padding:.85rem 1rem .85rem 1.15rem;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;text-align:left;font:inherit;color:inherit;overflow:hidden;transition:border-color .12s,box-shadow .12s,transform .12s}
+.sev-tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--tc)}
+.sev-tile:hover{border-color:#c3c6f2;transform:translateY(-1px);box-shadow:0 4px 14px rgba(16,24,40,.06)}
+.sev-tile.active{border-color:var(--tc);box-shadow:inset 0 0 0 1px var(--tc),0 4px 14px rgba(16,24,40,.06)}
+.sev-tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sev-tile .n{font-size:1.6rem;font-weight:750;line-height:1.1;color:var(--tc);font-variant-numeric:tabular-nums}
+.sev-tile .l{font-size:.75rem;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:.3rem}
+.sev-tile .l .ico{opacity:0;color:var(--tc)}
+.sev-tile.active .l .ico{opacity:1}
+.sev-tile.dim{opacity:.55}
+.t-critical{--tc:#9d174d}.t-high{--tc:#dc2626}.t-medium{--tc:#d97706}.t-low{--tc:#2563eb}.t-info{--tc:#6b7280}
+.lr-cols{grid-template-columns:182px minmax(0,1fr) 88px 52px minmax(0,.7fr) 90px 18px}
+.lr-row{display:grid;grid-template-columns:182px minmax(0,1fr) 88px 52px minmax(0,.7fr) 90px 18px;align-items:center;gap:.9rem;padding:.65rem .7rem;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;transition:border-color .12s,background .12s,box-shadow .12s;outline:none}
+.lr-row:hover,.lr-row:focus-visible,.lr-row.selected{border-color:#c3c6f2;background:#fafaff;box-shadow:0 2px 10px rgba(79,70,229,.07)}
+.lr-row.selected{box-shadow:inset 3px 0 0 var(--accent),0 2px 10px rgba(79,70,229,.07)}
+.lr-list{display:flex;flex-direction:column;gap:.45rem}
+.lr-row>.badge,.lr-row>.cvss{justify-self:start}
+.lr-rule{display:flex;align-items:center;gap:.5rem;min-width:0}
+.lr-plat{width:26px;height:26px;border-radius:8px;font-size:.85rem}
+.lr-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;font-weight:600;line-height:1.35;min-width:0;overflow-wrap:anywhere}
+.lr-title{font-weight:600;font-size:.85rem;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.lr-sub{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.25rem}
+.lr-tag{font-size:.65rem;font-weight:700;letter-spacing:.03em;padding:.05rem .45rem;border-radius:5px;background:var(--bg);border:1px solid var(--border);color:#4b5563}
+.lr-regex{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.7rem;color:#374151;background:#f6f7f9;border:1px solid #eceef2;border-radius:6px;padding:.2rem .45rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.lr-date{font-size:.75rem;color:var(--muted);white-space:nowrap}
+.lr-chev{color:#c0c4cc;font-size:.9rem}
+.lr-row:hover .lr-chev{color:var(--accent)}
+.cvss{display:inline-flex;justify-content:center;min-width:38px;font-size:.74rem;font-weight:750;font-variant-numeric:tabular-nums;padding:.12rem .4rem;border-radius:6px;background:#f1f2f4;color:#374151}
+.cvss.c{background:#fce7f3;color:#9d174d}.cvss.h{background:#fee2e2;color:#b91c1c}.cvss.m{background:#fef3c7;color:#92400e}.cvss.l{background:#dbeafe;color:#1e40af}
+.rule-sec{margin-top:1.1rem}
+.rule-sec:first-child{margin-top:0}
+.rule-sec p{font-size:.85rem;line-height:1.6}
+.rule-code{position:relative}
+.rule-code pre{margin:0;padding:.75rem .85rem;padding-right:4.5rem;background:#0f172a;color:#e2e8f0;border-radius:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;line-height:1.55;white-space:pre-wrap;word-break:break-all;max-height:320px;overflow:auto}
+.rule-code .copy-btn{position:absolute;top:.45rem;right:.45rem;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#e2e8f0;border-radius:7px;font:inherit;font-size:.7rem;font-weight:600;padding:.2rem .5rem;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem}
+.rule-code .copy-btn:hover{background:rgba(255,255,255,.16)}
+.rule-kv{display:grid;grid-template-columns:110px minmax(0,1fr);gap:.4rem .75rem;font-size:.8rem}
+.rule-kv .k{color:var(--muted);font-weight:600}
+.rule-kv .v{overflow-wrap:anywhere}
+@media(max-width:1000px){
+  .lr-cols,.lr-row{grid-template-columns:176px minmax(0,1fr) 88px 52px 18px}
+  .lr-regex,.lr-date,.lr-head .h-regex,.lr-head .h-date{display:none}
+}
+@media(max-width:720px){
+  .store-row{grid-template-columns:1fr}
+  .lr-head{display:none}
+  .lr-row{grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"rule sev cvss" "title title title";row-gap:.4rem}
+  .lr-rule{grid-area:rule}.lr-row>.badge{grid-area:sev}.lr-row>.cvss{grid-area:cvss}.lr-main{grid-area:title}
+  .lr-chev{display:none}
+}
 .affected-list{display:flex;flex-direction:column;gap:.45rem}
 .affected-item{font-size:.8rem;padding:.45rem .6rem;background:var(--bg);border:1px solid var(--border);border-radius:6px}
 .affected-item .aff-name{font-family:monospace;font-weight:600;word-break:break-all}
 .affected-item .aff-meta{font-size:.72rem;color:var(--muted);margin-top:.15rem;word-break:break-all}
 .vuln-loc-count{font-size:.72rem;font-weight:600;color:var(--muted);background:var(--bg);padding:.1rem .45rem;border-radius:4px;white-space:nowrap}
-.regex-cell .regex-toggle{display:none;margin-top:.2rem;font-size:.68rem;font-weight:600;color:var(--accent);cursor:pointer;background:none;border:0;padding:0}
-.regex-cell.long .regex-toggle{display:inline}
 
 /* ai assistant */
 .chat-ai{max-width:100%}
@@ -841,6 +913,147 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 .chat-attach-chip button:hover{color:var(--red)}
 .chat-msg-images{display:flex;flex-wrap:wrap;gap:.4rem;margin:.35rem 0}
 .chat-msg-images img{max-width:220px;max-height:220px;border-radius:6px;border:1px solid var(--border);cursor:zoom-in}
+
+/* ══ design refresh: shared components (applies to every scan-result tab) ══ */
+.card{border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 4px 16px rgba(16,24,40,.04);padding:1.15rem 1.25rem}
+.card-title{font-weight:700;font-size:.97rem}
+.stat{border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,.04);padding:.95rem 1.1rem}
+.stat-val,.stat-n{font-size:1.65rem;font-weight:750;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat-label,.stat-l{font-size:.76rem;color:var(--muted);margin-top:.3rem;font-weight:600}
+.btn{border-radius:9px}
+.btn-sm{border-radius:8px}
+.btn-ghost{background:var(--surface)}
+.btn-ghost:hover{background:#f7f7ff;border-color:#c3c6f2;color:var(--text)}
+.alert{border-radius:10px;line-height:1.5}
+.empty{border:1px dashed var(--border);border-radius:12px;background:var(--surface)}
+.loading{padding:2.5rem}
+.search-bar{gap:.6rem;align-items:center;flex-wrap:wrap}
+.search-bar input,.search-bar select{height:40px;padding:0 .8rem;border-radius:10px;font-size:.85rem;background-color:#fff;transition:border-color .12s,box-shadow .12s}
+.search-bar input[type=text],.search-bar input[type=search]{flex:1 1 240px;padding-left:2.3rem;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:.8rem center;background-size:15px}
+.search-bar select{appearance:none;-webkit-appearance:none;padding-right:2rem;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .65rem center;background-size:14px}
+.search-bar input:focus,.search-bar select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+.search-bar .btn{height:40px;padding:0 1rem}
+.tbl-wrap{border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.tbl-wrap table th{background:#f8f9fb;font-size:.68rem;letter-spacing:.05em;padding:.6rem .8rem}
+.tbl-wrap table td{padding:.55rem .8rem}
+.tbl-wrap table tr:last-child td{border-bottom:0}
+tr:hover td{background:#fafaff}
+.pagination{justify-content:space-between;margin-top:.9rem}
+.pagination .page-btn{min-width:32px;height:32px;padding:0 .7rem;border-radius:8px;font:inherit;font-size:.78rem;font-weight:600;color:var(--text);display:inline-flex;align-items:center;justify-content:center}
+.pagination .page-btn:hover:not(:disabled){border-color:#c3c6f2;background:#f7f7ff}
+.log-box{border-radius:12px;background:#0f172a;line-height:1.6;padding:1rem 1.1rem}
+.kv{gap:0 .9rem}
+.kv>*{padding:.42rem 0;border-bottom:1px solid #f1f2f4}
+.kv>*:nth-last-child(-n+2){border-bottom:0}
+.kv-val{font-size:.8rem}
+.vuln-card{border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,.04);transition:border-color .12s,box-shadow .12s}
+.vuln-card:hover{border-color:#c3c6f2;box-shadow:0 2px 10px rgba(79,70,229,.07)}
+.vuln-head{padding:.8rem 1rem}
+.vuln-head:hover{background:#fafaff}
+.vuln-code,.vuln-poc{border-radius:8px}
+.chat-msgs{border-radius:12px}
+.chat-input textarea{border-radius:10px}
+.fn-wrap{border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.assess-row:hover{background:#fafaff}
+.llm-row:hover td{background:#fafaff}
+
+.chat-bar select,.chat-bar input{height:34px;border-radius:8px;padding:0 .65rem;background-color:#fff;font:inherit;font-size:.8rem;transition:border-color .12s,box-shadow .12s}
+.chat-bar select{appearance:none;-webkit-appearance:none;padding-right:1.9rem;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .55rem center;background-size:13px}
+.chat-bar select:focus,.chat-bar input:focus,.chat-input textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+.chat-bar .btn{height:34px}
+.chat-chips .btn{border-radius:999px}
+.chat-msgs{background:#f8f9fb}
+
+/* ── scan detail: header + tabs ── */
+.sd-head{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
+.sd-head .plat-tile{width:54px;height:54px;font-size:1.65rem;border-radius:14px}
+.sd-main{flex:1 1 22rem;min-width:0}
+.sd-title-row{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;min-width:0}
+.sd-title{font-size:1.35rem;font-weight:750;letter-spacing:-.015em;line-height:1.25;overflow-wrap:anywhere}
+.sd-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem .9rem;margin-top:.35rem;font-size:.78rem;color:var(--muted)}
+.sd-meta>span{display:inline-flex;align-items:center;gap:.3rem;min-width:0}
+.sd-meta .ico{color:#9ca3af}
+.sd-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.74rem;border:0;background:#f1f2f4;color:#374151;border-radius:6px;padding:.08rem .4rem;cursor:pointer}
+.sd-id:hover{background:#e7e8fb;color:var(--accent)}
+.sd-actions{display:flex;flex-wrap:wrap;gap:.45rem}
+.btn.btn-danger-outline{background:var(--surface);color:var(--red);border:1px solid #fecaca;border-radius:10px;padding:.55rem .8rem;font-size:.82rem}
+.btn.btn-danger-outline:hover{background:#fef2f2}
+.sd-tabs.can-scroll{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 48px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 48px),transparent)}
+.sd-tabs.can-scroll.at-end{-webkit-mask-image:none;mask-image:none}
+.sd-tabs{display:flex;gap:.1rem;overflow-x:auto;scrollbar-width:thin;border-bottom:1px solid var(--border);margin-bottom:1.15rem;-webkit-overflow-scrolling:touch}
+.sd-tabs .tab{display:inline-flex;align-items:center;gap:.35rem;padding:.6rem .62rem;font-size:.8rem;white-space:nowrap;flex:none;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:8px 8px 0 0;user-select:none}
+.sd-tabs .tab:hover{color:var(--text);background:#f6f6fb}
+.sd-tabs .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.sd-tabs .tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.sd-tabs .tab .ico{font-size:.95rem}
+.tab-n{font-size:.66rem;font-weight:700;padding:.02rem .42rem;border-radius:999px;background:#eef0f4;color:#4b5563;font-variant-numeric:tabular-nums}
+.tab.active .tab-n{background:#eef0ff;color:var(--accent)}
+.tab-n.hot{background:#fee2e2;color:#b91c1c}
+
+/* ── summary tab ── */
+.sum-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem;margin-bottom:1rem}
+.sum-stat{display:flex;align-items:center;gap:.8rem;padding:.9rem 1rem;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,.04);cursor:pointer;text-align:left;font:inherit;color:inherit;transition:border-color .12s,transform .12s,box-shadow .12s;min-width:0}
+.sum-stat:hover{border-color:#c3c6f2;transform:translateY(-1px);box-shadow:0 4px 14px rgba(16,24,40,.06)}
+.sum-stat .si{width:40px;height:40px;border-radius:11px;background:#eef0ff;color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.15rem;flex:none}
+.sum-stat .sn{font-size:1.4rem;font-weight:750;line-height:1.1;font-variant-numeric:tabular-nums}
+.sum-stat .sl{font-size:.75rem;color:var(--muted);font-weight:600}
+.sum-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:1rem;margin-bottom:1rem}
+.sum-grid>.card{margin:0}
+.risk-head{display:flex;align-items:flex-end;gap:.75rem;margin-bottom:.9rem}
+.risk-total{font-size:2.2rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.risk-sub{font-size:.78rem;color:var(--muted);padding-bottom:.2rem}
+.risk-rows{display:flex;flex-direction:column;gap:.45rem}
+.risk-row{display:grid;grid-template-columns:86px minmax(0,1fr) 38px;align-items:center;gap:.7rem;padding:.3rem .4rem;margin:0 -.4rem;border:0;border-radius:8px;background:transparent;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.risk-row:hover{background:#f6f6fb}
+.risk-row .track{height:9px;background:#eef0f4;border-radius:999px;overflow:hidden}
+.risk-row .fill{height:100%;border-radius:999px;background:var(--tc)}
+.risk-row .n{text-align:right;font-weight:700;font-size:.82rem;font-variant-numeric:tabular-nums}
+.risk-row .badge{justify-self:start}
+.risk-foot{display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:.9rem;padding-top:.75rem;border-top:1px solid var(--border);font-size:.76rem;color:var(--muted)}
+.state-panel{display:flex;align-items:center;gap:1rem;padding:1.1rem 1.2rem;border-radius:14px;margin-bottom:1rem}
+.state-panel.running{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.state-panel.failed{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+.state-panel .big{font-size:1.6rem;display:flex}
+.state-panel strong{display:block;font-size:.95rem}
+@media(max-width:900px){.sum-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.sum-grid{grid-template-columns:1fr}}
+
+/* ── entry points (summary preview + tab) ── */
+.ep-rows{display:flex;flex-direction:column}
+.ep-row{display:grid;grid-template-columns:92px minmax(0,1fr);align-items:center;gap:.75rem;padding:.5rem .1rem;border-bottom:1px solid #f1f2f4;min-width:0}
+.ep-row:last-child{border-bottom:0}
+.ep-badge{justify-self:start;font-size:.66rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:.15rem .5rem;border-radius:6px;background:#f1f2f4;color:#4b5563;white-space:nowrap}
+.ep-badge.activity{background:#e0e7ff;color:#3730a3}.ep-badge.service{background:#dcfce7;color:#166534}
+.ep-badge.receiver{background:#fef3c7;color:#92400e}.ep-badge.provider{background:#dbeafe;color:#1e40af}
+.ep-badge.native{background:#f3e8ff;color:#6b21a8}
+.ep-nm{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;font-weight:650;overflow-wrap:anywhere}
+.ep-nm .mem{color:var(--muted);font-weight:500}
+.ep-pk{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.7rem;color:var(--muted);overflow-wrap:anywhere;margin-top:.05rem}
+.ep-foot{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border);font-size:.76rem;color:var(--muted)}
+
+/* ── status tiles for assessment ── */
+.t-present{--tc:#16a34a}.t-partial{--tc:#d97706}.t-absent{--tc:#dc2626}.t-unknown{--tc:#6b7280}
+
+/* ── log tab ── */
+.log-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin-bottom:.75rem}
+.log-box .lv-err{color:#fca5a5}.log-box .lv-warn{color:#fcd34d}.log-box .lv-dim{color:#94a3b8}
+.log-box mark{background:#4f46e5;color:#fff;border-radius:3px;padding:0 .1rem}
+.log-box.tall{max-height:calc(100vh - 300px);min-height:320px}
+
+/* ── downloads tab ── */
+.dl-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem;margin-bottom:1rem}
+.dl-card{display:flex;align-items:center;gap:.85rem;padding:.95rem 1rem;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,.04);min-width:0}
+.dl-card .si{width:44px;height:44px;border-radius:12px;background:#eef0ff;color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex:none}
+.dl-card.off{opacity:.6}.dl-card.off .si{background:#f1f2f4;color:var(--muted)}
+.dl-main{flex:1;min-width:0}
+.dl-name{font-weight:650;font-size:.88rem}
+.dl-file{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-desc{font-size:.74rem;color:var(--muted);margin-top:.1rem}
+.api-list{display:flex;flex-direction:column;gap:.35rem}
+.api-row{display:flex;align-items:center;gap:.6rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;padding:.4rem .55rem;border:1px solid #f1f2f4;border-radius:8px;min-width:0}
+.api-row:hover{background:#fafaff;border-color:#e0e2f7}
+.api-row .m{font-size:.64rem;font-weight:800;color:#15803d;background:#dcfce7;border-radius:5px;padding:.05rem .35rem}
+.api-row a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:720px){.dl-grid{grid-template-columns:1fr}.sd-actions{width:100%}}
 </style>
 <!-- Vendored, self-hosted (not a CDN) so the Functions tab's syntax highlighting works offline — see THIRD_PARTY_NOTICES.md -->
 <link rel="stylesheet" href="/vendor/hljs/styles/atom-one-dark.min.css"/>
@@ -1466,6 +1679,16 @@ const ICONS = {
   feather: '<path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/><path d="M16 8 2 22"/><path d="M17.5 15H9"/>',
   plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
   key: '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>',
+  bug: '<path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/>',
+  code: '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>',
+  type: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+  logIn: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
+  message: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  terminal: '<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  layers: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  braces: '<path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"/><path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/>',
 };
 function ico(name, cls = '') {
   return `<svg class="ico ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
@@ -1688,26 +1911,9 @@ function recentRowHtml(s, d) {
   const state = String(s.state || 'queued').toLowerCase();
   const plat = String(d?.platform || '').toUpperCase();
   const kind = plat === 'IOS' ? 'ios' : plat === 'ANDROID' ? 'android' : packageKindOf(name);
-  let count, bar;
-  if (state === 'done') {
-    const c = d?.vulnerability_counts;
-    if (d === undefined) { count = '<span class="skel" style="width:70px"></span>'; bar = '<span class="skel"></span>'; }
-    else if (!c) { count = '<span class="rs-count muted">—</span>'; bar = '<div class="sev-bar"></div>'; }
-    else {
-      const n = c.total || 0;
-      count = n ? `<span class="rs-count">${num(n)} finding${n === 1 ? '' : 's'}</span>` : '<span class="rs-count muted">No findings</span>';
-      bar = sevBarHtml(c);
-    }
-  } else if (state === 'running' || state === 'queued') {
-    count = `<span class="rs-count muted">${state === 'running' ? 'Scanning…' : 'Waiting…'}</span>`;
-    bar = '<div class="sev-bar indet"></div>';
-  } else {
-    count = '<span class="rs-count muted">No results</span>';
-    bar = '<div class="sev-bar"></div>';
-  }
-  const href = '#/scan/' + encodeURIComponent(id);
+  const {count, bar} = scanFindingsParts(s, d);
   return `
-    <div class="rs-row" data-rs="${escAttr(id)}" data-href="${escAttr(href)}" role="link" tabindex="0"
+    <div class="rs-row" data-rs="${escAttr(id)}" data-href="#/scan/${escAttr(encodeURIComponent(id))}" role="link" tabindex="0"
       aria-label="${escAttr(name)}, ${escAttr(state)}">
       ${platTile(kind)}
       <div class="rs-main">
@@ -1717,14 +1923,7 @@ function recentRowHtml(s, d) {
       <div class="rs-state">${statePill(state)}</div>
       <div class="rs-count-cell" style="grid-area:count">${count}</div>
       <div class="rs-bar">${bar}</div>
-      <details class="rs-menu">
-        <summary aria-label="Actions for ${escAttr(name)}">${ico('more')}</summary>
-        <div class="rs-menu-pop">
-          <a href="${href}">${ico('arrowRight')} Open scan</a>
-          ${state === 'done' ? `<a href="/api/v1/scans/${encodeURIComponent(id)}/report" target="_blank" rel="noopener">${ico('external')} HTML report</a>` : ''}
-          <button type="button" class="danger" data-delete="${escAttr(id)}">${ico('trash')} Delete scan</button>
-        </div>
-      </details>
+      ${scanRowMenuHtml(s)}
     </div>`;
 }
 
@@ -1937,10 +2136,16 @@ route('home', async function() {
   loadRecentScans();
 });
 
-/* ── scans list view ── */
+/* ── scans list view ──
+   Same visual language as Home's "Recent Scans": rows with platform tile, status pill, findings
+   count + severity bar and a row menu. Adds search, state/platform filters, sortable columns and
+   pagination; findings are fetched lazily (per visible page) and cached with Home's cache. */
 let _scansCache = [];
 /** @type {{key:string, dir:'asc'|'desc'}} */
 let _scansSort = {key: 'started', dir: 'desc'};
+let _scansView = {q: '', state: 'all', plat: 'all', page: 1};
+const SCANS_PAGE_SIZE = 20;
+let _scansTimer = null;
 
 /** Workflow severity: error < running < queued < done */
 const SCAN_STATE_RANK = { error: 0, running: 1, queued: 2, done: 3 };
@@ -1951,16 +2156,29 @@ function scanDurationMs(s) {
   return Number.isFinite(ms) ? ms : null;
 }
 
+function scanKindOf(s) {
+  const p = String(_recentDetails.get(s.scan_id)?.platform || '').toUpperCase();
+  return p === 'IOS' ? 'ios' : p === 'ANDROID' ? 'android' : packageKindOf(s.filename);
+}
+
+function scanStateGroup(s) {
+  const st = String(s.state || 'queued').toLowerCase();
+  return st === 'done' ? 'done' : st === 'error' ? 'error' : 'active';
+}
+
 function scanSortValue(s, key) {
   switch (key) {
     case 'file': return String(s.filename||'').toLowerCase();
-    case 'scan_id': return String(s.scan_id||'').toLowerCase();
+    case 'mode': return scanModeLabel(s.llm_mode).toLowerCase();
     case 'state': return SCAN_STATE_RANK[String(s.state||'').toLowerCase()] ?? 99;
+    case 'findings': {
+      const c = _recentDetails.get(s.scan_id)?.vulnerability_counts;
+      return c ? (c.total || 0) : -1;
+    }
     case 'started': return s.created_at ? new Date(s.created_at).getTime() : 0;
     case 'duration': {
       const ms = scanDurationMs(s);
-      // Missing/running duration sorts first when asc, last when desc
-      return ms == null ? -1 : ms;
+      return ms == null ? -1 : ms;   // missing/running sorts first when asc, last when desc
     }
     default: return '';
   }
@@ -1971,175 +2189,276 @@ function sortedScans() {
   const {key, dir} = _scansSort;
   const mul = dir === 'asc' ? 1 : -1;
   scans.sort((a, b) => {
-    const va = scanSortValue(a, key);
-    const vb = scanSortValue(b, key);
-    let cmp = 0;
-    if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
-    else cmp = String(va).localeCompare(String(vb), undefined, {sensitivity:'base'});
+    const va = scanSortValue(a, key), vb = scanSortValue(b, key);
+    let cmp = (typeof va === 'number' && typeof vb === 'number') ? va - vb
+      : String(va).localeCompare(String(vb), undefined, {sensitivity:'base'});
     if (cmp !== 0) return cmp * mul;
-    // Tie-break: newest started first
-    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;   // tie-break: newest first
     const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
     return tb - ta;
   });
   return scans;
 }
 
-function scansSortHeaderHtml(key, label) {
+function filteredScans() {
+  const {q, state, plat} = _scansView;
+  const needle = q.trim().toLowerCase();
+  return sortedScans().filter(s =>
+    (state === 'all' || scanStateGroup(s) === state)
+    && (plat === 'all' || scanKindOf(s) === plat)
+    && (!needle || `${s.filename} ${s.scan_id} ${scanModeLabel(s.llm_mode)} ${s.llm_provider}`.toLowerCase().includes(needle)));
+}
+
+/** Findings count + severity bar for a scan row (shared by Home and the Scans page). */
+function scanFindingsParts(s, d) {
+  const state = String(s.state || 'queued').toLowerCase();
+  if (state === 'done') {
+    const c = d?.vulnerability_counts;
+    if (d === undefined) return {count: '<span class="skel" style="width:70px"></span>', bar: '<span class="skel"></span>'};
+    if (!c) return {count: '<span class="rs-count muted">—</span>', bar: '<div class="sev-bar"></div>'};
+    const n = c.total || 0;
+    return {
+      count: n ? `<span class="rs-count">${num(n)} finding${n === 1 ? '' : 's'}</span>` : '<span class="rs-count muted">No findings</span>',
+      bar: sevBarHtml(c),
+    };
+  }
+  if (state === 'running' || state === 'queued') {
+    return {count: `<span class="rs-count muted">${state === 'running' ? 'Scanning…' : 'Waiting…'}</span>`, bar: '<div class="sev-bar indet"></div>'};
+  }
+  return {count: '<span class="rs-count muted">No results</span>', bar: '<div class="sev-bar"></div>'};
+}
+
+function scanRowMenuHtml(s) {
+  const id = String(s.scan_id || '');
+  const name = String(s.filename || 'Untitled scan');
+  const href = '#/scan/' + encodeURIComponent(id);
+  return `<details class="rs-menu">
+      <summary aria-label="Actions for ${escAttr(name)}">${ico('more')}</summary>
+      <div class="rs-menu-pop">
+        <a href="${href}">${ico('arrowRight')} Open scan</a>
+        ${s.state === 'done' ? `<a href="/api/v1/scans/${encodeURIComponent(id)}/report" target="_blank" rel="noopener">${ico('external')} HTML report</a>` : ''}
+        <button type="button" class="danger" data-delete="${escAttr(id)}">${ico('trash')} Delete scan</button>
+      </div>
+    </details>`;
+}
+
+function scanListRowHtml(s, d) {
+  const id = String(s.scan_id || '');
+  const name = String(s.filename || 'Untitled scan');
+  const state = String(s.state || 'queued').toLowerCase();
+  const kind = scanKindOf(s);
+  const {count, bar} = scanFindingsParts(s, d);
+  const llm = s.llm_enabled && s.llm_provider && s.llm_provider !== 'none';
+  return `
+    <div class="rs-row sl-row" data-rs="${escAttr(id)}" data-href="#/scan/${escAttr(encodeURIComponent(id))}" role="link" tabindex="0"
+      aria-label="${escAttr(name)}, ${escAttr(state)}">
+      ${platTile(kind)}
+      <div class="rs-main">
+        <div class="rs-name" title="${escAttr(name)}">${esc(name)}</div>
+        <div class="rs-meta"><span>${platformName(kind)}</span><span class="mono" title="${escAttr(id)}">${esc(id.slice(0, 8))}</span><span class="m-only">${esc(fmtShort(s.created_at))}</span></div>
+      </div>
+      <div class="sl-mode"><span class="chip mode-chip" title="${escAttr(scanModeLabel(s.llm_mode) + (llm ? ' · LLM: ' + s.llm_provider : ''))}">${ico(llm ? 'sparkles' : (SCAN_MODES[s.llm_mode]?.icon || 'zap'))} ${esc(scanModeLabel(s.llm_mode))}</span></div>
+      <div class="rs-state">${statePill(state)}</div>
+      <div class="sl-find">${count}${bar}</div>
+      <div class="sl-date" title="${escAttr(fmt(s.created_at))}">${esc(fmtShort(s.created_at))}</div>
+      <div class="sl-dur">${dur(s.started_at, s.finished_at)}</div>
+      ${scanRowMenuHtml(s)}
+    </div>`;
+}
+
+function scansSortBtn(key, label, cls = '') {
   const active = _scansSort.key === key;
-  const ind = active ? (_scansSort.dir === 'asc' ? '▲' : '▼') : '▼';
-  const ariaSort = active ? (_scansSort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
-  return `<th class="th-sort${active?' active':''}" data-sort="${key}" aria-sort="${ariaSort}">
-      <button type="button" class="scan-sort-button" onclick="sortScansColumn('${key}')"
-        aria-label="Sort by ${label}${active ? `, currently ${ariaSort}` : ''}">
-        ${label}<span class="sort-ind" aria-hidden="true">${ind}</span>
-      </button></th>`;
+  const ind = active && _scansSort.dir === 'asc' ? '▲' : '▼';
+  const aria = active ? (_scansSort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  return `<span class="${cls}"><button type="button" class="sort-btn${active ? ' active' : ''}" data-sort="${key}"
+    aria-label="Sort by ${label}${active ? ', currently ' + aria : ''}">${label}<span class="sort-ind" aria-hidden="true">${ind}</span></button></span>`;
 }
 
-function renderScansThead() {
-  return `<tr>
-    ${scansSortHeaderHtml('file','File')}
-    ${scansSortHeaderHtml('scan_id','Scan ID')}
-    ${scansSortHeaderHtml('state','State')}
-    ${scansSortHeaderHtml('started','Started')}
-    ${scansSortHeaderHtml('duration','Duration')}
-    <th></th>
-  </tr>`;
+function segHtml(attr, current, items) {
+  return items.map(([v, label, n, icon]) => `<button type="button" data-${attr}="${v}" class="${current === v ? 'active' : ''}"
+    aria-pressed="${current === v}">${icon ? ico(icon) : ''}${label}${n != null ? ` <span class="n">${n}</span>` : ''}</button>`).join('');
 }
 
-function renderScansRows(scans=sortedScans()) {
-  return scans.map(s => {
-    const id = String(s.scan_id||'');
-    const filename = String(s.filename||'Untitled scan');
-    return `
-    <tr>
-      <td><a class="scans-file-link" href="#/scan/${encodeURIComponent(id)}" title="${escAttr(filename)}">${esc(filename)}</a></td>
-      <td class="mono" title="${escAttr(id)}">${esc(id.slice(0,8))}</td>
-      <td>${badge(s.state)}</td>
-      <td>${fmt(s.created_at)}</td>
-      <td>${dur(s.started_at, s.finished_at)}</td>
-      <td><button type="button" class="btn btn-danger btn-sm" data-scan-id="${escAttr(id)}"
-        onclick="deleteScan(this.dataset.scanId,event)" aria-label="Delete scan ${escAttr(filename)}">Delete</button></td>
-    </tr>`;
-  }).join('');
-}
-
-function renderScansCards(scans=sortedScans()) {
-  return scans.map(s => {
-    const id = String(s.scan_id||'');
-    const filename = String(s.filename||'Untitled scan');
-    return `<article class="scans-list-item">
-      <div class="scans-list-main">
-        <a class="scans-list-name" href="#/scan/${encodeURIComponent(id)}" title="${escAttr(filename)}">${esc(filename)}</a>
-        <div class="scans-list-meta">
-          <div class="scans-meta-item">
-            <span class="scans-meta-label">Scan ID</span>
-            <span class="scans-meta-value mono" title="${escAttr(id)}">${esc(id.slice(0,8))}</span>
-          </div>
-          <div class="scans-meta-item">
-            <span class="scans-meta-label">Started</span>
-            <span class="scans-meta-value">${fmt(s.created_at)}</span>
-          </div>
-          <div class="scans-meta-item">
-            <span class="scans-meta-label">Duration</span>
-            <span class="scans-meta-value">${dur(s.started_at, s.finished_at)}</span>
-          </div>
-        </div>
-      </div>
-      <div class="scans-list-actions">
-        ${badge(s.state)}
-        <button type="button" class="btn btn-danger btn-sm" data-scan-id="${escAttr(id)}"
-          onclick="deleteScan(this.dataset.scanId,event)" aria-label="Delete scan ${escAttr(filename)}">Delete</button>
-      </div>
-    </article>`;
-  }).join('');
-}
-
-function renderScansSortControls() {
-  const options = [
-    ['file','File'],['scan_id','Scan ID'],['state','State'],
-    ['started','Started'],['duration','Duration']
-  ].map(([key,label]) => `<option value="${key}"${_scansSort.key===key?' selected':''}>${label}</option>`).join('');
-  const ascending = _scansSort.dir === 'asc';
-  return `<label for="scans-sort-select">Sort by</label>
-    <select id="scans-sort-select" onchange="setScansSort(this.value)" aria-label="Sort scans by">${options}</select>
-    <button type="button" class="btn btn-ghost btn-sm scans-direction" onclick="sortScansColumn(_scansSort.key)"
-      aria-label="Change sort direction; currently ${ascending?'ascending':'descending'}">
-      <span aria-hidden="true">${ascending?'↑':'↓'}</span> ${ascending?'Ascending':'Descending'}
-    </button>`;
-}
-
-function refreshScansTable() {
-  const tbody = document.getElementById('scans-tbody');
-  const thead = document.getElementById('scans-thead');
-  const cards = document.getElementById('scans-card-list');
-  const controls = document.getElementById('scans-mobile-toolbar');
-  if (!tbody && !cards) return;
-  const scans = sortedScans();
-  if (tbody) tbody.innerHTML = renderScansRows(scans);
-  if (thead) thead.innerHTML = renderScansThead();
-  if (cards) cards.innerHTML = renderScansCards(scans);
-  if (controls) controls.innerHTML = renderScansSortControls();
-}
-
-window.sortScansColumn = function(key) {
-  if (_scansSort.key === key) {
-    _scansSort.dir = _scansSort.dir === 'asc' ? 'desc' : 'asc';
-  } else {
-    _scansSort.key = key;
-    // Started/duration default newest/longest first; text/state columns A→Z / severity asc
-    _scansSort.dir = (key === 'started' || key === 'duration') ? 'desc' : 'asc';
+function pagerHtml(page, pages, total, size, attr) {
+  if (total <= size) return `<span>${total} result${total === 1 ? '' : 's'}</span><span></span>`;
+  const from = (page - 1) * size + 1, to = Math.min(total, page * size);
+  const nums = [];
+  for (let p = 1; p <= pages; p++) {
+    if (p === 1 || p === pages || Math.abs(p - page) <= 1) nums.push(p);
+    else if (nums[nums.length - 1] !== '…') nums.push('…');
   }
-  refreshScansTable();
-};
+  return `<span>Showing ${from}–${to} of ${total}</span>
+    <div class="pager-btns">
+      <button type="button" data-${attr}="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="Previous page">‹</button>
+      ${nums.map(p => p === '…' ? '<button type="button" disabled>…</button>'
+        : `<button type="button" data-${attr}="${p}" class="${p === page ? 'active' : ''}" aria-current="${p === page ? 'page' : 'false'}">${p}</button>`).join('')}
+      <button type="button" data-${attr}="${page + 1}" ${page >= pages ? 'disabled' : ''} aria-label="Next page">›</button>
+    </div>`;
+}
 
-window.setScansSort = function(key) {
-  if (!['file','scan_id','state','started','duration'].includes(key)) return;
-  if (_scansSort.key !== key) {
-    _scansSort.key = key;
-    _scansSort.dir = (key === 'started' || key === 'duration') ? 'desc' : 'asc';
+/** Fetch scan details for done scans not cached yet (4 at a time) and re-render their rows. */
+async function hydrateScanRows(scans, rowHtml) {
+  const need = scans.filter(s => s.state === 'done' && !_recentDetails.has(s.scan_id));
+  let i = 0;
+  const worker = async () => {
+    while (i < need.length) {
+      const s = need[i++];
+      let d = null;
+      try { d = await api('/scans/' + encodeURIComponent(s.scan_id)); } catch (_) {}
+      _recentDetails.set(s.scan_id, d);
+      const row = document.querySelector(`.rs-row[data-rs="${CSS.escape(s.scan_id)}"]`);
+      if (row) row.outerHTML = rowHtml(s, d);
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+}
+
+function renderScansList() {
+  const body = document.getElementById('sl-body');
+  if (!body) return;
+  const all = _scansCache;
+  const counts = {all: all.length, done: 0, active: 0, error: 0};
+  const pcounts = {all: all.length, android: 0, ios: 0};
+  all.forEach(s => { counts[scanStateGroup(s)]++; const k = scanKindOf(s); if (k in pcounts) pcounts[k]++; });
+  document.getElementById('sl-state-seg').innerHTML = segHtml('state', _scansView.state, [
+    ['all', 'All', counts.all], ['done', 'Done', counts.done], ['active', 'In progress', counts.active], ['error', 'Failed', counts.error]]);
+  document.getElementById('sl-plat-seg').innerHTML = segHtml('plat', _scansView.plat, [
+    ['all', 'All platforms'], ['android', 'Android', pcounts.android], ['ios', 'iOS', pcounts.ios]]);
+  document.getElementById('sl-head').innerHTML = scansSortBtn('file', 'File') + scansSortBtn('mode', 'Mode', 'h-mode')
+    + scansSortBtn('state', 'Status') + scansSortBtn('findings', 'Findings') + scansSortBtn('started', 'Started')
+    + scansSortBtn('duration', 'Duration', 'h-dur') + '<span></span>';
+  const ms = document.getElementById('sl-sort-mobile');
+  if (ms) ms.value = `${_scansSort.key}:${_scansSort.dir}`;
+  const sub = document.getElementById('sl-sub');
+  if (sub) sub.textContent = `${counts.all} scan${counts.all === 1 ? '' : 's'}` + (counts.active ? ` · ${counts.active} in progress` : '') + (counts.error ? ` · ${counts.error} failed` : '');
+
+  const list = filteredScans();
+  const pages = Math.max(1, Math.ceil(list.length / SCANS_PAGE_SIZE));
+  _scansView.page = Math.min(Math.max(1, _scansView.page), pages);
+  const pageItems = list.slice((_scansView.page - 1) * SCANS_PAGE_SIZE, _scansView.page * SCANS_PAGE_SIZE);
+  const filtered = _scansView.q || _scansView.state !== 'all' || _scansView.plat !== 'all';
+  document.getElementById('sl-head').hidden = !pageItems.length;
+  body.innerHTML = pageItems.length ? pageItems.map(s => scanListRowHtml(s, _recentDetails.get(s.scan_id))).join('')
+    : `<div class="empty-state"><div class="es-ico">${ico('scanSearch')}</div><strong>No scans match these filters</strong>
+        Try another search term or reset the filters.
+        <button type="button" class="btn btn-outline" data-clear-filters>${ico('refresh')} Clear filters</button></div>`;
+  document.getElementById('sl-pager').innerHTML = pagerHtml(_scansView.page, pages, list.length, SCANS_PAGE_SIZE, 'page');
+  document.getElementById('sl-clear').hidden = !filtered;
+  hydrateScanRows(pageItems, scanListRowHtml);
+}
+
+async function refreshScansData() {
+  clearTimeout(_scansTimer);
+  try {
+    const scans = await api('/scans');
+    if (!document.getElementById('sl-body')) return;
+    _scansCache = Array.isArray(scans) ? scans : [];
+    renderScansList();
+  } catch (_) { /* keep showing the last good list */ }
+  if (document.getElementById('sl-body') && _scansCache.some(s => scanStateGroup(s) === 'active')) {
+    _scansTimer = setTimeout(refreshScansData, 5000);
   }
-  refreshScansTable();
-};
+}
 
 route('scans', async function() {
-  render('<div class="loading"><div class="spinner"></div></div>');
+  clearTimeout(_scansTimer);
+  render(`<div class="page-wrap"><div class="loading"><div class="spinner"></div></div></div>`);
   try {
     const scans = await api('/scans');
     _scansCache = Array.isArray(scans) ? scans : [];
-    if (!_scansCache.length) { render('<div class="empty">No scans yet. <a href="#/">Upload an IPA →</a></div>'); return; }
-    const sorted = sortedScans();
-    render(`
-      <div class="card scans-card">
-        <div class="scans-card-head">
-          <div class="card-title">All Scans</div>
-          <a href="#/" class="btn btn-primary btn-sm">+ New Scan</a>
-        </div>
-        <div id="scans-mobile-toolbar" class="scans-mobile-toolbar">${renderScansSortControls()}</div>
-        <div class="scans-desktop">
-          <table class="scans-table">
-            <thead id="scans-thead">${renderScansThead()}</thead>
-            <tbody id="scans-tbody">${renderScansRows(sorted)}</tbody>
-          </table>
-        </div>
-        <div id="scans-card-list" class="scans-card-list">${renderScansCards(sorted)}</div>
-      </div>`);
-  } catch(e) {
-    render(`<div class="alert alert-error">${esc(e.message)}</div>`);
+  } catch (e) {
+    render(`<div class="page-wrap"><div class="alert alert-error">${esc(e.message)}</div></div>`);
+    return;
   }
+  const head = `
+    <div class="page-head">
+      <div class="page-head-main">
+        <div class="page-ico">${ico('history')}</div>
+        <div><h1 class="page-title">All Scans</h1><div class="page-sub" id="sl-sub"></div></div>
+      </div>
+      <div class="page-head-r"><a href="#/" class="btn btn-primary btn-lg">${ico('cloudUpload')} New Scan</a></div>
+    </div>`;
+  if (!_scansCache.length) {
+    render(`<div class="page-wrap">${head}<section class="panel"><div class="empty-state">
+      <div class="es-ico">${ico('cloudUpload')}</div><strong>No scans yet</strong>
+      Upload an APK, IPA or XAPK to run your first security scan.
+      <a href="#/" class="btn btn-primary btn-lg">${ico('folderOpen')} Upload application</a></div></section></div>`);
+    return;
+  }
+  render(`
+    <div class="page-wrap" id="scans-page">
+      ${head}
+      <div class="toolbar">
+        <label class="search-ctl">${ico('scanSearch')}
+          <input id="sl-q" class="ctl" type="search" placeholder="Search by file name, scan ID or mode…" value="${escAttr(_scansView.q)}" aria-label="Search scans"/></label>
+        <div class="seg" id="sl-state-seg" role="group" aria-label="Filter by status"></div>
+        <div class="seg" id="sl-plat-seg" role="group" aria-label="Filter by platform"></div>
+      </div>
+      <section class="panel">
+        <div class="result-line" style="margin-bottom:.6rem">
+          <span class="mobile-sort">Sort
+            <select id="sl-sort-mobile" class="ctl" aria-label="Sort scans">
+              ${[['started:desc','Newest first'],['started:asc','Oldest first'],['file:asc','File A→Z'],['state:asc','Status'],
+                 ['findings:desc','Most findings'],['duration:desc','Longest']].map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}
+            </select></span>
+          <button type="button" class="btn btn-ghost btn-sm" id="sl-clear" data-clear-filters hidden>${ico('refresh')} Clear filters</button>
+        </div>
+        <div class="list-head sl-head sl-cols" id="sl-head"></div>
+        <div class="rs-list" id="sl-body"></div>
+        <div class="pager" id="sl-pager"></div>
+      </section>
+    </div>`);
+
+  const page = document.getElementById('scans-page');
+  page.addEventListener('click', ev => {
+    const t = ev.target.closest('button');
+    if (!t || t.disabled) return;
+    if (t.dataset.sort) {
+      const key = t.dataset.sort;
+      if (_scansSort.key === key) _scansSort.dir = _scansSort.dir === 'asc' ? 'desc' : 'asc';
+      else { _scansSort.key = key; _scansSort.dir = ['started', 'duration', 'findings'].includes(key) ? 'desc' : 'asc'; }
+    } else if (t.dataset.state) { _scansView.state = t.dataset.state; _scansView.page = 1; }
+    else if (t.dataset.plat) { _scansView.plat = t.dataset.plat; _scansView.page = 1; }
+    else if (t.dataset.page) { _scansView.page = Number(t.dataset.page); page.scrollIntoView({block: 'start', behavior: 'smooth'}); }
+    else if ('clearFilters' in t.dataset) {
+      _scansView = {q: '', state: 'all', plat: 'all', page: 1};
+      document.getElementById('sl-q').value = '';
+    } else return;
+    renderScansList();
+  });
+  let qTimer = null;
+  document.getElementById('sl-q').addEventListener('input', ev => {
+    clearTimeout(qTimer);
+    qTimer = setTimeout(() => { _scansView.q = ev.target.value; _scansView.page = 1; renderScansList(); }, 120);
+  });
+  document.getElementById('sl-sort-mobile').addEventListener('change', ev => {
+    const [key, dir] = ev.target.value.split(':');
+    _scansSort = {key, dir};
+    renderScansList();
+  });
+  renderScansList();
+  if (_scansCache.some(s => scanStateGroup(s) === 'active')) _scansTimer = setTimeout(refreshScansData, 5000);
 });
 
 window.deleteScan = async function(id, ev) {
   ev?.preventDefault();
   ev?.stopPropagation();
-  if (!confirm('Delete this scan?')) return;
-  await fetch('/api/v1/scans/'+encodeURIComponent(String(id)), {method:'DELETE', headers: headers()});
+  if (!confirm('Delete this scan? Its results and uploaded package are removed permanently.')) return;
+  const r = await fetch('/api/v1/scans/'+encodeURIComponent(String(id)), {method:'DELETE', headers: headers()});
+  if (!r.ok && r.status !== 404) {
+    alert('Could not delete scan: ' + (((await r.text().catch(() => '')) || r.statusText).slice(0, 200)));
+    return;
+  }
+  _recentDetails.delete(String(id));
   router();
 };
 
 /* ── learned rules view ── */
 let _learnedCache = null;
 let _learnedPlat = 'ALL';
+let _learnedSev = '';           // '' = every severity, else CRITICAL/HIGH/MEDIUM/LOW/INFO
+let _learnedQ = '';
+let _learnedRows = [];          // currently displayed (filtered + sorted) rules, indexed by the drawer
 /** @type {{key:string, dir:'asc'|'desc'}} */
 let _learnedSort = {key: 'severity', dir: 'desc'};
 
@@ -2157,37 +2476,24 @@ function badgePlatform(plat) {
   return `<span class="badge badge-${cls}">${label}</span>`;
 }
 
-function renderRegexCell(regex) {
-  const raw = regex || '';
-  const long = raw.length > 64;
-  return `<td class="regex-cell${long?' long':''}" title="${escAttr(raw)}">
-    <span class="regex-text" onclick="toggleRegex(this)">${esc(raw)}</span>
-    ${long?`<button type="button" class="regex-toggle" onclick="toggleRegex(this)">Show more</button>`:''}
-  </td>`;
+function cvssHtml(score) {
+  const n = Number(score || 0);
+  const cls = n >= 9 ? 'c' : n >= 7 ? 'h' : n >= 4 ? 'm' : n > 0 ? 'l' : '';
+  return `<span class="cvss ${cls}" title="CVSS ${n.toFixed(1)}">${n.toFixed(1)}</span>`;
 }
-
-window.toggleRegex = function(el) {
-  const cell = el.closest('.regex-cell');
-  if (!cell) return;
-  const open = cell.classList.toggle('expanded');
-  const btn = cell.querySelector('.regex-toggle');
-  if (btn) btn.textContent = open ? 'Show less' : 'Show more';
-};
 
 function learnedStoreMeta(stores, plat) {
   return (stores || []).find(s => s.platform === plat) || {platform: plat, path: '', exists: false, count: 0};
 }
 
 function learnedRuleSearchText(r) {
-  return [r.id, r.scope, r.title, r.category, r.severity, r.platform, r.regex]
+  return [r.id, r.scope, r.title, r.category, r.severity, r.platform, r.regex, r.cwe, r.description]
     .map(x => String(x||'').toLowerCase()).join(' ');
 }
 
 function learnedSortValue(r, key) {
   switch (key) {
-    case 'platform': return String(r.platform||'IOS').toUpperCase();
     case 'id': return String(r.id||'').toLowerCase();
-    case 'scope': return String(r.scope||'').toLowerCase();
     case 'title': return String(r.title||'').toLowerCase();
     case 'severity': return SEV_RANK[String(r.severity||'INFO').toUpperCase()] || 0;
     case 'cvss': return Number(r.cvssScore||0);
@@ -2202,241 +2508,231 @@ function sortedLearnedRules() {
   const {key, dir} = _learnedSort;
   const mul = dir === 'asc' ? 1 : -1;
   rules.sort((a, b) => {
-    const va = learnedSortValue(a, key);
-    const vb = learnedSortValue(b, key);
-    let cmp = 0;
-    if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
-    else cmp = String(va).localeCompare(String(vb), undefined, {sensitivity:'base'});
+    const va = learnedSortValue(a, key), vb = learnedSortValue(b, key);
+    const cmp = (typeof va === 'number' && typeof vb === 'number') ? va - vb
+      : String(va).localeCompare(String(vb), undefined, {sensitivity:'base'});
     if (cmp !== 0) return cmp * mul;
     return String(a.id||'').localeCompare(String(b.id||''), undefined, {sensitivity:'base'});
   });
   return rules;
 }
 
-function learnedSortHeaderHtml(key, label) {
+function learnedPlatOf(r) { return String(r.platform||'IOS').toUpperCase() === 'ANDROID' ? 'ANDROID' : 'IOS'; }
+function learnedSevOf(r) { const s = String(r.severity||'INFO').toUpperCase(); return s in SEV_RANK ? s : 'INFO'; }
+
+function learnedSortBtn(key, label, cls = '') {
   const active = _learnedSort.key === key;
-  const ind = active ? (_learnedSort.dir === 'asc' ? '▲' : '▼') : '▼';
-  return `<th class="th-sort${active?' active':''}" data-sort="${key}"
-      onclick="sortLearnedColumn('${key}')"
-      title="Sort by ${label}">${label}<span class="sort-ind" aria-hidden="true">${ind}</span></th>`;
+  const ind = active && _learnedSort.dir === 'asc' ? '▲' : '▼';
+  return `<span class="${cls}"><button type="button" class="sort-btn${active ? ' active' : ''}" data-lsort="${key}"
+    aria-label="Sort by ${label}">${label}<span class="sort-ind" aria-hidden="true">${ind}</span></button></span>`;
 }
 
-function renderLearnedThead() {
-  return `<tr>
-    ${learnedSortHeaderHtml('platform','Platform')}
-    ${learnedSortHeaderHtml('id','Rule ID')}
-    ${learnedSortHeaderHtml('scope','Scope')}
-    ${learnedSortHeaderHtml('title','Title')}
-    ${learnedSortHeaderHtml('severity','Severity')}
-    ${learnedSortHeaderHtml('cvss','CVSS')}
-    ${learnedSortHeaderHtml('regex','Regex')}
-    ${learnedSortHeaderHtml('created','Created')}
-  </tr>`;
+function learnedRowHtml(r, idx) {
+  const plat = learnedPlatOf(r);
+  const kind = plat === 'ANDROID' ? 'android' : 'ios';
+  const tags = [r.scope, r.cwe].filter(Boolean).map(t => `<span class="lr-tag">${esc(t)}</span>`).join('');
+  return `<div class="lr-row" role="button" tabindex="0" data-lidx="${idx}" aria-label="${escAttr((r.id || '') + ': ' + (r.title || ''))}">
+    <div class="lr-rule">${platTile(kind).replace('class="plat-tile', 'class="plat-tile lr-plat')}<span class="lr-id" title="${escAttr(r.id||'')}">${esc(r.id||'')}</span></div>
+    <div class="lr-main" style="min-width:0"><div class="lr-title">${esc(r.title||'Untitled rule')}</div>${tags ? `<div class="lr-sub">${tags}</div>` : ''}</div>
+    ${badgeSev(learnedSevOf(r))}
+    ${cvssHtml(r.cvssScore)}
+    <code class="lr-regex" title="${escAttr(r.regex||'')}">${esc(r.regex||'')}</code>
+    <span class="lr-date">${r.createdAt ? esc(new Date(r.createdAt).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'})) : '—'}</span>
+    <span class="lr-chev">${ico('arrowRight')}</span>
+  </div>`;
 }
 
-function renderLearnedRows() {
-  return sortedLearnedRules().map(r => {
-    const plat = String(r.platform||'IOS').toUpperCase();
-    return `<tr data-search="${escAttr(learnedRuleSearchText(r))}" data-platform="${escAttr(plat)}"
-        data-severity="${escAttr(String(r.severity||'INFO').toUpperCase())}">
-      <td>${badgePlatform(plat)}</td>
-      <td class="mono">${esc(r.id||'')}</td>
-      <td>${esc(r.scope||'')}</td>
-      <td>${esc(r.title||'')}</td>
-      <td>${badgeSev(r.severity)}</td>
-      <td>${(r.cvssScore||0).toFixed(1)}</td>
-      ${renderRegexCell(r.regex)}
-      <td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ''}</td>
-    </tr>`;
-  }).join('');
-}
+function renderLearnedList() {
+  const body = document.getElementById('lr-body');
+  if (!body) return;
+  const q = _learnedQ.trim().toLowerCase();
+  const all = sortedLearnedRules();
+  const inPlat = all.filter(r => _learnedPlat === 'ALL' || learnedPlatOf(r) === _learnedPlat);
+  const inQuery = inPlat.filter(r => !q || learnedRuleSearchText(r).includes(q));
+  _learnedRows = inQuery.filter(r => !_learnedSev || learnedSevOf(r) === _learnedSev);
 
-function updateLearnedSummary() {
-  const plat = _learnedPlat || 'ALL';
-  const q = (document.getElementById('learned-q')?.value || '').trim().toLowerCase();
-  const sevCounts = { CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0, INFO:0 };
-  const platCounts = { IOS:0, ANDROID:0 };
-  let shown = 0;
-  (sortedLearnedRules()).forEach(r => {
-    const p = String(r.platform||'IOS').toUpperCase();
-    const matchP = plat === 'ALL' || p === plat;
-    const matchQ = !q || learnedRuleSearchText(r).includes(q);
-    if (!matchP || !matchQ) return;
-    shown++;
-    const sev = String(r.severity||'INFO').toUpperCase();
-    if (sev in sevCounts) sevCounts[sev]++;
-    else sevCounts.INFO++;
-    if (p === 'ANDROID') platCounts.ANDROID++;
-    else platCounts.IOS++;
-  });
+  const pc = {ALL: all.length, IOS: 0, ANDROID: 0};
+  all.forEach(r => pc[learnedPlatOf(r)]++);
+  document.getElementById('lr-plat-seg').innerHTML = segHtml('lplat', _learnedPlat, [
+    ['ALL', 'All', pc.ALL], ['IOS', 'iOS', pc.IOS], ['ANDROID', 'Android', pc.ANDROID]]);
 
-  const setStat = (id, n) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = String(n);
-  };
-  setStat('learned-sev-critical', sevCounts.CRITICAL);
-  setStat('learned-sev-high', sevCounts.HIGH);
-  setStat('learned-sev-medium', sevCounts.MEDIUM);
-  setStat('learned-sev-low', sevCounts.LOW);
+  // Severity tiles count what the platform + search filters leave, so clicking one is predictable.
+  const sc = {CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0};
+  inQuery.forEach(r => sc[learnedSevOf(r)]++);
+  const tiles = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].concat(sc.INFO ? ['INFO'] : []);
+  document.getElementById('lr-tiles').innerHTML = tiles.map(k => `
+    <button type="button" class="sev-tile t-${k.toLowerCase()}${_learnedSev === k ? ' active' : ''}${_learnedSev && _learnedSev !== k ? ' dim' : ''}"
+      data-lsev="${k}" aria-pressed="${_learnedSev === k}" title="${_learnedSev === k ? 'Show every severity' : 'Show only ' + k.toLowerCase() + ' rules'}">
+      <span class="n">${sc[k]}</span><span class="l">${k.charAt(0) + k.slice(1).toLowerCase()} ${ico('check')}</span></button>`).join('');
 
-  const strip = document.getElementById('learned-plat-strip');
-  if (strip) {
-    strip.innerHTML = `
-      <span class="plat-stat">${badgePlatform('IOS')} <span class="plat-n">${platCounts.IOS}</span> rule(s)</span>
-      <span class="plat-stat">${badgePlatform('ANDROID')} <span class="plat-n">${platCounts.ANDROID}</span> rule(s)</span>
-      <span class="plat-stat">Visible <span class="plat-n">${shown}</span></span>
-      ${sevCounts.INFO ? `<span class="plat-stat">Info <span class="plat-n">${sevCounts.INFO}</span></span>` : ''}`;
-  }
-  return shown;
-}
+  document.getElementById('lr-head').innerHTML = learnedSortBtn('id', 'Rule') + learnedSortBtn('title', 'Title')
+    + learnedSortBtn('severity', 'Severity') + learnedSortBtn('cvss', 'CVSS') + learnedSortBtn('regex', 'Detection regex', 'h-regex')
+    + learnedSortBtn('created', 'Created', 'h-date') + '<span></span>';
+  document.getElementById('lr-head').hidden = !_learnedRows.length;
 
-function applyLearnedFilters() {
-  const plat = _learnedPlat || 'ALL';
-  const q = (document.getElementById('learned-q')?.value || '').trim().toLowerCase();
-  const rows = document.querySelectorAll('#learned-tbody tr');
-  let shown = 0;
-  rows.forEach(tr => {
-    const matchP = plat === 'ALL' || tr.dataset.platform === plat;
-    const matchQ = !q || (tr.dataset.search || '').includes(q);
-    const ok = matchP && matchQ;
-    tr.style.display = ok ? '' : 'none';
-    if (ok) shown++;
-  });
-  updateLearnedSummary();
-  const countEl = document.getElementById('learned-shown');
-  if (countEl) countEl.textContent = shown + ' shown';
-  const emptyEl = document.getElementById('learned-empty');
-  if (emptyEl) {
-    if (!shown) {
-      emptyEl.hidden = false;
-      if (q) emptyEl.textContent = 'No rules match this filter.';
-      else if (plat === 'ANDROID') emptyEl.textContent = 'No Android learned rules yet. Run an APK scan with LLM enrichment in Full Scan mode.';
-      else if (plat === 'IOS') emptyEl.textContent = 'No iOS learned rules yet. Run an IPA scan with LLM enrichment in Full Scan mode.';
-      else emptyEl.textContent = 'No learned rules yet.';
-    } else {
-      emptyEl.hidden = true;
-    }
-    const wrap = document.getElementById('learned-tbl-wrap');
-    if (wrap) wrap.hidden = !shown;
-  }
-  document.querySelectorAll('#learned-tabs .tab').forEach(t => {
-    t.classList.toggle('active', t.dataset.plat === plat);
-  });
-}
+  const filtered = !!(q || _learnedSev || _learnedPlat !== 'ALL');
+  document.getElementById('lr-clear').hidden = !filtered;
+  document.getElementById('lr-count').textContent = filtered
+    ? `Showing ${_learnedRows.length} of ${all.length} rules` : `${all.length} rules`;
 
-function refreshLearnedTable() {
-  const tbody = document.getElementById('learned-tbody');
-  const thead = document.getElementById('learned-thead');
-  if (!tbody) return;
-  tbody.innerHTML = renderLearnedRows();
-  if (thead) thead.innerHTML = renderLearnedThead();
-  applyLearnedFilters();
-}
-
-window.sortLearnedColumn = function(key) {
-  if (_learnedSort.key === key) {
-    _learnedSort.dir = _learnedSort.dir === 'asc' ? 'desc' : 'asc';
+  if (_learnedRows.length) {
+    body.innerHTML = _learnedRows.map(learnedRowHtml).join('');
   } else {
-    _learnedSort.key = key;
-    _learnedSort.dir = (key === 'severity' || key === 'cvss' || key === 'created') ? 'desc' : 'asc';
+    const msg = q || _learnedSev ? 'No rules match these filters.'
+      : _learnedPlat === 'ANDROID' ? 'No Android learned rules yet. Run an APK scan with LLM enrichment in Full Scan mode.'
+      : _learnedPlat === 'IOS' ? 'No iOS learned rules yet. Run an IPA scan with LLM enrichment in Full Scan mode.'
+      : 'No learned rules yet.';
+    body.innerHTML = `<div class="empty-state"><div class="es-ico">${ico('scanSearch')}</div><strong>Nothing to show</strong>${esc(msg)}
+      ${filtered ? `<button type="button" class="btn btn-outline" data-lclear>${ico('refresh')} Clear filters</button>` : ''}</div>`;
   }
-  refreshLearnedTable();
-};
+}
 
-function renderLearnedTable(data, platFilter) {
+function closeRuleDrawer() {
+  document.getElementById('rule-drawer')?.classList.remove('open');
+  document.getElementById('rule-drawer-backdrop')?.classList.remove('open');
+  $$('.lr-row.selected').forEach(r => r.classList.remove('selected'));
+}
+
+function openRuleDrawer(idx) {
+  const r = _learnedRows[idx];
+  const drawer = document.getElementById('rule-drawer');
+  if (!r || !drawer) return;
+  const plat = learnedPlatOf(r);
+  document.getElementById('rule-drawer-title').textContent = r.title || r.id || 'Learned rule';
+  document.getElementById('rule-drawer-meta').innerHTML = `${badgePlatform(plat)} ${badgeSev(learnedSevOf(r))} ${cvssHtml(r.cvssScore)}
+    ${r.cwe ? `<span class="meta-chip">${esc(r.cwe)}</span>` : ''}${r.scope ? `<span class="meta-chip">${esc(r.scope)}</span>` : ''}`;
+  const section = (label, html) => html ? `<div class="rule-sec"><div class="llm-section-label">${label}</div>${html}</div>` : '';
+  const code = (text, id) => `<div class="rule-code"><pre id="${id}">${esc(text)}</pre>
+    <button type="button" class="copy-btn" data-copy="${id}">${ico('fileText')} Copy</button></div>`;
+  document.getElementById('rule-drawer-body').innerHTML = [
+    section('Description', isEmptyField(r.description) ? '' : `<p>${esc(r.description)}</p>`),
+    section('Remediation', isEmptyField(r.remediation) ? '' : `<p>${esc(r.remediation)}</p>`),
+    section('Detection regex', r.regex ? code(r.regex, 'rule-regex') : ''),
+    section('Proof of concept', isEmptyField(r.pocTemplate) ? '' : code(r.pocTemplate, 'rule-poc')),
+    section('Details', `<div class="rule-kv">
+      <span class="k">Rule ID</span><span class="v mono">${esc(r.id || '—')}</span>
+      <span class="k">Platform</span><span class="v">${plat === 'ANDROID' ? 'Android' : 'iOS'}</span>
+      ${r.category ? `<span class="k">Category</span><span class="v">${esc(r.category)}</span>` : ''}
+      ${r.target ? `<span class="k">Matches</span><span class="v">${esc(r.target)}</span>` : ''}
+      ${r.referenceUrl ? `<span class="k">Source</span><span class="v">${/^https?:\/\//.test(r.referenceUrl)
+        ? `<a href="${escAttr(r.referenceUrl)}" target="_blank" rel="noopener">${esc(r.referenceUrl)}</a>` : esc(r.referenceUrl)}</span>` : ''}
+      <span class="k">Created</span><span class="v">${r.createdAt ? esc(new Date(r.createdAt).toLocaleString()) : '—'}</span>
+    </div>`),
+  ].join('');
+  $$('.lr-row').forEach(el => el.classList.toggle('selected', Number(el.dataset.lidx) === idx));
+  drawer.classList.add('open');
+  document.getElementById('rule-drawer-backdrop').classList.add('open');
+  drawer.focus();
+}
+
+function renderLearnedPage(data) {
   const ios = learnedStoreMeta(data.stores, 'IOS');
   const and = learnedStoreMeta(data.stores, 'ANDROID');
   const totalAll = (data.stores||[]).reduce((n,s)=>n+(s.count||0), 0);
-  const tabCount = (p) => p === 'ALL' ? totalAll
-    : (learnedStoreMeta(data.stores, p).count || 0);
-
-  const tabs = ['ALL','IOS','ANDROID'].map(p => {
-    const label = p === 'ALL' ? 'All' : (p === 'ANDROID' ? 'Android' : 'iOS');
-    return `<div class="tab${platFilter===p?' active':''}" data-plat="${p}" onclick="setLearnedPlat('${p}')">${label} (${tabCount(p)})</div>`;
-  }).join('');
-
-  const pathsHtml = `
-    <div class="learned-paths">
-      <div class="path-row">${badgePlatform('IOS')}
-        <code>${esc(ios.path||'')}</code>
-        <span>· ${ios.exists ? ios.count+' rule(s)' : 'file not found'}</span>
-      </div>
-      <div class="path-row">${badgePlatform('ANDROID')}
-        <code>${esc(and.path||'')}</code>
-        <span>· ${and.exists ? and.count+' rule(s)' : 'file not found'}</span>
-      </div>
+  const storeCard = (m, kind, label) => `
+    <div class="store-card">
+      ${platTile(kind)}
+      <div class="store-main"><div class="store-name">${label} rule store</div>
+        <div class="store-path" title="${escAttr(m.path||'')}">${esc(m.path || '—')}</div></div>
+      <span class="store-count${m.exists ? '' : ' missing'}">${m.exists ? `${m.count} rule${m.count === 1 ? '' : 's'}` : 'Not created yet'}</span>
     </div>`;
+  const head = `
+    <div class="page-head">
+      <div class="page-head-main">
+        <div class="page-ico">${ico('sparkles')}</div>
+        <div><h1 class="page-title">Learned Rules</h1>
+          <div class="page-sub">Detection rules the LLM distilled from previous scans. They run on every scan for the matching platform — even without LLM enrichment.</div></div>
+      </div>
+    </div>
+    <div class="store-row">${storeCard(ios, 'ios', 'iOS')}${storeCard(and, 'android', 'Android')}</div>`;
 
   if (!totalAll) {
-    return `
-      <div class="card">
-        <div class="card-title">Learned Rules</div>
-        <p style="color:var(--muted);font-size:.875rem;margin-bottom:.75rem">
-          No learned rules yet. Run a scan with <strong>LLM enrichment</strong> in
-          <em>Full Scan</em> mode — vulnerabilities the LLM discovers will be
-          distilled into reusable detection rules, stored separately per platform.
-        </p>
-        ${pathsHtml}
-        <p style="font-size:.875rem;color:var(--muted)">
-          Once stored, every subsequent scan (even without LLM) will check
-          for these patterns alongside the built-in MSTG/MASTG rules.
-        </p>
-      </div>`;
+    return `<div class="page-wrap">${head}
+      <section class="panel"><div class="empty-state">
+        <div class="es-ico">${ico('sparkles')}</div><strong>No learned rules yet</strong>
+        Run a scan with <b>LLM Enrichment</b> in <b>Full Scan</b> mode. Vulnerabilities the LLM discovers are distilled into
+        reusable detection rules, stored per platform, and checked on every later scan alongside the built-in MASTG rules.
+        <a href="#/" class="btn btn-primary btn-lg">${ico('cloudUpload')} Start a scan</a>
+      </div></section></div>`;
   }
-
   return `
-    <div class="card">
-      <div class="card-title" style="justify-content:space-between">
-        Learned Rules
-        <span style="font-size:.75rem;color:var(--muted);font-weight:400">${totalAll} rule(s) across platforms</span>
+    <div class="page-wrap" id="learned-page">
+      ${head}
+      <div class="sev-tiles" id="lr-tiles" role="group" aria-label="Filter by severity"></div>
+      <div class="toolbar">
+        <label class="search-ctl">${ico('scanSearch')}
+          <input id="learned-q" class="ctl" type="search" placeholder="Search by ID, title, scope, CWE, regex…" value="${escAttr(_learnedQ)}" aria-label="Search learned rules"/></label>
+        <div class="seg" id="lr-plat-seg" role="group" aria-label="Filter by platform"></div>
       </div>
-      <p style="font-size:.85rem;color:var(--muted);margin-bottom:.75rem">
-        These rules were auto-generated by the LLM from previous scans.
-        They run on every scan for the matching platform, even without LLM enrichment.
-      </p>
-      ${pathsHtml}
-      <div class="tabs" id="learned-tabs" style="margin-bottom:.9rem">${tabs}</div>
-      <div class="search-bar">
-        <input id="learned-q" type="text" placeholder="Filter by scope, title, ID, severity…" oninput="filterLearned()"/>
-      </div>
-      <div class="learned-summary" id="learned-summary">
-        <div class="grid-4">
-          <div class="stat"><div class="stat-val" style="color:var(--high)" id="learned-sev-critical">0</div><div class="stat-label">Critical</div></div>
-          <div class="stat"><div class="stat-val" style="color:var(--medium)" id="learned-sev-high">0</div><div class="stat-label">High</div></div>
-          <div class="stat"><div class="stat-val" style="color:var(--yellow)" id="learned-sev-medium">0</div><div class="stat-label">Medium</div></div>
-          <div class="stat"><div class="stat-val" style="color:var(--low)" id="learned-sev-low">0</div><div class="stat-label">Low</div></div>
+      <section class="panel">
+        <div class="result-line" style="margin-bottom:.6rem">
+          <span id="lr-count"></span>
+          <button type="button" class="btn btn-ghost btn-sm" id="lr-clear" data-lclear hidden>${ico('refresh')} Clear filters</button>
         </div>
-        <div class="learned-plat-strip" id="learned-plat-strip"></div>
-      </div>
-      <div id="learned-empty" class="empty" hidden></div>
-      <div class="tbl-wrap" id="learned-tbl-wrap"><table>
-        <thead id="learned-thead">${renderLearnedThead()}</thead>
-        <tbody id="learned-tbody">${renderLearnedRows()}</tbody>
-      </table></div>
-      <div style="margin-top:.6rem;font-size:.75rem;color:var(--muted)" id="learned-shown"></div>
+        <div class="list-head lr-head lr-cols" id="lr-head"></div>
+        <div class="lr-list" id="lr-body"></div>
+      </section>
+      <div id="rule-drawer-backdrop" class="llm-drawer-backdrop"></div>
+      <aside id="rule-drawer" class="llm-drawer" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="rule-drawer-title">
+        <div class="llm-drawer-head">
+          <div class="llm-drawer-head-main">
+            <div id="rule-drawer-title" class="llm-drawer-title"></div>
+            <div id="rule-drawer-meta" class="llm-drawer-meta"></div>
+          </div>
+          <button type="button" class="llm-drawer-close" data-close-drawer aria-label="Close">×</button>
+        </div>
+        <div id="rule-drawer-body" class="llm-drawer-body"></div>
+      </aside>
     </div>`;
 }
 
-window.setLearnedPlat = function(plat) {
-  _learnedPlat = plat || 'ALL';
-  applyLearnedFilters();
-};
-
-window.filterLearned = function() {
-  applyLearnedFilters();
-};
-
 route('learned', async function() {
-  render('<div class="loading"><div class="spinner"></div></div>');
-  try {
-    const data = await api('/learned-rules');
-    _learnedCache = data;
-    if (!_learnedPlat) _learnedPlat = 'ALL';
-    render(renderLearnedTable(data, _learnedPlat));
-    applyLearnedFilters();
-  } catch(e) {
-    render(`<div class="alert alert-error">${esc(e.message)}</div>`);
-  }
+  render('<div class="page-wrap"><div class="loading"><div class="spinner"></div></div></div>');
+  let data;
+  try { data = await api('/learned-rules'); }
+  catch (e) { render(`<div class="page-wrap"><div class="alert alert-error">${esc(e.message)}</div></div>`); return; }
+  _learnedCache = data;
+  render(renderLearnedPage(data));
+  const page = document.getElementById('learned-page');
+  if (!page) return;
+  page.addEventListener('click', async ev => {
+    const t = ev.target;
+    if (t.id === 'rule-drawer-backdrop' || t.closest('[data-close-drawer]')) { closeRuleDrawer(); return; }
+    const copy = t.closest('[data-copy]');
+    if (copy) {
+      const text = document.getElementById(copy.dataset.copy)?.textContent || '';
+      try { await navigator.clipboard.writeText(text); copy.innerHTML = ico('check') + ' Copied'; }
+      catch (_) { copy.textContent = 'Copy failed'; }
+      setTimeout(() => { copy.innerHTML = ico('fileText') + ' Copy'; }, 1500);
+      return;
+    }
+    const row = t.closest('.lr-row');
+    if (row) { openRuleDrawer(Number(row.dataset.lidx)); return; }
+    const b = t.closest('button');
+    if (!b) return;
+    if (b.dataset.lsort) {
+      const key = b.dataset.lsort;
+      if (_learnedSort.key === key) _learnedSort.dir = _learnedSort.dir === 'asc' ? 'desc' : 'asc';
+      else { _learnedSort.key = key; _learnedSort.dir = ['severity', 'cvss', 'created'].includes(key) ? 'desc' : 'asc'; }
+    } else if (b.dataset.lsev) _learnedSev = _learnedSev === b.dataset.lsev ? '' : b.dataset.lsev;
+    else if (b.dataset.lplat) _learnedPlat = b.dataset.lplat;
+    else if ('lclear' in b.dataset) {
+      _learnedPlat = 'ALL'; _learnedSev = ''; _learnedQ = '';
+      document.getElementById('learned-q').value = '';
+    } else return;
+    renderLearnedList();
+  });
+  page.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') { closeRuleDrawer(); return; }
+    const row = ev.target.closest && ev.target.closest('.lr-row');
+    if (row && ev.target === row && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openRuleDrawer(Number(row.dataset.lidx)); }
+  });
+  let qTimer = null;
+  document.getElementById('learned-q').addEventListener('input', ev => {
+    clearTimeout(qTimer);
+    qTimer = setTimeout(() => { _learnedQ = ev.target.value; renderLearnedList(); }, 120);
+  });
+  renderLearnedList();
 });
 
 
@@ -2453,9 +2749,43 @@ function tabsForDetail(detail) {
   return tabs;
 }
 
+const TAB_ICONS = {summary:'layers', vulnerabilities:'bug', assessment:'shield', functions:'code', strings:'type',
+  resources:'folderOpen', entrypoints:'logIn', offensive:'crosshair', llm:'sparkles', assistant:'message', log:'terminal', downloads:'download'};
+const TAB_LABELS = {llm:'LLM Findings', entrypoints:'Entry Points', assistant:'AI Assistant'};
+
 function tabLabel(t) {
-  if (t === 'assistant') return 'AI Assistant';
-  return t === 'llm' ? 'Llm' : t.charAt(0).toUpperCase() + t.slice(1);
+  return TAB_LABELS[t] || (t.charAt(0).toUpperCase() + t.slice(1));
+}
+
+function compactNum(n) {
+  n = Number(n) || 0;
+  if (n < 1000) return String(n);
+  if (n < 1e6) return (n / 1000).toFixed(n < 10000 ? 1 : 0).replace(/\.0$/, '') + 'K';
+  return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+}
+
+/** Small count pill shown next to a tab label (only when the number is known and meaningful). */
+function tabCountHtml(t, d) {
+  const vc = d.vulnerability_counts;
+  const n = t === 'vulnerabilities' ? vc?.total
+    : t === 'entrypoints' ? d.entry_point_count
+    : t === 'llm' ? d.llm_finding_count
+    : t === 'strings' ? d.string_count : null;
+  if (n == null || (t !== 'vulnerabilities' && !n)) return '';
+  const hot = t === 'vulnerabilities' && ((vc?.CRITICAL || 0) + (vc?.HIGH || 0)) > 0;
+  return ` <span class="tab-n${hot ? ' hot' : ''}">${compactNum(n)}</span>`;
+}
+
+window.copyText = async function(text, btn) {
+  try {
+    await navigator.clipboard.writeText(String(text));
+    if (btn) { const old = btn.innerHTML; btn.innerHTML = ico('check') + ' Copied'; setTimeout(() => { btn.innerHTML = old; }, 1200); }
+  } catch (_) { prompt('Copy:', String(text)); }
+};
+
+function scanKindFromDetail(d) {
+  const p = String(d?.platform || '').toUpperCase();
+  return p === 'IOS' ? 'ios' : p === 'ANDROID' ? 'android' : packageKindOf(d?.filename);
 }
 
 route('scan', async function(id, tab='summary') {
@@ -2466,26 +2796,51 @@ route('scan', async function(id, tab='summary') {
 
   const tabs = tabsForDetail(detail);
   if (tab === 'offensive' && !tabs.includes('offensive')) tab = 'summary';
-  const tabsHtml = tabs.map(t=>
-    `<div class="tab${t===tab?' active':''}" data-tab="${t}" onclick="goTab('${id}','${t}')">${tabLabel(t)}</div>`
+  const tabsHtml = tabs.map(t =>
+    `<div class="tab${t===tab?' active':''}" data-tab="${t}" role="tab" tabindex="0" aria-selected="${t===tab}"
+      onclick="goTab('${id}','${t}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goTab('${id}','${t}')}">${ico(TAB_ICONS[t] || 'info')} ${tabLabel(t)}${tabCountHtml(t, detail)}</div>`
   ).join('');
+  const kind = scanKindFromDetail(detail);
+  const modeKey = String(detail.llm_mode || 'summarize').toLowerCase();
+  const llmOn = detail.llm_enabled && detail.llm_provider && detail.llm_provider !== 'none';
+  const started = detail.started_at || detail.created_at;
+  const pkgLabel = /\.ipa$/i.test(detail.filename) ? 'IPA' : 'APK';
 
   render(`
-    <div class="detail-header">
-      <div>
-        <div class="detail-title">${esc(detail.bundle_id || detail.filename)}</div>
-        <div class="detail-sub">${esc(detail.filename)} &nbsp;·&nbsp; ${detail.scan_id.slice(0,8)} &nbsp;·&nbsp; ${badge(detail.state)}</div>
+    <section class="panel sd-head">
+      ${platTile(kind)}
+      <div class="sd-main">
+        <div class="sd-title-row"><h1 class="sd-title">${esc(detail.bundle_id || detail.filename)}</h1>${statePill(detail.state)}</div>
+        <div class="sd-meta">
+          <span title="Uploaded file">${ico('fileText')} ${esc(detail.filename)}</span>
+          <span>${platformName(kind)}</span>
+          <span><button type="button" class="sd-id" title="Copy full scan ID (${escAttr(detail.scan_id)})"
+            onclick="copyText('${escAttr(detail.scan_id)}', this)">${esc(detail.scan_id.slice(0,8))}</button></span>
+          <span>${ico(SCAN_MODES[modeKey]?.icon || 'zap')} ${esc(scanModeLabel(detail.llm_mode))}${llmOn ? ' · ' + esc(providerLabel(detail.llm_provider)) : ''}</span>
+          <span title="${escAttr(fmt(started))}">${ico('clock')} ${esc(fmtShort(started))}${detail.finished_at ? ' · ' + dur(detail.started_at, detail.finished_at) : ''}</span>
+        </div>
       </div>
-      <div class="detail-actions">
-        ${detail.has_html?`<a class="btn btn-ghost btn-sm" href="/api/v1/scans/${id}/report" target="_blank">HTML Report</a>`:''}
-        ${detail.has_sarif?`<a class="btn btn-ghost btn-sm" href="/api/v1/scans/${id}/sarif">Download SARIF</a>`:''}
-        ${detail.has_package?`<a class="btn btn-ghost btn-sm" href="/api/v1/scans/${id}/package">Download ${/\.ipa$/i.test(detail.filename)?'IPA':'APK'}</a>`:''}
-        <button class="btn btn-danger btn-sm" onclick="deleteScan('${id}', event)">Delete</button>
+      <div class="sd-actions">
+        ${detail.has_html?`<a class="btn btn-outline" href="/api/v1/scans/${id}/report" target="_blank" rel="noopener">${ico('external')} HTML Report</a>`:''}
+        ${detail.has_sarif?`<a class="btn btn-outline" href="/api/v1/scans/${id}/sarif">${ico('braces')} SARIF</a>`:''}
+        ${detail.has_package?`<a class="btn btn-outline" href="/api/v1/scans/${id}/package">${ico('download')} ${pkgLabel}</a>`:''}
+        <button class="btn btn-danger-outline" onclick="deleteScan('${id}', event)" title="Delete this scan">${ico('trash')} Delete</button>
       </div>
-    </div>
+    </section>
     ${detail.scan_mode==='light'?`<div class="alert alert-warn" style="margin-bottom:.75rem"><strong>Light scan</strong> — Ghidra was skipped, so there is no pseudocode. ${(detail.rules_not_evaluated||[]).length} pseudocode-based rule(s) were <strong>not evaluated</strong> (${(detail.rules_not_evaluated||[]).map(esc).join(', ')}); absence of a finding for them does not mean the app is safe. Decompile single functions on demand from the Functions tab or the AI Assistant.</div>`:''}
-    <div class="tabs">${tabsHtml}</div>
+    <div class="tabs sd-tabs" role="tablist" aria-label="Scan result sections">${tabsHtml}</div>
     <div id="tab-content"><div class="loading"><div class="spinner"></div></div></div>`);
+
+  const tabBar = document.querySelector('.sd-tabs');
+  const syncTabFade = () => {
+    if (!tabBar.isConnected) { window.removeEventListener('resize', syncTabFade); return; }
+    tabBar.classList.toggle('can-scroll', tabBar.scrollWidth > tabBar.clientWidth + 2);
+    tabBar.classList.toggle('at-end', tabBar.scrollLeft + tabBar.clientWidth >= tabBar.scrollWidth - 2);
+  };
+  tabBar.addEventListener('scroll', syncTabFade, {passive: true});
+  window.addEventListener('resize', syncTabFade);
+  syncTabFade();
+  tabBar.querySelector('.tab.active')?.scrollIntoView({block: 'nearest', inline: 'nearest'});
 
   await renderTab(id, tab, detail);
 
@@ -2511,8 +2866,9 @@ route('scan', async function(id, tab='summary') {
 
 window.goTab = function(id, tab) {
   history.replaceState(null,'','#/scan/'+id+'/'+tab);
-  document.querySelectorAll('.tab').forEach(t=>{
+  document.querySelectorAll('.sd-tabs .tab').forEach(t=>{
     t.classList.toggle('active', t.dataset.tab===tab);
+    t.setAttribute('aria-selected', String(t.dataset.tab===tab));
   });
   api('/scans/'+id).then(detail => renderTab(id, tab, detail));
 };
@@ -2528,6 +2884,7 @@ async function renderTab(id, tab, detail) {
       case 'summary':
         el.innerHTML = await tabSummary(detail);
         postSummaryHydrate(id);
+        if (detail.state === 'queued' || detail.state === 'running') startLiveLog(id);
         break;
       case 'vulnerabilities': await tabVulnerabilities(el, id, detail); break;
       case 'assessment':      await tabAssessment(el, id, detail); break;
@@ -3156,14 +3513,30 @@ function extractErrorReason(log) {
 }
 
 /* ── summary tab ── */
+let vulnPendingSev = null;   // severity to pre-filter the Vulnerabilities tab with (set from Summary)
+window.openVulnsAt = function(id, sev) { vulnPendingSev = sev || null; goTab(id, 'vulnerabilities'); };
+
+/* Keeps the running scan's "Live log" panel fed until the scan finishes or the panel goes away. */
+async function startLiveLog(id) {
+  const box = document.getElementById('live-log');
+  if (!box) return;
+  try {
+    const {lines} = await api('/scans/'+id+'/log?tail=60');
+    if (!box.isConnected) return;
+    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
+    box.textContent = (lines || []).join('\n') || 'Waiting for output…';
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  } catch (_) { /* transient — keep polling */ }
+  setTimeout(() => { if (box.isConnected) startLiveLog(id); }, 3000);
+}
+
 async function tabSummary(d) {
   if (d.state !== 'done') {
     const isPending = d.state === 'queued' || d.state === 'running';
     if (isPending) {
-      return `<div class="alert alert-warn">
-          Analysis is <strong>${d.state}</strong> — this page will refresh automatically.
-        </div>
-        ${d.has_log?`<div class="card"><div class="card-title">Live log</div>
+      return `<div class="state-panel running"><span class="big">${ico('loader', 'ico-spin')}</span>
+          <div><strong>Analysis is ${esc(d.state)}</strong>This page refreshes automatically when the scan finishes.</div></div>
+        ${d.has_log?`<div class="card"><div class="card-title">${ico('terminal')} Live log</div>
           <div id="live-log" class="log-box">Loading…</div></div>`:''}`;
     }
     // state === 'error' — fetch log tail, extract friendly reason
@@ -3179,104 +3552,140 @@ async function tabSummary(d) {
     } catch(_) {}
 
     return `
-      <div class="alert alert-error">
-        <strong>Scan failed</strong> — exit code ${d.exit_code ?? '?'}.
-      </div>
+      <div class="state-panel failed"><span class="big">${ico('circleX')}</span>
+        <div><strong>Scan failed</strong>The analysis exited with code ${esc(String(d.exit_code ?? '?'))}.</div></div>
       <div class="card" style="border-left:4px solid var(--red)">
-        <div class="card-title">Why did this fail?</div>
+        <div class="card-title">${ico('alert')} Why did this fail?</div>
         <p style="font-family:monospace;font-size:.82rem;line-height:1.55;color:var(--text);white-space:pre-wrap">${esc(reason)}</p>
         ${hint ? `<div class="alert alert-info" style="margin-top:.75rem">${hint}</div>` : ''}
       </div>
       <div class="card">
         <div class="card-title" style="justify-content:space-between">
-          <span>Last ${Math.min(40, (logTail.split('\n').length))} log lines</span>
-          <a href="#/scan/${d.scan_id}/log" style="font-size:.75rem;font-weight:400">View full log →</a>
+          <span style="display:inline-flex;align-items:center;gap:.5rem">${ico('terminal')} Last ${Math.min(40, (logTail.split('\n').length))} log lines</span>
+          <a href="#/scan/${d.scan_id}/log" class="link-strong" style="font-size:.78rem">View full log ${ico('arrowRight')}</a>
         </div>
         <div class="log-box">${esc(logTail.split('\n').slice(-40).join('\n')) || '(log empty)'}</div>
       </div>`;
   }
+
+  const id = d.scan_id;
+  const isAndroid = String(d.platform || '').toUpperCase() === 'ANDROID';
   const archs = (d.architectures||[]).join(', ') || '—';
+  const stats = [
+    ['layers', d.class_count, 'Classes', 'functions'],
+    ['code', d.function_count, 'Functions', 'functions'],
+    ['type', d.string_count, 'Strings', 'strings'],
+    ['logIn', d.entry_point_count, 'Entry points', 'entrypoints'],
+  ];
+  const vc = d.vulnerability_counts;
+  const sevs = [['CRITICAL','t-critical'],['HIGH','t-high'],['MEDIUM','t-medium'],['LOW','t-low'],['INFO','t-info']];
+  const maxSev = Math.max(1, ...sevs.map(([k]) => vc?.[k] || 0));
+  const total = vc?.total || 0;
+  const totalColor = !total ? 'var(--green)' : ((vc.CRITICAL || vc.HIGH) ? 'var(--high)' : 'var(--medium)');
+  const riskCard = vc ? `
+      <div class="card">
+        <div class="card-title">${ico('bug')} Findings by severity</div>
+        <div class="risk-head">
+          <span class="risk-total" style="color:${totalColor}">${num(total)}</span>
+          <span class="risk-sub">unique open issue${total === 1 ? '' : 's'}${(vc.occurrences || 0) > total ? ` · ${num(vc.occurrences)} occurrences` : ''}</span>
+        </div>
+        <div class="risk-rows">${sevs.map(([k, cls]) => `
+          <button type="button" class="risk-row ${cls}" onclick="openVulnsAt('${id}','${k}')" title="Show ${k.toLowerCase()} findings">
+            <span class="badge badge-${k.toLowerCase()}">${k}</span>
+            <span class="track"><span class="fill" style="display:block;width:${(vc[k] || 0) ? Math.max(3, Math.round((vc[k] || 0) / maxSev * 100)) : 0}%"></span></span>
+            <span class="n">${vc[k] || 0}</span>
+          </button>`).join('')}</div>
+        <div class="risk-foot">
+          <span>${vc.suppressed ? `${num(vc.suppressed)} suppressed (false positive / fixed)` : 'Counts exclude false positives and fixed issues'}</span>
+          <a href="#/scan/${id}/vulnerabilities" class="link-strong">View vulnerabilities ${ico('arrowRight')}</a>
+        </div>
+      </div>`
+    : `<div class="card"><div class="card-title">${ico('bug')} Findings by severity</div>
+        <div class="empty">Vulnerability counts are unavailable for this scan.</div></div>`;
+  const kvRow = (k, v) => `<span class="kv-key">${k}</span><span class="kv-val">${v}</span>`;
+  const appCard = `
+      <div class="card">
+        <div class="card-title">${platTile(scanKindFromDetail(d)).replace('class="plat-tile', 'style="width:26px;height:26px;font-size:.85rem;border-radius:8px" class="plat-tile')} Application</div>
+        <div class="kv">
+          ${kvRow('Platform', esc(isAndroid ? 'Android' : (d.platform ? 'iOS' : '—')))}
+          ${kvRow(isAndroid ? 'Package' : 'Bundle ID', esc(d.bundle_id || '—'))}
+          ${kvRow('Executable', esc(d.bundle_executable || '—'))}
+          ${isAndroid ? `
+            ${kvRow('Min / Target SDK', `${esc(d.min_sdk ?? '—')} / ${esc(d.target_sdk ?? '—')}`)}
+            ${kvRow('Decompiler', d.decompiler === 'asc' ? 'Droid ASC' : 'JADX')}
+          ` : `
+            ${kvRow('Swift', d.is_swift ? 'Yes' : 'No')}
+            ${kvRow('Universal', d.is_universal ? 'Yes' : 'No')}
+            ${kvRow('Architectures', esc(archs))}
+            ${kvRow('Team ID', esc(d.team_id || '—'))}
+            ${kvRow('Profile', esc(d.provisioning_profile || '—'))}
+            ${kvRow('Profile expiry', esc(d.provisioning_expiry || '—'))}
+          `}
+        </div>
+      </div>`;
+  const ci = d.ci_pipeline_url || d.ci_commit_sha || d.ci_triggered_by;
+  const scanCard = `
+      <div class="card">
+        <div class="card-title">${ico('scanSearch')} Scan</div>
+        <div class="kv">
+          ${kvRow('Scan ID', `${esc(d.scan_id)}`)}
+          ${kvRow('File', esc(d.filename))}
+          ${kvRow('Scan mode', esc(scanModeLabel(d.llm_mode)) + (d.scan_mode === 'light' ? ' (light)' : ''))}
+          ${kvRow('LLM', d.llm_enabled ? esc(providerLabel(d.llm_provider)) + (d.llm_model ? ' · ' + esc(d.llm_model) : '') : 'disabled')}
+          ${kvRow('Assessment', d.assessment_enabled === false ? 'disabled' : 'enabled')}
+          ${kvRow('Started', esc(fmt(d.started_at)))}
+          ${kvRow('Duration', dur(d.started_at, d.finished_at))}
+          ${ci ? kvRow('CI', [d.ci_triggered_by, d.ci_commit_sha && d.ci_commit_sha.slice(0, 12)].filter(Boolean).map(esc).join(' · ')
+              + (d.ci_pipeline_url && /^https?:\/\//.test(d.ci_pipeline_url) ? ` · <a href="${escAttr(d.ci_pipeline_url)}" target="_blank" rel="noopener">pipeline</a>` : '')) : ''}
+        </div>
+      </div>`;
   return `
-    <div class="grid-4" style="margin-bottom:1rem">
-      <div class="stat"><div class="stat-val">${num(d.class_count)}</div><div class="stat-label">Classes</div></div>
-      <div class="stat"><div class="stat-val">${num(d.function_count)}</div><div class="stat-label">Functions</div></div>
-      <div class="stat"><div class="stat-val">${num(d.string_count)}</div><div class="stat-label">Strings</div></div>
-      <div class="stat" style="cursor:pointer" onclick="goTab('${d.scan_id}','vulnerabilities')">
-        <div class="stat-val" style="color:${(d.vulnerability_counts?.total||0)>0?'var(--high)':'var(--text)'}">${num(d.vulnerability_counts?.total)}</div>
-        <div class="stat-label">Vulnerabilities ${d.vulnerability_counts?.CRITICAL?'<span class="badge badge-critical" style="margin-left:.3rem">'+d.vulnerability_counts.CRITICAL+' CRIT</span>':''}</div>
-        ${(d.vulnerability_counts?.occurrences||0) > (d.vulnerability_counts?.total||0)
-          ? `<div class="stat-sub">${num(d.vulnerability_counts.occurrences)} occurrences</div>` : ''}
-      </div>
-    </div>
-    <div class="grid-2">
+    <div class="sum-stats">${stats.map(([icon, n, label, t]) => `
+      <button type="button" class="sum-stat" onclick="goTab('${id}','${t}')" title="Open ${tabLabel(t)}">
+        <span class="si">${ico(icon)}</span>
+        <span style="min-width:0"><span class="sn" style="display:block">${num(n)}</span><span class="sl">${label}</span></span>
+      </button>`).join('')}</div>
+    <div class="sum-grid">${riskCard}${appCard}</div>
+    <div class="sum-grid">
+      ${scanCard}
       <div class="card">
-        <div class="card-title">Bundle</div>
-        <div class="kv">
-          <span class="kv-key">Platform</span><span class="kv-val">${esc(d.platform||'IOS')}</span>
-          <span class="kv-key">Identifier</span><span class="kv-val">${esc(d.bundle_id||'—')}</span>
-          <span class="kv-key">Executable</span><span class="kv-val">${esc(d.bundle_executable||'—')}</span>
-          ${d.platform==='ANDROID' ? `
-          <span class="kv-key">Min / Target SDK</span><span class="kv-val">${esc(d.min_sdk??'—')} / ${esc(d.target_sdk??'—')}</span>
-          ` : `
-          <span class="kv-key">Swift</span><span class="kv-val">${d.is_swift?'Yes':'No'}</span>
-          <span class="kv-key">Universal</span><span class="kv-val">${d.is_universal?'Yes':'No'}</span>
-          <span class="kv-key">Architectures</span><span class="kv-val">${esc(archs)}</span>
-          `}
+        <div class="card-title" style="justify-content:space-between">
+          <span style="display:inline-flex;align-items:center;gap:.5rem">${ico('logIn')} Entry Points</span>
+          <span class="tab-n">${num(d.entry_point_count)}</span>
         </div>
-      </div>
-      <div class="card">
-        <div class="card-title">${d.platform==='ANDROID' ? 'Android' : 'Signing'}</div>
-        <div class="kv">
-          ${d.platform==='ANDROID' ? `
-          <span class="kv-key">Package</span><span class="kv-val">${esc(d.bundle_id||'—')}</span>
-          <span class="kv-key">Decompiler</span><span class="kv-val">JADX</span>
-          ` : `
-          <span class="kv-key">Team ID</span><span class="kv-val">${esc(d.team_id||'—')}</span>
-          <span class="kv-key">Profile</span><span class="kv-val">${esc(d.provisioning_profile||'—')}</span>
-          <span class="kv-key">Expiry</span><span class="kv-val">${esc(d.provisioning_expiry||'—')}</span>
-          `}
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Scan</div>
-        <div class="kv">
-          <span class="kv-key">Scan ID</span><span class="kv-val">${esc(d.scan_id)}</span>
-          <span class="kv-key">File</span><span class="kv-val">${esc(d.filename)}</span>
-          <span class="kv-key">Scan mode</span><span class="kv-val">${esc(scanModeLabel(d.llm_mode))}</span>
-          <span class="kv-key">LLM</span><span class="kv-val">${d.llm_enabled?esc(d.llm_provider):'disabled'}</span>
-          <span class="kv-key">Started</span><span class="kv-val">${fmt(d.started_at)}</span>
-          <span class="kv-key">Duration</span><span class="kv-val">${dur(d.started_at, d.finished_at)}</span>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Entry Points (${num(d.entry_point_count)})</div>
         <div id="ep-mini"><div class="spinner"></div></div>
       </div>
     </div>`;
 }
 
-/** Parse Android "name.type:class" and native "native:library/symbol" entry points. */
+/* Entry points arrive as "<ClassName>.<FunctionName>". Android components store FunctionName as
+   "<type>:<class>" (so a fully-qualified name repeats), native ones as "native:<lib>/<symbol>",
+   iOS ones as "<Class>.<selector>". */
+function splitQualified(name) {
+  const n = String(name || ''), i = n.lastIndexOf('.');
+  return i > 0 ? {short: n.slice(i + 1), pkg: n.slice(0, i)} : {short: n, pkg: ''};
+}
 function parseEntryPoint(raw) {
   const s = String(raw || '');
   const native = s.match(/^native:([^/]+)\/(.+)$/);
-  if (native) return { raw: s, name: native[1], type: 'native', cls: native[2], short: native[2] };
-  const m = s.match(/^([^.:]+)\.([a-zA-Z]+):(.+)$/);
-  if (!m) return { raw: s, name: s, type: '', cls: '', short: s };
-  const cls = m[3];
-  const short = cls.includes('.') ? cls.split('.').pop() : cls;
-  return { raw: s, name: m[1], type: m[2].toLowerCase(), cls, short };
+  if (native) return {raw: s, type: 'native', short: native[2], pkg: native[1], member: ''};
+  const m = s.match(/^(.*)\.(activity-alias|activity|service|receiver|provider):(.+)$/i);
+  if (m) return {raw: s, type: m[2].toLowerCase().replace('-alias', ''), ...splitQualified(m[3] || m[1]), member: ''};
+  const colon = s.indexOf(':');
+  const dot = s.lastIndexOf('.', colon < 0 ? s.length : colon);
+  if (dot > 0) return {raw: s, type: 'method', ...splitQualified(s.slice(0, dot)), member: s.slice(dot + 1)};
+  return {raw: s, type: '', short: s, pkg: '', member: ''};
 }
 
 function renderEntryPointItem(raw) {
-  const ep = parseEntryPoint(raw);
-  if (!ep.type) {
-    return `<li class="ep-item" title="${escAttr(ep.raw)}"><span class="ep-class">${esc(ep.raw)}</span></li>`;
-  }
-  return `<li class="ep-item" title="${escAttr(ep.raw)}">
-    <span class="ep-type ep-type-${escAttr(ep.type)}">${esc(ep.type)}</span>
-    <span class="ep-name">${esc(ep.name)}</span>
-    <span class="ep-class">${esc(ep.short)}</span>
-  </li>`;
+  const ep = typeof raw === 'string' ? parseEntryPoint(raw) : raw;
+  return `<div class="ep-row" title="${escAttr(ep.raw)}">
+    <span class="ep-badge ${escAttr(ep.type)}">${esc(ep.type || 'entry')}</span>
+    <div style="min-width:0">
+      <div class="ep-nm">${esc(ep.short)}${ep.member ? `<span class="mem">.${esc(ep.member)}</span>` : ''}</div>
+      ${ep.pkg ? `<div class="ep-pk">${esc(ep.pkg)}</div>` : ''}
+    </div>
+  </div>`;
 }
 
 async function postSummaryHydrate(id) {
@@ -3287,14 +3696,14 @@ async function postSummaryHydrate(id) {
     const eps = await api('/scans/'+id+'/entrypoints');
     // The original element is detached whenever the scan or tab is re-rendered.
     if (!el.isConnected || el !== document.getElementById('ep-mini')) return;
-    if (!eps.length) { el.innerHTML='<div class="empty" style="padding:.5rem">None detected.</div>'; return; }
+    if (!eps.length) { el.innerHTML='<div class="empty" style="padding:1rem">None detected.</div>'; return; }
     const preview = eps.slice(0, previewSize);
     const count = eps.length > previewSize
-      ? `<span class="ep-summary-count">Showing ${preview.length} of ${eps.length.toLocaleString()}</span>`
+      ? `<span>Showing ${preview.length} of ${eps.length.toLocaleString()}</span>`
       : '<span></span>';
     const href = '#/scan/' + encodeURIComponent(String(id)) + '/entrypoints';
-    el.innerHTML = '<ul class="ep-list">'+preview.map(renderEntryPointItem).join('')+'</ul>'
-      + `<div class="ep-summary-footer">${count}<a href="${escAttr(href)}">View all entry points →</a></div>`;
+    el.innerHTML = '<div class="ep-rows">' + preview.map(renderEntryPointItem).join('') + '</div>'
+      + `<div class="ep-foot">${count}<a class="link-strong" href="${escAttr(href)}">View all entry points ${ico('arrowRight')}</a></div>`;
   } catch(_) {
     if (el.isConnected && el === document.getElementById('ep-mini')) {
       el.innerHTML='<span class="muted">—</span>';
@@ -3918,6 +4327,7 @@ async function loadResources(root, id, state) {
 }
 
 /* ── entry points tab ── */
+const EP_TYPE_ORDER = ['activity', 'service', 'receiver', 'provider', 'native', 'method', ''];
 async function tabEntryPoints(el, id, detail) {
   if (detail.state !== 'done') { el.innerHTML=`<div class="alert alert-warn">Scan not complete.</div>`; return; }
   const pageSize = 50;
@@ -3925,49 +4335,57 @@ async function tabEntryPoints(el, id, detail) {
   root.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   el.replaceChildren(root);
   try {
-    const eps = await api('/scans/'+id+'/entrypoints');
+    const raw = await api('/scans/'+id+'/entrypoints');
     if (!root.isConnected || !el.contains(root)) return;
-    if (!eps.length) { root.innerHTML='<div class="empty">No entry points detected.</div>'; return; }
-
-    let page = 0;
-    let query = '';
-    root.innerHTML = `<div class="card">
-      <div class="card-title" id="ep-full-title">Detected Entry Points (${eps.length.toLocaleString()})</div>
-      <div class="search-bar"><input id="ep-filter" type="text" placeholder="Filter entry points…" autocomplete="off"/></div>
-      <div id="ep-full-list"></div>
-      <div id="ep-pages" class="pagination ep-pagination"></div>
-    </div>`;
+    if (!raw.length) {
+      root.innerHTML = `<div class="panel"><div class="empty-state"><div class="es-ico">${ico('logIn')}</div>
+        <strong>No entry points detected</strong>Exported components and native entry symbols appear here when found.</div></div>`;
+      return;
+    }
+    const eps = raw.map(parseEntryPoint)
+      .sort((a, b) => EP_TYPE_ORDER.indexOf(a.type) - EP_TYPE_ORDER.indexOf(b.type) || a.short.localeCompare(b.short));
+    const types = EP_TYPE_ORDER.filter(t => eps.some(e => e.type === t));
+    let page = 1, query = '', type = 'all';
+    root.innerHTML = `
+      <div class="toolbar" style="margin-bottom:.9rem">
+        <label class="search-ctl">${ico('scanSearch')}
+          <input id="ep-filter" class="ctl" type="search" placeholder="Filter by class, package or member…" autocomplete="off" aria-label="Filter entry points"/></label>
+        ${types.length > 1 ? '<div class="seg" id="ep-seg" role="group" aria-label="Filter by type"></div>' : ''}
+      </div>
+      <section class="panel">
+        <div class="result-line" style="margin-bottom:.35rem"><span id="ep-count"></span></div>
+        <div class="ep-rows" id="ep-full-list"></div>
+        <div class="pager" id="ep-pages"></div>
+      </section>`;
 
     const renderPage = () => {
       if (!root.isConnected || !el.contains(root)) return;
-      const filtered = query
-        ? eps.filter(ep => String(ep).toLowerCase().includes(query))
-        : eps;
+      const filtered = eps.filter(e => (type === 'all' || e.type === type)
+        && (!query || `${e.raw} ${e.type}`.toLowerCase().includes(query)));
       const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
-      page = Math.min(page, pages - 1);
-      const pageItems = filtered.slice(page * pageSize, (page + 1) * pageSize);
-      const list = root.querySelector('#ep-full-list');
-      const pager = root.querySelector('#ep-pages');
-      const title = root.querySelector('#ep-full-title');
-      title.textContent = `Detected Entry Points (${eps.length.toLocaleString()})`;
-      list.innerHTML = pageItems.length
-        ? `<ul class="ep-list" style="font-size:.82rem">${pageItems.map(renderEntryPointItem).join('')}</ul>`
-        : '<div class="empty">No entry points match this filter.</div>';
-      const totalText = query
-        ? `${filtered.length.toLocaleString()} of ${eps.length.toLocaleString()} matching`
-        : `${eps.length.toLocaleString()} total`;
-      pager.innerHTML = `<span>${totalText} · Page ${page + 1} of ${pages}</span>
-        <span class="ep-pagination-actions">
-          <button class="page-btn" data-page="prev" ${page === 0 ? 'disabled' : ''}>Previous</button>
-          <button class="page-btn" data-page="next" ${page >= pages - 1 ? 'disabled' : ''}>Next</button>
-        </span>`;
-      pager.querySelector('[data-page="prev"]').onclick = () => { if (page > 0) { page--; renderPage(); } };
-      pager.querySelector('[data-page="next"]').onclick = () => { if (page < pages - 1) { page++; renderPage(); } };
+      page = Math.min(Math.max(1, page), pages);
+      const items = filtered.slice((page - 1) * pageSize, page * pageSize);
+      const seg = root.querySelector('#ep-seg');
+      if (seg) seg.innerHTML = segHtml('eptype', type, [['all', 'All', eps.length],
+        ...types.map(t => [t, t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Other', eps.filter(e => e.type === t).length])]);
+      root.querySelector('#ep-count').textContent = (query || type !== 'all')
+        ? `${filtered.length.toLocaleString()} of ${eps.length.toLocaleString()} entry points`
+        : `${eps.length.toLocaleString()} entry points`;
+      root.querySelector('#ep-full-list').innerHTML = items.length ? items.map(renderEntryPointItem).join('')
+        : `<div class="empty-state"><div class="es-ico">${ico('scanSearch')}</div><strong>No matches</strong>No entry points match this filter.</div>`;
+      root.querySelector('#ep-pages').innerHTML = pagerHtml(page, pages, filtered.length, pageSize, 'epage');
     };
-
+    root.addEventListener('click', ev => {
+      const b = ev.target.closest('button');
+      if (!b || b.disabled) return;
+      if (b.dataset.eptype) { type = b.dataset.eptype; page = 1; }
+      else if (b.dataset.epage) page = Number(b.dataset.epage);
+      else return;
+      renderPage();
+    });
     root.querySelector('#ep-filter').addEventListener('input', event => {
       query = event.target.value.trim().toLowerCase();
-      page = 0;
+      page = 1;
       renderPage();
     });
     renderPage();
@@ -4105,7 +4523,7 @@ async function tabAssessment(el, id, detail) {
     }
     const rowHtml = (a) => {
       const i = rows.indexOf(a);
-      return `<button type="button" class="assess-row" data-idx="${i}"
+      return `<button type="button" class="assess-row" data-idx="${i}" data-status="${escAttr(String(a.status || 'UNKNOWN').toUpperCase())}"
           aria-label="Open assessment details for ${escAttr(a.title || a.control_id || 'control')}"
           onclick="openAssessDrawer(${i})">
         ${assessStatusBadge(a.status)}
@@ -4118,15 +4536,14 @@ async function tabAssessment(el, id, detail) {
       </button>`;
     };
     el.innerHTML = `
-      <div class="sev-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-bottom:1rem">
-        <div class="stat"><div class="stat-n" style="color:#16a34a">${counts.PRESENT}</div><div class="stat-l">Present</div></div>
-        <div class="stat"><div class="stat-n" style="color:#d97706">${counts.PARTIAL}</div><div class="stat-l">Partial</div></div>
-        <div class="stat"><div class="stat-n" style="color:#dc2626">${counts.ABSENT}</div><div class="stat-l">Absent</div></div>
-        <div class="stat"><div class="stat-n" style="color:#6b7280">${counts.UNKNOWN}</div><div class="stat-l">Unknown</div></div>
+      <div class="sev-tiles" id="assess-tiles" role="group" aria-label="Filter by status" style="margin-bottom:.85rem">
+        ${[['PRESENT','Present'],['PARTIAL','Partial'],['ABSENT','Absent'],['UNKNOWN','Unknown']].map(([k, l]) => `
+          <button type="button" class="sev-tile t-${k.toLowerCase()}" data-astat="${k}" aria-pressed="false" title="Show only ${l.toLowerCase()} controls">
+            <span class="n">${counts[k]}</span><span class="l">${l} ${ico('check')}</span></button>`).join('')}
       </div>
       <p style="color:var(--muted);font-size:.8rem;margin-bottom:1rem">Static best-effort inventory of implemented protections. Not counted in vulnerability severity totals. Click a control for summary, reason, and static/dynamic checks.</p>
       ${Object.keys(byCat).sort().map(cat => `
-        <div class="card" style="margin-bottom:.75rem">
+        <div class="card assess-cat" style="margin-bottom:.75rem">
           <div class="card-title">${esc(cat)} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${byCat[cat].length}</span></div>
           ${byCat[cat].map(rowHtml).join('')}
         </div>`).join('')}
@@ -4141,6 +4558,27 @@ async function tabAssessment(el, id, detail) {
         </div>
         <div id="assess-drawer-body" class="llm-drawer-body"></div>
       </aside>`;
+    let statusFilter = '';
+    document.getElementById('assess-tiles').addEventListener('click', ev => {
+      const t = ev.target.closest('.sev-tile');
+      if (!t) return;
+      statusFilter = statusFilter === t.dataset.astat ? '' : t.dataset.astat;
+      $$('#assess-tiles .sev-tile').forEach(x => {
+        const on = x.dataset.astat === statusFilter;
+        x.classList.toggle('active', on);
+        x.classList.toggle('dim', !!statusFilter && !on);
+        x.setAttribute('aria-pressed', String(on));
+      });
+      $$('.assess-cat').forEach(card => {
+        let shown = 0;
+        card.querySelectorAll('.assess-row').forEach(r => {
+          const ok = !statusFilter || r.dataset.status === statusFilter;
+          r.hidden = !ok;
+          if (ok) shown++;
+        });
+        card.hidden = !shown;
+      });
+    });
   } catch (e) {
     el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
@@ -4289,11 +4727,10 @@ async function tabVulnerabilities(el, id, detail) {
     const groups = groupFindingsByRule(findings);
     const counts = countUniqueIssueSeverities(groups);
     const totals = `
-      <div class="grid-4" style="margin-bottom:1rem">
-        <div class="stat"><div class="stat-val" style="color:var(--high)">${counts.CRITICAL||0}</div><div class="stat-label">Critical</div></div>
-        <div class="stat"><div class="stat-val" style="color:var(--medium)">${counts.HIGH||0}</div><div class="stat-label">High</div></div>
-        <div class="stat"><div class="stat-val" style="color:var(--yellow)">${counts.MEDIUM||0}</div><div class="stat-label">Medium</div></div>
-        <div class="stat"><div class="stat-val" style="color:var(--low)">${counts.LOW||0}</div><div class="stat-label">Low</div></div>
+      <div class="sev-tiles" id="vuln-tiles" role="group" aria-label="Filter by severity" style="margin-bottom:1rem">
+        ${['CRITICAL','HIGH','MEDIUM','LOW'].concat(counts.INFO ? ['INFO'] : []).map(k => `
+          <button type="button" class="sev-tile t-${k.toLowerCase()}" data-vsev="${k}" aria-pressed="false" title="Show only ${k.toLowerCase()} issues">
+            <span class="n">${counts[k]||0}</span><span class="l">${k.charAt(0) + k.slice(1).toLowerCase()} ${ico('check')}</span></button>`).join('')}
       </div>
       <div class="vuln-toolbar">
         <p>
@@ -4302,7 +4739,7 @@ async function tabVulnerabilities(el, id, detail) {
           · summary counts unique open/active issues
         </p>
         <button class="btn btn-ae btn-sm" type="button" onclick="openAutoEnhance()"
-                title="Run AI Fix over many findings at once">✨ Auto Enhance</button>
+                title="Run AI Fix over many findings at once">${ico('sparkles')} Auto Enhance</button>
       </div>
       <div id="ae-banner-slot"></div>`;
 
@@ -4317,6 +4754,7 @@ async function tabVulnerabilities(el, id, detail) {
           <option value="HIGH">High</option>
           <option value="MEDIUM">Medium</option>
           <option value="LOW">Low</option>
+          <option value="INFO">Info</option>
         </select>
         <select id="vuln-status">
           <option value="active">Active only</option>
@@ -4366,9 +4804,23 @@ async function tabVulnerabilities(el, id, detail) {
         card.style.display = (matchQ && matchS && matchT) ? '' : 'none';
       });
     };
+    const sevSel = document.getElementById('vuln-sev');
+    const syncTiles = () => $$('#vuln-tiles .sev-tile').forEach(t => {
+      const on = sevSel.value === t.dataset.vsev;
+      t.classList.toggle('active', on);
+      t.classList.toggle('dim', !!sevSel.value && !on);
+      t.setAttribute('aria-pressed', String(on));
+    });
+    document.getElementById('vuln-tiles').addEventListener('click', ev => {
+      const t = ev.target.closest('.sev-tile');
+      if (!t) return;
+      sevSel.value = sevSel.value === t.dataset.vsev ? '' : t.dataset.vsev;
+      syncTiles(); filterFn();
+    });
     document.getElementById('vuln-q').addEventListener('input', filterFn);
-    document.getElementById('vuln-sev').addEventListener('change', filterFn);
+    sevSel.addEventListener('change', () => { syncTiles(); filterFn(); });
     document.getElementById('vuln-status').addEventListener('change', filterFn);
+    if (vulnPendingSev) { sevSel.value = vulnPendingSev; vulnPendingSev = null; syncTiles(); filterFn(); }
   } catch(e) {
     el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
@@ -6060,46 +6512,88 @@ async function loadLlmFindings(root, id, state) {
 }
 
 /* ── log tab ── */
+const LOG_TAIL = 2000;
+function logLevelOf(line) {
+  if (/\b(ERROR|SEVERE|FATAL)\b|Exception\b|^\s*Caused by:|^\s+at [\w$.]+\(/.test(line)) return 'err';
+  if (/\bWARN(ING)?\b/.test(line)) return 'warn';
+  if (/\b(DEBUG|TRACE)\b/.test(line)) return 'dim';
+  return '';
+}
 async function tabLog(el, id) {
   el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try {
-    const {lines} = await api('/scans/'+id+'/log?tail=500');
-    el.innerHTML = `<div class="log-box">${lines.map(esc).join('\n')}</div>`;
-  } catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; }
+  let lines;
+  try { ({lines} = await api('/scans/'+id+'/log?tail='+LOG_TAIL)); }
+  catch(e) { el.innerHTML=`<div class="alert alert-error">${esc(e.message)}</div>`; return; }
+  lines = lines || [];
+  const levels = lines.map(logLevelOf);
+  const nErr = levels.filter(l => l === 'err').length, nWarn = levels.filter(l => l === 'warn').length;
+  let level = 'all', q = '';
+  el.innerHTML = `
+    <div class="log-toolbar">
+      <label class="search-ctl">${ico('scanSearch')}<input id="log-q" class="ctl" type="search" placeholder="Filter log lines…" aria-label="Filter log lines"/></label>
+      <div class="seg" id="log-lvl" role="group" aria-label="Filter by level"></div>
+      <button type="button" class="btn btn-outline" id="log-copy">${ico('copy')} Copy</button>
+      <button type="button" class="btn btn-outline" id="log-reload">${ico('refresh')} Refresh</button>
+    </div>
+    <div class="result-line" style="margin-bottom:.5rem"><span id="log-count"></span>
+      <span>${lines.length >= LOG_TAIL ? `Last ${LOG_TAIL.toLocaleString()} lines of analysis.log` : 'Full analysis.log'}</span></div>
+    <div class="log-box tall" id="log-box"></div>`;
+  const box = el.querySelector('#log-box');
+  const paint = () => {
+    el.querySelector('#log-lvl').innerHTML = segHtml('lvl', level, [['all', 'All', lines.length], ['err', 'Errors', nErr], ['warn', 'Warnings', nWarn]]);
+    const needle = q.toLowerCase();
+    const re = q ? new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])), 'gi') : null;
+    const out = [];
+    lines.forEach((line, i) => {
+      if (level !== 'all' && levels[i] !== level) return;
+      if (needle && !line.toLowerCase().includes(needle)) return;
+      let h = esc(line);
+      if (re) h = h.replace(re, m => `<mark>${m}</mark>`);
+      out.push(levels[i] ? `<span class="lv-${levels[i]}">${h}</span>` : h);
+    });
+    box.innerHTML = out.length ? out.join('\n') : '<span class="lv-dim">No lines match.</span>';
+    el.querySelector('#log-count').textContent = (level !== 'all' || q) ? `${out.length.toLocaleString()} of ${lines.length.toLocaleString()} lines` : `${lines.length.toLocaleString()} lines`;
+  };
+  el.querySelector('#log-lvl').addEventListener('click', ev => {
+    const b = ev.target.closest('button[data-lvl]');
+    if (b) { level = b.dataset.lvl; paint(); }
+  });
+  let t = null;
+  el.querySelector('#log-q').addEventListener('input', ev => { clearTimeout(t); t = setTimeout(() => { q = ev.target.value.trim(); paint(); }, 120); });
+  el.querySelector('#log-copy').addEventListener('click', ev => copyText(lines.join('\n'), ev.currentTarget));
+  el.querySelector('#log-reload').addEventListener('click', () => tabLog(el, id));
+  paint();
+  box.scrollTop = box.scrollHeight;
 }
 
 /* ── downloads tab ── */
 function tabDownloads(id, detail) {
-  const rows = [
-    ['SARIF 2.1 Report', 'findings.sarif', detail.has_sarif, `/api/v1/scans/${id}/sarif`],
-    ['HTML Report', 'report.html', detail.has_html, `/api/v1/scans/${id}/report`],
-    ['Analysis Log', 'analysis.log', detail.has_log, `/api/v1/scans/${id}/log`],
-    ['Uploaded package', detail.filename, detail.has_package, `/api/v1/scans/${id}/package`],
+  const pkg = /\.ipa$/i.test(detail.filename) ? 'IPA' : 'APK';
+  const items = [
+    ['fileText', 'HTML Report', 'report.html', 'Bilingual VA report — open it and print to PDF.', detail.has_html, `/api/v1/scans/${id}/report`, true],
+    ['braces', 'SARIF 2.1 Report', 'findings.sarif', 'For CI pipelines and code-scanning tools.', detail.has_sarif, `/api/v1/scans/${id}/sarif`, false],
+    ['terminal', 'Analysis Log', 'analysis.log (JSON tail)', 'Last lines of the analyzer output.', detail.has_log, `/api/v1/scans/${id}/log`, true],
+    ['download', `Uploaded ${pkg}`, detail.filename, 'The original package that was scanned.', detail.has_package, `/api/v1/scans/${id}/package`, false],
   ];
-  return `<div class="card">
-    <div class="card-title">Downloads</div>
-    <table>
-      <thead><tr><th>File</th><th>Available</th><th></th></tr></thead>
-      <tbody>${rows.map(([name, file, avail, url])=>`<tr>
-        <td>${esc(name)}</td>
-        <td>${avail?'<span class="badge badge-done">Ready</span>':'<span class="badge badge-queued">Not generated</span>'}</td>
-        <td>${avail?`<a class="btn btn-primary btn-sm" href="${url}" target="_blank">Open / Download</a>`:'—'}</td>
-      </tr>`).join('')}</tbody>
-    </table>
-  </div>
-  <div class="card" style="margin-top:1rem">
-    <div class="card-title">Raw API</div>
-    <div style="font-size:.8rem;font-family:monospace;line-height:2">
-      <div>GET <a href="/api/v1/scans/${id}" target="_blank">/api/v1/scans/${id}</a></div>
-      <div>GET <a href="/api/v1/scans/${id}/functions" target="_blank">/api/v1/scans/${id}/functions</a></div>
-      <div>GET <a href="/api/v1/scans/${id}/strings" target="_blank">/api/v1/scans/${id}/strings</a></div>
-      <div>GET <a href="/api/v1/scans/${id}/resources" target="_blank">/api/v1/scans/${id}/resources</a></div>
-      <div>GET <a href="/api/v1/scans/${id}/entrypoints" target="_blank">/api/v1/scans/${id}/entrypoints</a></div>
-      <div>GET <a href="/api/v1/scans/${id}/llm" target="_blank">/api/v1/scans/${id}/llm</a></div>
+  const api = ['', '/functions', '/strings', '/resources', '/entrypoints', '/vulnerabilities', '/assessments', '/llm'];
+  return `
+  <div class="dl-grid">${items.map(([icon, name, file, desc, avail, url, newTab]) => `
+    <div class="dl-card${avail ? '' : ' off'}">
+      <span class="si">${ico(icon)}</span>
+      <div class="dl-main">
+        <div class="dl-name">${esc(name)}</div>
+        <div class="dl-file" title="${escAttr(file)}">${esc(file)}</div>
+        <div class="dl-desc">${avail ? esc(desc) : 'Not generated for this scan.'}</div>
+      </div>
+      ${avail ? `<a class="btn btn-outline" href="${url}"${newTab ? ' target="_blank" rel="noopener"' : ''}>${ico(newTab ? 'external' : 'download')} ${newTab ? 'Open' : 'Download'}</a>` : ''}
+    </div>`).join('')}</div>
+  <div class="card">
+    <div class="card-title" style="justify-content:space-between">
+      <span style="display:inline-flex;align-items:center;gap:.5rem">${ico('braces')} Raw API</span>
+      <a href="/docs" target="_blank" rel="noopener" class="link-strong" style="font-size:.78rem">OpenAPI docs ${ico('arrowRight')}</a>
     </div>
-    <p style="margin-top:.75rem;font-size:.75rem;color:var(--muted)">
-      Full OpenAPI spec at <a href="/docs">/docs</a>
-    </p>
+    <div class="api-list">${api.map(p => `
+      <div class="api-row"><span class="m">GET</span><a href="/api/v1/scans/${id}${p}" target="_blank" rel="noopener">/api/v1/scans/${id}${p}</a></div>`).join('')}</div>
   </div>`;
 }
 
