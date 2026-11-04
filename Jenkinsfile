@@ -19,6 +19,15 @@
 //
 // malimite_ci.py auto-detects BUILD_URL/GIT_COMMIT from Jenkins' own built-in env vars and tags
 // the scan with them — no extra configuration needed for that part.
+//
+// TRIGGER STRATEGY: release-tags-only (chosen over scanning every commit/PR). A full scan can
+// take minutes on a large IPA, and the server has a bounded concurrency budget
+// (MAX_CONCURRENT_SCANS, default 3) — scanning every commit across several teams' repos would
+// compete for those slots and slow down everyone's build feedback loop. The `when { tag "v*" }`
+// below means this stage only runs when the build is for a tag matching v* (e.g. v1.2.0); plain
+// branch/PR builds skip it entirely. This requires the job be a "Multibranch Pipeline" (or
+// Pipeline-from-SCM with tag discovery enabled) so Jenkins populates env.TAG_NAME for tag
+// builds — a plain "Pipeline" job never sets TAG_NAME and this stage would never run.
 
 pipeline {
     agent any
@@ -37,6 +46,9 @@ pipeline {
 
     stages {
         stage('Malimite Security Scan') {
+            when {
+                tag "v*"   // only runs for a build triggered by a tag matching v* — see note above
+            }
             steps {
                 script {
                     if (!fileExists(params.APP_PATH)) {

@@ -107,6 +107,20 @@ triage override (`effective_severity`) is honored over the original scanner-assi
 marked **Secured**). See [`deploy/EC2_DEPLOYMENT.md`](../../deploy/EC2_DEPLOYMENT.md) for how to
 stand up the server this points at.
 
+### When to trigger the scan
+
+The root [`bitbucket-pipelines.yml`](../../bitbucket-pipelines.yml) and [`Jenkinsfile`](../../Jenkinsfile)
+templates default to a **release-tags-only** trigger (a tag matching `v*`, not every commit/PR).
+This is deliberate: a full scan can take minutes on a large APK/IPA, and the server has a bounded
+concurrency budget (`MAX_CONCURRENT_SCANS`, default 3) — scanning every commit across several
+teams' repos would compete for those slots and slow down everyone's build feedback loop. Scanning
+only release builds trades fast-per-commit feedback for predictable, low server load.
+
+If your team instead wants fast per-PR feedback and has the server headroom for it, trigger on
+every push/PR instead (Bitbucket: `pipelines.pull-requests`/`pipelines.branches`; Jenkins: remove
+the `when { tag "v*" }` block) — just size `MAX_CONCURRENT_SCANS` and the EC2 instance for the
+resulting load (see `deploy/EC2_DEPLOYMENT.md`'s sizing section).
+
 ## Running the tests
 
 ```bash

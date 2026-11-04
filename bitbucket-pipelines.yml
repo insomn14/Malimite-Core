@@ -20,11 +20,33 @@
 #
 # malimite_ci.py auto-detects BITBUCKET_BUILD_NUMBER/BITBUCKET_REPO_FULL_NAME/BITBUCKET_COMMIT
 # and tags the scan with them — no extra configuration needed for that part.
+#
+# TRIGGER STRATEGY: release-tags-only (chosen over scanning every push/PR). A full scan can take
+# minutes on a large IPA and the server has a bounded concurrency budget (MAX_CONCURRENT_SCANS,
+# default 3) — scanning every PR across several teams' repos would compete for those slots and
+# slow down everyone's PR feedback loop. Scanning only release builds trades fast-per-PR feedback
+# for a predictable, low server load: every tag matching v* (e.g. v1.2.0) triggers a scan; plain
+# commits/PRs to any branch do not. Adjust the `tags: 'v*'` pattern below to match your team's
+# actual release-tagging convention if it differs.
 
 image: python:3.12-slim
 
 definitions:
   steps:
+    # EXAMPLE build step — replace with your repo's actual build (Gradle for Android, xcodebuild
+    # for iOS, etc). Only here so this file is runnable as-is for a quick first try; its only job
+    # is to produce the file APP_PATH points at before the scan step below runs.
+    - step: &build
+        name: Build release APK
+        image: eclipse-temurin:17-jdk
+        caches:
+          - gradle
+        script:
+          - ./gradlew assembleRelease
+          - cp app/build/outputs/apk/release/app-release.apk app.apk
+        artifacts:
+          - app.apk
+
     - step: &malimite-scan
         name: Malimite Security Scan
         script:
@@ -47,13 +69,9 @@ definitions:
           - malimite-result.json
 
 pipelines:
-  default:
-    - step: *malimite-scan
-
-  branches:
-    main:
-      - step: *malimite-scan
-
-  pull-requests:
-    '**':
+  # Release-only trigger: runs ONLY when a tag matching v* is pushed (e.g. `git tag v1.2.0 &&
+  # git push origin v1.2.0`), not on regular commits/PRs to any branch.
+  tags:
+    'v*':
+      - step: *build        # replace with your repo's actual build step(s) — produces APP_PATH
       - step: *malimite-scan
