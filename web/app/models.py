@@ -15,6 +15,8 @@ class ScanMeta(BaseModel):
     llm_mode: str = "summarize"
     llm_model: str = ""
     assessment_enabled: bool = True
+    ios_light: bool = False
+    decompiler: str = "jadx"   # Android-only: "jadx" (default) or "asc" (Droid ASC)
 
 
 class ScanDetail(ScanMeta):

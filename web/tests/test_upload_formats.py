@@ -55,6 +55,26 @@ class UploadRouteTests(unittest.TestCase):
     def test_empty_xapk_is_refused(self):
         self.assertEqual(self.post("a.xapk", b"").status_code, 400)
 
+    def test_decompiler_defaults_to_jadx_and_accepts_asc(self):
+        for value in ("jadx", "asc"):
+            self.create.reset_mock()
+            r = self.client.post("/api/v1/scans", files={"file": ("a.apk", b"PK\x03\x04data")},
+                                 data={"llm_provider": "none", "decompiler": value})
+            self.assertEqual(r.status_code, 202, value)
+            self.assertEqual(self.create.await_args.args[-1], value)
+        # omitted entirely -> jadx default
+        self.create.reset_mock()
+        r = self.client.post("/api/v1/scans", files={"file": ("a.apk", b"PK\x03\x04data")},
+                             data={"llm_provider": "none"})
+        self.assertEqual(r.status_code, 202)
+        self.assertEqual(self.create.await_args.args[-1], "jadx")
+
+    def test_decompiler_rejects_unknown_values(self):
+        r = self.client.post("/api/v1/scans", files={"file": ("a.apk", b"PK\x03\x04data")},
+                             data={"llm_provider": "none", "decompiler": "ghidra"})
+        self.assertEqual(r.status_code, 422)
+        self.create.assert_not_awaited()
+
     def test_the_ui_offers_and_checks_the_same_formats(self):
         html = (Path(main.__file__).parent.parent / "index.html").read_text()
         self.assertIn('accept=".ipa,.apk,.xapk"', html)

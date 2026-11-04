@@ -71,6 +71,13 @@ main>*,#tab-content{min-width:0;max-width:100%}
 .drop-file-btn{display:inline-block;margin-top:.8rem;padding:.5rem 1.2rem;background:var(--accent);color:#fff;border-radius:var(--radius);font-weight:600;cursor:pointer;font-size:.875rem}
 .drop-file-btn:hover{background:var(--accent-h)}
 input[type=file]{display:none}
+.picked-file{display:flex;align-items:center;gap:.75rem;padding:.9rem 1.1rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)}
+.picked-file-icon{font-size:1.6rem;line-height:1}
+.picked-file-name{font-weight:600;word-break:break-all}
+.picked-file-meta{color:var(--muted);font-size:.78rem;margin-top:.15rem}
+.picked-file-change{margin-left:auto;flex-shrink:0}
+.scan-options-title{font-size:.85rem;font-weight:600;margin:1.1rem 0 .5rem}
+.run-scan-row{display:flex;align-items:center;gap:.75rem;margin-top:1.1rem}
 
 /* buttons */
 .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;border-radius:var(--radius);font-size:.8rem;font-weight:600;cursor:pointer;border:none;transition:background .12s}
@@ -1095,119 +1102,158 @@ function fieldOr(s, fallback) {
   return isEmptyField(s) ? fallback : s;
 }
 
-/* ── home view ── */
-route('home', async function() {
-  render(`
-  <div style="max-width:680px;margin:0 auto">
-    <div class="card" style="margin-bottom:1rem">
-      <div class="card-title">Upload package</div>
-      <div class="drop-zone" id="drop">
-        <div style="font-size:2rem">📦</div>
-        <p><strong>Drag &amp; drop .ipa, .apk or .xapk here</strong></p>
-        <p>iOS via Ghidra · Android via JADX (+ Ghidra for native .so) · Malimite finds the sketchy bits.</p>
-        <label class="drop-file-btn">Browse file<input type="file" id="ipa-file" accept=".ipa,.apk,.xapk"/></label>
+/* ── home view ──
+   Two-step upload: picking a file no longer starts a scan immediately. Step 1 shows the
+   drop-zone; picking/dropping a file switches to step 2 (options + an explicit Run Scan
+   button) without touching the server at all until that button is clicked. */
+
+function fmtBytes(n) {
+  if (!Number.isFinite(n)) return '';
+  const u = ['B','KB','MB','GB']; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n.toFixed(1)) + ' ' + u[i];
+}
+
+function packageKindOf(filename) {
+  const n = (filename || '').toLowerCase();
+  if (n.endsWith('.ipa')) return 'ios';
+  if (n.endsWith('.apk') || n.endsWith('.xapk')) return 'android';
+  return null;
+}
+
+function renderDropZoneHtml() {
+  return `
+    <div class="drop-zone" id="drop">
+      <div style="font-size:2rem">📦</div>
+      <p><strong>Drag &amp; drop .ipa, .apk or .xapk here</strong></p>
+      <p>iOS via Ghidra · Android via JADX or Droid ASC (+ Ghidra for native .so) · Malimite finds the sketchy bits.</p>
+      <label class="drop-file-btn">Browse file<input type="file" id="ipa-file" accept=".ipa,.apk,.xapk"/></label>
+    </div>`;
+}
+
+function renderScanOptionsHtml(file) {
+  const kind = packageKindOf(file.name);
+  return `
+    <div class="picked-file">
+      <div class="picked-file-icon">${kind === 'ios' ? '🍎' : '🤖'}</div>
+      <div style="min-width:0">
+        <div class="picked-file-name">${esc(file.name)}</div>
+        <div class="picked-file-meta">${fmtBytes(file.size)}</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-top:1rem;font-size:.8rem">
-        <label style="display:flex;flex-direction:column;gap:.3rem">
-          LLM Enrichment
-          <select id="llm-provider" onchange="onProviderChange()">
-            <option value="none">Disabled</option>
-            <option value="openai">OpenAI</option>
-            <option value="claude">Claude</option>
-            <option value="claude-oauth">Claude (OAuth — Pro/Max)</option>
-            <option value="deepseek">DeepSeek</option>
-            <option value="ollama">Ollama (local)</option>
-          </select>
-        </label>
-        <label style="display:flex;flex-direction:column;gap:.3rem">
-          Scan Mode
-          <select id="llm-mode" onchange="onLlmModeChange()">
-            <option value="summarize">Fast Scan</option>
-            <option value="find_vulns">Full Scan</option>
-            <option value="auto_fix">Auto Fix</option>
-            <option value="offensive">Offensive</option>
-          </select>
-          <span id="llm-mode-help" style="color:var(--muted);font-size:.72rem;max-width:22rem">Fast Scan = first-party app code and native libs only. Cheaper MSTG + optional LLM.</span>
-        </label>
-        <label style="display:flex;flex-direction:column;gap:.3rem">
-          Model override
-          <select id="llm-model-select" hidden onchange="onModelSelectChange()" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"></select>
-          <input id="llm-model" type="text" placeholder="leave empty for default" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
-        </label>
+      <button type="button" class="btn btn-ghost btn-sm picked-file-change" id="change-file">Change file</button>
+    </div>
+
+    <div class="scan-options-title">Scan options</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;font-size:.8rem">
+      <label style="display:flex;flex-direction:column;gap:.3rem">
+        LLM Enrichment
+        <select id="llm-provider" onchange="onProviderChange()">
+          <option value="none">Disabled</option>
+          <option value="openai">OpenAI</option>
+          <option value="claude">Claude</option>
+          <option value="claude-oauth">Claude (OAuth — Pro/Max)</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="ollama">Ollama (local)</option>
+        </select>
+      </label>
+      <label style="display:flex;flex-direction:column;gap:.3rem">
+        Scan Mode
+        <select id="llm-mode" onchange="onLlmModeChange()">
+          <option value="summarize">Fast Scan</option>
+          <option value="find_vulns">Full Scan</option>
+          <option value="auto_fix">Auto Fix</option>
+          <option value="offensive">Offensive</option>
+        </select>
+        <span id="llm-mode-help" style="color:var(--muted);font-size:.72rem;max-width:22rem">Fast Scan = first-party app code and native libs only. Cheaper MSTG + optional LLM.</span>
+      </label>
+      <label style="display:flex;flex-direction:column;gap:.3rem">
+        Model override
+        <select id="llm-model-select" hidden onchange="onModelSelectChange()" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"></select>
+        <input id="llm-model" type="text" placeholder="leave empty for default" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
+      </label>
+    </div>
+    <div id="llm-key-row" hidden style="margin-top:.75rem;font-size:.8rem">
+      <label style="display:flex;flex-direction:column;gap:.3rem">
+        <span id="llm-key-label">API Key <span style="color:var(--red)">*</span></span>
+        <input id="llm-api-key" type="password" placeholder="Paste your API key here" oninput="clearKeyError()"
+          style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px;max-width:420px"/>
+        <span id="llm-key-error" hidden style="color:var(--red);font-weight:600">API key is required to use this provider.</span>
+        <span style="color:var(--muted);font-size:.72rem">Sent only to this server to authenticate with the LLM provider. Never stored.</span>
+      </label>
+    </div>
+    <div id="llm-oauth-hint" class="alert alert-info" hidden style="margin-top:.75rem;font-size:.8rem">
+      Uses the Claude Pro/Max subscription signed in on the <strong>server host</strong> (no API key needed here).
+      <span id="oauth-status-text">Checking status…</span>
+      <div id="oauth-claude-code-row" hidden style="margin-top:.5rem">
+        <button class="btn btn-ghost btn-sm" onclick="importFromClaudeCode()">Import from Claude Code CLI</button>
+        <span style="color:var(--muted);font-size:.72rem">
+          Found a <code>claude /login</code> session on this server — one click reuses it.
+        </span>
       </div>
-      <div id="llm-key-row" hidden style="margin-top:.75rem;font-size:.8rem">
-        <label style="display:flex;flex-direction:column;gap:.3rem">
-          <span id="llm-key-label">API Key <span style="color:var(--red)">*</span></span>
-          <input id="llm-api-key" type="password" placeholder="Paste your API key here" oninput="clearKeyError()"
-            style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px;max-width:420px"/>
-          <span id="llm-key-error" hidden style="color:var(--red);font-weight:600">API key is required to use this provider.</span>
-          <span style="color:var(--muted);font-size:.72rem">Sent only to this server to authenticate with the LLM provider. Never stored.</span>
-        </label>
-      </div>
-      <div id="llm-oauth-hint" class="alert alert-info" hidden style="margin-top:.75rem;font-size:.8rem">
-        Uses the Claude Pro/Max subscription signed in on the <strong>server host</strong> (no API key needed here).
-        <span id="oauth-status-text">Checking status…</span>
-        <div id="oauth-claude-code-row" hidden style="margin-top:.5rem">
-          <button class="btn btn-ghost btn-sm" onclick="importFromClaudeCode()">Import from Claude Code CLI</button>
-          <span style="color:var(--muted);font-size:.72rem">
-            Found a <code>claude /login</code> session on this server — one click reuses it.
-          </span>
+      <details style="margin-top:.5rem">
+        <summary style="cursor:pointer">…or paste a token manually</summary>
+        <p style="color:var(--muted);font-size:.72rem;margin:.4rem 0">
+          From <code>~/.claude/.credentials.json</code>'s <code>claudeAiOauth</code> object
+          (wherever you last ran <code>claude /login</code>), or your own sandbox. Sent straight
+          to this server — never shown elsewhere.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:.3rem;max-width:420px">
+          <input id="oauth-imp-access" type="password" placeholder="accessToken (sk-ant-oat01-...)"
+            style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
+          <input id="oauth-imp-refresh" type="password" placeholder="refreshToken (sk-ant-ort01-...)"
+            style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
+          <input id="oauth-imp-expires" type="text" placeholder="expiresAt (epoch milliseconds)"
+            style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
+          <button class="btn btn-ghost btn-sm" onclick="importOauthToken()" style="align-self:flex-start">Import token</button>
         </div>
-        <details style="margin-top:.5rem">
-          <summary style="cursor:pointer">…or paste a token manually</summary>
-          <p style="color:var(--muted);font-size:.72rem;margin:.4rem 0">
-            From <code>~/.claude/.credentials.json</code>'s <code>claudeAiOauth</code> object
-            (wherever you last ran <code>claude /login</code>), or your own sandbox. Sent straight
-            to this server — never shown elsewhere.
-          </p>
-          <div style="display:flex;flex-direction:column;gap:.3rem;max-width:420px">
-            <input id="oauth-imp-access" type="password" placeholder="accessToken (sk-ant-oat01-...)"
-              style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
-            <input id="oauth-imp-refresh" type="password" placeholder="refreshToken (sk-ant-ort01-...)"
-              style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
-            <input id="oauth-imp-expires" type="text" placeholder="expiresAt (epoch milliseconds)"
-              style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
-            <button class="btn btn-ghost btn-sm" onclick="importOauthToken()" style="align-self:flex-start">Import token</button>
-          </div>
-        </details>
-        <div id="oauth-import-err"></div>
-      </div>
-      <div id="offensive-warn" class="alert alert-warn off-warn" hidden>
-        Offensive mode generates Frida bypass/intercept scripts for <strong>authorized testing only</strong>.
-        Selecting it enables LLM Enrichment.
-      </div>
-      <label style="display:flex;align-items:center;gap:.5rem;margin-top:.85rem;font-size:.8rem;cursor:pointer">
-        <input type="checkbox" id="assessment-enabled" checked/>
-        <span><strong>Security Assessment</strong> — inventory controls (obfuscation, pinning, root/Frida detection, FLAG_SECURE, …). Independent of LLM.</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:.5rem;margin-top:.5rem;font-size:.8rem;cursor:pointer">
-        <input type="checkbox" id="ios-light"/>
-        <span><strong>iOS light scan</strong> — skip Ghidra: strings, imported symbols and plist only (seconds, little RAM). For very large .ipa that run out of memory; rules that need pseudocode are reported as not evaluated. Ignored for Android.</span>
-      </label>
-      <progress id="upload-bar" value="0" max="100" hidden></progress>
+      </details>
+      <div id="oauth-import-err"></div>
     </div>
-
-    <div class="card">
-      <div class="card-title" style="justify-content:space-between">
-        Recent scans
-        <a href="#/scans" style="font-size:.75rem;font-weight:400">View all →</a>
-      </div>
-      <div id="recent-list"><div class="loading"><div class="spinner"></div></div></div>
+    <div id="offensive-warn" class="alert alert-warn off-warn" hidden>
+      Offensive mode generates Frida bypass/intercept scripts for <strong>authorized testing only</strong>.
+      Selecting it enables LLM Enrichment.
     </div>
-  </div>`);
+    <label style="display:flex;align-items:center;gap:.5rem;margin-top:.85rem;font-size:.8rem;cursor:pointer">
+      <input type="checkbox" id="assessment-enabled" checked/>
+      <span><strong>Security Assessment</strong> — inventory controls (obfuscation, pinning, root/Frida detection, FLAG_SECURE, …). Independent of LLM.</span>
+    </label>
+    ${kind === 'ios' ? `
+    <label style="display:flex;align-items:center;gap:.5rem;margin-top:.5rem;font-size:.8rem;cursor:pointer">
+      <input type="checkbox" id="ios-light"/>
+      <span><strong>iOS light scan</strong> — skip Ghidra: strings, imported symbols and plist only (seconds, little RAM). For very large .ipa that run out of memory; rules that need pseudocode are reported as not evaluated.</span>
+    </label>` : ''}
+    ${kind === 'android' ? `
+    <div style="margin-top:.85rem;font-size:.8rem">
+      <div style="font-weight:600;margin-bottom:.35rem">Android decompiler</div>
+      <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer">
+        <input type="radio" name="decompiler" id="decompiler-jadx" value="jadx" checked style="margin-top:.2rem"/>
+        <span><strong>JADX</strong> (default) — full tree decompile up front. Slower to start, well-tested, works for most APKs.</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;margin-top:.35rem">
+        <input type="radio" name="decompiler" id="decompiler-asc" value="asc" style="margin-top:.2rem"/>
+        <span><strong>Droid ASC</strong> — on-demand, zero-preprocessing decompiler; can be faster for huge APKs.
+          Falls back to JADX automatically if <code>droidasc</code> isn't installed/configured on the server.</span>
+      </label>
+    </div>` : ''}
+    <progress id="upload-bar" value="0" max="100" hidden></progress>
+    <div class="run-scan-row">
+      <button type="button" class="btn btn-primary" id="run-scan-btn">Run Scan</button>
+      <span id="run-scan-hint" style="color:var(--muted);font-size:.78rem">Nothing is uploaded until you click this.</span>
+    </div>`;
+}
 
-  const drop = $('#drop');
-  const fileEl = $('#ipa-file');
-  ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag-over')}));
-  ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag-over')}));
-  drop.addEventListener('drop', ev=>doUpload(ev.dataTransfer.files[0]));
-  fileEl.addEventListener('change', ev=>doUpload(ev.target.files[0]));
+route('home', async function() {
+  let pendingFile = null;
 
-  async function doUpload(file) {
+  function pickFile(file) {
     if (!file) return;
     const n = file.name.toLowerCase();
     if (!n.endsWith('.ipa') && !n.endsWith('.apk') && !n.endsWith('.xapk')) { alert('Only .ipa, .apk or .xapk files accepted'); return; }
+    pendingFile = file;
+    paintUploadCard();
+  }
 
+  async function doUpload(file) {
     // Validate: API key required when provider needs one
     let provider = $('#llm-provider').value;
     const mode = $('#llm-mode').value;
@@ -1247,8 +1293,14 @@ route('home', async function() {
     fd.append('llm_api_key', apiKeyVal);
     fd.append('assessment_enabled', $('#assessment-enabled')?.checked !== false);
     fd.append('ios_light', !!$('#ios-light')?.checked);
+    const ascEl = $('#decompiler-asc');
+    fd.append('decompiler', (ascEl && ascEl.checked) ? 'asc' : 'jadx');
 
     const bar = $('#upload-bar');
+    const runBtn = $('#run-scan-btn');
+    const changeBtn = $('#change-file');
+    if (runBtn) { runBtn.disabled = true; runBtn.textContent = 'Starting…'; }
+    if (changeBtn) changeBtn.disabled = true;
     bar.hidden = false; bar.value = 0;
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/v1/scans');
@@ -1258,12 +1310,59 @@ route('home', async function() {
       bar.value = 100;
       try {
         const j = JSON.parse(xhr.responseText);
-        if (j.scan_id) location.hash = '#/scan/' + j.scan_id;
-      } catch(_) { alert('Upload failed: ' + xhr.responseText); }
+        if (j.scan_id) { location.hash = '#/scan/' + j.scan_id; return; }
+        throw new Error(xhr.responseText);
+      } catch(_) {
+        let detail = xhr.responseText;
+        try { detail = formatApiErrorDetail(JSON.parse(xhr.responseText).detail); } catch(__) {}
+        alert('Could not start scan: ' + detail);
+      }
+      if (runBtn) { runBtn.disabled = false; runBtn.textContent = 'Run Scan'; }
+      if (changeBtn) changeBtn.disabled = false;
     };
-    xhr.onerror = () => alert('Network error');
+    xhr.onerror = () => {
+      alert('Network error');
+      if (runBtn) { runBtn.disabled = false; runBtn.textContent = 'Run Scan'; }
+      if (changeBtn) changeBtn.disabled = false;
+    };
     xhr.send(fd);
   }
+
+  render(`
+  <div style="max-width:680px;margin:0 auto">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Upload package</div>
+      <div id="upload-card-inner"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        Recent scans
+        <a href="#/scans" style="font-size:.75rem;font-weight:400">View all →</a>
+      </div>
+      <div id="recent-list"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>`);
+
+  // The card-title stays fixed; only this inner slot swaps between the drop-zone (step 1) and
+  // the options form (step 2) as the user picks/changes a file — never the whole page.
+  function paintUploadCard() {
+    $('#upload-card-inner').innerHTML = pendingFile ? renderScanOptionsHtml(pendingFile) : renderDropZoneHtml();
+    if (pendingFile) {
+      $('#change-file').addEventListener('click', () => { pendingFile = null; paintUploadCard(); });
+      $('#run-scan-btn').addEventListener('click', () => doUpload(pendingFile));
+      onProviderChange();
+      onLlmModeChange();
+    } else {
+      const drop = $('#drop');
+      const fileEl = $('#ipa-file');
+      ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag-over')}));
+      ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag-over')}));
+      drop.addEventListener('drop', ev=>pickFile(ev.dataTransfer.files[0]));
+      fileEl.addEventListener('change', ev=>pickFile(ev.target.files[0]));
+    }
+  }
+  paintUploadCard();
 
   try {
     const scans = await api('/scans');

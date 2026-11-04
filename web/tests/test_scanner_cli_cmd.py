@@ -52,6 +52,27 @@ class CliCmdTests(unittest.TestCase):
         self.assertEqual(cmd[2], "/opt/malimite-cli.jar")
         self.assertEqual(cmd[cmd.index("--ghidra") + 1], "/opt/ghidra")
 
+    def test_decompiler_jadx_is_the_default_and_adds_no_flag(self):
+        cmd = scanner._cli_cmd(Path("/tmp/upload.apk"), Path("/tmp/out"), {"llm_mode": "summarize"})
+        self.assertNotIn("--decompiler", cmd)
+        cmd = scanner._cli_cmd(Path("/tmp/upload.apk"), Path("/tmp/out"),
+                               {"llm_mode": "summarize", "decompiler": "jadx"})
+        self.assertNotIn("--decompiler", cmd)
+
+    def test_decompiler_asc_is_passed_through(self):
+        cmd = scanner._cli_cmd(Path("/tmp/upload.apk"), Path("/tmp/out"),
+                               {"llm_mode": "summarize", "decompiler": "asc"})
+        self.assertIn("--decompiler", cmd)
+        self.assertEqual(cmd[cmd.index("--decompiler") + 1], "asc")
+
+    def test_decompiler_unknown_value_is_treated_as_jadx(self):
+        # meta.json could in principle hold a stale/garbage value; _cli_cmd itself only forwards
+        # exactly "asc", so anything else silently behaves like the jadx default instead of
+        # passing a bogus value through to the CLI.
+        cmd = scanner._cli_cmd(Path("/tmp/upload.apk"), Path("/tmp/out"),
+                               {"llm_mode": "summarize", "decompiler": "nonsense"})
+        self.assertNotIn("--decompiler", cmd)
+
 
 class LlmEnvTests(unittest.TestCase):
     def test_provider_env_mapping(self):

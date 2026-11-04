@@ -64,6 +64,39 @@ public final class AscRunner {
         }
     }
 
+    /**
+     * True when the resolved command can actually be launched (e.g. the executable exists on
+     * PATH, or the Python interpreter + droidasc module import under the source checkout). The
+     * constructor only resolves *which* command to try — it never starts a process, so a missing
+     * {@code droidasc}/{@code python3} binary is otherwise only discovered mid-scan, after the
+     * on-demand decompile phase has already committed to ASC with no fallback. Callers should
+     * check this once, right after construction, and treat {@code false} the same as the
+     * constructor having thrown (fall back to JADX).
+     */
+    public boolean isAvailable() {
+        try {
+            List<String> cmd = new ArrayList<>(command);
+            cmd.add("--help");
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            if (workDir != null) pb.directory(workDir.toFile());
+            pb.redirectErrorStream(true);
+            pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+            Process proc = pb.start();
+            boolean finished = proc.waitFor(15, TimeUnit.SECONDS);
+            if (!finished) {
+                proc.destroyForcibly();
+                return false;
+            }
+            // Any clean process start/exit (0 or a usage-error code) proves the binary/interpreter
+            // itself is runnable; only a launch failure (ENOENT etc., caught below) means it isn't.
+            return true;
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            log.warn("Droid ASC availability check failed ({}): {}", String.join(" ", command), e.getMessage());
+            return false;
+        }
+    }
+
     /** Decode AndroidManifest.xml straight from the APK (no full inflate). */
     public String manifest(Path apk) throws Exception {
         return run(List.of("getmanifest", apk.toString()));

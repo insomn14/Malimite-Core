@@ -128,11 +128,21 @@ public class MalimiteAnalyzer {
         Path workDir = Files.createTempDirectory("malimite-apk-" + scanId + "-");
         ApkExtractor.ExtractionResult extraction = ApkExtractor.extract(opts.packagePath(), workDir);
 
-        // Optional Droid ASC backend (on-demand, zero-preprocessing decompiler).
+        // Optional Droid ASC backend (on-demand, zero-preprocessing decompiler). Checked once,
+        // right here: isAvailable() actually launches the resolved command, unlike the
+        // constructor (which only picks *which* command to try). This must happen before
+        // manifestFor()/decompileToTree() ever touch `asc`, so a missing droidasc/python3 falls
+        // back to JADX consistently for the whole scan instead of surfacing mid-run as an
+        // unhandled IOException once a later ASC call actually tries to exec it.
         AscRunner asc = null;
         if (opts.useAsc()) {
             try {
-                asc = new AscRunner(opts.ascHome());
+                AscRunner candidate = new AscRunner(opts.ascHome());
+                if (candidate.isAvailable()) {
+                    asc = candidate;
+                } else {
+                    log.warn("ASC unavailable (droidasc/python3 not runnable); falling back to JADX");
+                }
             } catch (Exception e) {
                 log.warn("ASC unavailable ({}); falling back to JADX", e.getMessage());
             }

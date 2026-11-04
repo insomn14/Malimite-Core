@@ -89,11 +89,14 @@ async def create_scan(
     llm_api_key: str = Form(""),
     assessment_enabled: bool = Form(True),
     ios_light: bool = Form(False),
+    decompiler: str = Form("jadx"),
 ):
     _check_auth(request)
     name = file.filename.lower()
     if not name.endswith(_ACCEPTED_EXTENSIONS):
         raise HTTPException(status_code=400, detail="Only .ipa, .apk or .xapk files are accepted")
+    if decompiler not in ("jadx", "asc"):
+        raise HTTPException(status_code=422, detail="decompiler must be 'jadx' or 'asc'")
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
@@ -133,7 +136,7 @@ async def create_scan(
     return await scanner.create_scan(
         data, file.filename,
         llm_enabled, llm_provider, llm_mode, llm_model, llm_api_key,
-        assessment_enabled, ios_light,
+        assessment_enabled, ios_light, decompiler,
     )
 
 

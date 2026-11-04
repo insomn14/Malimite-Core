@@ -325,6 +325,7 @@ async def create_scan(
     llm_api_key: str = "",
     assessment_enabled: bool = True,
     ios_light: bool = False,
+    decompiler: str = "jadx",
 ) -> ScanMeta:
     migrate_legacy_scan_dirs()
     settings.scan_dir.mkdir(parents=True, exist_ok=True)
@@ -351,6 +352,9 @@ async def create_scan(
         "llm_model": llm_model,
         "assessment_enabled": assessment_enabled,
         "ios_light": ios_light,
+        # Android-only (.apk/.xapk); ignored by the CLI for .ipa. "jadx" (default) or "asc"
+        # (Droid ASC — falls back to jadx server-side if the asc/droidasc binary isn't installed).
+        "decompiler": decompiler if decompiler in ("jadx", "asc") else "jadx",
         # in-memory only (stripped by _write_meta): used by _run to build the CLI environment
         "_llm_api_key": llm_api_key,
     }
@@ -383,6 +387,11 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
         cmd += ["--no-assessment"]
     if meta.get("ios_light"):
         cmd += ["--ios-light"]
+    # CLI default is jadx; only pass --decompiler when asc was explicitly picked (Android-only —
+    # the CLI itself ignores this flag for .ipa). If droidasc isn't installed/configured on this
+    # host, MalimiteAnalyzer falls back to jadx server-side and logs why — never a hard failure.
+    if meta.get("decompiler") == "asc":
+        cmd += ["--decompiler", "asc"]
     return cmd
 
 
