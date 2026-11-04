@@ -42,7 +42,7 @@ public final class HtmlReporter {
      * stale reports and re-render via {@link ReportRenderer}. Keep in sync with
      * {@code web/app/main.py}'s {@code _HTML_REPORT_TEMPLATE_VERSION}.
      */
-    public static final String TEMPLATE_VERSION = "7";
+    public static final String TEMPLATE_VERSION = "8";
 
     private static final String IOS_TEMPLATE_RESOURCE = "/report-template/va-report-ios.html";
     private static final String ANDROID_TEMPLATE_RESOURCE = "/report-template/va-report-android.html";

@@ -22,7 +22,7 @@
   findings*: [{id, severity: CRITICAL|HIGH|MEDIUM|LOW|INFO, cvss, cvss_vector, title, rule,
               source: MASTG|LLM, category, cwe, masvs, description, affected[{name,type,location}],
               evidence, poc[], remediation, reference, status: OPEN|IN_PROGRESS|FIXED|ACCEPTED|FALSE_POSITIVE}]
-  code_surface: {entry_points[], classes[{name, fn}]}
+  code_surface: {entry_points[], entry_points_count, classes[{name, fn}]}
   strings_sample: [{address, segment, value}], strings_total
   Teks bebas (title, description, remediation, executive_note) boleh string atau {"id":"…","en":"…"}.
   Free text fields accept a string or {"id":"…","en":"…"}.
@@ -144,6 +144,27 @@ ol,ul{margin:0;padding-left:20px}
 .note{font-size:12px;padding:8px 12px;border-radius:8px;background:var(--med-bg);color:var(--med);margin-top:12px}
 .sign td{height:56px}
 footer{text-align:center;font-size:11px;color:var(--faint);margin-top:8px}
+/* appendix: code surface */
+.cs-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:8px 0 4px}
+@media (max-width:700px){.cs-stats{grid-template-columns:repeat(2,1fr)}}
+.cs-stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--soft)}
+.cs-stat .n{font-size:20px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
+.cs-stat .t{font-size:11px;color:var(--muted);margin-top:3px}
+.cs-h{font-size:13px;margin:18px 0 6px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.cs-chips{display:inline-flex;flex-wrap:wrap;gap:6px;font-weight:400}
+.cs-table td{vertical-align:middle}
+.cs-name{font-family:"IBM Plex Mono",monospace;font-size:12px;overflow-wrap:anywhere}
+.cs-member{color:var(--muted);font-weight:400}
+.cs-pkg{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--faint);overflow-wrap:anywhere;margin-top:1px}
+.cs-type{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;white-space:nowrap;background:var(--info-bg);color:var(--info)}
+.cs-type.activity{background:var(--brand-soft);color:var(--brand)}
+.cs-type.service{background:var(--ok-bg);color:var(--ok)}
+.cs-type.receiver{background:var(--med-bg);color:var(--med)}
+.cs-type.provider{background:var(--low-bg);color:var(--low)}
+.cs-bar{display:grid;grid-template-columns:1fr 52px;gap:8px;align-items:center;font-size:12px;font-variant-numeric:tabular-nums}
+.cs-bar span{text-align:right}
+.cs-bar .track{height:8px;background:var(--soft);border-radius:4px;overflow:hidden}
+.cs-bar .fill{height:100%;background:var(--brand);border-radius:4px}
 /* print */
 @media print{
   @page{size:A4;margin:16mm 14mm}
@@ -215,6 +236,8 @@ const L = {
   llmNote:["Temuan ini dihasilkan analisis berbasis LLM dan perlu diverifikasi manual sebelum ditindaklanjuti.","This finding was produced by LLM-assisted analysis and requires manual verification before action."],
   matrix:["Pemetaan MASVS","MASVS Mapping"],
   appendix:["Lampiran","Appendix"], surface:["Permukaan Kode","Code Surface"], entry:["Entry Points","Entry Points"],
+  epType:["Tipe","Type"], component:["Komponen / Kelas","Component / Class"], topClasses:["Kelas dengan Fungsi Terbanyak","Classes with the Most Functions"],
+  fnCount:["Jumlah Fungsi","Function Count"], clsN:["Kelas","Classes"], fnN:["Fungsi","Functions"],
   classIdx:["Indeks Kelas","Class Index"], fn:["fungsi","functions"], strings:["Sampel String","String Sample"],
   addr:["Alamat","Address"], seg:["Segmen","Segment"], value:["Nilai","Value"], scanMeta:["Metadata Pemindaian","Scan Metadata"],
   duration:["Durasi","Duration"], disclaimer:["Batasan & Penafian","Limitations & Disclaimer"],
@@ -416,6 +439,49 @@ const GLOSSARY = [
   ["SHA-256", "Fungsi hash kriptografis yang menghasilkan sidik jari 256-bit suatu berkas, dipakai untuk memverifikasi integritas.", "A cryptographic hash function producing a 256-bit fingerprint of a file, used to verify integrity."]
 ];
 const glossaryRows = GLOSSARY.map(([term,idDesc,enDesc])=>`<tr><td class="mono small">${esc(term)}</td><td>${bi(idDesc,enDesc)}</td></tr>`).join("");
+/* Code surface. Entry points arrive as "<ClassName>.<FunctionName>" strings: Android components
+   store FunctionName as "<type>:<class>" (so the class name repeats), iOS/native ones as
+   "<Class>.<selector or symbol>". Parse them into type + class (+ member) instead of printing raw. */
+const EP_ORDER = ["activity","service","receiver","provider","method"];
+const EPL = {activity:["Activity","Activity"], service:["Service","Service"], receiver:["Receiver","Receiver"],
+  provider:["Provider","Provider"], method:["Metode","Method"]};
+const parseEp = raw => {
+  const s = String(raw ?? "");
+  const m = s.match(/^(.*)\.(activity|service|receiver|provider):(.+)$/);
+  if (m) return {type:m[2], cls:m[3] || m[1], member:""};
+  const colon = s.indexOf(":");
+  const dot = s.lastIndexOf(".", colon < 0 ? s.length : colon);
+  return dot > 0 ? {type:"method", cls:s.slice(0, dot), member:s.slice(dot + 1)} : {type:"method", cls:s, member:""};
+};
+const clsCell = (c, member) => {
+  const name = String(c ?? ""), i = name.lastIndexOf(".");
+  const pkg = i > 0 ? name.slice(0, i) : "", short = i > 0 ? name.slice(i + 1) : name;
+  return `<div class="cs-name" title="${esc(name)}"><b>${esc(short)}</b>${member?`<span class="cs-member">.${esc(member)}</span>`:""}</div>`
+    + (pkg ? `<div class="cs-pkg">${esc(pkg)}</div>` : "");
+};
+const fmtN = n => (n === null || n === undefined || n === "") ? "—" : (isNaN(+n) ? esc(n) : Number(n).toLocaleString("en-US"));
+const EPS = (cs.entry_points||[]).map(parseEp)
+  .sort((a,b) => EP_ORDER.indexOf(a.type) - EP_ORDER.indexOf(b.type) || a.cls.localeCompare(b.cls));
+const epCounts = EP_ORDER.map(k => [k, EPS.filter(e => e.type === k).length]).filter(([,n]) => n);
+const CLS = cs.classes||[];
+const maxFn = Math.max(1, ...CLS.map(c => +c.fn || 0));
+const totalClasses = A.classes ?? CLS.length;
+const surfaceHtml = `
+  <h3>B. ${t("surface")}</h3>
+  <div class="cs-stats">
+    <div class="cs-stat"><div class="n">${fmtN(totalClasses)}</div><div class="t">${t("clsN")}</div></div>
+    <div class="cs-stat"><div class="n">${fmtN(A.functions)}</div><div class="t">${t("fnN")}</div></div>
+    <div class="cs-stat"><div class="n">${fmtN(cs.entry_points_count ?? EPS.length)}</div><div class="t">Entry points</div></div>
+    <div class="cs-stat"><div class="n">${fmtN(D.strings_total ?? A.strings)}</div><div class="t">Strings</div></div>
+  </div>
+  ${EPS.length?`<h4 class="cs-h">${t("entry")} <span class="cs-chips">${epCounts.map(([k,n])=>`<span class="cs-type ${k}">${pair(EPL,k)} · ${n}</span>`).join("")}</span></h4>
+  <div class="tw"><table class="cs-table"><thead><tr><th style="width:120px">${t("epType")}</th><th>${t("component")}</th></tr></thead><tbody>
+  ${EPS.map(e=>`<tr><td><span class="cs-type ${e.type}">${pair(EPL,e.type)}</span></td><td>${clsCell(e.cls,e.member)}</td></tr>`).join("")}
+  </tbody></table></div>`:""}
+  ${CLS.length?`<h4 class="cs-h">${t("topClasses")} <span class="small muted">(${t("showing")} ${CLS.length} ${t("of")} ${fmtN(totalClasses)})</span></h4>
+  <div class="tw"><table class="cs-table"><thead><tr><th class="c" style="width:44px">#</th><th>${t("classIdx")}</th><th style="width:32%">${t("fnCount")}</th></tr></thead><tbody>
+  ${CLS.map((c,i)=>`<tr><td class="c muted small">${i+1}</td><td>${clsCell(c.name)}</td><td><div class="cs-bar"><div class="track"><div class="fill" style="width:${Math.max(2,Math.round((+c.fn||0)/maxFn*100))}%"></div></div><span>${fmtN(c.fn)}</span></div></td></tr>`).join("")}
+  </tbody></table></div>`:""}`;
 const appendix = `
 <section class="page flow">
   ${H("appendix")}
@@ -424,10 +490,7 @@ const appendix = `
     ${kvRow(t("scanId"),`<span class="mono small">${esc(M.scan_id)}</span>`)}${kvRow(t("generated"),esc(M.generated))}
     ${kvRow(t("duration"),esc(dur))}${kvRow(t("tool"),esc(M.tool_version||"Malimite"))}
   </tbody></table></div>
-  <h3>B. ${t("surface")}</h3>
-  <p class="small muted">${esc((cs.classes||[]).length)} ${bi("kelas","classes")} · ${esc(A.functions??"")} ${t("fn")} · ${esc((cs.entry_points||[]).length)} entry points</p>
-  ${(cs.entry_points||[]).length?`<div class="affected" style="margin-bottom:10px">${cs.entry_points.map(e=>`<span>${esc(e)}</span>`).join("")}</div>`:""}
-  ${(cs.classes||[]).length?`<div class="tw"><table><thead><tr><th>${t("classIdx")}</th><th class="c">${t("fn")}</th></tr></thead><tbody>${cs.classes.map(c=>`<tr><td class="mono small">${esc(c.name)}</td><td class="c">${esc(c.fn)}</td></tr>`).join("")}</tbody></table></div>`:""}
+${surfaceHtml}
   ${SS.length?`<h3>C. ${t("strings")} <span class="small muted">(${t("showing")} ${SS.length} ${t("of")} ${esc(D.strings_total??SS.length)})</span></h3>
   <div class="tw"><table><thead><tr><th>${t("addr")}</th><th>${t("seg")}</th><th>${t("value")}</th></tr></thead><tbody>
   ${SS.map(s=>`<tr><td class="mono small">${esc(s.address)}</td><td class="mono small">${esc(s.segment)}</td><td class="mono small">${esc(s.value)}</td></tr>`).join("")}</tbody></table></div>`:""}
