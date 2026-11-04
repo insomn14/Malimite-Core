@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import auto_enhance, db, finding_fix, offensive_phases, scanner
+from . import auto_enhance, db, finding_fix, llm_probe, offensive_phases, scanner
 from .agent import anthropic_oauth, loop as agent_loop, ondemand, store as chat_store
 from .agent.llm import VISION_CAPABLE_PROVIDERS, LlmError, resolve_llm
 from .agent.tools import Ctx, valid_class_name
@@ -922,6 +922,24 @@ async def claude_oauth_import_claude_code(request: Request):
                                     f"{anthropic_oauth.claude_code_credentials_path()}. "
                                     f"Run 'claude /login' first, wherever this process can read that file.")
     return {"ok": True, "changed": result.changed, "token_fingerprint": result.fingerprint}
+
+
+class LlmTestRequest(BaseModel):
+    provider: str
+    api_key: str = Field("", max_length=4096)
+    model: str = Field("", max_length=200)
+
+
+@app.post("/api/v1/llm/test")
+async def llm_test_connection(request: Request, req: LlmTestRequest):
+    """Backs the upload form's "Test Connection" button: lists the provider's models with the
+    given key (or the server's own key when none is supplied). Never spends a completion and
+    never echoes the key back."""
+    _check_auth(request)
+    try:
+        return await llm_probe.probe(req.provider, req.api_key, req.model)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 # ── file downloads ────────────────────────────────────────────────────────────

@@ -57,6 +57,8 @@ Python (MIT), python-dotenv (BSD 3-Clause).
 | Library | License | Role |
 |---|---|---|
 | [highlight.js](https://github.com/highlightjs/highlight.js) 11.12.0 | BSD 3-Clause | Syntax highlighting in the Functions tab's source viewer. Self-hosted (not loaded from a CDN) so the web UI keeps working on an offline/air-gapped network; see `web/vendor/hljs/LICENSE`. Core plus 8 language grammars: Java, Kotlin, Objective-C, Swift, C, C++, JSON, XML (`web/vendor/hljs/languages/`). |
+| [Lucide](https://lucide.dev) icons | ISC (© Lucide Contributors) | Outline icon paths inlined in `web/index.html` (`ICONS`) for the home page's upload and scan-configuration UI. |
+| [Simple Icons](https://simpleicons.org) Apple glyph · [Material Icons](https://fonts.google.com/icons) Android glyph | CC0-1.0 · Apache-2.0 | Platform glyphs (`PLATFORM_GLYPHS` in `web/index.html`) marking iOS / Android packages. |
 
 ## Services (not bundled)
 

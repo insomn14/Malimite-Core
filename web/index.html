@@ -8,7 +8,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#f8f9fb;--surface:#fff;--border:#e2e4e9;--text:#1a1d23;
-  --muted:#6b7280;--accent:#5571f7;--accent-h:#3d56e0;
+  --muted:#6b7280;--accent:#4f46e5;--accent-h:#4338ca;
   --high:#dc2626;--medium:#d97706;--low:#2563eb;--info:#6b7280;
   --green:#16a34a;--red:#dc2626;--yellow:#ca8a04;
   --radius:8px;--shadow:0 1px 3px rgba(0,0,0,.08);
@@ -64,20 +64,191 @@ main>*,#tab-content{min-width:0;max-width:100%}
 .stat-label{font-size:.75rem;color:var(--muted);margin-top:.25rem}
 .stat-sub{font-size:.65rem;color:var(--muted);margin-top:.2rem;opacity:.85}
 
-/* upload */
-.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:3rem;text-align:center;cursor:pointer;transition:all .15s}
-.drop-zone:hover,.drop-zone.drag-over{background:#f0f3ff;border-color:var(--accent)}
-.drop-zone p{color:var(--muted);font-size:.9rem;margin-top:.5rem}
-.drop-file-btn{display:inline-block;margin-top:.8rem;padding:.5rem 1.2rem;background:var(--accent);color:#fff;border-radius:var(--radius);font-weight:600;cursor:pointer;font-size:.875rem}
-.drop-file-btn:hover{background:var(--accent-h)}
+/* ── home: upload + scan configuration + recent scans ── */
 input[type=file]{display:none}
-.picked-file{display:flex;align-items:center;gap:.75rem;padding:.9rem 1.1rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)}
-.picked-file-icon{font-size:1.6rem;line-height:1}
-.picked-file-name{font-weight:600;word-break:break-all}
-.picked-file-meta{color:var(--muted);font-size:.78rem;margin-top:.15rem}
-.picked-file-change{margin-left:auto;flex-shrink:0}
-.scan-options-title{font-size:.85rem;font-weight:600;margin:1.1rem 0 .5rem}
-.run-scan-row{display:flex;align-items:center;gap:.75rem;margin-top:1.1rem}
+.ico{width:1em;height:1em;flex:none;vertical-align:-.125em}
+.home-wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:1.25rem}
+.panel{min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 4px 16px rgba(16,24,40,.04);padding:1.15rem 1.25rem}
+.panel-head{display:flex;align-items:center;gap:.55rem;font-weight:700;font-size:1rem;margin-bottom:.9rem;min-width:0}
+.panel-head>.ico{color:var(--accent);font-size:1.15rem}
+.panel-head-r{margin-left:auto;display:flex;align-items:center;gap:.6rem;font-size:.8rem;font-weight:600}
+.link-strong{display:inline-flex;align-items:center;gap:.3rem;font-weight:650;color:var(--accent)}
+.link-strong:hover{text-decoration:none;color:var(--accent-h)}
+.link-strong .ico{transition:transform .15s}
+.link-strong:hover .ico{transform:translateX(2px)}
+.muted-count{color:var(--muted);font-weight:500;font-size:.78rem}
+
+/* step 1 — drop zone */
+.up-drop{display:flex;flex-direction:column;align-items:center;text-align:center;gap:.3rem;padding:2.6rem 1.5rem 2.2rem;border:2px dashed #c3c6f2;border-radius:18px;background:linear-gradient(180deg,#f8f8ff 0%,#f0f1fe 100%);cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;outline:none}
+.up-drop:hover,.up-drop:focus-visible{border-color:var(--accent);box-shadow:0 0 0 4px rgba(79,70,229,.08)}
+.up-drop.drag-over{border-color:var(--accent);border-style:solid;background:#eceefe;box-shadow:0 0 0 6px rgba(79,70,229,.12)}
+.up-drop-icon{width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--accent);background:#fff;box-shadow:0 8px 24px rgba(79,70,229,.16);margin-bottom:.7rem;font-size:2.2rem;transition:transform .2s ease}
+.up-drop:hover .up-drop-icon,.up-drop.drag-over .up-drop-icon{transform:translateY(-4px)}
+.up-drop h2{font-size:1.4rem;font-weight:750;letter-spacing:-.015em}
+.up-drop-sub{color:var(--muted);font-size:.93rem}
+.up-formats{display:inline-flex;align-items:center;margin:.6rem 0 .45rem;padding:.25rem .35rem;background:#e7e8fb;border-radius:999px}
+.up-formats span{padding:.1rem .65rem;font-size:.74rem;font-weight:750;color:#3730a3;letter-spacing:.04em}
+.up-formats span+span{border-left:4px solid transparent;position:relative}
+.up-formats span+span::before{content:"";position:absolute;left:-4px;top:50%;width:4px;height:4px;margin-top:-2px;border-radius:50%;background:#818cf8}
+.up-browse{margin-top:.55rem;pointer-events:none}
+.up-drop-hint{color:var(--muted);font-size:.8rem;margin-top:.4rem}
+.up-drop-error{display:flex;align-items:center;gap:.35rem;margin-top:.5rem;color:var(--red);font-weight:600;font-size:.82rem}
+.up-engines{margin-top:1rem;padding-top:.85rem;border-top:1px solid #e0e2f7;width:min(560px,100%);text-align:center;color:var(--muted);font-size:.74rem;line-height:1.5}
+
+/* buttons used by the redesigned home */
+.btn.btn-lg{padding:.7rem 1.4rem;font-size:.92rem;border-radius:11px;gap:.5rem}
+.btn.btn-lg.btn-primary{box-shadow:0 6px 16px rgba(79,70,229,.28)}
+.btn.btn-outline{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:.55rem .9rem;font-size:.82rem}
+.btn.btn-outline:hover{background:#f7f7ff;border-color:#c3c6f2}
+.btn.btn-outline .ico{color:var(--accent)}
+.btn:disabled{cursor:not-allowed;opacity:.6}
+
+/* platform tile + recent scans */
+.plat-tile{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex:none}
+.plat-android{background:#eef0ff;color:#5b5bd6}
+.plat-ios{background:#f1f2f4;color:#111827}
+.plat-unknown{background:#f1f2f4;color:var(--muted)}
+.rs-list{display:flex;flex-direction:column;gap:.5rem}
+.rs-row{display:grid;grid-template-columns:42px minmax(0,1fr) 104px 96px 72px 34px;grid-template-areas:"icon main state count bar menu";align-items:center;gap:.9rem;padding:.6rem .7rem;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;transition:border-color .12s,background .12s,box-shadow .12s;outline:none}
+.rs-row:hover,.rs-row:focus-visible{border-color:#c3c6f2;background:#fafaff;box-shadow:0 2px 10px rgba(79,70,229,.07)}
+.rs-row>.plat-tile{grid-area:icon}
+.rs-main{grid-area:main;min-width:0}
+.rs-name{font-weight:650;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rs-meta{font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rs-meta span+span::before{content:" • "}
+.rs-state{grid-area:state}
+.rs-count{font-size:.8rem;font-weight:600;white-space:nowrap}
+.rs-count.muted{color:var(--muted);font-weight:500}
+.rs-bar{grid-area:bar}
+.rs-menu{grid-area:menu;position:relative;justify-self:end}
+.st-pill{display:inline-flex;align-items:center;gap:.3rem;padding:.22rem .6rem;border-radius:999px;font-size:.68rem;font-weight:750;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.st-pill .ico{font-size:.85rem}
+.st-done{background:#dcfce7;color:#15803d}
+.st-running{background:#fef3c7;color:#a16207}
+.st-queued{background:#f1f2f4;color:#4b5563}
+.st-error{background:#fee2e2;color:#b91c1c}
+.ico-spin{animation:spin .8s linear infinite}
+.sev-bar{display:flex;gap:2px;width:100%;height:7px;border-radius:999px;overflow:hidden;background:#e5e7eb}
+.sev-bar i{display:block;height:100%;min-width:3px}
+.sev-bar .s-c{background:#9d174d}.sev-bar .s-h{background:#ef4444}.sev-bar .s-m{background:#f59e0b}.sev-bar .s-l{background:#3b82f6}.sev-bar .s-i{background:#9ca3af}
+.sev-bar.clean{background:#bbf7d0}
+.sev-bar.indet{position:relative}
+.sev-bar.indet::after{content:"";position:absolute;inset:0;width:40%;border-radius:999px;background:#fcd34d;animation:indet 1.2s ease-in-out infinite}
+@keyframes indet{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+.skel{display:block;height:.7rem;border-radius:6px;background:linear-gradient(90deg,#eef0f3 25%,#f7f8fa 50%,#eef0f3 75%);background-size:200% 100%;animation:skel 1.2s linear infinite}
+@keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
+.rs-menu summary{list-style:none;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;font-size:1.1rem}
+.rs-menu summary::-webkit-details-marker{display:none}
+.rs-menu summary:hover,.rs-menu[open] summary{background:#eef0ff;color:var(--accent)}
+.rs-menu-pop{position:absolute;right:0;top:calc(100% + .3rem);z-index:30;min-width:190px;padding:.3rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(16,24,40,.14)}
+.rs-menu-pop a,.rs-menu-pop button{display:flex;align-items:center;gap:.5rem;width:100%;padding:.45rem .6rem;border:0;border-radius:7px;background:transparent;font:inherit;font-size:.8rem;color:var(--text);text-align:left;cursor:pointer}
+.rs-menu-pop a:hover,.rs-menu-pop button:hover{background:var(--bg);text-decoration:none}
+.rs-menu-pop .danger{color:var(--red)}
+.rs-empty{display:flex;flex-direction:column;align-items:center;gap:.35rem;padding:2rem 1rem;color:var(--muted);font-size:.85rem;text-align:center}
+.rs-empty .ico{font-size:1.6rem;color:#a5b4fc}
+@media(max-width:720px){
+  .rs-row{grid-template-columns:42px auto minmax(0,1fr) 60px;grid-template-areas:"icon main main menu" "icon state count bar";row-gap:.45rem;column-gap:.7rem}
+  .rs-count-cell{justify-self:end}
+}
+
+/* step 2 — picked file + configuration */
+fieldset.plain{border:0;padding:0;margin:0;min-width:0;display:flex;flex-direction:column;gap:1rem}
+.picked{display:flex;align-items:center;gap:.9rem;padding:.8rem .9rem;border:1px solid #dfe1fb;background:#f7f7ff;border-radius:12px;min-width:0;transition:border-color .15s,box-shadow .15s}
+.picked.drag-over{border-color:var(--accent);box-shadow:0 0 0 4px rgba(79,70,229,.12)}
+.picked .plat-tile{width:50px;height:50px;font-size:1.55rem;background:#fff;box-shadow:0 1px 3px rgba(16,24,40,.08)}
+.picked-main{min-width:0;flex:1}
+.picked-name{font-weight:700;font-size:1rem;overflow-wrap:anywhere}
+.picked-meta{font-size:.78rem;color:var(--muted);margin-top:.1rem}
+.picked-ok{color:var(--green);font-size:1.25rem;display:flex}
+.cfg-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1rem}
+.cfg-card{grid-column:span 3;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 4px 16px rgba(16,24,40,.04);padding:1.1rem 1.2rem;transition:border-color .15s}
+.cfg-card.span-2{grid-column:span 2}
+.cfg-head{display:flex;align-items:center;gap:.55rem;min-width:0}
+.step-num{width:22px;height:22px;border-radius:50%;background:#eef0ff;color:var(--accent);font-size:.72rem;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.cfg-title{font-weight:700;font-size:.97rem;display:flex;align-items:center;gap:.45rem;min-width:0}
+.cfg-title>.ico{color:var(--accent);font-size:1.1rem}
+.cfg-head-r{margin-left:auto;display:flex;align-items:center;gap:.55rem;flex:none}
+.cfg-desc{color:var(--muted);font-size:.8rem;margin:.3rem 0 .9rem}
+.tag-opt{font-size:.68rem;font-weight:650;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:.05rem .45rem}
+.tag-rec{font-size:.66rem;font-weight:700;color:#3730a3;background:#e7e8fb;border-radius:999px;padding:.05rem .45rem;margin-left:.3rem;vertical-align:.1em}
+.state-pill{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;background:#f1f2f4;color:var(--muted)}
+.state-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.state-pill.on{background:#dcfce7;color:#15803d}
+.field{display:flex;flex-direction:column;gap:.35rem;min-width:0}
+.field-label{font-size:.78rem;font-weight:650;color:#374151;display:flex;align-items:center;gap:.3rem}
+.field-label .req{color:var(--red)}
+.field-help{font-size:.76rem;color:var(--muted);margin-top:.5rem;line-height:1.45}
+.ctl{width:100%;min-width:0;height:40px;padding:0 .75rem;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit;font-size:.85rem;color:var(--text);transition:border-color .12s,box-shadow .12s}
+.ctl:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+.ctl:disabled{background:#f6f7f9;color:var(--muted)}
+.ctl.invalid{border-color:var(--red);box-shadow:0 0 0 3px rgba(220,38,38,.12)}
+select.ctl{appearance:none;-webkit-appearance:none;padding-right:2.1rem;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .7rem center;background-size:15px}
+.ctl-static{display:flex;align-items:center;gap:.4rem;background:#f6f7f9;color:var(--muted);font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctl-icon{position:relative}
+.ctl-icon>.ico{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--accent);pointer-events:none;font-size:1rem}
+.ctl-icon>.ctl{padding-left:2.25rem}
+.key-wrap{position:relative}
+.key-wrap>.ctl{padding-right:2.5rem}
+.key-eye{position:absolute;right:.3rem;top:50%;transform:translateY(-50%);width:32px;height:32px;border:0;border-radius:7px;background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem}
+.key-eye:hover{background:var(--bg);color:var(--text)}
+.llm-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1.25fr) auto;gap:.65rem;align-items:end}
+.llm-model-stack{display:flex;flex-direction:column;gap:.4rem}
+.btn.btn-test{height:40px;padding:0 .85rem;white-space:nowrap}
+.btn.btn-test.is-ok{border-color:#86efac;background:#f0fdf4;color:#15803d}
+.btn.btn-test.is-ok .ico{color:#15803d}
+.btn.btn-test.is-err{border-color:#fca5a5;background:#fef2f2;color:#b91c1c}
+.btn.btn-test.is-err .ico{color:#b91c1c}
+.cfg-note{display:flex;gap:.45rem;align-items:flex-start;margin-top:.75rem;font-size:.76rem;line-height:1.45;color:var(--muted)}
+.cfg-note>.ico{margin-top:.12rem;font-size:.95rem}
+.cfg-note.ok{color:#15803d}.cfg-note.warn{color:#a16207}.cfg-note.err{color:#b91c1c}
+.cfg-card.is-off .llm-body{opacity:.5;filter:grayscale(.35)}
+.cfg-card.is-on{border-color:#c7cbf5}
+.oauth-box{margin-top:.75rem;padding:.75rem .85rem;border:1px solid #bfdbfe;background:#eff6ff;color:#1e40af;border-radius:10px;font-size:.78rem;line-height:1.5}
+.oauth-box .ctl{height:36px;font-size:.78rem}
+.cfg-alert{display:flex;gap:.45rem;align-items:flex-start;margin-top:.75rem;padding:.6rem .75rem;border-radius:10px;font-size:.76rem;line-height:1.45}
+.cfg-alert.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.cfg-alert>.ico{margin-top:.12rem}
+.switch{position:relative;display:inline-flex;flex:none;cursor:pointer}
+.switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.switch-track{width:44px;height:24px;border-radius:999px;background:#d1d5db;transition:background .15s;position:relative}
+.switch-track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .18s ease}
+.switch input:checked+.switch-track{background:var(--accent)}
+.switch input:checked+.switch-track::after{transform:translateX(20px)}
+.switch input:focus-visible+.switch-track{box-shadow:0 0 0 3px rgba(79,70,229,.3)}
+.switch input:disabled+.switch-track{opacity:.5}
+.opt-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
+.opt{display:flex;gap:.6rem;align-items:flex-start;padding:.65rem .75rem;border:1px solid var(--border);border-radius:11px;cursor:pointer;transition:border-color .12s,background .12s,box-shadow .12s;min-width:0}
+.opt:hover{border-color:#c3c6f2}
+.opt:has(input:checked){border-color:var(--accent);background:#f6f6ff;box-shadow:inset 0 0 0 1px var(--accent)}
+.opt input{accent-color:var(--accent);margin-top:.22rem;flex:none;width:15px;height:15px}
+.opt-title{font-weight:650;font-size:.85rem}
+.opt-desc{font-size:.74rem;color:var(--muted);margin-top:.1rem;line-height:1.4}
+.toggle-row{display:flex;align-items:flex-start;gap:.8rem}
+.toggle-row .cfg-desc{margin-bottom:0}
+.run-bar{position:sticky;bottom:1rem;z-index:20;display:flex;align-items:center;gap:1rem;padding:.8rem .85rem .8rem 1.2rem;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgba(16,24,40,.1);overflow:hidden}
+.run-info{flex:1;min-width:0}
+.run-title{font-weight:700;font-size:.88rem}
+.run-title span{color:var(--muted);font-weight:500}
+.run-chips{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.35rem}
+.chip{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;font-weight:600;padding:.12rem .5rem;border-radius:999px;background:var(--bg);border:1px solid var(--border);color:#4b5563;white-space:nowrap}
+.chip .ico{color:var(--accent)}
+.chip.off{color:var(--muted);border-style:dashed}
+.btn.btn-run{height:50px;padding:0 1.7rem;font-size:.97rem;border-radius:12px;box-shadow:0 8px 20px rgba(79,70,229,.3);flex:none}
+.btn.btn-run .ico{font-size:1.05rem}
+.run-progress{position:absolute;left:0;bottom:0;height:3px;width:0;background:linear-gradient(90deg,#818cf8,var(--accent));transition:width .2s}
+@media(max-width:900px){
+  .cfg-grid{grid-template-columns:1fr}
+  .cfg-card,.cfg-card.span-2{grid-column:auto}
+  .llm-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:560px){
+  .llm-fields,.opt-list{grid-template-columns:1fr}
+  .picked{flex-wrap:wrap}
+  .picked .btn{width:100%;justify-content:center}
+  .run-bar{flex-direction:column;align-items:stretch;bottom:.5rem}
+  .btn.btn-run{width:100%;justify-content:center}
+  .up-drop{padding:2rem 1rem}
+}
 
 /* buttons */
 .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;border-radius:var(--radius);font-size:.8rem;font-weight:600;cursor:pointer;border:none;transition:background .12s}
@@ -761,16 +932,37 @@ const LLM_MODEL_CATALOG = {
 };
 const LLM_MODEL_CUSTOM = '__custom__';
 
-window.onProviderChange = function() {
-  const provider = document.getElementById('llm-provider')?.value || 'none';
-  const keyRow   = document.getElementById('llm-key-row');
-  const keyLabel = document.getElementById('llm-key-label');
+const LLM_PROVIDERS = [
+  {value:'openai',       label:'OpenAI',       keyPh:'sk-…'},
+  {value:'claude',       label:'Claude',       keyPh:'sk-ant-…'},
+  {value:'claude-oauth', label:'Claude OAuth', noKey:'Server session',
+   note:'Claude Pro/Max subscription: authenticates with the OAuth session stored on the server.'},
+  {value:'deepseek',     label:'DeepSeek',     keyPh:'sk-…'},
+  {value:'ollama',       label:'Ollama',       noKey:'Not required',
+   note:'Runs against the Ollama instance configured on the server — no API key needed.'},
+];
+function providerNeedsKey(p) { return p === 'openai' || p === 'claude' || p === 'deepseek'; }
+function providerLabel(p) { return (LLM_PROVIDERS.find(x => x.value === p) || {label: p}).label; }
+const LLM_KEY_NOTE = 'Your API key is sent only to this server to authenticate with the provider. It is never stored.';
+function llmDefaultNote() {
+  const p = document.getElementById('llm-provider')?.value;
+  return (LLM_PROVIDERS.find(x => x.value === p) || {}).note || LLM_KEY_NOTE;
+}
+
+/* Upload form: re-shape the Model + API key cells for the chosen provider. `keepModel` restores a
+   remembered model (scan prefs) instead of resetting to the provider's default. */
+window.onProviderChange = function(keepModel) {
+  const provider = document.getElementById('llm-provider')?.value || 'openai';
+  const keyRow = document.getElementById('llm-key-row');
   if (!keyRow) return;
-  const needsKey = provider === 'openai' || provider === 'claude' || provider === 'deepseek';
+  const meta = LLM_PROVIDERS.find(x => x.value === provider) || {};
+  const needsKey = providerNeedsKey(provider);
   keyRow.hidden = !needsKey;
-  if (provider === 'openai') keyLabel.innerHTML = 'OpenAI API Key (sk-...) <span style="color:var(--red)">*</span>';
-  if (provider === 'claude') keyLabel.innerHTML = 'Anthropic API Key (sk-ant-...) <span style="color:var(--red)">*</span>';
-  if (provider === 'deepseek') keyLabel.innerHTML = 'DeepSeek API Key <span style="color:var(--red)">*</span>';
+  const noKey = document.getElementById('llm-key-none');
+  noKey.hidden = needsKey;
+  noKey.querySelector('span').textContent = meta.noKey || 'Not required';
+  document.getElementById('llm-key-label').innerHTML = needsKey ? 'API Key <span class="req">*</span>' : 'API Key';
+  document.getElementById('llm-api-key').placeholder = meta.keyPh || '';
   const oauthHint = document.getElementById('llm-oauth-hint');
   if (oauthHint) {
     oauthHint.hidden = provider !== 'claude-oauth';
@@ -781,22 +973,28 @@ window.onProviderChange = function() {
   const modelSelect = document.getElementById('llm-model-select');
   if (modelEl && modelSelect) {
     const catalog = LLM_MODEL_CATALOG[provider];
+    const want = typeof keepModel === 'string' ? keepModel : '';
     if (catalog) {
-      modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('')
-        + `<option value="${LLM_MODEL_CUSTOM}">Custom (type model name)…</option>`;
-      modelSelect.value = catalog[0].value;
+      // Bare model IDs fit the compact cell; the descriptive label stays available as a tooltip.
+      modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}" title="${escAttr(m.label)}">${esc(m.value)}${/\bdefault\b/i.test(m.label) ? ' (default)' : ''}</option>`).join('')
+        + `<option value="${LLM_MODEL_CUSTOM}">Custom…</option>`;
+      const known = want && catalog.some(m => m.value === want);
+      modelSelect.value = known ? want : (want ? LLM_MODEL_CUSTOM : catalog[0].value);
       modelSelect.hidden = false;
-      modelEl.hidden = true;
-      modelEl.value = '';
+      modelEl.hidden = modelSelect.value !== LLM_MODEL_CUSTOM;
+      modelEl.value = known ? '' : want;
+      modelEl.placeholder = 'Type the exact model name';
     } else {
-      // ollama (every install's local model list is different) or no provider: plain text, as before.
+      // ollama (every install's local model list is different): plain text, as before.
       modelSelect.hidden = true;
       modelEl.hidden = false;
-      modelEl.placeholder = provider === 'ollama' ? 'e.g. llama3 (leave empty for default)' : 'leave empty for default';
+      modelEl.value = want;
+      modelEl.placeholder = 'e.g. llama3 (empty = default)';
     }
   }
-  // Clear any previous error when switching provider
   clearKeyError();
+  resetLlmTest();
+  updateRunSummary();
 };
 
 window.onModelSelectChange = function() {
@@ -806,6 +1004,89 @@ window.onModelSelectChange = function() {
   const custom = modelSelect.value === LLM_MODEL_CUSTOM;
   modelEl.hidden = !custom;
   if (custom) { modelEl.value = ''; modelEl.placeholder = 'Type the exact model name'; modelEl.focus(); }
+  resetLlmTest();
+  updateRunSummary();
+};
+
+/** Model the upload form will send: the catalog pick, or the free-text field (custom / ollama). */
+function currentLlmModel() {
+  const sel = document.getElementById('llm-model-select');
+  // The select stays visible with "Custom" picked (so the user can switch back without
+  // re-choosing a provider) — only read from it when it's showing a real catalog entry.
+  if (sel && !sel.hidden && sel.value !== LLM_MODEL_CUSTOM) return sel.value;
+  return (document.getElementById('llm-model')?.value || '').trim();
+}
+
+function setLlmNote(kind, text) {
+  const note = document.getElementById('llm-note');
+  if (!note) return;
+  const icon = {ok: 'circleCheck', warn: 'alert', err: 'circleX'}[kind] || 'info';
+  note.className = 'cfg-note' + (kind ? ' ' + kind : '');
+  note.innerHTML = ico(icon) + `<span>${esc(text)}</span>`;
+}
+
+function resetLlmTest() {
+  const btn = document.getElementById('llm-test');
+  if (!btn || btn.disabled) return;
+  btn.classList.remove('is-ok', 'is-err');
+  btn.innerHTML = ico('plug') + ' Test Connection';
+  setLlmNote('', llmDefaultNote());
+}
+
+window.testLlmConnection = async function() {
+  const btn = document.getElementById('llm-test');
+  if (!btn) return;
+  const provider = document.getElementById('llm-provider').value;
+  const apiKeyVal = (document.getElementById('llm-api-key')?.value || '').trim();
+  btn.disabled = true;
+  btn.classList.remove('is-ok', 'is-err');
+  btn.innerHTML = ico('loader', 'ico-spin') + ' Testing…';
+  let ok = false;
+  try {
+    const r = await api('/llm/test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({provider, api_key: providerNeedsKey(provider) ? apiKeyVal : '', model: currentLlmModel()}),
+    });
+    ok = !!r.ok;
+    setLlmNote(ok ? (r.model_found === false ? 'warn' : 'ok') : 'err', r.message || (ok ? 'Connected.' : 'Connection failed.'));
+  } catch (e) {
+    setLlmNote('err', e.message || String(e));
+  } finally {
+    btn.disabled = false;
+    btn.classList.add(ok ? 'is-ok' : 'is-err');
+    btn.innerHTML = ico(ok ? 'check' : 'refresh') + (ok ? ' Connected' : ' Retry test');
+  }
+};
+
+window.onLlmToggle = function(fromMode) {
+  const on = !!document.getElementById('llm-enabled')?.checked;
+  const mode = document.getElementById('llm-mode')?.value;
+  if (!on && mode === 'offensive' && !fromMode) {
+    document.getElementById('llm-enabled').checked = true;
+    setLlmNote('warn', 'Offensive mode requires LLM Enrichment — switch the scan mode first to turn it off.');
+    return;
+  }
+  const card = document.getElementById('llm-card');
+  card.classList.toggle('is-off', !on);
+  card.classList.toggle('is-on', on);
+  card.querySelectorAll('.llm-body select, .llm-body input, .llm-body button').forEach(el => { el.disabled = !on; });
+  const pill = document.getElementById('llm-state');
+  pill.textContent = on ? 'Enabled' : 'Off';
+  pill.classList.toggle('on', on);
+  if (!on) clearKeyError();
+  updateRunSummary();
+};
+
+window.toggleKeyVisibility = function() {
+  const input = document.getElementById('llm-api-key');
+  const btn = document.getElementById('key-eye');
+  if (!input || !btn) return;
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.innerHTML = ico(show ? 'eyeOff' : 'eye');
+  btn.setAttribute('aria-label', show ? 'Hide API key' : 'Show API key');
+  btn.setAttribute('aria-pressed', String(show));
 };
 
 /* Same dropdown-with-Custom-escape-hatch pattern as the upload form's "Model override" field,
@@ -841,7 +1122,7 @@ window.onChatModelSelectChange = function() {
 window.clearKeyError = function() {
   const keyInput = document.getElementById('llm-api-key');
   const keyError = document.getElementById('llm-key-error');
-  if (keyInput) keyInput.style.borderColor = '';
+  if (keyInput) keyInput.classList.remove('invalid');
   if (keyError) keyError.hidden = true;
 };
 
@@ -910,27 +1191,59 @@ window.importOauthToken = async function() {
   }
 };
 
+const SCAN_MODES = {
+  summarize:  {label: 'Fast Scan', icon: 'zap',
+               help: 'Focuses MSTG checks and optional LLM analysis on first-party app code and native libs.',
+               iosNote: ' On .ipa, Ghidra still decompiles the whole binary first, so the decompile phase is not shorter.'},
+  find_vulns: {label: 'Full Scan', icon: 'scanSearch',
+               help: 'Includes third-party Java/native code. MSTG runs on everything ingested; the optional LLM hunts for vulnerabilities.'},
+  auto_fix:   {label: 'Auto Fix', icon: 'wrench',
+               help: 'Reconstructs decompiled code with the LLM. Same first-party scope as Fast Scan.'},
+  offensive:  {label: 'Offensive', icon: 'crosshair',
+               help: 'First-party Frida playbooks plus a small security-SDK allowlist. Requires LLM Enrichment.'},
+};
+
 window.onLlmModeChange = function() {
-  const mode = document.getElementById('llm-mode')?.value || '';
+  const modeEl = document.getElementById('llm-mode');
+  if (!modeEl) return;
+  const mode = modeEl.value || 'summarize';
+  const m = SCAN_MODES[mode] || SCAN_MODES.summarize;
   const warn = document.getElementById('offensive-warn');
   const help = document.getElementById('llm-mode-help');
+  const iconSlot = document.getElementById('mode-icon');
   if (warn) warn.hidden = mode !== 'offensive';
-  if (help) {
-    help.textContent = ({
-      summarize: 'Fast Scan = scopes MSTG + optional LLM to first-party app code and native libs. On .ipa, Ghidra still decompiles the whole binary first (no first-party skip at that step), so this does not shorten the decompile phase.',
-      find_vulns: 'Full Scan = includes third-party Java/native. MSTG on everything ingested; optional LLM FIND_VULNS.',
-      auto_fix: 'Auto Fix = reconstruct decompiled code. First-party scope (same as Fast Scan).',
-      offensive: 'Offensive = first-party Frida playbooks plus a small security-SDK allowlist. Requires LLM on.'
-    })[mode] || '';
+  if (iconSlot) iconSlot.outerHTML = ico(m.icon).replace('<svg ', '<svg id="mode-icon" ');
+  if (help) help.textContent = m.help + (modeEl.dataset.kind === 'ios' && m.iosNote ? m.iosNote : '');
+  const llm = document.getElementById('llm-enabled');
+  if (mode === 'offensive' && llm && !llm.checked) {
+    llm.checked = true;
+    onLlmToggle(true);
+    setLlmNote('warn', 'LLM Enrichment was switched on — Offensive mode requires it.');
   }
-  if (mode === 'offensive') {
-    const provider = document.getElementById('llm-provider');
-    if (provider && (provider.value === 'none' || !provider.value)) {
-      provider.value = 'deepseek';
-      onProviderChange();
-    }
-  }
+  updateRunSummary();
 };
+
+/* Bottom "Ready to scan" bar: a live summary of what Run Scan is about to send. */
+function updateRunSummary() {
+  const chips = document.getElementById('run-chips');
+  if (!chips) return;
+  const mode = document.getElementById('llm-mode')?.value || 'summarize';
+  const m = SCAN_MODES[mode] || SCAN_MODES.summarize;
+  const llmOn = !!document.getElementById('llm-enabled')?.checked;
+  const provider = document.getElementById('llm-provider')?.value;
+  const model = currentLlmModel();
+  const assess = document.getElementById('assessment-enabled')?.checked !== false;
+  const asc = document.getElementById('decompiler-asc');
+  const light = document.getElementById('ios-light');
+  const out = [`<span class="chip">${ico(m.icon)} ${esc(m.label)}</span>`];
+  out.push(llmOn
+    ? `<span class="chip">${ico('sparkles')} ${esc(providerLabel(provider))}${model ? ' · ' + esc(model) : ''}</span>`
+    : `<span class="chip off">${ico('sparkles')} No LLM</span>`);
+  out.push(`<span class="chip${assess ? '' : ' off'}">${ico('shield')} Assessment ${assess ? 'on' : 'off'}</span>`);
+  if (asc) out.push(`<span class="chip">${ico('cpu')} ${asc.checked ? 'Droid ASC' : 'JADX'}</span>`);
+  if (light) out.push(`<span class="chip${light.checked ? '' : ' off'}">${ico('feather')} Light scan ${light.checked ? 'on' : 'off'}</span>`);
+  chips.innerHTML = out.join('');
+}
 
 /* ── config ── */
 const KEY_LS = 'malimite.apikey';   // remembered in this browser only; best-effort (storage can be blocked)
@@ -1121,126 +1434,347 @@ function packageKindOf(filename) {
   return null;
 }
 
+/* Inline icons — Lucide (https://lucide.dev, ISC) outline paths; platform glyphs are filled. */
+const ICONS = {
+  cloudUpload: '<path d="M12 13v8"/><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="m8 17 4-4 4 4"/>',
+  folderOpen: '<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
+  fileText: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  sparkles: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+  scanSearch: '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.9-1.9"/>',
+  wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  crosshair: '<circle cx="12" cy="12" r="10"/><path d="M22 12h-4"/><path d="M6 12H2"/><path d="M12 6V2"/><path d="M12 22v-4"/>',
+  history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  circleCheck: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  circleX: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  arrowRight: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  cpu: '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>',
+  feather: '<path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/><path d="M16 8 2 22"/><path d="M17.5 15H9"/>',
+  plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+  key: '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>',
+};
+function ico(name, cls = '') {
+  return `<svg class="ico ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+}
+const PLATFORM_GLYPHS = {
+  android: '<path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85a.637.637 0 0 0-.83.22l-1.88 3.24a11.46 11.46 0 0 0-8.94 0L5.65 5.67a.643.643 0 0 0-.87-.2c-.28.18-.37.54-.22.83L6.4 9.48A10.78 10.78 0 0 0 1 18h22a10.78 10.78 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/>',
+  ios: '<path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/>',
+};
+function platTile(kind) {
+  const k = PLATFORM_GLYPHS[kind] ? kind : 'unknown';
+  const glyph = PLATFORM_GLYPHS[kind]
+    ? `<svg class="ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${PLATFORM_GLYPHS[kind]}</svg>`
+    : ico('fileText');
+  return `<div class="plat-tile plat-${k}" title="${kind === 'ios' ? 'iOS' : kind === 'android' ? 'Android' : 'Unknown platform'}">${glyph}</div>`;
+}
+function platformName(kind) { return kind === 'ios' ? 'iOS' : kind === 'android' ? 'Android' : 'Unknown'; }
+
+/* Upload-form choices remembered in this browser (never the API key). */
+const SCAN_PREFS_LS = 'malimite.scanPrefs';
+function loadScanPrefs() {
+  try { return JSON.parse(localStorage.getItem(SCAN_PREFS_LS) || '{}') || {}; } catch (_) { return {}; }
+}
+function saveScanPrefs(p) {
+  try { localStorage.setItem(SCAN_PREFS_LS, JSON.stringify(p)); } catch (_) {}
+}
+
 function renderDropZoneHtml() {
   return `
-    <div class="drop-zone" id="drop">
-      <div style="font-size:2rem">📦</div>
-      <p><strong>Drag &amp; drop .ipa, .apk or .xapk here</strong></p>
-      <p>iOS via Ghidra · Android via JADX or Droid ASC (+ Ghidra for native .so) · Malimite finds the sketchy bits.</p>
-      <label class="drop-file-btn">Browse file<input type="file" id="ipa-file" accept=".ipa,.apk,.xapk"/></label>
+    <div class="up-drop" id="drop" tabindex="0" role="button"
+      aria-label="Upload an application: drop an APK, IPA or XAPK file here, or press Enter to browse">
+      <div class="up-drop-icon">${ico('cloudUpload')}</div>
+      <h2>Upload your application</h2>
+      <p class="up-drop-sub">Drag and drop your APK, IPA, or XAPK file here</p>
+      <div class="up-formats" aria-hidden="true"><span>APK</span><span>IPA</span><span>XAPK</span></div>
+      <span class="btn btn-primary btn-lg up-browse">${ico('folderOpen')} Browse files</span>
+      <p class="up-drop-hint">or select a file from your device</p>
+      <p class="up-drop-error" id="drop-error" role="alert" hidden></p>
+      <p class="up-engines">iOS via Ghidra · Android via JADX or Droid ASC (+ Ghidra for native .so) · nothing is uploaded until you click Run Scan</p>
     </div>`;
 }
 
-function renderScanOptionsHtml(file) {
+function renderScanOptionsHtml(file, prefs) {
   const kind = packageKindOf(file.name);
+  const xapk = file.name.toLowerCase().endsWith('.xapk');
+  const mode = SCAN_MODES[prefs.mode] ? prefs.mode : 'summarize';
+  const provider = LLM_PROVIDERS.some(p => p.value === prefs.provider) ? prefs.provider : 'openai';
+  const modeOpts = Object.entries(SCAN_MODES)
+    .map(([v, m]) => `<option value="${v}"${v === mode ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
+  const providerOpts = LLM_PROVIDERS
+    .map(p => `<option value="${p.value}"${p.value === provider ? ' selected' : ''}>${esc(p.label)}</option>`).join('');
+  const useAsc = prefs.decompiler === 'asc';
   return `
-    <div class="picked-file">
-      <div class="picked-file-icon">${kind === 'ios' ? '🍎' : '🤖'}</div>
-      <div style="min-width:0">
-        <div class="picked-file-name">${esc(file.name)}</div>
-        <div class="picked-file-meta">${fmtBytes(file.size)}</div>
+  <fieldset class="plain" id="scan-form">
+    <section class="panel" id="pkg-panel">
+      <div class="panel-head">${ico('fileText')} Upload Package</div>
+      <div class="picked" id="picked">
+        ${platTile(kind)}
+        <div class="picked-main">
+          <div class="picked-name">${esc(file.name)}</div>
+          <div class="picked-meta">${fmtBytes(file.size)} · ${kind === 'ios' ? 'iOS Application' : xapk ? 'Android Package (split XAPK)' : 'Android Package'}</div>
+        </div>
+        <span class="picked-ok" title="Ready to scan">${ico('circleCheck')}</span>
+        <button type="button" class="btn btn-outline" id="change-file">${ico('refresh')} Change file</button>
       </div>
-      <button type="button" class="btn btn-ghost btn-sm picked-file-change" id="change-file">Change file</button>
+    </section>
+
+    <div class="cfg-grid">
+      <section class="cfg-card span-2">
+        <div class="cfg-head"><span class="step-num">1</span><span class="cfg-title">${ico('settings')} Scan Configuration</span></div>
+        <p class="cfg-desc">Choose how deep Malimite analyzes this package.</p>
+        <label class="field">
+          <span class="field-label">Scan Mode</span>
+          <span class="ctl-icon">${ico(SCAN_MODES[mode].icon).replace('<svg ', '<svg id="mode-icon" ')}
+            <select id="llm-mode" class="ctl" data-kind="${kind}">${modeOpts}</select></span>
+        </label>
+        <p id="llm-mode-help" class="field-help"></p>
+        <div id="offensive-warn" class="cfg-alert warn" hidden>${ico('alert')}
+          <span>Offensive mode generates Frida bypass/intercept scripts for <strong>authorized testing only</strong>. It turns LLM Enrichment on.</span>
+        </div>
+      </section>
+
+      <section class="cfg-card" id="llm-card">
+        <div class="cfg-head">
+          <span class="step-num">2</span>
+          <span class="cfg-title">${ico('sparkles')} LLM Enrichment <span class="tag-opt">Optional</span></span>
+          <span class="cfg-head-r">
+            <span class="state-pill" id="llm-state">Off</span>
+            <label class="switch"><input type="checkbox" id="llm-enabled" role="switch"
+              aria-label="Enable LLM enrichment"${prefs.llmOn ? ' checked' : ''}/><span class="switch-track"></span></label>
+          </span>
+        </div>
+        <p class="cfg-desc">Improve finding descriptions and security analysis with AI.</p>
+        <div class="llm-body">
+          <div class="llm-fields">
+            <label class="field"><span class="field-label">LLM Provider</span>
+              <select id="llm-provider" class="ctl">${providerOpts}</select></label>
+            <label class="field"><span class="field-label">Model</span>
+              <span class="llm-model-stack">
+                <select id="llm-model-select" class="ctl" hidden></select>
+                <input id="llm-model" class="ctl" type="text" autocomplete="off" placeholder="empty = default"/>
+              </span></label>
+            <div class="field">
+              <span class="field-label" id="llm-key-label">API Key</span>
+              <div class="key-wrap" id="llm-key-row">
+                <input id="llm-api-key" class="ctl" type="password" autocomplete="off" spellcheck="false" aria-labelledby="llm-key-label"/>
+                <button type="button" class="key-eye" id="key-eye" aria-label="Show API key" aria-pressed="false">${ico('eye')}</button>
+              </div>
+              <div class="ctl ctl-static" id="llm-key-none" hidden>${ico('key')}<span></span></div>
+            </div>
+            <button type="button" class="btn btn-outline btn-test" id="llm-test">${ico('plug')} Test Connection</button>
+          </div>
+          <div class="cfg-note" id="llm-key-error" hidden>${ico('circleX')}<span>An API key is required to use this provider.</span></div>
+          <div class="cfg-note" id="llm-note">${ico('info')}<span>${esc(LLM_KEY_NOTE)}</span></div>
+          <div id="llm-oauth-hint" class="oauth-box" hidden>
+            Uses the Claude Pro/Max subscription signed in on the <strong>server host</strong> — no API key needed here.
+            <span id="oauth-status-text">Checking status…</span>
+            <div id="oauth-claude-code-row" hidden style="margin-top:.5rem;display:flex;flex-wrap:wrap;align-items:center;gap:.5rem">
+              <button type="button" class="btn btn-outline btn-sm" onclick="importFromClaudeCode()">Import from Claude Code CLI</button>
+              <span style="font-size:.72rem">Found a <code>claude /login</code> session on this server — one click reuses it.</span>
+            </div>
+            <details style="margin-top:.5rem">
+              <summary style="cursor:pointer;font-weight:600">…or paste a token manually</summary>
+              <p style="font-size:.72rem;margin:.4rem 0">
+                From <code>~/.claude/.credentials.json</code>'s <code>claudeAiOauth</code> object (wherever you last
+                ran <code>claude /login</code>). Sent straight to this server — never shown elsewhere.
+              </p>
+              <div style="display:flex;flex-direction:column;gap:.35rem;max-width:420px">
+                <input id="oauth-imp-access" class="ctl" type="password" placeholder="accessToken (sk-ant-oat01-...)"/>
+                <input id="oauth-imp-refresh" class="ctl" type="password" placeholder="refreshToken (sk-ant-ort01-...)"/>
+                <input id="oauth-imp-expires" class="ctl" type="text" placeholder="expiresAt (epoch milliseconds)"/>
+                <button type="button" class="btn btn-outline btn-sm" onclick="importOauthToken()" style="align-self:flex-start">Import token</button>
+              </div>
+            </details>
+            <div id="oauth-import-err"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cfg-card span-2">
+        <div class="toggle-row">
+          <div style="flex:1;min-width:0">
+            <div class="cfg-head"><span class="step-num">3</span><span class="cfg-title">${ico('shield')} Security Assessment</span></div>
+            <p class="cfg-desc">Inventory protection controls — obfuscation, pinning, root/Frida detection, FLAG_SECURE and more. Independent of LLM.</p>
+          </div>
+          <label class="switch"><input type="checkbox" id="assessment-enabled" role="switch"
+            aria-label="Enable security assessment"${prefs.assessment === false ? '' : ' checked'}/><span class="switch-track"></span></label>
+        </div>
+      </section>
+
+      ${kind === 'ios' ? `
+      <section class="cfg-card">
+        <div class="toggle-row">
+          <div style="flex:1;min-width:0">
+            <div class="cfg-head"><span class="step-num">4</span><span class="cfg-title">${ico('feather')} iOS Light Scan</span></div>
+            <p class="cfg-desc">Skip Ghidra: strings, imported symbols and plist only — seconds, little RAM. For very large .ipa files
+              that run out of memory; rules that need pseudocode are reported as not evaluated.</p>
+          </div>
+          <label class="switch"><input type="checkbox" id="ios-light" role="switch"
+            aria-label="Enable iOS light scan"${prefs.iosLight ? ' checked' : ''}/><span class="switch-track"></span></label>
+        </div>
+      </section>` : `
+      <section class="cfg-card">
+        <div class="cfg-head"><span class="step-num">4</span><span class="cfg-title">${ico('cpu')} Android Decompiler</span></div>
+        <p class="cfg-desc">Native <code>.so</code> libraries are always decompiled with Ghidra.</p>
+        <div class="opt-list" role="radiogroup" aria-label="Android decompiler">
+          <label class="opt"><input type="radio" name="decompiler" id="decompiler-jadx" value="jadx"${useAsc ? '' : ' checked'}/>
+            <span><span class="opt-title">JADX</span><span class="tag-rec">Recommended</span>
+              <span class="opt-desc" style="display:block">Full tree decompilation up front. Well-tested, works for most APKs.</span></span></label>
+          <label class="opt"><input type="radio" name="decompiler" id="decompiler-asc" value="asc"${useAsc ? ' checked' : ''}/>
+            <span><span class="opt-title">Droid ASC</span>
+              <span class="opt-desc" style="display:block">On-demand decompilation; can be faster for huge APKs. Falls back to JADX if the server lacks <code>droidasc</code>.</span></span></label>
+        </div>
+      </section>`}
     </div>
 
-    <div class="scan-options-title">Scan options</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;font-size:.8rem">
-      <label style="display:flex;flex-direction:column;gap:.3rem">
-        LLM Enrichment
-        <select id="llm-provider" onchange="onProviderChange()">
-          <option value="none">Disabled</option>
-          <option value="openai">OpenAI</option>
-          <option value="claude">Claude</option>
-          <option value="claude-oauth">Claude (OAuth — Pro/Max)</option>
-          <option value="deepseek">DeepSeek</option>
-          <option value="ollama">Ollama (local)</option>
-        </select>
-      </label>
-      <label style="display:flex;flex-direction:column;gap:.3rem">
-        Scan Mode
-        <select id="llm-mode" onchange="onLlmModeChange()">
-          <option value="summarize">Fast Scan</option>
-          <option value="find_vulns">Full Scan</option>
-          <option value="auto_fix">Auto Fix</option>
-          <option value="offensive">Offensive</option>
-        </select>
-        <span id="llm-mode-help" style="color:var(--muted);font-size:.72rem;max-width:22rem">Fast Scan = first-party app code and native libs only. Cheaper MSTG + optional LLM.</span>
-      </label>
-      <label style="display:flex;flex-direction:column;gap:.3rem">
-        Model override
-        <select id="llm-model-select" hidden onchange="onModelSelectChange()" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"></select>
-        <input id="llm-model" type="text" placeholder="leave empty for default" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
-      </label>
-    </div>
-    <div id="llm-key-row" hidden style="margin-top:.75rem;font-size:.8rem">
-      <label style="display:flex;flex-direction:column;gap:.3rem">
-        <span id="llm-key-label">API Key <span style="color:var(--red)">*</span></span>
-        <input id="llm-api-key" type="password" placeholder="Paste your API key here" oninput="clearKeyError()"
-          style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px;max-width:420px"/>
-        <span id="llm-key-error" hidden style="color:var(--red);font-weight:600">API key is required to use this provider.</span>
-        <span style="color:var(--muted);font-size:.72rem">Sent only to this server to authenticate with the LLM provider. Never stored.</span>
-      </label>
-    </div>
-    <div id="llm-oauth-hint" class="alert alert-info" hidden style="margin-top:.75rem;font-size:.8rem">
-      Uses the Claude Pro/Max subscription signed in on the <strong>server host</strong> (no API key needed here).
-      <span id="oauth-status-text">Checking status…</span>
-      <div id="oauth-claude-code-row" hidden style="margin-top:.5rem">
-        <button class="btn btn-ghost btn-sm" onclick="importFromClaudeCode()">Import from Claude Code CLI</button>
-        <span style="color:var(--muted);font-size:.72rem">
-          Found a <code>claude /login</code> session on this server — one click reuses it.
-        </span>
+    <div id="run-error" class="alert alert-error" role="alert" hidden style="margin:0"></div>
+    <div class="run-bar">
+      <div class="run-info">
+        <div class="run-title">Ready to scan: <span>1 file selected · ${platformName(kind)} App</span></div>
+        <div class="run-chips" id="run-chips"></div>
       </div>
-      <details style="margin-top:.5rem">
-        <summary style="cursor:pointer">…or paste a token manually</summary>
-        <p style="color:var(--muted);font-size:.72rem;margin:.4rem 0">
-          From <code>~/.claude/.credentials.json</code>'s <code>claudeAiOauth</code> object
-          (wherever you last ran <code>claude /login</code>), or your own sandbox. Sent straight
-          to this server — never shown elsewhere.
-        </p>
-        <div style="display:flex;flex-direction:column;gap:.3rem;max-width:420px">
-          <input id="oauth-imp-access" type="password" placeholder="accessToken (sk-ant-oat01-...)"
-            style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
-          <input id="oauth-imp-refresh" type="password" placeholder="refreshToken (sk-ant-ort01-...)"
-            style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
-          <input id="oauth-imp-expires" type="text" placeholder="expiresAt (epoch milliseconds)"
-            style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px"/>
-          <button class="btn btn-ghost btn-sm" onclick="importOauthToken()" style="align-self:flex-start">Import token</button>
+      <button type="button" class="btn btn-primary btn-run" id="run-scan-btn">${ico('play')} Run Scan</button>
+      <div class="run-progress" id="upload-bar"></div>
+    </div>
+  </fieldset>`;
+}
+
+/* ── recent scans (home) ── */
+const _recentDetails = new Map();   // scan_id -> ScanDetail of finished scans (immutable once done)
+let _recentTimer = null;
+
+function fmtShort(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleString(undefined, {month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'});
+}
+
+function statePill(state) {
+  const s = String(state || 'queued').toLowerCase();
+  const map = {
+    done: ['st-done', 'circleCheck', 'Done'], running: ['st-running', 'loader', 'Running'],
+    queued: ['st-queued', 'clock', 'Queued'], error: ['st-error', 'circleX', 'Failed'],
+  };
+  const [cls, icon, label] = map[s] || map.queued;
+  return `<span class="st-pill ${cls}">${ico(icon, s === 'running' ? 'ico-spin' : '')} ${label}</span>`;
+}
+
+function sevBarHtml(c) {
+  const parts = [['CRITICAL', 's-c'], ['HIGH', 's-h'], ['MEDIUM', 's-m'], ['LOW', 's-l'], ['INFO', 's-i']];
+  const total = parts.reduce((n, [k]) => n + (c?.[k] || 0), 0);
+  if (!total) return '<div class="sev-bar clean" title="No open findings"></div>';
+  const title = parts.filter(([k]) => c[k]).map(([k]) => `${c[k]} ${k.toLowerCase()}`).join(', ');
+  return `<div class="sev-bar" title="${escAttr(title)}" role="img" aria-label="${escAttr(title)}">`
+    + parts.filter(([k]) => c[k]).map(([k, cls]) => `<i class="${cls}" style="flex:${c[k]}"></i>`).join('') + '</div>';
+}
+
+function recentRowHtml(s, d) {
+  const id = String(s.scan_id || '');
+  const name = String(s.filename || 'Untitled scan');
+  const state = String(s.state || 'queued').toLowerCase();
+  const plat = String(d?.platform || '').toUpperCase();
+  const kind = plat === 'IOS' ? 'ios' : plat === 'ANDROID' ? 'android' : packageKindOf(name);
+  let count, bar;
+  if (state === 'done') {
+    const c = d?.vulnerability_counts;
+    if (d === undefined) { count = '<span class="skel" style="width:70px"></span>'; bar = '<span class="skel"></span>'; }
+    else if (!c) { count = '<span class="rs-count muted">—</span>'; bar = '<div class="sev-bar"></div>'; }
+    else {
+      const n = c.total || 0;
+      count = n ? `<span class="rs-count">${num(n)} finding${n === 1 ? '' : 's'}</span>` : '<span class="rs-count muted">No findings</span>';
+      bar = sevBarHtml(c);
+    }
+  } else if (state === 'running' || state === 'queued') {
+    count = `<span class="rs-count muted">${state === 'running' ? 'Scanning…' : 'Waiting…'}</span>`;
+    bar = '<div class="sev-bar indet"></div>';
+  } else {
+    count = '<span class="rs-count muted">No results</span>';
+    bar = '<div class="sev-bar"></div>';
+  }
+  const href = '#/scan/' + encodeURIComponent(id);
+  return `
+    <div class="rs-row" data-rs="${escAttr(id)}" data-href="${escAttr(href)}" role="link" tabindex="0"
+      aria-label="${escAttr(name)}, ${escAttr(state)}">
+      ${platTile(kind)}
+      <div class="rs-main">
+        <div class="rs-name" title="${escAttr(name)}">${esc(name)}</div>
+        <div class="rs-meta"><span>${platformName(kind)}</span><span>${esc(fmtShort(s.created_at))}</span></div>
+      </div>
+      <div class="rs-state">${statePill(state)}</div>
+      <div class="rs-count-cell" style="grid-area:count">${count}</div>
+      <div class="rs-bar">${bar}</div>
+      <details class="rs-menu">
+        <summary aria-label="Actions for ${escAttr(name)}">${ico('more')}</summary>
+        <div class="rs-menu-pop">
+          <a href="${href}">${ico('arrowRight')} Open scan</a>
+          ${state === 'done' ? `<a href="/api/v1/scans/${encodeURIComponent(id)}/report" target="_blank" rel="noopener">${ico('external')} HTML report</a>` : ''}
+          <button type="button" class="danger" data-delete="${escAttr(id)}">${ico('trash')} Delete scan</button>
         </div>
       </details>
-      <div id="oauth-import-err"></div>
-    </div>
-    <div id="offensive-warn" class="alert alert-warn off-warn" hidden>
-      Offensive mode generates Frida bypass/intercept scripts for <strong>authorized testing only</strong>.
-      Selecting it enables LLM Enrichment.
-    </div>
-    <label style="display:flex;align-items:center;gap:.5rem;margin-top:.85rem;font-size:.8rem;cursor:pointer">
-      <input type="checkbox" id="assessment-enabled" checked/>
-      <span><strong>Security Assessment</strong> — inventory controls (obfuscation, pinning, root/Frida detection, FLAG_SECURE, …). Independent of LLM.</span>
-    </label>
-    ${kind === 'ios' ? `
-    <label style="display:flex;align-items:center;gap:.5rem;margin-top:.5rem;font-size:.8rem;cursor:pointer">
-      <input type="checkbox" id="ios-light"/>
-      <span><strong>iOS light scan</strong> — skip Ghidra: strings, imported symbols and plist only (seconds, little RAM). For very large .ipa that run out of memory; rules that need pseudocode are reported as not evaluated.</span>
-    </label>` : ''}
-    ${kind === 'android' ? `
-    <div style="margin-top:.85rem;font-size:.8rem">
-      <div style="font-weight:600;margin-bottom:.35rem">Android decompiler</div>
-      <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer">
-        <input type="radio" name="decompiler" id="decompiler-jadx" value="jadx" checked style="margin-top:.2rem"/>
-        <span><strong>JADX</strong> (default) — full tree decompile up front. Slower to start, well-tested, works for most APKs.</span>
-      </label>
-      <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;margin-top:.35rem">
-        <input type="radio" name="decompiler" id="decompiler-asc" value="asc" style="margin-top:.2rem"/>
-        <span><strong>Droid ASC</strong> — on-demand, zero-preprocessing decompiler; can be faster for huge APKs.
-          Falls back to JADX automatically if <code>droidasc</code> isn't installed/configured on the server.</span>
-      </label>
-    </div>` : ''}
-    <progress id="upload-bar" value="0" max="100" hidden></progress>
-    <div class="run-scan-row">
-      <button type="button" class="btn btn-primary" id="run-scan-btn">Run Scan</button>
-      <span id="run-scan-hint" style="color:var(--muted);font-size:.78rem">Nothing is uploaded until you click this.</span>
     </div>`;
 }
+
+async function loadRecentScans() {
+  clearTimeout(_recentTimer);
+  const list = document.getElementById('recent-list');
+  if (!list) return;
+  let scans;
+  try { scans = await api('/scans'); }
+  catch (e) {
+    if (document.getElementById('recent-list')) list.innerHTML = `<div class="alert alert-error" style="margin:0">${esc(e.message)}</div>`;
+    return;
+  }
+  if (!document.getElementById('recent-list')) return;   // navigated away meanwhile
+  const top = (Array.isArray(scans) ? scans : []).slice(0, 5);
+  const count = document.getElementById('recent-count');
+  if (count) count.textContent = scans.length ? `${scans.length} total` : '';
+  if (!top.length) {
+    list.innerHTML = `<div class="rs-empty">${ico('history')}<strong style="color:var(--text)">No scans yet</strong>Upload your first app above to see results here.</div>`;
+    return;
+  }
+  list.innerHTML = top.map(s => recentRowHtml(s, _recentDetails.get(s.scan_id))).join('');
+  await Promise.all(top.filter(s => s.state === 'done' && !_recentDetails.has(s.scan_id)).map(async s => {
+    let d = null;
+    try { d = await api('/scans/' + encodeURIComponent(s.scan_id)); } catch (_) {}
+    _recentDetails.set(s.scan_id, d);
+    const row = document.querySelector(`.rs-row[data-rs="${CSS.escape(s.scan_id)}"]`);
+    if (row) row.outerHTML = recentRowHtml(s, d);
+  }));
+  // Live-refresh while anything is still in flight, for as long as this list is on screen.
+  if (top.some(s => s.state === 'queued' || s.state === 'running')) {
+    _recentTimer = setTimeout(() => { if (document.getElementById('recent-list')) loadRecentScans(); }, 5000);
+  }
+}
+
+// One delegated handler for every recent-scan row: navigate, keyboard, row menu, delete.
+document.addEventListener('click', ev => {
+  const t = ev.target;
+  document.querySelectorAll('details.rs-menu[open]').forEach(m => { if (!m.contains(t)) m.open = false; });
+  const del = t.closest && t.closest('[data-delete]');
+  if (del) { deleteScan(del.dataset.delete, ev); return; }
+  if (t.closest && t.closest('.rs-menu')) return;
+  const row = t.closest && t.closest('.rs-row[data-href]');
+  if (row) location.hash = row.dataset.href;
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') document.querySelectorAll('details.rs-menu[open]').forEach(m => { m.open = false; });
+  const row = ev.target.closest && ev.target.closest('.rs-row[data-href]');
+  if (row && ev.target === row && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); location.hash = row.dataset.href; }
+});
 
 route('home', async function() {
   let pendingFile = null;
@@ -1248,137 +1782,159 @@ route('home', async function() {
   function pickFile(file) {
     if (!file) return;
     const n = file.name.toLowerCase();
-    if (!n.endsWith('.ipa') && !n.endsWith('.apk') && !n.endsWith('.xapk')) { alert('Only .ipa, .apk or .xapk files accepted'); return; }
+    if (!n.endsWith('.ipa') && !n.endsWith('.apk') && !n.endsWith('.xapk')) {
+      const msg = `“${file.name}” is not a supported package. Choose an .apk, .ipa or .xapk file.`;
+      const err = document.getElementById('drop-error');
+      if (err) { err.innerHTML = ico('alert') + `<span>${esc(msg)}</span>`; err.hidden = false; }
+      else alert(msg);
+      return;
+    }
     pendingFile = file;
     paintUploadCard();
   }
 
+  function wireDrop(el, onFile) {
+    let depth = 0;   // dragenter/leave fire for every child; count so the highlight doesn't flicker
+    el.addEventListener('dragenter', ev => { ev.preventDefault(); depth++; el.classList.add('drag-over'); });
+    el.addEventListener('dragover', ev => { ev.preventDefault(); });
+    el.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; el.classList.remove('drag-over'); } });
+    el.addEventListener('drop', ev => { ev.preventDefault(); depth = 0; el.classList.remove('drag-over'); onFile(ev.dataTransfer.files[0]); });
+  }
+
+  function collectPrefs() {
+    return {
+      mode: $('#llm-mode').value,
+      llmOn: !!$('#llm-enabled').checked,
+      provider: $('#llm-provider').value,
+      model: currentLlmModel(),
+      assessment: $('#assessment-enabled').checked,
+      decompiler: $('#decompiler-asc')?.checked ? 'asc' : (loadScanPrefs().decompiler || 'jadx'),
+      iosLight: $('#ios-light') ? $('#ios-light').checked : !!loadScanPrefs().iosLight,
+    };
+  }
+
+  function setUploading(on, pct) {
+    const form = $('#scan-form');
+    const btn = $('#run-scan-btn');
+    if (form) form.disabled = on;
+    if (!btn) return;
+    btn.innerHTML = on
+      ? ico('loader', 'ico-spin') + (pct >= 100 ? ' Starting…' : ` Uploading ${Math.round(pct || 0)}%`)
+      : ico('play') + ' Run Scan';
+    $('#upload-bar').style.width = on ? `${pct || 0}%` : '0';
+  }
+
+  function showRunError(msg) {
+    const box = $('#run-error');
+    if (!box) { alert(msg); return; }
+    box.textContent = msg;
+    box.hidden = !msg;
+  }
+
   async function doUpload(file) {
-    // Validate: API key required when provider needs one
-    let provider = $('#llm-provider').value;
+    showRunError('');
     const mode = $('#llm-mode').value;
-    if (mode === 'offensive' && (provider === 'none' || !provider)) {
-      provider = 'deepseek';
-      const pEl = $('#llm-provider');
-      if (pEl) pEl.value = provider;
-      onProviderChange();
-    }
-    if (mode === 'offensive' && provider === 'none') {
-      alert('Offensive mode requires LLM Enrichment — select a provider.');
-      return;
-    }
-    const needsKey = provider === 'openai' || provider === 'claude' || provider === 'deepseek';
+    if (mode === 'offensive' && !$('#llm-enabled').checked) { $('#llm-enabled').checked = true; onLlmToggle(true); }
+    const llmOn = $('#llm-enabled').checked;
+    const provider = llmOn ? $('#llm-provider').value : 'none';
     const apiKeyVal = ($('#llm-api-key')?.value || '').trim();
-    if (needsKey && !apiKeyVal) {
+    if (llmOn && providerNeedsKey(provider) && !apiKeyVal) {
       const keyInput = $('#llm-api-key');
-      const keyError = $('#llm-key-error');
-      if (keyInput) keyInput.style.borderColor = 'var(--red)';
-      if (keyError) keyError.hidden = false;
-      keyInput?.focus();
+      keyInput.classList.add('invalid');
+      $('#llm-key-error').hidden = false;
+      keyInput.scrollIntoView({block: 'center', behavior: 'smooth'});
+      keyInput.focus({preventScroll: true});
       return;
     }
+    saveScanPrefs(collectPrefs());
 
     const fd = new FormData();
     fd.append('file', file);
     fd.append('llm_enabled', provider !== 'none');
     fd.append('llm_provider', provider);
     fd.append('llm_mode', mode);
-    fd.append('llm_model', (() => {
-      const sel = $('#llm-model-select');
-      // The select stays visible with "Custom" picked (so the user can switch back without
-      // re-choosing a provider) — only read from it when it's showing a real catalog entry.
-      if (sel && !sel.hidden && sel.value !== LLM_MODEL_CUSTOM) return sel.value;
-      return $('#llm-model').value;
-    })());
-    fd.append('llm_api_key', apiKeyVal);
+    fd.append('llm_model', llmOn ? currentLlmModel() : '');
+    fd.append('llm_api_key', llmOn && providerNeedsKey(provider) ? apiKeyVal : '');
     fd.append('assessment_enabled', $('#assessment-enabled')?.checked !== false);
     fd.append('ios_light', !!$('#ios-light')?.checked);
     const ascEl = $('#decompiler-asc');
     fd.append('decompiler', (ascEl && ascEl.checked) ? 'asc' : 'jadx');
 
-    const bar = $('#upload-bar');
-    const runBtn = $('#run-scan-btn');
-    const changeBtn = $('#change-file');
-    if (runBtn) { runBtn.disabled = true; runBtn.textContent = 'Starting…'; }
-    if (changeBtn) changeBtn.disabled = true;
-    bar.hidden = false; bar.value = 0;
+    setUploading(true, 0);
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/v1/scans');
     if (apiKey()) xhr.setRequestHeader('X-Api-Key', apiKey());
-    xhr.upload.onprogress = e => { bar.value = (e.loaded/e.total)*100; };
+    xhr.upload.onprogress = e => { if (e.lengthComputable) setUploading(true, (e.loaded / e.total) * 100); };
+    xhr.upload.onload = () => setUploading(true, 100);
     xhr.onload = () => {
-      bar.value = 100;
       try {
         const j = JSON.parse(xhr.responseText);
         if (j.scan_id) { location.hash = '#/scan/' + j.scan_id; return; }
-        throw new Error(xhr.responseText);
-      } catch(_) {
-        let detail = xhr.responseText;
-        try { detail = formatApiErrorDetail(JSON.parse(xhr.responseText).detail); } catch(__) {}
-        alert('Could not start scan: ' + detail);
-      }
-      if (runBtn) { runBtn.disabled = false; runBtn.textContent = 'Run Scan'; }
-      if (changeBtn) changeBtn.disabled = false;
+      } catch (_) {}
+      let detail = xhr.responseText;
+      try { detail = formatApiErrorDetail(JSON.parse(xhr.responseText).detail); } catch (_) {}
+      if (xhr.status === 401) detail = 'Invalid or missing server API key — set it in the "API Key" field (top right).';
+      setUploading(false);
+      showRunError('Could not start scan: ' + (detail || `HTTP ${xhr.status}`));
     };
-    xhr.onerror = () => {
-      alert('Network error');
-      if (runBtn) { runBtn.disabled = false; runBtn.textContent = 'Run Scan'; }
-      if (changeBtn) changeBtn.disabled = false;
-    };
+    xhr.onerror = () => { setUploading(false); showRunError('Network error — the upload did not reach the server.'); };
     xhr.send(fd);
   }
 
   render(`
-  <div style="max-width:680px;margin:0 auto">
-    <div class="card" style="margin-bottom:1rem">
-      <div class="card-title">Upload package</div>
-      <div id="upload-card-inner"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" style="justify-content:space-between">
-        Recent scans
-        <a href="#/scans" style="font-size:.75rem;font-weight:400">View all →</a>
+  <div class="home-wrap">
+    <input type="file" id="ipa-file" accept=".ipa,.apk,.xapk"/>
+    <div id="upload-slot"></div>
+    <section class="panel" id="recent-panel">
+      <div class="panel-head">${ico('history')} Recent Scans
+        <span class="panel-head-r"><span class="muted-count" id="recent-count"></span>
+          <a href="#/scans" class="link-strong">View all ${ico('arrowRight')}</a></span>
       </div>
-      <div id="recent-list"><div class="loading"><div class="spinner"></div></div></div>
-    </div>
+      <div id="recent-list" class="rs-list">
+        ${'<div class="rs-row" style="cursor:default"><span class="skel" style="height:42px;width:42px;border-radius:11px"></span><div class="rs-main"><span class="skel" style="width:55%"></span><span class="skel" style="width:35%;margin-top:.4rem"></span></div></div>'.repeat(3)}
+      </div>
+    </section>
   </div>`);
 
-  // The card-title stays fixed; only this inner slot swaps between the drop-zone (step 1) and
-  // the options form (step 2) as the user picks/changes a file — never the whole page.
+  // One picker serves both "Browse files" (step 1) and "Change file" (step 2).
+  const fileEl = $('#ipa-file');
+  fileEl.addEventListener('change', () => { pickFile(fileEl.files[0]); fileEl.value = ''; });
+
+  // Only the upload slot swaps between the drop zone (step 1) and the configuration form (step 2)
+  // as the user picks/changes a file — never the whole page. Nothing touches the server until Run Scan.
   function paintUploadCard() {
-    $('#upload-card-inner').innerHTML = pendingFile ? renderScanOptionsHtml(pendingFile) : renderDropZoneHtml();
-    if (pendingFile) {
-      $('#change-file').addEventListener('click', () => { pendingFile = null; paintUploadCard(); });
-      $('#run-scan-btn').addEventListener('click', () => doUpload(pendingFile));
-      onProviderChange();
-      onLlmModeChange();
-    } else {
+    const slot = $('#upload-slot');
+    if (!slot) return;
+    $('#recent-panel').hidden = !!pendingFile;
+    if (!pendingFile) {
+      slot.innerHTML = renderDropZoneHtml();
       const drop = $('#drop');
-      const fileEl = $('#ipa-file');
-      ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag-over')}));
-      ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag-over')}));
-      drop.addEventListener('drop', ev=>pickFile(ev.dataTransfer.files[0]));
-      fileEl.addEventListener('change', ev=>pickFile(ev.target.files[0]));
+      drop.addEventListener('click', () => fileEl.click());
+      drop.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); fileEl.click(); } });
+      wireDrop(drop, pickFile);
+      return;
     }
+    const prefs = loadScanPrefs();
+    slot.innerHTML = renderScanOptionsHtml(pendingFile, prefs);
+    $('#change-file').addEventListener('click', () => fileEl.click());
+    wireDrop($('#picked'), pickFile);
+    $('#run-scan-btn').addEventListener('click', () => doUpload(pendingFile));
+    $('#llm-mode').addEventListener('change', onLlmModeChange);
+    $('#llm-enabled').addEventListener('change', () => onLlmToggle(false));
+    $('#llm-provider').addEventListener('change', () => onProviderChange());
+    $('#llm-model-select').addEventListener('change', onModelSelectChange);
+    $('#llm-model').addEventListener('input', () => { resetLlmTest(); updateRunSummary(); });
+    $('#llm-api-key').addEventListener('input', () => { clearKeyError(); resetLlmTest(); });
+    $('#key-eye').addEventListener('click', toggleKeyVisibility);
+    $('#llm-test').addEventListener('click', testLlmConnection);
+    $$('#scan-form input[name=decompiler], #assessment-enabled, #ios-light').forEach(el => el.addEventListener('change', updateRunSummary));
+    onProviderChange(LLM_PROVIDERS.some(p => p.value === prefs.provider) ? (prefs.model || '') : '');
+    onLlmToggle(true);
+    onLlmModeChange();
+    window.scrollTo({top: 0});
   }
   paintUploadCard();
-
-  try {
-    const scans = await api('/scans');
-    const list = document.getElementById('recent-list');
-    if (!scans.length) { list.innerHTML = '<div class="empty">No scans yet.</div>'; return; }
-    list.innerHTML = scans.slice(0,5).map(s => `
-      <div class="scan-row" onclick="location.hash='#/scan/${s.scan_id}'">
-        <div style="flex:1">
-          <div class="scan-name">${esc(s.filename)}</div>
-          <div class="scan-meta"><span>${fmt(s.created_at)}</span><span>${esc(s.scan_id.slice(0,8))}</span></div>
-        </div>
-        ${badge(s.state)}
-      </div>`).join('');
-  } catch(e) {
-    document.getElementById('recent-list').innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
-  }
+  loadRecentScans();
 });
 
 /* ── scans list view ── */
