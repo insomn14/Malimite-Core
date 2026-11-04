@@ -12,11 +12,20 @@
 # (see README.md's "CI/CD integration" section for the current status of that approach).
 #
 # Required repository/workspace variables (Repository settings -> Pipelines -> Repository
-# variables; mark MALIMITE_API_KEY as Secured):
-#   MALIMITE_URL       — base URL of the malimite-web server, e.g. http://malimite.internal:7070
-#   MALIMITE_API_KEY    — the server's configured API_KEY (Secured)
-#   APP_PATH            — relative path to the built .apk/.ipa/.xapk in this repo (default: app.apk)
-#   FAIL_ON             — NONE | LOW | MEDIUM | HIGH (default: HIGH)
+# variables; mark MALIMITE_API_KEY and MALIMITE_SLACK_WEBHOOK_URL as Secured):
+#   MALIMITE_URL              — base URL of the malimite-web server, e.g. http://malimite.internal:7070
+#   MALIMITE_API_KEY           — the server's configured API_KEY (Secured)
+#   APP_PATH                   — relative path to the built .apk/.ipa/.xapk in this repo (default: app.apk)
+#   FAIL_ON                    — NONE | LOW | MEDIUM | HIGH (default: HIGH). Set to NONE for
+#                                 "monitoring mode" — the scan still runs and is reviewable in the
+#                                 web UI, but never fails the build; pair this with
+#                                 MALIMITE_SLACK_WEBHOOK_URL below so the security team is still
+#                                 notified of every scan rather than relying on someone checking
+#                                 the web UI unprompted — see tools/malimite-ci/README.md's
+#                                 "Monitoring mode" section
+#   MALIMITE_SLACK_WEBHOOK_URL — (optional, Secured) Slack Incoming Webhook URL; when set, a
+#                                 summary is posted for EVERY completed scan regardless of the
+#                                 FAIL_ON verdict
 #
 # malimite_ci.py auto-detects BITBUCKET_BUILD_NUMBER/BITBUCKET_REPO_FULL_NAME/BITBUCKET_COMMIT
 # and tags the scan with them — no extra configuration needed for that part.
@@ -64,6 +73,7 @@ definitions:
               --api-key "$MALIMITE_API_KEY" \
               --file "$APP_PATH" \
               --fail-on "${FAIL_ON:-HIGH}" \
+              --slack-webhook-url "${MALIMITE_SLACK_WEBHOOK_URL:-}" \
               --json-out malimite-result.json
         artifacts:
           - malimite-result.json

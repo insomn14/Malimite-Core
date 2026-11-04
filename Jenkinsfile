@@ -16,6 +16,12 @@
 //     credential ID into that env var, or hardcode it below).
 //   - MALIMITE_URL: base URL of the malimite-web server (set below, or as a Jenkins global
 //     environment variable so every job that includes this stage doesn't repeat it).
+//   - (optional) A "Secret text" credential holding a Slack Incoming Webhook URL, referenced
+//     below as MALIMITE_SLACK_WEBHOOK_CRED_ID. When FAIL_ON is set to NONE ("monitoring mode" —
+//     the scan still runs and is reviewable in the web UI, but never fails the build), pair it
+//     with this so the security team is still notified of every scan — see
+//     tools/malimite-ci/README.md's "Monitoring mode" section. Leave the credential ID blank (or
+//     remove the withCredentials block below) if you don't want Slack notifications at all.
 //
 // malimite_ci.py auto-detects BUILD_URL/GIT_COMMIT from Jenkins' own built-in env vars and tags
 // the scan with them — no extra configuration needed for that part.
@@ -42,6 +48,9 @@ pipeline {
     environment {
         MALIMITE_URL = 'http://malimite.internal:7070'   // point at your deployed instance
         MALIMITE_API_KEY_CRED_ID = 'malimite-api-key'     // Jenkins credential ID, Secret text
+        // Blank = no Slack notifications. Set to a real credential ID to enable them (required
+        // if FAIL_ON is NONE and you still want the security team notified of every scan).
+        MALIMITE_SLACK_WEBHOOK_CRED_ID = ''
     }
 
     stages {
@@ -55,18 +64,28 @@ pipeline {
                         error "error: ${params.APP_PATH} not found — build your app before this stage, or set APP_PATH"
                     }
                 }
-                withCredentials([string(credentialsId: env.MALIMITE_API_KEY_CRED_ID, variable: 'MALIMITE_API_KEY')]) {
-                    sh '''
-                        set -euo pipefail
-                        curl -fsSL -o malimite_ci.py \
-                            "https://raw.githubusercontent.com/insomn14/Malimite-Core/main/tools/malimite-ci/malimite_ci.py"
-                        python3 malimite_ci.py \
-                            --url "$MALIMITE_URL" \
-                            --api-key "$MALIMITE_API_KEY" \
-                            --file "$APP_PATH" \
-                            --fail-on "$FAIL_ON" \
-                            --json-out malimite-result.json
-                    '''
+                script {
+                    // withCredentials errors if given a blank/nonexistent credential ID, so the
+                    // Slack binding is conditional — the common case (no Slack configured) must
+                    // not require a dummy credential to exist just to satisfy this block.
+                    def creds = [string(credentialsId: env.MALIMITE_API_KEY_CRED_ID, variable: 'MALIMITE_API_KEY')]
+                    if (env.MALIMITE_SLACK_WEBHOOK_CRED_ID) {
+                        creds.add(string(credentialsId: env.MALIMITE_SLACK_WEBHOOK_CRED_ID, variable: 'MALIMITE_SLACK_WEBHOOK_URL'))
+                    }
+                    withCredentials(creds) {
+                        sh '''
+                            set -euo pipefail
+                            curl -fsSL -o malimite_ci.py \
+                                "https://raw.githubusercontent.com/insomn14/Malimite-Core/main/tools/malimite-ci/malimite_ci.py"
+                            python3 malimite_ci.py \
+                                --url "$MALIMITE_URL" \
+                                --api-key "$MALIMITE_API_KEY" \
+                                --file "$APP_PATH" \
+                                --fail-on "$FAIL_ON" \
+                                --slack-webhook-url "${MALIMITE_SLACK_WEBHOOK_URL:-}" \
+                                --json-out malimite-result.json
+                        '''
+                    }
                 }
             }
             post {

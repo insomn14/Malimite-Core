@@ -45,6 +45,39 @@ python3 malimite_ci.py \
 | `--ci-commit-sha` | auto-detected | Commit SHA this scan was built from |
 | `--ci-triggered-by` | auto-detected | Free-form label for what started this scan |
 | `--no-ci-autodetect` | off | Disable CI environment detection entirely |
+| `--slack-webhook-url` | `$MALIMITE_SLACK_WEBHOOK_URL` | Posts a summary for **every** completed scan, regardless of `--fail-on` verdict — see "Monitoring mode" below |
+
+### Monitoring mode (`--fail-on NONE`) + Slack notifications
+
+Running with `--fail-on NONE` is a deliberate, supported configuration — not a workaround. The
+scan still runs, findings are still recorded and reviewable in the web UI, but the build is never
+gated on them. This trades automatic enforcement for avoiding false-positive-driven pipeline
+friction while a security team is still triaging a new or historically large finding backlog, or
+while rolling a scanner out without risking developer pushback from day one.
+
+The risk this mode introduces on its own: nothing guarantees a human actually looks at the
+results before the build (and whatever it deploys) proceeds. `--slack-webhook-url` closes that
+gap — a summary (finding counts, severity breakdown, gate verdict, a link to the full report) is
+posted to Slack for **every** completed scan, whether or not it would have failed the build. This
+makes "scan ran but nobody looked" an explicit choice a team has to not act on, rather than a
+silent gap.
+
+```bash
+python3 malimite_ci.py \
+  --url "$MALIMITE_URL" --api-key "$MALIMITE_API_KEY" \
+  --file app-release.apk \
+  --fail-on NONE \
+  --slack-webhook-url "$MALIMITE_SLACK_WEBHOOK_URL"
+```
+
+Create the webhook under your Slack app's **Incoming Webhooks** feature (one URL per channel);
+store it as a CI secret (`MALIMITE_SLACK_WEBHOOK_URL`), never in a committed pipeline file.
+
+A Slack delivery failure (bad URL, Slack outage, network blip) is logged to stderr as a warning
+and **never changes the process exit code** — a notification side-channel must not become a new
+way for an otherwise-clean build to fail. This is independent of `--fail-on`: a Slack delivery
+failure doesn't affect the severity gate's own pass/fail verdict either, which is computed purely
+from the scan's findings.
 
 ### CI metadata auto-detection
 

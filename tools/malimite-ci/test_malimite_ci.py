@@ -330,5 +330,171 @@ class MainEndToEndTests(unittest.TestCase):
             self.assertEqual(summary["severity_counts"], {"HIGH": 1, "MEDIUM": 1})
 
 
+class SlackPayloadTests(unittest.TestCase):
+    """build_slack_payload() — pure function, no network."""
+
+    def test_payload_includes_fail_verdict(self):
+        payload = malimite_ci.build_slack_payload(
+            "scan-123", "http://x/#/scan/scan-123", "app.apk", "HIGH", True,
+            {"HIGH": 2}, 2)
+        text = json.dumps(payload)
+        self.assertIn("FAIL", text)
+        self.assertIn("app.apk", text)
+        self.assertIn("scan-123"[:8], text)
+
+    def test_payload_includes_pass_verdict(self):
+        payload = malimite_ci.build_slack_payload(
+            "scan-123", "http://x/#/scan/scan-123", "app.apk", "HIGH", False,
+            {}, 0)
+        text = json.dumps(payload)
+        self.assertIn("pass", text)
+        self.assertIn("No active findings", text)
+
+    def test_payload_includes_ci_context_when_present(self):
+        payload = malimite_ci.build_slack_payload(
+            "scan-123", "http://x/#/scan/scan-123", "app.apk", "HIGH", False, {}, 0,
+            ci_pipeline_url="https://bitbucket.org/org/repo/pipelines/results/42",
+            ci_triggered_by="bitbucket-pipelines")
+        text = json.dumps(payload)
+        self.assertIn("Pipeline run", text)
+        self.assertIn("bitbucket-pipelines", text)
+
+    def test_long_filename_does_not_exceed_slacks_150_char_header_limit(self):
+        """Slack's header block REJECTS the entire message (not just truncates) if its
+        plain_text exceeds 150 chars — a long APK/IPA filename must not silently drop the
+        notification, which is the one thing this feature exists to guarantee."""
+        long_filename = "a" * 140 + ".apk"
+        payload = malimite_ci.build_slack_payload(
+            "scan-123", "http://x/#/scan/scan-123", long_filename, "HIGH", False, {}, 0)
+        header_text = payload["blocks"][0]["text"]["text"]
+        self.assertLessEqual(len(header_text), 150)
+
+    def test_payload_omits_ci_context_when_absent(self):
+        payload = malimite_ci.build_slack_payload(
+            "scan-123", "http://x/#/scan/scan-123", "app.apk", "HIGH", False, {}, 0)
+        text = json.dumps(payload)
+        self.assertNotIn("Pipeline run", text)
+        self.assertNotIn("Triggered by", text)
+
+
+class SlackDeliveryTests(unittest.TestCase):
+    """send_slack_notification() network behavior — the critical property under test is that a
+    delivery failure NEVER raises or otherwise propagates into the caller's exit code; it is
+    always best-effort."""
+
+    def test_successful_post_sends_expected_body(self):
+        seen = {}
+
+        def fake_urlopen(req, timeout=None):
+            seen["url"] = req.full_url
+            seen["body"] = json.loads(req.data)
+            seen["content_type"] = req.headers.get("Content-type")
+            return _http_response({"ok": True})
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            malimite_ci.send_slack_notification("https://hooks.slack.com/services/x", {"blocks": []})
+
+        self.assertEqual(seen["url"], "https://hooks.slack.com/services/x")
+        self.assertEqual(seen["body"], {"blocks": []})
+        self.assertEqual(seen["content_type"], "application/json")
+
+    def test_http_error_does_not_raise(self):
+        err = urllib.error.HTTPError("https://hooks.slack.com/x", 404, "Not Found", {}, io.BytesIO(b"no_service"))
+        try:
+            with patch("urllib.request.urlopen", side_effect=err):
+                malimite_ci.send_slack_notification("https://hooks.slack.com/services/x", {"blocks": []})
+            # reaching here without an exception is the assertion
+        finally:
+            err.close()
+
+    def test_connection_error_does_not_raise(self):
+        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("refused")):
+            malimite_ci.send_slack_notification("https://hooks.slack.com/services/x", {"blocks": []})
+            # reaching here without an exception is the assertion
+
+
+class SlackIntegrationInMainTests(unittest.TestCase):
+    """Exercises --slack-webhook-url end to end through main(), confirming the single most
+    important property: a Slack delivery failure must never change the process exit code — the
+    --fail-on verdict computed from the scan itself is the only thing allowed to do that."""
+
+    def _run_main_with_slack(self, scan_responses, slack_urlopen_side_effect, extra_args):
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".apk", delete=False) as f:
+            f.write(b"fake apk bytes")
+            apk_path = f.name
+        try:
+            scan_mocks = [_http_response(r) for r in scan_responses]
+            call_count = {"n": 0}
+
+            def urlopen_router(req, timeout=None):
+                call_count["n"] += 1
+                if call_count["n"] <= len(scan_mocks):
+                    return scan_mocks[call_count["n"] - 1]
+                # the call after all scan-flow calls is the Slack POST
+                if callable(slack_urlopen_side_effect):
+                    return slack_urlopen_side_effect(req)
+                raise slack_urlopen_side_effect
+
+            with patch("urllib.request.urlopen", urlopen_router):
+                return malimite_ci.main([
+                    "--url", "http://x", "--api-key", "k", "--file", apk_path,
+                    "--slack-webhook-url", "https://hooks.slack.com/services/x", *extra_args,
+                ])
+        finally:
+            Path(apk_path).unlink(missing_ok=True)
+
+    def test_slack_delivery_failure_does_not_change_a_passing_exit_code(self):
+        code = self._run_main_with_slack(
+            scan_responses=[{"scan_id": "s1"}, {"state": "done"}, [_vuln("LOW")]],
+            slack_urlopen_side_effect=urllib.error.URLError("slack is down"),
+            extra_args=["--fail-on", "HIGH"],
+        )
+        self.assertEqual(code, 0)
+
+    def test_slack_delivery_failure_does_not_change_a_failing_exit_code(self):
+        code = self._run_main_with_slack(
+            scan_responses=[{"scan_id": "s1"}, {"state": "done"}, [_vuln("HIGH")]],
+            slack_urlopen_side_effect=urllib.error.URLError("slack is down"),
+            extra_args=["--fail-on", "HIGH"],
+        )
+        self.assertEqual(code, 1)
+
+    def test_slack_is_notified_even_when_fail_on_is_none(self):
+        """The core scenario this feature exists for: monitoring mode (--fail-on NONE) still
+        gets the security team a notification for every scan, pass or fail."""
+        notified = {}
+
+        def capture(req):
+            notified["body"] = json.loads(req.data)
+            return _http_response({"ok": True})
+
+        code = self._run_main_with_slack(
+            scan_responses=[{"scan_id": "s1"}, {"state": "done"}, [_vuln("HIGH")]],
+            slack_urlopen_side_effect=capture,
+            extra_args=["--fail-on", "NONE"],
+        )
+        self.assertEqual(code, 0)   # NONE never fails the build
+        self.assertIn("blocks", notified["body"])   # but Slack was still notified
+
+    def test_no_slack_call_when_webhook_url_not_set(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".apk", delete=False) as f:
+            f.write(b"fake apk bytes")
+            apk_path = f.name
+        try:
+            mock = MagicMock(side_effect=[
+                _http_response({"scan_id": "s1"}),
+                _http_response({"state": "done"}),
+                _http_response([_vuln("LOW")]),
+            ])
+            with patch("urllib.request.urlopen", mock):
+                malimite_ci.main(["--url", "http://x", "--api-key", "k", "--file", apk_path,
+                                  "--fail-on", "HIGH"])
+            self.assertEqual(mock.call_count, 3)   # upload, poll, vulnerabilities — no 4th (Slack) call
+        finally:
+            Path(apk_path).unlink(missing_ok=True)
+
+
 if __name__ == "__main__":
     unittest.main()

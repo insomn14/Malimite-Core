@@ -240,6 +240,80 @@ def should_fail(findings: list[dict], fail_on: str) -> bool:
     return False
 
 
+# Matches bot/python/slack_format.py's emoji convention (consistent visual language across both
+# Malimite Slack surfaces) without importing it: that module depends on slack-bolt, which this
+# script deliberately avoids to stay stdlib-only.
+_SEV_EMOJI = {
+    "CRITICAL": ":red_circle:",
+    "HIGH": ":large_orange_circle:",
+    "MEDIUM": ":large_yellow_circle:",
+    "LOW": ":large_blue_circle:",
+    "INFO": ":white_circle:",
+}
+
+
+def build_slack_payload(scan_id: str, scan_url: str, filename: str, fail_on: str,
+                        fail: bool, counts: dict[str, int], total_findings: int,
+                        ci_pipeline_url: Optional[str] = None,
+                        ci_triggered_by: Optional[str] = None) -> dict:
+    """Slack Incoming Webhook payload (Block Kit) — sent for every completed scan, regardless of
+    --fail-on verdict, so the security team has full visibility even when the build itself isn't
+    gated (see tools/malimite-ci/README.md's "Monitoring mode" section for why that's a
+    deliberate, supported configuration rather than a workaround)."""
+    verdict_text = (
+        f":rotating_light: *Build gate: FAIL* (--fail-on {fail_on})" if fail
+        else f":white_check_mark: Build gate: pass (--fail-on {fail_on})"
+    )
+    headline = (":white_check_mark: *No active findings*" if total_findings == 0
+                else f":mag: *{total_findings} finding{'s' if total_findings != 1 else ''} detected*")
+
+    # Slack's header block enforces a hard 150-char limit on plain_text and REJECTS the whole
+    # message if exceeded — not just truncates. A long APK/IPA filename could realistically blow
+    # past this, so truncate defensively rather than let a long filename silently drop the
+    # notification entirely (the one thing this feature exists to guarantee).
+    header_text = f"Malimite scan: {filename}"
+    if len(header_text) > 150:
+        header_text = header_text[:147] + "..."
+
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text", "text": header_text}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": headline}},
+    ]
+
+    sev_parts = [f"{_SEV_EMOJI[s]} *{counts.get(s, 0)}* {s.capitalize()}"
+                for s in ("CRITICAL", "HIGH", "MEDIUM", "LOW") if counts.get(s)]
+    if sev_parts:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": " · ".join(sev_parts)}})
+
+    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": verdict_text}})
+
+    context_parts = [f"<{scan_url}|View full report>"]
+    if ci_pipeline_url:
+        context_parts.append(f"<{ci_pipeline_url}|Pipeline run>")
+    if ci_triggered_by:
+        context_parts.append(f"Triggered by: {ci_triggered_by}")
+    context_parts.append(f"Scan ID: `{scan_id[:8]}…`")
+    blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": " · ".join(context_parts)}]})
+
+    return {"blocks": blocks}
+
+
+def send_slack_notification(webhook_url: str, payload: dict, timeout: float = 10.0) -> None:
+    """Best-effort: a Slack delivery failure (bad URL, Slack outage, network blip) is logged to
+    stderr but never changes the process exit code. A notification side-channel must not become a
+    new way for an otherwise-clean build to fail — the --fail-on verdict computed from the scan
+    itself is the only thing allowed to do that."""
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"},
+                                 method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            resp.read()
+        print("Slack notification sent.")
+    except (urllib.error.HTTPError, urllib.error.URLError) as e:
+        print(f"warning: could not send Slack notification: {e}", file=sys.stderr)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Upload an APK/IPA to a Malimite web server, wait for the scan, "
@@ -274,6 +348,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-ci-autodetect", action="store_true",
                     help="Disable CI environment auto-detection entirely (only explicit --ci-* "
                         "flags are used, if any)")
+    p.add_argument("--slack-webhook-url", default=os.environ.get("MALIMITE_SLACK_WEBHOOK_URL"),
+                    help="Slack Incoming Webhook URL. When set, a summary is posted for EVERY "
+                        "completed scan regardless of --fail-on verdict (so a security team has "
+                        "full visibility even in monitoring mode, --fail-on NONE). Defaults to "
+                        "$MALIMITE_SLACK_WEBHOOK_URL. A delivery failure is logged but never "
+                        "changes the process exit code")
     return p
 
 
@@ -316,6 +396,14 @@ def main(argv: Optional[list[str]] = None) -> int:
             if counts.get(sev):
                 print(f"  {sev}: {counts[sev]}")
         print(f"--fail-on {args.fail_on}: {'FAIL' if fail else 'PASS'}")
+
+        if args.slack_webhook_url:
+            payload = build_slack_payload(
+                scan_id, f"{base_url}/#/scan/{scan_id}", os.path.basename(args.file),
+                args.fail_on, fail, counts, len(active),
+                ci_pipeline_url=ci_pipeline_url, ci_triggered_by=ci_triggered_by,
+            )
+            send_slack_notification(args.slack_webhook_url, payload)
 
         if args.json_out:
             summary = {
