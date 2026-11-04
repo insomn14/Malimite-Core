@@ -400,17 +400,21 @@ started by CI is distinguishable from a manual upload when reviewed in the web U
 
 ### Alternative: a standalone Docker image running the CLI directly
 
-| Platform | File | Status |
-|----------|------|--------|
-| GitHub Actions | [`.github/workflows/ipa-scan.yml`](.github/workflows/ipa-scan.yml) | ⚠️ References a Docker image (`ghcr.io/<owner>/malimite:latest`) that **this repository does not currently build or publish** — no workflow does `docker build`/`docker push` for a standalone CLI image. Uploading SARIF to **Security → Code scanning** works once that image exists |
-| GitLab CI | [`.gitlab/malimite.yml`](.gitlab/malimite.yml) | ⚠️ Same assumption — `ghcr.io/malimite/malimite:latest` is a placeholder, not a real published image |
+Good for a fully self-contained scanner with no server dependency (e.g. air-gapped CI).
+[`deploy/Dockerfile`](deploy/Dockerfile) ships **Ghidra 12.0.4** + JADX (fixed — it previously
+shipped 11.1.2, which this codebase's scan rejects: `Bad argument: -enableAnalyzer`) and is
+published to GHCR by [`.github/workflows/publish-docker.yml`](.github/workflows/publish-docker.yml)
+on every version tag (`ghcr.io/insomn14/malimite:<tag>` and `:latest`). Built and smoke-tested
+locally against a real APK during development — JADX decompiled it, `VulnerabilityScanner` found
+findings, `--fail-on HIGH` correctly exited 1.
 
-If you need a fully self-contained scanner (no server dependency, e.g. air-gapped CI), build
-[`deploy/Dockerfile`](deploy/Dockerfile) yourself — note it currently ships **Ghidra 11.1.2**,
-which this codebase's scan rejects (`Bad argument: -enableAnalyzer`); it needs the same Ghidra
-12.0.4 upgrade `deploy/web.Dockerfile` already has before IPA scans will succeed from it. This is
-tracked as follow-up work; the server-based approach above is both verified and simpler to
-operate today.
+| Platform | File |
+|----------|------|
+| GitHub Actions | [`.github/workflows/ipa-scan.yml`](.github/workflows/ipa-scan.yml) |
+| GitLab CI | [`.gitlab/malimite.yml`](.gitlab/malimite.yml) |
+
+Both pull `ghcr.io/insomn14/malimite:latest` by default — override `MALIMITE_IMAGE` if you forked
+this repo (GHCR images are namespaced by repository owner).
 
 ---
 

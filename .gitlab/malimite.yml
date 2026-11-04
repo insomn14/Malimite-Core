@@ -1,4 +1,11 @@
 # Malimite IPA Security Scan — GitLab CI template
+#
+# This is the STANDALONE DOCKER IMAGE path (self-contained, no server dependency — good for
+# air-gapped CI). For most setups, scanning via tools/malimite-ci against a running
+# malimite-web server is recommended instead — see README.md's "CI/CD integration" section.
+# The image this template pulls (.github/workflows/publish-docker.yml, published to GHCR on
+# every version tag) ships Ghidra 12.0.4 + JADX.
+#
 # Include this in your .gitlab-ci.yml:
 #
 #   include:
@@ -6,7 +13,8 @@
 #       file: '.gitlab/malimite.yml'
 #
 # Required CI/CD variables (Settings → CI/CD → Variables):
-#   MALIMITE_IMAGE   — Docker image, e.g. ghcr.io/yourorg/malimite:latest
+#   MALIMITE_IMAGE   — Docker image (default: ghcr.io/insomn14/malimite:latest — override if
+#                      you fork this repo, since GHCR images are namespaced by repo owner)
 #   GHIDRA_HOME      — path inside the container (default: /opt/ghidra)
 #   LLM_PROVIDER     — openai | claude | ollama | none  (default: none)
 #   OPENAI_API_KEY   — (masked)
@@ -17,7 +25,7 @@
   services:
     - docker:24-dind
   variables:
-    MALIMITE_IMAGE:  "${MALIMITE_IMAGE:-ghcr.io/malimite/malimite:latest}"
+    MALIMITE_IMAGE:  "${MALIMITE_IMAGE:-ghcr.io/insomn14/malimite:latest}"
     GHIDRA_HOME:     "/opt/ghidra"
     LLM_PROVIDER:    "${LLM_PROVIDER:-none}"
     LLM_MODE:        "${LLM_MODE:-find_vulns}"

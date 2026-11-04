@@ -1,4 +1,11 @@
 name: IPA Scan
+
+# This is the STANDALONE DOCKER IMAGE path (self-contained, no server dependency — good for
+# air-gapped CI). For most setups, scanning via tools/malimite-ci against a running
+# malimite-web server is recommended instead — see README.md's "CI/CD integration" section.
+# The image below (ghcr.io/<owner>/malimite:latest) is published by
+# .github/workflows/publish-docker.yml on every version tag, and ships Ghidra 12.0.4 + JADX.
+
 on:
   release:
     types: [published]

@@ -1,0 +1,86 @@
+name: Publish Docker image
+
+# Builds deploy/Dockerfile (the standalone CLI image — Ghidra 12.0.4 + JADX, no server
+# dependency) and publishes it to GHCR on every version tag. This is the image
+# .github/workflows/ipa-scan.yml and .gitlab/malimite.yml reference as
+# ghcr.io/<owner>/malimite:<tag> and ghcr.io/<owner>/malimite:latest — before this workflow
+# existed, no workflow in this repository ever built or published that image at all, so those
+# two CI templates referenced a package that didn't exist (confirmed via `gh api
+# /users/<owner>/packages?package_type=container` returning an empty list during development).
+#
+# This does NOT replace the recommended CI/CD path (tools/malimite-ci calling a running
+# malimite-web server — see README.md's "CI/CD integration" section); it exists for
+# self-contained/air-gapped scanning where no server is available.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:   # manual run against the current main, e.g. to re-publish :latest
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine image tags
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${{ github.repository_owner }}/malimite"
+          tags="$image:latest"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            tags="$image:${GITHUB_REF_NAME},${tags},$image:${version}"
+          fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (load locally first, for the smoke test below)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          # Only the test-and-push tags below carry a real version; this intermediate load uses
+          # a disposable local tag so smoke-testing doesn't depend on parsing step.meta's output.
+          tags: malimite-smoke-test:local
+          load: true
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test the image
+        run: |
+          set -euo pipefail
+          actual_version="$(docker run --rm malimite-smoke-test:local malimite --version)"
+          echo "CLI reports: $actual_version"
+          # Fails loudly (not silently) if the jar inside the image can't even start.
+          [[ "$actual_version" == malimite* ]]
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          tags: ${{ steps.meta.outputs.tags }}
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

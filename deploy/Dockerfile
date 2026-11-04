@@ -14,13 +14,22 @@ COPY bot/ bot/
 RUN mvn -T 1C -DskipTests package
 
 # ── stage 2: runtime ────────────────────────────────────────────────────────
-FROM eclipse-temurin:17-jdk-jammy
-ARG GHIDRA_VERSION=11.1.2
-ARG GHIDRA_DATE=20240709
+# JDK 21, not 17 or the base image's own JDK: Ghidra's analyzeHeadless OSGi script loader
+# rejects newer JDKs (osgi.ee=UNKNOWN on JDK 22, confirmed in development) and this is the
+# version verified end to end against this codebase elsewhere (see deploy/EC2_DEPLOYMENT.md).
+FROM eclipse-temurin:21-jdk-jammy
+# 12.x: the scan passes -enableAnalyzer/-disableAnalyzer, which 11.1.2 rejects ("Bad argument").
+# Do not move to 12.1+ until DumpClassData.java is updated for its class-loader change — see
+# web/app/config.py and deploy/web.Dockerfile, which this pins identically to.
+ARG GHIDRA_VERSION=12.0.4
+ARG GHIDRA_DATE=20260303
 ARG GHIDRA_URL=https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/ghidra_${GHIDRA_VERSION}_PUBLIC_${GHIDRA_DATE}.zip
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl unzip ca-certificates && \
+    # libharfbuzz0b/libfontconfig1/libfreetype6: Ghidra's analyzers load the JDK font manager
+    # even headless — missing these makes analyzeHeadless fail obscurely partway through a scan.
+    apt-get install -y --no-install-recommends curl unzip ca-certificates \
+        libharfbuzz0b libfontconfig1 libfreetype6 && \
     rm -rf /var/lib/apt/lists/*
 
 RUN curl -fL -o /tmp/ghidra.zip "$GHIDRA_URL" && \
