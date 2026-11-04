@@ -137,6 +137,7 @@ Malimite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 | **Maven** | 3.8+ |
 | **Ghidra** | 12.0.x (the web Docker image ships 12.0.4) — must contain `support/analyzeHeadless` (required for `.ipa`). 11.1.2 rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`); 12.1+ is untested (see `web/app/config.py`). Headless also needs the JDK font libraries (`libharfbuzz0b`, `libfontconfig1`, `libfreetype6` on Debian) |
 | **JADX** | ≥ 1.5 — CLI `bin/jadx` (required for `.apk` DEX; set `JADX_HOME`) |
+| **Droid ASC** (optional) | `droidasc` on `PATH` (or `ASC_HOME`/`python -m droidasc`) — alternate Android decompiler, `--decompiler asc`. Falls back to JADX automatically when unavailable (see below) |
 | **Ghidra (Android native)** | Same install as iOS — used for APK `lib/arm64-v8a/*.so` when `GHIDRA_HOME` is set |
 | **Python** | 3.10+ (web service & Slack bot only) |
 | **LLM API key** | Optional — only when `--llm` is enabled |
@@ -153,6 +154,33 @@ Install JADX (Android APK decompilation):
 # Download a release from https://github.com/skylot/jadx/releases
 export JADX_HOME=/opt/jadx   # directory containing bin/jadx
 ```
+
+Install Droid ASC (optional — faster on-demand Android decompiler, `--decompiler asc`):
+
+```bash
+pip install droidasc   # or: pipx install droidasc (keeps it out of the system Python env)
+# the `droidasc` console script now needs to be on PATH wherever the CLI process actually runs
+```
+
+`AscRunner` resolves the binary as `--asc-home <dir>`/`ASC_HOME` (a source
+checkout, run via `python -m droidasc`) → a `droidasc` script on `PATH`, and
+verifies it can actually launch (not just that the install step succeeded)
+before ever trying to use it — if that check fails, the scan transparently
+falls back to JADX instead of erroring out. **systemd units do not inherit
+the login shell's `PATH`** (user services default to `PATH=/usr/local/bin:/usr/bin`),
+so a `pip install --user`/`pipx install` of `droidasc` under `~/.local/bin` is
+invisible to a service unless that directory is added explicitly:
+
+```ini
+# ~/.config/systemd/user/malimite-web.service
+[Service]
+Environment=PATH=/home/%u/.local/bin:/usr/local/bin:/usr/bin
+```
+
+Without this, `--decompiler asc` silently (and correctly, per the fallback
+above) runs JADX instead — nothing breaks, but ASC never actually gets used.
+Confirm which one ran from a scan's own log: `Decompiler backend: asc` vs.
+`Decompiler backend: jadx` / `ASC unavailable (...); falling back to JADX`.
 
 ---
 
