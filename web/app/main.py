@@ -90,6 +90,9 @@ async def create_scan(
     assessment_enabled: bool = Form(True),
     ios_light: bool = Form(False),
     decompiler: str = Form("jadx"),
+    ci_pipeline_url: Optional[str] = Form(None),
+    ci_commit_sha: Optional[str] = Form(None),
+    ci_triggered_by: Optional[str] = Form(None),
 ):
     _check_auth(request)
     name = file.filename.lower()
@@ -137,6 +140,7 @@ async def create_scan(
         data, file.filename,
         llm_enabled, llm_provider, llm_mode, llm_model, llm_api_key,
         assessment_enabled, ios_light, decompiler,
+        ci_pipeline_url, ci_commit_sha, ci_triggered_by,
     )
 
 

@@ -17,6 +17,13 @@ class ScanMeta(BaseModel):
     assessment_enabled: bool = True
     ios_light: bool = False
     decompiler: str = "jadx"   # Android-only: "jadx" (default) or "asc" (Droid ASC)
+    # Optional CI/CD provenance — set by pipeline clients (e.g. tools/malimite-ci) so a scan
+    # started by automation is distinguishable in the web UI from one uploaded by a reviewer.
+    # All three are free-form strings the caller supplies; None/absent means "not from a
+    # recognized pipeline" (manual upload is the overwhelmingly common case and stays unset).
+    ci_pipeline_url: Optional[str] = None
+    ci_commit_sha: Optional[str] = None
+    ci_triggered_by: Optional[str] = None
 
 
 class ScanDetail(ScanMeta):

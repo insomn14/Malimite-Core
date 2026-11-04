@@ -326,6 +326,9 @@ async def create_scan(
     assessment_enabled: bool = True,
     ios_light: bool = False,
     decompiler: str = "jadx",
+    ci_pipeline_url: Optional[str] = None,
+    ci_commit_sha: Optional[str] = None,
+    ci_triggered_by: Optional[str] = None,
 ) -> ScanMeta:
     migrate_legacy_scan_dirs()
     settings.scan_dir.mkdir(parents=True, exist_ok=True)
@@ -355,6 +358,12 @@ async def create_scan(
         # Android-only (.apk/.xapk); ignored by the CLI for .ipa. "jadx" (default) or "asc"
         # (Droid ASC — falls back to jadx server-side if the asc/droidasc binary isn't installed).
         "decompiler": decompiler if decompiler in ("jadx", "asc") else "jadx",
+        # Optional CI/CD provenance (e.g. set by tools/malimite-ci) — purely informational,
+        # never read by _run()/the CLI invocation, just carried through to the API response
+        # and meta.json so the web UI can show which scans came from automation.
+        "ci_pipeline_url": (ci_pipeline_url or "").strip() or None,
+        "ci_commit_sha": (ci_commit_sha or "").strip() or None,
+        "ci_triggered_by": (ci_triggered_by or "").strip() or None,
         # in-memory only (stripped by _write_meta): used by _run to build the CLI environment
         "_llm_api_key": llm_api_key,
     }
