@@ -1012,6 +1012,7 @@ tr:hover td{background:#fafaff}
 .risk-foot{display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:.9rem;padding-top:.75rem;border-top:1px solid var(--border);font-size:.76rem;color:var(--muted)}
 .state-panel{display:flex;align-items:center;gap:1rem;padding:1.1rem 1.2rem;border-radius:14px;margin-bottom:1rem}
 .state-panel.running{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.state-panel{background:var(--surface);border:1px solid var(--border);color:var(--text)}
 .state-panel.failed{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
 .state-panel .big{font-size:1.6rem;display:flex}
 .state-panel strong{display:block;font-size:.95rem}
@@ -2783,6 +2784,20 @@ window.copyText = async function(text, btn) {
   } catch (_) { prompt('Copy:', String(text)); }
 };
 
+/* Every result tab shows the same "no results yet" panel while a scan is still running (or when it
+   failed), so a tab that hasn't been given data never looks like a different kind of error. */
+function notReadyHtml(detail, what) {
+  const st = String(detail?.state || '').toLowerCase();
+  const pending = st === 'running' || st === 'queued';
+  const title = pending ? (st === 'queued' ? 'Scan is queued' : 'Scan is running') : 'Scan did not finish';
+  const body = pending
+    ? `${what} will appear here automatically once the analysis finishes.`
+    : `The analysis stopped before it finished, so ${what} are unavailable for this scan. Check the Summary tab for the failure reason.`;
+  const cls = pending ? 'running' : 'failed';
+  return `<div class="state-panel ${cls}"><span class="big">${ico(pending ? 'loader' : 'circleX', pending ? 'ico-spin' : '')}</span>
+    <div><strong>${esc(title)}</strong>${esc(body)}</div></div>`;
+}
+
 function scanKindFromDetail(d) {
   const p = String(d?.platform || '').toUpperCase();
   return p === 'IOS' ? 'ios' : p === 'ANDROID' ? 'android' : packageKindOf(d?.filename);
@@ -2890,7 +2905,7 @@ async function renderTab(id, tab, detail) {
       case 'assessment':      await tabAssessment(el, id, detail); break;
       case 'functions':       await tabFunctions(el, id, detail); break;
       case 'strings':     await tabStrings(el, id, detail); break;
-      case 'resources':   await tabResources(el, id); break;
+      case 'resources':   await tabResources(el, id, detail); break;
       case 'entrypoints': await tabEntryPoints(el, id, detail); break;
       case 'offensive':   await tabOffensive(el, id, detail); break;
       case 'llm':         await tabLlm(el, id, detail); break;
@@ -3116,9 +3131,7 @@ function chatShowPrompts() {
 }
 
 async function tabAssistant(el, id, detail) {
-  if (detail.state !== 'done') {
-    el.innerHTML = `<div class="alert alert-warn">Scan not complete.</div>`; return;
-  }
+  if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'The AI Assistant'); return; }
   const st = chatSt(id);
   el.innerHTML = `
     <div class="card chat-card">
@@ -3752,7 +3765,7 @@ function fnLanguageFor(origin, detail) {
 }
 
 async function tabFunctions(el, id, detail) {
-  if (detail.state !== 'done') { el.innerHTML = '<div class="alert alert-warn">Scan not complete.</div>'; return; }
+  if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'Decompiled functions'); return; }
   if (!fnSt || fnSt.id !== id) {
     el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     let classes;
@@ -4147,7 +4160,7 @@ function fnApplySeverityDots() {
 let stringsRequestSeq = 0;
 
 async function tabStrings(el, id, detail) {
-  if (detail.state !== 'done') { el.innerHTML=`<div class="alert alert-warn">Scan not complete.</div>`; return; }
+  if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'Extracted strings'); return; }
   const root = document.createElement('div');
   root.id = 'strings-root';
   root.innerHTML = `
@@ -4233,7 +4246,8 @@ let resourcesRequestSeq = 0;
 // fnPendingOpen/chatSt(id).prefill pattern used elsewhere, so goTab's lack of an await never matters.
 let resPendingHighlight = null;
 
-async function tabResources(el, id) {
+async function tabResources(el, id, detail) {
+  if (detail && detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'Extracted resources'); return; }
   const root = document.createElement('div');
   root.id = 'resources-root';
   root.innerHTML = `
@@ -4329,7 +4343,7 @@ async function loadResources(root, id, state) {
 /* ── entry points tab ── */
 const EP_TYPE_ORDER = ['activity', 'service', 'receiver', 'provider', 'native', 'method', ''];
 async function tabEntryPoints(el, id, detail) {
-  if (detail.state !== 'done') { el.innerHTML=`<div class="alert alert-warn">Scan not complete.</div>`; return; }
+  if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'Detected entry points'); return; }
   const pageSize = 50;
   const root = document.createElement('div');
   root.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -4498,10 +4512,7 @@ window.closeAssessDrawer = closeAssessDrawer;
 async function tabAssessment(el, id, detail) {
   closeAssessDrawer();
   _assessRows = [];
-  if (detail.state !== 'done') {
-    el.innerHTML = `<div class="alert alert-warn">Scan not complete — assessment appears when analysis finishes.</div>`;
-    return;
-  }
+  if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'Security assessment results'); return; }
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const rows = await api('/scans/'+id+'/assessments');
@@ -4711,10 +4722,7 @@ function renderAffectedAssetsList(assets) {
 }
 
 async function tabVulnerabilities(el, id, detail) {
-  if (detail.state !== 'done') {
-    el.innerHTML = `<div class="alert alert-warn">Scan not complete — vulnerabilities will appear when analysis finishes.</div>`;
-    return;
-  }
+  if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'Vulnerabilities'); return; }
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const findings = await api('/scans/'+id+'/vulnerabilities');
@@ -5905,10 +5913,7 @@ function collectOffensiveTargets(findings) {
 }
 
 async function tabOffensive(el, id, detail) {
-  if (detail.state !== 'done') {
-    el.innerHTML = `<div class="alert alert-warn">Scan not complete — Offensive playbooks appear when analysis finishes.</div>`;
-    return;
-  }
+  if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'Offensive playbooks'); return; }
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const findings = await api('/scans/'+id+'/llm');
@@ -6411,11 +6416,14 @@ async function tabLlm(el, id, detail) {
   _llmSelectedIdx = -1;
   _llmSort = {key:'status', dir:'desc'};
   _llmLoad = null;
+  // State first: while a scan is still running, "re-run with LLM enabled" would be misleading
+  // even when enrichment really is off for this scan.
+  if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'LLM findings'); return; }
   if (!detail.llm_enabled) {
-    el.innerHTML=`<div class="alert alert-info">LLM enrichment was not enabled for this scan.
-      Re-run with LLM enabled to see findings.</div>`; return;
+    el.innerHTML = `<div class="state-panel"><span class="big">${ico('sparkles')}</span>
+      <div><strong>LLM enrichment was not enabled for this scan</strong>Run a scan with LLM Enrichment turned on to collect AI findings.</div></div>`;
+    return;
   }
-  if (detail.state !== 'done') { el.innerHTML=`<div class="alert alert-warn">Scan not complete.</div>`; return; }
 
   const root = document.createElement('div');
   root.id = 'llm-root';
