@@ -16,9 +16,16 @@ import java.util.regex.Pattern;
  * Output file is written to {@code outputDir/findings.sarif}.
  *
  * Rules:
- *   MALIMITE001 — Entry point detected           (note)
- *   MALIMITE002 — Suspicious hardcoded string    (warning)
- *   MALIMITE003 — LLM vulnerability finding      (error/warning/note based on severity tag)
+ *   MALIMITE001 — Entry point detected            (note)
+ *   MALIMITE002 — Suspicious hardcoded string     (warning)
+ *   MALIMITE003 — LLM vulnerability finding       (error/warning/note based on severity tag)
+ *   MALIMITE004 — MASTG/MSTG rule-scanner finding (error/warning/note based on effectiveSeverity())
+ *
+ * MALIMITE004 is the primary signal for most scans: VulnerabilityScanner's MASTG/MSTG rule
+ * catalog typically finds far more than LLM enrichment alone (which is optional and often
+ * disabled). Suppressed findings (status false_positive/fixed — see
+ * VulnerabilityRecord.isSuppressed()) are excluded, matching HtmlReporter's own filtering, so a
+ * reviewer's triage decisions are reflected the next time the report is regenerated.
  */
 public final class SarifExporter {
 
@@ -58,6 +65,7 @@ public final class SarifExporter {
         addEntryPointResults(results, report);
         addSuspiciousStringResults(results, report);
         addLlmVulnResults(results, report);
+        addVulnerabilityScannerResults(results, report);
         run.add("results", results);
 
         runs.add(run);
@@ -79,6 +87,8 @@ public final class SarifExporter {
                 "A potentially sensitive hardcoded string was found in the binary.", "warning"));
         rules.add(rule("MALIMITE003", "LlmVulnerability",
                 "LLM analysis identified a potential security vulnerability.", "error"));
+        rules.add(rule("MALIMITE004", "MastgRuleFinding",
+                "A MASTG/MSTG rule-scanner finding was recorded for this application.", "warning"));
         return rules;
     }
 
@@ -128,6 +138,26 @@ public final class SarifExporter {
         }
     }
 
+    /**
+     * MASTG/MSTG rule-scanner findings (VulnerabilityScanner / AndroidVulnerabilityCatalog) —
+     * the primary finding source for most scans (LLM enrichment is optional). Uses
+     * effectiveSeverity() so a reviewer's manual/AI-Fix severity override is reflected, and skips
+     * suppressed findings (false_positive/fixed) the same way HtmlReporter does, so SARIF stays
+     * consistent with what the HTML report and the web UI show as "active" findings.
+     */
+    private static void addVulnerabilityScannerResults(JsonArray results, AnalysisReport report) {
+        if (report.vulnerabilities() == null) return;
+        for (AnalysisReport.VulnerabilityRecord v : report.vulnerabilities()) {
+            if (v.isSuppressed()) continue;
+            String level = sarifLevelFor(v.effectiveSeverity());
+            String location = v.evidenceLocation() != null && !v.evidenceLocation().isBlank()
+                    ? v.evidenceLocation() : v.affectedName();
+            String message = (v.ruleId() != null ? v.ruleId() + ": " : "")
+                    + v.title() + (location != null && !location.isBlank() ? " [" + location + "]" : "");
+            results.add(result("MALIMITE004", level, truncate(message, 300), null, null));
+        }
+    }
+
     private static JsonObject result(String ruleId, String level, String message,
                                       String className, String functionName) {
         JsonObject r = new JsonObject();
@@ -162,6 +192,18 @@ public final class SarifExporter {
         if (upper.contains("HIGH"))   return "error";
         if (upper.contains("MEDIUM")) return "warning";
         return "note";
+    }
+
+    /** CRITICAL/HIGH → SARIF "error" (fails most default CI SARIF gates); MEDIUM → "warning";
+     * LOW/INFO/unknown → "note". Mirrors detectSeverityLevel()'s level scale but reads the
+     * VulnerabilityRecord's own severity field directly instead of substring-matching free text. */
+    private static String sarifLevelFor(String severity) {
+        if (severity == null) return "note";
+        return switch (severity.toUpperCase()) {
+            case "CRITICAL", "HIGH" -> "error";
+            case "MEDIUM" -> "warning";
+            default -> "note";
+        };
     }
 
     private static String truncate(String s, int max) {

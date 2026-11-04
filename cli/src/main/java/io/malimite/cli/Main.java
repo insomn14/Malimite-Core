@@ -211,15 +211,45 @@ public class Main implements Callable<Integer> {
         return computeExitCode(report, failOn);
     }
 
-    private int computeExitCode(AnalysisReport report, String failOn) {
+    /**
+     * Exit code policy (Phase 5.4). Considers BOTH finding sources that end up in findings.sarif:
+     * VulnerabilityScanner's MASTG/MSTG rule catalog (report.vulnerabilities(), the primary
+     * signal for most scans — LLM enrichment is optional and often disabled) and LLM-enriched
+     * findings (report.llmFindings()). A rule-scanner finding counts via its effectiveSeverity()
+     * (so a reviewer's triage/AI-Fix override is honored) and is skipped when suppressed
+     * (status false_positive/fixed — see VulnerabilityRecord.isSuppressed()), matching what
+     * SarifExporter and HtmlReporter already treat as "active". Previously this method only
+     * looked at llmFindings(), so --fail-on silently never tripped on a scan run without --llm —
+     * the common case — even with CRITICAL/HIGH rule-scanner findings present.
+     */
+    static int computeExitCode(AnalysisReport report, String failOn) {
         if ("NONE".equalsIgnoreCase(failOn)) return 0;
-        if (report.llmFindings() == null || report.llmFindings().isEmpty()) return 0;
 
-        boolean hasHigh   = report.llmFindings().stream()
-                .anyMatch(f -> f.finding() != null && f.finding().toUpperCase().contains("HIGH"));
-        boolean hasMedium = report.llmFindings().stream()
-                .anyMatch(f -> f.finding() != null && f.finding().toUpperCase().contains("MEDIUM"));
-        boolean hasAny    = !report.llmFindings().isEmpty();
+        boolean hasHigh = false, hasMedium = false, hasAny = false;
+
+        if (report.vulnerabilities() != null) {
+            for (AnalysisReport.VulnerabilityRecord v : report.vulnerabilities()) {
+                if (v.isSuppressed()) continue;
+                String sev = v.effectiveSeverity();
+                if (sev == null) continue;
+                hasAny = true;
+                switch (sev.toUpperCase()) {
+                    case "CRITICAL", "HIGH" -> hasHigh = true;
+                    case "MEDIUM" -> hasMedium = true;
+                    default -> { /* LOW/INFO already counted via hasAny */ }
+                }
+            }
+        }
+
+        if (report.llmFindings() != null) {
+            for (AnalysisReport.LlmFinding f : report.llmFindings()) {
+                if (f.finding() == null) continue;
+                String upper = f.finding().toUpperCase();
+                hasAny = true;
+                if (upper.contains("HIGH")) hasHigh = true;
+                else if (upper.contains("MEDIUM")) hasMedium = true;
+            }
+        }
 
         return switch (failOn.toUpperCase()) {
             case "HIGH"   -> hasHigh   ? 1 : 0;
