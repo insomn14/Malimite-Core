@@ -1,6 +1,6 @@
 # Malimite-Core — Development Phases
 
-> Last updated: 2026-11-03 — reflects actual codebase state, not the original planning baseline. Revised 2026-11-02: `report.html` rewritten as a formal bilingual VA document, CLI log timestamps, and a Claude thinking-response fix. Revised 2026-11-03: Auto Enhance (bulk AI Fix as a background job).
+> Last updated: 2026-11-05 — reflects actual codebase state, not the original planning baseline. Revised 2026-11-02: `report.html` rewritten as a formal bilingual VA document, CLI log timestamps, and a Claude thinking-response fix. Revised 2026-11-03: Auto Enhance (bulk AI Fix as a background job). Revised 2026-11-05 (Phase 5h — see below): fixed a correctness bug where `findings.sarif`/`--fail-on` never saw VulnerabilityScanner's rule-catalog findings at all (only LLM findings); built `tools/malimite-ci` + Bitbucket/Jenkins templates so an organization's own mobile-app CI/CD can trigger a scan against a running `malimite-web` server; added scan concurrency/rate limits and built-in retention (previously neither existed); fixed `deploy/Dockerfile`'s Ghidra version and wired up `publish-docker.yml` so the standalone image path actually publishes something; added an EC2 native-deployment guide.
 
 ## Current State (Baseline)
 
@@ -12,18 +12,19 @@
 | Slack bot (`bot/python/`) | ⚠️ Works, not hardened — Socket Mode; `.ipa` / `.apk`; runs the CLI itself. No user allowlist, no concurrency cap, no tests; counts raw occurrences (not unique issues); no `JADX_HOME`/ASC settings; no `claude-oauth` mentioned in its own README. See *Chat bots* below |
 | Watcher (`watcher/`) | ✅ Complete — inotify drop-folder daemon (`.ipa` / `.apk`) |
 | Docker: web image (`deploy/web.Dockerfile`) | ✅ Ghidra 12.0.4 + font libs + JADX; runs as uid 10001; port bound to `127.0.0.1` by default. Full iOS scan verified end to end |
-| Docker: legacy stack (`deploy/Dockerfile`, compose api/worker/watcher/bot) | ⚠️ Still Ghidra 11.1.2, which rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`): Ghidra scans are expected to fail there. Not updated |
+| Docker: standalone CLI image (`deploy/Dockerfile`) | ✅ Fixed (Phase 5h) — was still Ghidra 11.1.2 (rejected the scan's headless args: `Bad argument: -enableAnalyzer`); now 12.0.4 + JADX + font libs, same versions as `web.Dockerfile`. Published to GHCR on every version tag by `.github/workflows/publish-docker.yml` (didn't exist before — no workflow ever built/pushed this image). Built + scanned a real APK successfully in a real `docker build`/`docker run` during development |
+| `tools/malimite-ci` | ✅ New (Phase 5h) — zero-dependency Python client for CI/CD pipelines (Bitbucket Pipelines, Jenkins, GitHub Actions): upload → poll → fetch `/vulnerabilities` → gate the build on severity. Computes its own severity gate rather than trusting the API's `exit_code` (process success/failure only, not a severity policy) or the CLI's `--fail-on` (not forwarded by the web service). Auto-detects CI provenance (pipeline URL/commit/triggered-by) from well-known env vars; tags the scan via new optional `ci_pipeline_url`/`ci_commit_sha`/`ci_triggered_by` fields on `ScanMeta` |
 | AI Assistant (`web/app/agent/`) | ✅ Merged to `main` (PR #1). Tools: scan data, assessments, manifest, `recommend_hook_targets` (Frida), on-demand ASC/JADX/Ghidra. Verified with DeepSeek; Claude/OpenAI parsers only against recorded/fake streams. `claude-oauth` provider added (PR #5) |
 | AI Fix (`web/app/finding_fix.py` + `web/app/main.py`) | ✅ Merged to `main`. Per-finding LLM rewrite of Description/Evidence/Risk/PoC/Remediation stored as reversible `Override*` columns; never touches original scanned text; revert endpoint restores it. Shares the AI Assistant's rate limit and LLM provider resolution |
 | Auto Enhance (`web/app/auto_enhance.py` + `web/app/main.py`) | ✅ Merged to `main`. Bulk AI Fix as a server-side background job over many findings at once (reuses `finding_fix.fix_finding` per finding); live progress, Cancel Batch, per-finding Retry, Activity Log persisted per scan. One job per scan at a time; counts once against the shared rate limit regardless of finding count |
-| GitHub / GitLab / Bitbucket CI | ✅ Complete — SARIF upload wired (stock templates are IPA-oriented; image includes JADX) |
+| GitHub / GitLab / Bitbucket CI / Jenkins | ✅ Two distinct paths, both working — see Phase 5h: (1) **recommended** — `tools/malimite-ci` + Bitbucket/Jenkins templates against a running `malimite-web` server; (2) standalone Docker image (GitHub Actions/GitLab templates), now actually publishing an image that works (was previously referencing a nonexistent GHCR package) |
 | Legacy Javalin API (`api/`) | ⚠️ Legacy — superseded by `web/`; kept for Docker-compose compat |
 | Legacy Worker / Java bots (Telegram, Discord, Slack-Java) | ⚠️ Legacy — upload to `POST /api/v1/scans` (compatible with the Python web API) and reply with the `scan_id` only: no results, no polling, no tests |
 | Observability (Phase 6) | ❌ Not started |
-| Security hardening (Phase 7) | ⚠️ Started — see Phase 7 |
-| Enterprise scale (Phase 8) | ❌ Not started |
+| Security hardening (Phase 7) | ⚠️ Started — see Phase 7. Scan upload rate limiting and concurrency guard added (Phase 5h); previously neither existed |
+| Enterprise scale (Phase 8) | ⚠️ Started — see Phase 8. Result retention policy (8.6) added (Phase 5h); previously none existed |
 
-Unit tests in `core/` and `cli/` (232) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM providers (incl. Claude OAuth and the thinking-response regression), SARIF/HTML (incl. triage and AI Fix overrides, the VA report's JSON data contract, and a JSON-escaping regression), learned-rule quality gates and on-demand decompilation; `web/tests/` (173, stdlib `unittest`/`pytest`-compatible) cover the AI Assistant, Functions tab routes, triage, AI Fix, and Auto Enhance (job runner concurrency/cancel/retry, routes). Both suites run on every pull request and on `main` (`.github/workflows/ci.yml`: Java on JDK 17 and 21, Python on 3.12). **A real-IPA/APK scan does not run on CI yet** (it needs Ghidra / JADX on the runner).
+Unit tests: `core`/`cli` (262, 2 pre-existing environment-dependent `AscRunnerTest` failures unrelated to any feature — the test assumes a `droidasc` binary doesn't exist, which no longer holds once it's installed on PATH) cover IPA/APK validation, Android ingest, Assessment, catalogs, LLM providers (incl. Claude OAuth and the thinking-response regression), SARIF/HTML (incl. triage and AI Fix overrides, the VA report's JSON data contract, a JSON-escaping regression, and the `--fail-on`/SARIF rule-scanner-findings fix), learned-rule quality gates, on-demand decompilation, and the exit-code severity gate; `web/tests/` (214, stdlib `unittest`/`pytest`-compatible) cover the AI Assistant, Functions tab routes, triage, AI Fix, Auto Enhance (job runner concurrency/cancel/retry, routes), scan concurrency/rate limiting, and built-in retention; `tools/malimite-ci/test_malimite_ci.py` (31, stdlib-only `unittest`) covers the severity gate, the upload/poll/fetch HTTP flow, and CI metadata auto-detection. All three suites run on every pull request and on `main` (`.github/workflows/ci.yml`: Java on JDK 17 and 21, Python on 3.12, plus a dedicated `malimite-ci-client` job). **A real-IPA/APK scan does not run on CI yet** (it needs Ghidra / JADX on the runner) — `publish-docker.yml`'s smoke test only checks `malimite --version`, not an actual scan.
 
 ---
 
@@ -288,6 +289,30 @@ A reviewer selects any number of findings, picks which fields to rewrite, and cl
 
 ---
 
+## Phase 5h — Organizational CI/CD Integration
+
+**Status: ✅ Complete**
+
+**Goal:** Let an organization's own mobile-app repositories trigger a Malimite scan automatically on every build/release (Bitbucket Pipelines, Jenkins), with results reviewable in the web UI afterward — and fix the correctness/operational gaps that surfaced while building toward that.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 5h.1 | `--fail-on`/SARIF rule-scanner bug fix | ✅ | `SarifExporter` never wrote `VulnerabilityScanner`'s MASTG/MSTG rule-catalog findings to `findings.sarif` at all — only entry points, a hardcoded-string regex, and optional LLM findings. `Main.computeExitCode()` had the same blind spot (`--fail-on` only checked `llmFindings()`), so a scan run without `--llm` — the common case — could never trip `--fail-on` regardless of severity. Reproduced directly: `dvba_v1.1.0.apk` without `--llm` found 51 findings incl. 7 HIGH, yet `findings.sarif` had 0 rule-scanner results and `--fail-on HIGH` exited 0. Fixed: new `MALIMITE004` SARIF rule exports `report.vulnerabilities()` via `effectiveSeverity()` (honors triage/AI-Fix overrides), skipping suppressed (`false_positive`/`fixed`) findings; `computeExitCode()` now considers both finding sources |
+| 5h.2 | `tools/malimite-ci` | ✅ | Zero-dependency (stdlib `urllib`) Python client: upload → poll → fetch `/vulnerabilities` → compute its own severity gate (deliberately not trusting the API's `exit_code` or the CLI's `--fail-on`, neither of which reflects a severity policy over this path). Auto-detects CI provenance (pipeline URL/commit SHA/triggered-by) from Bitbucket/Jenkins/GitHub Actions env vars, overridable via `--ci-*` flags. 31 tests, `urlopen` mocked |
+| 5h.3 | CI scan provenance | ✅ | New optional `ci_pipeline_url`/`ci_commit_sha`/`ci_triggered_by` on `ScanMeta`/`ScanDetail`, set via `POST /api/v1/scans` form fields — backward compatible (default `None`). Data-layer only; no web UI badge yet distinguishing CI-triggered scans from manual uploads |
+| 5h.4 | Bitbucket Pipelines + Jenkins templates | ✅ | Rewrote `bitbucket-pipelines.yml` (previously assumed a `docker run ghcr.io/malimite/malimite:latest` image that never existed) and added a new `Jenkinsfile` — both call `tools/malimite-ci` against a running `malimite-web` server. Both are copy-paste references for a mobile-app repo's own pipeline, not something that runs inside Malimite-Core itself |
+| 5h.5 | Scan concurrency guard | ✅ | `scanner.create_scan()`/`_run()` previously had no limit at all — every upload spawned its own Ghidra/JADX subprocess immediately. New `max_concurrent_scans` (default 3, `asyncio.Semaphore`, same per-event-loop pattern as `heavy_concurrency`); a scan blocked behind the limit stays `queued` (not misleadingly `running`) until a slot frees. Verified against the live sandbox server: 4 parallel uploads showed exactly 3 `running` + 1 `queued` |
+| 5h.6 | Scan upload rate limiting | ✅ | New `scan_rate_per_min` (default 30, sliding-window `deque`, same pattern as the existing `_chat_rate_limit()`) — separate from `chat_rate_per_min`, which only guards LLM spend, not raw scan starts. Raises `429` with `Retry-After` |
+| 5h.7 | Built-in scan retention | ✅ | Phase 8.6 gap closed. New `scan_retention_days` (default `0` = disabled, preserving prior "keep everything" behavior). `delete_expired_scans()` ages from `created_at`, skips `queued`/`running` scans regardless of age, tolerates missing/corrupt `meta.json`. Runs once at startup, then on a daily background task started/cancelled cleanly in `main.py`'s `lifespan` |
+| 5h.8 | `deploy/Dockerfile` fix + GHCR publish | ✅ | Was still Ghidra 11.1.2 (same `-enableAnalyzer` rejection as above); bumped to 12.0.4, added the font libs `web.Dockerfile` already had, base image JDK 17→21 (JDK 22 breaks Ghidra's OSGi loader). New `.github/workflows/publish-docker.yml` builds+smoke-tests+pushes to `ghcr.io/<owner>/malimite` on every version tag — no workflow ever did this before, so `ipa-scan.yml`/`.gitlab/malimite.yml` referenced a nonexistent image. Built and scanned a real APK inside the fixed image with `docker build`/`docker run` during development (not just in CI) |
+| 5h.9 | EC2 native deployment guide | ✅ | New `deploy/EC2_DEPLOYMENT.md` — native systemd (matches the already-verified dev setup, not `deploy/web.Dockerfile`, which has never been deployment-tested outside a sandbox): instance sizing (explicit callout that scans have no server-side queue, so size for RAM headroom), security group placement, exact pinned Ghidra/JADX versions, separate EBS volume for scan data, the new built-in retention setting, the systemd unit, mandatory `API_KEY`, and an end-to-end smoke test |
+| 5h.10 | Tests | ✅ | 9 new `SarifExporterTest` + 15 new `MainTest` (Java); 5 new `test_upload_formats.py` + 7 new `test_scanner_concurrency.py` + 13 new `test_scanner_retention.py` (Python web); 31 new `tools/malimite-ci/test_malimite_ci.py` |
+
+### Deliverable
+An organization's Bitbucket Pipelines or Jenkins build calls `tools/malimite-ci` against a `malimite-web` server (deployable to EC2 per the new guide); the pipeline fails on a severity threshold computed from real findings (not a previously-broken gate); the server survives a burst of concurrent CI-triggered scans without unbounded subprocess spawn; old scans age out automatically instead of filling disk forever; and the exact same scan is visible in the web UI for manual review (triage, AI Fix, Auto Enhance, report.html) since CI-triggered and manually-uploaded scans share the same `POST /api/v1/scans` code path with no separate registry. **Met** — verified with real scans against both the live sandbox server and a real `docker build`/`docker run` of the fixed standalone image, not just unit tests.
+
+---
+
 ## Phase 6 — Observability
 **Status: ❌ Not started — NEXT MAJOR PHASE**
 
@@ -322,7 +347,7 @@ Grafana dashboard showing live scan throughput, queue depth, and error rate. Ale
 | # | Task | Status | Notes |
 |---|---|---|---|
 | 7.1 | JWT / API key scopes | ⚠️ | Single `API_KEY`, compared in constant time; the UI remembers it and fetches downloads with it. No scopes |
-| 7.2 | Rate limiting | ⚠️ | Global cap on chat requests (`CHAT_RATE_PER_MIN`); nothing on scan uploads |
+| 7.2 | Rate limiting | ⚠️ | Global cap on chat requests (`CHAT_RATE_PER_MIN`). Scan uploads now also bounded (Phase 5h): `SCAN_RATE_PER_MIN` (raw scan starts) + `MAX_CONCURRENT_SCANS` (concurrent Ghidra/JADX subprocesses, previously unbounded). Not yet per-user/per-key — both are global server-wide limits |
 | 7.3 | Zip bomb / path traversal guard | ❌ | `IpaValidator` / `ApkValidator` check size + structure; no compression-ratio guard |
 | 7.4 | Sandbox Ghidra / JADX process | ⚠️ | Web image runs as uid 10001; decompiler subprocesses get an allowlisted environment (no LLM/API keys) and die with their process group. No seccomp, no network isolation |
 | 7.5 | Secrets management | ⚠️ | Per-upload LLM key is no longer written to `meta.json` (old ones scrubbed at start); LLM keys only from server settings. No Vault/SSM, no log masking |
@@ -349,7 +374,7 @@ Penetration-test ready deployment; scoped API keys; decompilers run in restricte
 | 8.3 | Horizontal Pod Autoscaler | ❌ | docker-compose `replicas: 2` only |
 | 8.4 | Multi-tenancy | ❌ | Single MinIO bucket / Redis namespace |
 | 8.5 | OIDC / SSO | ❌ | |
-| 8.6 | Result retention policy | ❌ | |
+| 8.6 | Result retention policy | ✅ | Done in Phase 5h. `SCAN_RETENTION_DAYS` (default `0` = disabled); `delete_expired_scans()` ages from `created_at`, skips `queued`/`running` scans, runs at startup then daily in the background |
 | 8.7 | Web UI v2 | ❌ | Vanilla JS SPA in `web/index.html`; no React app |
 
 ### Deliverable
@@ -364,16 +389,17 @@ Phase 1   █████████░  Core Engine (+ Android) ~95%   [1.8 in
 Phase 2   █████████░  Storage & Result API    ~90%   [/result + /summary on Python web]
 Phase 3   █████████░  Analysis Depth          ~90%   [cross-ref query API]
 Phase 4   ████████░░  LLM Integration         ~85%   [async job + Redis cache in analyzer]
-Phase 5   ██████████  CI/CD & Reporting       100%   ✅ DONE
+Phase 5   ██████████  CI/CD & Reporting       100%   ✅ DONE [see Phase 5h for a correctness fix + real org-CI/CD integration]
 Phase 5b  ██████████  Security Assessment     100%   ✅ DONE
 Phase 5c  █████████░  AI Assistant            ~90%   [merged in PR #1; hook-target + claude-oauth added; 5c.6–5c.9 open]
 Phase 5d  ███████░░░  Detection quality       ~70%   [wider corpus needed]
 Phase 5e  ██████████  AI Fix                  100%   ✅ DONE
 Phase 5f  ██████████  VA Report Overhaul      100%   ✅ DONE
 Phase 5g  ██████████  Auto Enhance            100%   ✅ DONE
+Phase 5h  ██████████  Org CI/CD Integration   100%   ✅ DONE [malimite-ci, Bitbucket/Jenkins templates, concurrency/retention, fail-on/SARIF bug fix]
 Phase 6   ░░░░░░░░░░  Observability             0%   ← NEXT MAJOR PHASE
-Phase 7   ███░░░░░░░  Security & Hardening     ~30%   [started: 7.1, 7.2, 7.4, 7.5, 7.8 partial]
-Phase 8   ░░░░░░░░░░  Scale & Enterprise        0%
+Phase 7   ████░░░░░░  Security & Hardening     ~40%   [started: 7.1, 7.2, 7.4, 7.5, 7.8 partial; scan rate-limit/concurrency new in 5h]
+Phase 8   █░░░░░░░░░  Scale & Enterprise       ~10%   [8.6 result retention done in 5h; 8.1–8.5, 8.7 not started]
 ```
 
 ### Chat bots (Slack / Telegram / Discord)

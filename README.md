@@ -618,12 +618,13 @@ Malimite-Core/
 ├── core/           # Analysis engine (Ghidra, JADX, MASTG scanners, Assessment, LLM, SARIF, HTML)
 ├── cli/            # malimite-cli.jar entry point
 ├── web/            # FastAPI + SPA (recommended deployment)
+├── tools/malimite-ci/  # CI/CD client — uploads to malimite-web, gates the build on severity
 ├── bot/python/     # Slack bot (Socket Mode)
-├── deploy/         # Dockerfile + docker-compose
+├── deploy/         # Dockerfile, web.Dockerfile, docker-compose, EC2_DEPLOYMENT.md
 ├── watcher/        # inotify drop-folder daemon
 ├── api/            # Legacy Javalin REST (Docker stack compat)
 ├── worker/         # Legacy Redis queue consumer
-├── .github/        # GitHub Actions + SARIF upload
+├── .github/        # GitHub Actions (tests, release, Docker image publish) + SARIF upload
 └── PHASES.md       # Development roadmap
 ```
 
@@ -632,12 +633,13 @@ Malimite-Core/
 ## Testing
 
 ```bash
-mvn test -pl core,cli                            # 232 tests: Java core + CLI
-python -m unittest discover web/tests             # 173 tests: FastAPI web service
+mvn test -pl core,cli                            # 262 tests: Java core + CLI
+python -m unittest discover web/tests             # 214 tests: FastAPI web service
+python -m unittest discover tools/malimite-ci -p "test_*.py"   # 31 tests: CI/CD client
 # or: cd web && source .venv/bin/activate && pytest tests/
 ```
 
-Unit tests in `core/` cover IPA/APK validation & extraction, Android manifest/NSC ingest, Assessment scanner, MASTG catalogs, LLM providers (including Claude OAuth), SARIF schema, HTML reporter (triage overrides, AI Fix overrides, unique `rule_id` grouping), and platform-scoped learned-rules persistence. `web/tests/` covers the AI Assistant agent loop/tools, AI Fix endpoints, Auto Enhance (job runner, cancel, retry, routes), triage, Functions tab routes, upload handling, and scan lifecycle. Both suites run on every pull request and on `main`.
+Unit tests in `core/` cover IPA/APK validation & extraction, Android manifest/NSC ingest, Assessment scanner, MASTG catalogs, LLM providers (including Claude OAuth), SARIF schema (including the `--fail-on`/rule-scanner-findings fix), HTML reporter (triage overrides, AI Fix overrides, unique `rule_id` grouping), and platform-scoped learned-rules persistence. `web/tests/` covers the AI Assistant agent loop/tools, AI Fix endpoints, Auto Enhance (job runner, cancel, retry, routes), triage, Functions tab routes, upload handling, scan lifecycle, scan concurrency/rate limiting, and built-in retention. `tools/malimite-ci/test_malimite_ci.py` covers the CI/CD client's severity gate and HTTP flow. All three suites run on every pull request and on `main`.
 
 ---
 
