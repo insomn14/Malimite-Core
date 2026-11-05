@@ -381,10 +381,12 @@ is already running somewhere the pipeline can reach it.
 
 **Verified end to end** (see [`tools/malimite-ci/README.md`](tools/malimite-ci/README.md)): a
 pipeline builds the app, then calls [`tools/malimite-ci/malimite_ci.py`](tools/malimite-ci/malimite_ci.py) —
-a zero-dependency Python client — to upload it to a `malimite-web` instance, wait for the scan,
-and fail the build on a severity threshold (`--fail-on NONE|LOW|MEDIUM|HIGH`). The scan runs on
-the server (which already has Ghidra/JADX installed), so the CI runner itself needs nothing but
-Python 3.9+.
+a zero-dependency Python client — to upload it to a `malimite-web` instance and wait for the scan.
+Both templates ship **`--fail-on NONE` by default (monitoring mode)**: the scan runs and reports
+findings for review in the web UI, but never fails a developer's build. Raise it to
+`HIGH`/`MEDIUM`/`LOW` when you want the pipeline to enforce a severity gate
+(`--fail-on NONE|LOW|MEDIUM|HIGH`). The scan runs on the server (which already has Ghidra/JADX
+installed), so the CI runner itself needs nothing but Python 3.9+.
 
 | Platform | Template |
 |----------|------|

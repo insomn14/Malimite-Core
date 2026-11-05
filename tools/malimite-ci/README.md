@@ -35,7 +35,7 @@ python3 malimite_ci.py \
 | `--url` | *(required)* | Base URL of the `malimite-web` server |
 | `--api-key` | `$MALIMITE_API_KEY` | Sent as `X-Api-Key`. Required if the server has `API_KEY` set |
 | `--file` | *(required)* | Path to the `.ipa`/`.apk`/`.xapk` to scan |
-| `--fail-on` | `HIGH` | `NONE`, `LOW`, `MEDIUM`, or `HIGH` — see severity semantics below |
+| `--fail-on` | `HIGH` (script) / `NONE` (both CI templates) | `NONE`, `LOW`, `MEDIUM`, or `HIGH` — see severity semantics below. The CI templates default to `NONE` (monitoring mode, build never fails); pass this explicitly when invoking the script directly |
 | `--llm-enabled` | off | Enables LLM enrichment for this scan (slower, spends API quota) |
 | `--no-assessment` | off | Disables the Security Assessment controls inventory |
 | `--timeout` | `1800` | Max seconds to wait for the scan to finish |
@@ -49,11 +49,18 @@ python3 malimite_ci.py \
 
 ### Monitoring mode (`--fail-on NONE`) + Slack notifications
 
-Running with `--fail-on NONE` is a deliberate, supported configuration — not a workaround. The
-scan still runs, findings are still recorded and reviewable in the web UI, but the build is never
-gated on them. This trades automatic enforcement for avoiding false-positive-driven pipeline
-friction while a security team is still triaging a new or historically large finding backlog, or
-while rolling a scanner out without risking developer pushback from day one.
+This is the **default in both CI templates** ([`bitbucket-pipelines.yml`](../../bitbucket-pipelines.yml)
+and [`Jenkinsfile`](../../Jenkinsfile)): developer builds keep shipping, and the scan reports
+findings for review rather than blocking the pipeline. Running with `--fail-on NONE` is a
+deliberate, supported configuration — not a workaround. The scan still runs, findings are still
+recorded and reviewable in the web UI, but the build is never gated on them. This trades
+automatic enforcement for avoiding false-positive-driven pipeline friction while a security team
+is still triaging a new or historically large finding backlog, or while rolling a scanner out
+without risking developer pushback from day one.
+
+(Note: `malimite_ci.py`'s own flag default is still `HIGH` for direct command-line use — the
+templates always pass `--fail-on` explicitly, so this only affects someone invoking the script by
+hand without the flag.)
 
 The risk this mode introduces on its own: nothing guarantees a human actually looks at the
 results before the build (and whatever it deploys) proceeds. `--slack-webhook-url` closes that

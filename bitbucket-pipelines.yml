@@ -5,24 +5,29 @@
 # this is NOT meant to run inside the Malimite-Core repo itself.
 #
 # Uses tools/malimite-ci (a zero-dependency Python client, stdlib only) to upload a built
-# APK/IPA to a running malimite-web server, wait for the scan, and fail the build if a finding
-# at or above $FAIL_ON is present. The server itself does the actual Ghidra/JADX analysis — see
-# deploy/EC2_DEPLOYMENT.md in Malimite-Core for how to stand one up. This template does NOT run
-# `docker run malimite` locally: no Docker image for a standalone scanner is currently published
-# (see README.md's "CI/CD integration" section for the current status of that approach).
+# APK/IPA to a running malimite-web server and wait for the scan. By default ($FAIL_ON=NONE) the
+# build is NEVER failed by this step — findings are reported and reviewable in the web UI, and
+# optionally posted to Slack, while developer builds keep shipping. Set FAIL_ON=HIGH/MEDIUM/LOW
+# when you want the pipeline to enforce a severity gate instead. The server itself does the
+# actual Ghidra/JADX analysis — see deploy/EC2_DEPLOYMENT.md in Malimite-Core for how to stand
+# one up. This template does NOT run `docker run malimite` locally: no Docker image for a
+# standalone scanner is currently published (see README.md's "CI/CD integration" section for the
+# current status of that approach).
 #
 # Required repository/workspace variables (Repository settings -> Pipelines -> Repository
 # variables; mark MALIMITE_API_KEY and MALIMITE_SLACK_WEBHOOK_URL as Secured):
 #   MALIMITE_URL              — base URL of the malimite-web server, e.g. http://malimite.internal:7070
 #   MALIMITE_API_KEY           — the server's configured API_KEY (Secured)
 #   APP_PATH                   — relative path to the built .apk/.ipa/.xapk in this repo (default: app.apk)
-#   FAIL_ON                    — NONE | LOW | MEDIUM | HIGH (default: HIGH). Set to NONE for
-#                                 "monitoring mode" — the scan still runs and is reviewable in the
-#                                 web UI, but never fails the build; pair this with
-#                                 MALIMITE_SLACK_WEBHOOK_URL below so the security team is still
-#                                 notified of every scan rather than relying on someone checking
-#                                 the web UI unprompted — see tools/malimite-ci/README.md's
-#                                 "Monitoring mode" section
+#   FAIL_ON                    — NONE | LOW | MEDIUM | HIGH (default: NONE). The default is
+#                                 "monitoring mode" on purpose: the scan still runs and every
+#                                 finding is reviewable in the web UI, but the build is never
+#                                 failed by it — developer builds keep shipping. Pair it with
+#                                 MALIMITE_SLACK_WEBHOOK_URL below so the security team is told
+#                                 about every scan instead of relying on someone opening the web
+#                                 UI unprompted — see tools/malimite-ci/README.md's "Monitoring
+#                                 mode" section. Raise this to HIGH/MEDIUM/LOW later, once the
+#                                 finding backlog is triaged and you actually want enforcement
 #   MALIMITE_SLACK_WEBHOOK_URL — (optional, Secured) Slack Incoming Webhook URL; when set, a
 #                                 summary is posted for EVERY completed scan regardless of the
 #                                 FAIL_ON verdict
@@ -72,7 +77,7 @@ definitions:
               --url "$MALIMITE_URL" \
               --api-key "$MALIMITE_API_KEY" \
               --file "$APP_PATH" \
-              --fail-on "${FAIL_ON:-HIGH}" \
+              --fail-on "${FAIL_ON:-NONE}" \
               --slack-webhook-url "${MALIMITE_SLACK_WEBHOOK_URL:-}" \
               --json-out malimite-result.json
         artifacts:

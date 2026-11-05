@@ -6,9 +6,12 @@
 // run this stage against the resulting artifact.
 //
 // Uses tools/malimite-ci (a zero-dependency Python client, stdlib only) to upload the built
-// app to a running malimite-web server, wait for the scan, and fail the build if a finding at
-// or above $FAIL_ON is present. The server itself does the actual Ghidra/JADX analysis — see
-// deploy/EC2_DEPLOYMENT.md in Malimite-Core for how to stand one up.
+// app to a running malimite-web server and wait for the scan. By default ($FAIL_ON=NONE) this
+// stage NEVER fails the build — findings are reported and reviewable in the web UI, and
+// optionally posted to Slack, while developer builds keep shipping. Select HIGH/MEDIUM/LOW on
+// the parameter when you want the stage to enforce a severity gate instead. The server itself
+// does the actual Ghidra/JADX analysis — see deploy/EC2_DEPLOYMENT.md in Malimite-Core for how
+// to stand one up.
 //
 // Required Jenkins credentials/parameters:
 //   - A "Secret text" credential holding the server's API_KEY, referenced below as
@@ -17,11 +20,12 @@
 //   - MALIMITE_URL: base URL of the malimite-web server (set below, or as a Jenkins global
 //     environment variable so every job that includes this stage doesn't repeat it).
 //   - (optional) A "Secret text" credential holding a Slack Incoming Webhook URL, referenced
-//     below as MALIMITE_SLACK_WEBHOOK_CRED_ID. When FAIL_ON is set to NONE ("monitoring mode" —
-//     the scan still runs and is reviewable in the web UI, but never fails the build), pair it
-//     with this so the security team is still notified of every scan — see
-//     tools/malimite-ci/README.md's "Monitoring mode" section. Leave the credential ID blank (or
-//     remove the withCredentials block below) if you don't want Slack notifications at all.
+//     below as MALIMITE_SLACK_WEBHOOK_CRED_ID. Since FAIL_ON defaults to NONE ("monitoring mode"
+//     — the scan still runs and is reviewable in the web UI, but never fails the build), set this
+//     so the security team is actually notified of every scan instead of relying on someone
+//     opening the web UI unprompted — see tools/malimite-ci/README.md's "Monitoring mode"
+//     section. Leave the credential ID blank (or remove the withCredentials block below) if you
+//     don't want Slack notifications at all.
 //
 // malimite_ci.py auto-detects BUILD_URL/GIT_COMMIT from Jenkins' own built-in env vars and tags
 // the scan with them — no extra configuration needed for that part.
@@ -41,15 +45,20 @@ pipeline {
     parameters {
         string(name: 'APP_PATH', defaultValue: 'app.apk',
                description: 'Path to the built .apk/.ipa/.xapk, relative to the workspace')
-        choice(name: 'FAIL_ON', choices: ['HIGH', 'MEDIUM', 'LOW', 'NONE'],
-               description: 'Fail the build if a finding at/above this severity is present')
+        // NONE is first on purpose: Jenkins uses the FIRST choice as the default when a build is
+        // triggered without someone picking a value manually (webhook/tag build). That keeps
+        // developer builds shipping — findings are reported and reviewable in the web UI, never
+        // enforced, unless a human explicitly selects HIGH/MEDIUM/LOW.
+        choice(name: 'FAIL_ON', choices: ['NONE', 'HIGH', 'MEDIUM', 'LOW'],
+               description: 'NONE (default) = monitoring mode, never fails the build. Pick HIGH/MEDIUM/LOW to enforce a severity gate')
     }
 
     environment {
         MALIMITE_URL = 'http://malimite.internal:7070'   // point at your deployed instance
         MALIMITE_API_KEY_CRED_ID = 'malimite-api-key'     // Jenkins credential ID, Secret text
-        // Blank = no Slack notifications. Set to a real credential ID to enable them (required
-        // if FAIL_ON is NONE and you still want the security team notified of every scan).
+        // Blank = no Slack notifications. Set to a real credential ID to enable them (strongly
+        // recommended while FAIL_ON defaults to NONE, so the security team is still notified of
+        // every scan even though the build is never gated).
         MALIMITE_SLACK_WEBHOOK_CRED_ID = ''
     }
 
