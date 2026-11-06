@@ -964,6 +964,20 @@ tr:hover td{background:#fafaff}
 .chat-chips .btn{border-radius:999px}
 .chat-msgs{background:#f8f9fb}
 
+/* AI Assistant: streaming progress ("Thinking…", tool, writing) */
+.chat-status{display:inline-flex;align-items:center;gap:.5rem;align-self:flex-start;max-width:92%;padding:.3rem .7rem .3rem .55rem;
+  border-radius:999px;background:var(--surface);border:1px solid var(--border);box-shadow:0 1px 2px rgba(16,24,40,.04);
+  font-size:.78rem;color:var(--muted)}
+.chat-status .sp{width:13px;height:13px;flex:none;border-radius:50%;border:2px solid #dfe1f7;border-top-color:var(--accent);animation:spin .7s linear infinite}
+.chat-status.is-writing .sp{border-color:var(--accent);border-top-color:transparent;animation-duration:1.1s}
+.chat-status .lbl{color:var(--text);font-weight:650;white-space:nowrap}
+.chat-status .sub{color:var(--faint,#9ca3af);font-size:.72rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-status .t{font-variant-numeric:tabular-nums;font-size:.72rem;color:#9ca3af;flex:none;padding-left:.1rem;border-left:1px solid var(--border);margin-left:.1rem}
+.chat-status .t:not(:empty){padding-left:.5rem}
+@keyframes chat-blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+.chat-caret{display:inline-block;width:.5em;height:1em;margin-left:1px;vertical-align:-.15em;border-radius:1px;background:var(--accent);animation:chat-blink 1s steps(1,end) infinite}
+@media (prefers-reduced-motion:reduce){.chat-status .sp{animation-duration:2s}.chat-caret{animation:none;opacity:.8}}
+
 /* ── scan detail: header + tabs ── */
 .sd-head{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
 .sd-head .plat-tile{width:54px;height:54px;font-size:1.65rem;border-radius:14px}
@@ -3000,6 +3014,53 @@ function chatMd(text) {
   }).join('');
 }
 
+/* Elapsed time for the assistant's progress pill ("12s", "1m 04s"). */
+function chatElapsed(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+}
+
+/* One progress pill pinned to the bottom of the conversation while a reply is being produced:
+   what the model is doing right now (thinking / running a tool / writing) plus how long the turn
+   has been running. Callers drive it through setPhase() and must stop() it when the turn ends —
+   the persisted history has no equivalent, so leaving it behind would make a reloaded chat look
+   different from the live one. */
+function chatProgressStart() {
+  const box = document.getElementById('chat-msgs');
+  const el = document.createElement('div');
+  el.className = 'chat-status';
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  el.innerHTML = '<span class="sp" aria-hidden="true"></span><span class="lbl"></span><span class="sub"></span><span class="t"></span>';
+  const t0 = Date.now();
+  let phase = 'thinking', toolName = '', timer = 0;
+  const paint = () => {
+    if (!el.isConnected) { clearInterval(timer); return; }
+    const writing = phase === 'writing';
+    el.querySelector('.lbl').textContent = phase === 'tool' ? 'Running tool' : writing ? 'Writing answer' : 'Thinking';
+    el.querySelector('.sub').textContent = phase === 'tool' ? (toolName || '') : '';
+    el.querySelector('.t').textContent = chatElapsed(Date.now() - t0);
+    el.classList.toggle('is-writing', writing);
+  };
+  if (box) { box.appendChild(el); box.scrollTop = box.scrollHeight; }
+  paint();
+  timer = setInterval(paint, 250);
+  return {
+    el,
+    /** phase: 'thinking' | 'tool' | 'writing'. `name` labels the tool while phase is 'tool'. */
+    setPhase(next, name) { phase = next; if (name !== undefined) toolName = name; paint(); },
+    /** Keep the pill as the last child so it never sits above freshly-added bubbles/tool blocks. */
+    keepLast() {
+      const b = document.getElementById('chat-msgs');
+      if (el.isConnected && b && el.parentNode === b && b.lastElementChild !== el) {
+        b.appendChild(el);
+        b.scrollTop = b.scrollHeight;
+      }
+    },
+    stop() { clearInterval(timer); timer = 0; if (el.isConnected) el.remove(); },
+  };
+}
+
 function chatToolHtml(tu, result) {
   const status = !result ? 'running' : (result.is_error || result.ok === false ? 'error' : 'ok');
   const body = result ? esc(result.preview != null ? result.preview : result.content) : '';
@@ -3221,21 +3282,56 @@ async function tabAssistant(el, id, detail) {
     const savedInput = $in.value;   // restored below if the request is rejected before streaming starts
     const echoEl = chatAddUserEcho(text, files);
     $in.value = '';
-    let bubble = null, buf = '', raf = 0;
-    const paint = () => { raf = 0; if (bubble) { bubble.innerHTML = (bubble.dataset.pre || '') + chatMd(buf); const b = document.getElementById('chat-msgs'); if (b) b.scrollTop = b.scrollHeight; } };
-    const ensureBubble = () => { if (!bubble) { bubble = chatAdd('chat-ai', ''); buf = ''; } };
+    let bubble = null, buf = '', raf = 0, streaming = true;
+    const paint = () => {
+      raf = 0;
+      if (!bubble) return;
+      bubble.innerHTML = (bubble.dataset.pre || '') + chatMd(buf) + (streaming ? '<span class="chat-caret" aria-hidden="true"></span>' : '');
+      const b = document.getElementById('chat-msgs');
+      if (b) b.scrollTop = b.scrollHeight;
+    };
+    const ensureBubble = () => {
+      if (bubble) return;
+      bubble = chatAdd('chat-ai', '');
+      buf = '';
+      progress.keepLast();
+    };
     const toolEls = {};
+
+    /* Created as soon as the request goes out, so the wait before the first token is never a
+       silent screen. */
+    const progress = chatProgressStart();
+    const stopStatus = () => {
+      streaming = false;
+      progress.stop();
+      if (raf) cancelAnimationFrame(raf);
+      paint();   // drop the caret from the last bubble
+    };
+
     const handle = ev => {
       if (ev.type === 'session') { st.sid = ev.session_id; st.fresh = false; saveSid(st.sid); }
-      else if (ev.type === 'token') { ensureBubble(); buf += ev.text; if (!raf) raf = requestAnimationFrame(paint); }
+      else if (ev.type === 'token') {
+        ensureBubble();
+        progress.setPhase('writing');
+        buf += ev.text;
+        if (!raf) raf = requestAnimationFrame(paint);
+      }
       else if (ev.type === 'tool_call') {
         bubble = null; buf = '';  // next text starts a fresh bubble after the tool block
         const d = chatAdd('chat-ai', chatToolHtml(ev, null));
-        if (d) { d.dataset.args = JSON.stringify(ev.args); toolEls[ev.id] = d; }
+        if (d) {
+          d.dataset.args = JSON.stringify(ev.args);
+          toolEls[ev.id] = d;
+          const det = d.querySelector('details');
+          if (det) det.open = true;   // expanded while it runs; collapsed once the result lands
+        }
+        progress.keepLast();
+        progress.setPhase('tool', ev.name);
       } else if (ev.type === 'tool_result') {
         const d = toolEls[ev.id];
         if (d) d.innerHTML = chatToolHtml({id: ev.id, name: ev.name, args: JSON.parse(d.dataset.args || 'null')}, ev);
-      } else if (ev.type === 'error') showErr(ev.message);
+        progress.setPhase('thinking');   // back to waiting for the model's next step
+      } else if (ev.type === 'error') { showErr(ev.message); }
     };
     st.ctrl = new AbortController();
     try {
@@ -3287,6 +3383,7 @@ async function tabAssistant(el, id, detail) {
     } finally {
       if (raf) cancelAnimationFrame(raf);
       paint();
+      stopStatus();
       st.busy = false; st.ctrl = null;
       if (document.getElementById('chat-in')) { setBusy(false); document.getElementById('chat-in').focus(); }
       loadSession(st.sid).catch(() => {});  // refresh the list/titles; replays what the server persisted
