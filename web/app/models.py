@@ -52,6 +52,11 @@ class ScanDetail(ScanMeta):
     has_package: bool = False
     scan_mode: Optional[str] = None
     rules_not_evaluated: Optional[list] = None
+    # True when the analyzer exited successfully but stored nothing at all (no classes, functions,
+    # strings or entry points). Such a scan is not "clean", it is unusable — the UI must say so
+    # instead of presenting an empty result set as a pass. Derived on read (see main.get_scan) so
+    # it also applies to scans that finished before this field existed.
+    empty_result: bool = False
 
 
 class FunctionItem(BaseModel):

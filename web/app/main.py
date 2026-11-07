@@ -189,6 +189,13 @@ async def get_scan(request: Request, scan_id: str):
             detail.llm_finding_count = counts["llm_finding_count"]
             detail.vulnerability_counts = await db.get_vulnerability_counts(
                 detail.db_path, detail.bundle_executable)
+            # A scan that finished without storing a single class/function/string/entry point did
+            # not come back "clean" — the analysis itself produced nothing (decompiler crash, killed
+            # subprocess, failed ingest). Only judged once counts were actually read, so a scan whose
+            # database is missing stays "unknown" rather than being reported as empty.
+            detail.empty_result = (detail.state == "done"
+                                   and not (detail.class_count or detail.function_count
+                                            or detail.string_count or detail.entry_point_count))
         except Exception:
             pass
     return detail

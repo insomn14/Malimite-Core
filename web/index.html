@@ -127,6 +127,7 @@ input[type=file]{display:none}
 .st-running{background:#fef3c7;color:#a16207}
 .st-queued{background:#f1f2f4;color:#4b5563}
 .st-error{background:#fee2e2;color:#b91c1c}
+.st-empty{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
 .ico-spin{animation:spin .8s linear infinite}
 .sev-bar{display:flex;gap:2px;width:100%;height:7px;border-radius:999px;overflow:hidden;background:#e5e7eb}
 .sev-bar i{display:block;height:100%;min-width:3px}
@@ -1028,6 +1029,9 @@ tr:hover td{background:#fafaff}
 .state-panel.running{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
 .state-panel{background:var(--surface);border:1px solid var(--border);color:var(--text)}
 .state-panel.failed{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+.state-panel.empty{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.state-panel.empty strong{color:#78350f}
+.state-panel.empty a{color:#92400e;text-decoration:underline;font-weight:600}
 .state-panel .big{font-size:1.6rem;display:flex}
 .state-panel strong{display:block;font-size:.95rem}
 @media(max-width:900px){.sum-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.sum-grid{grid-template-columns:1fr}}
@@ -1884,6 +1888,7 @@ function renderScanOptionsHtml(file, prefs) {
       <div class="run-info">
         <div class="run-title">Ready to scan: <span>1 file selected · ${platformName(kind)} App</span></div>
         <div class="run-chips" id="run-chips"></div>
+        <div class="cfg-alert warn" id="dup-warn" hidden style="margin-top:.5rem"></div>
       </div>
       <button type="button" class="btn btn-primary btn-run" id="run-scan-btn">${ico('play')} Run Scan</button>
       <div class="run-progress" id="upload-bar"></div>
@@ -1893,6 +1898,7 @@ function renderScanOptionsHtml(file, prefs) {
 
 /* ── recent scans (home) ── */
 const _recentDetails = new Map();   // scan_id -> ScanDetail of finished scans (immutable once done)
+let _homeScans = [];                // newest /scans snapshot from Home, for the duplicate-scan warning
 let _recentTimer = null;
 
 function fmtShort(iso) {
@@ -1901,14 +1907,40 @@ function fmtShort(iso) {
   return isNaN(d) ? '—' : d.toLocaleString(undefined, {month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'});
 }
 
-function statePill(state) {
+/* True when a finished scan stored nothing at all. The API's `empty_result` flag is authoritative,
+   but the counts are enough to derive the same verdict, so the UI stays correct against a server
+   build that predates the flag. */
+function isEmptyScan(d) {
+  if (!d) return false;
+  if (d.empty_result) return true;
+  if (String(d.state || '') !== 'done') return false;
+  const known = ['class_count', 'function_count', 'string_count', 'entry_point_count']
+    .some(k => typeof d[k] === 'number');
+  if (!known) return false;   // counts were never read (missing DB) — no verdict
+  return !(d.class_count || d.function_count || d.string_count || d.entry_point_count);
+}
+
+function statePill(state, emptyResult) {
   const s = String(state || 'queued').toLowerCase();
+  if (s === 'done' && emptyResult) {
+    return `<span class="st-pill st-empty" title="The analyzer finished without storing any results — re-run this scan">${ico('alert')} Incomplete</span>`;
+  }
   const map = {
     done: ['st-done', 'circleCheck', 'Done'], running: ['st-running', 'loader', 'Running'],
     queued: ['st-queued', 'clock', 'Queued'], error: ['st-error', 'circleX', 'Failed'],
   };
   const [cls, icon, label] = map[s] || map.queued;
   return `<span class="st-pill ${cls}">${ico(icon, s === 'running' ? 'ico-spin' : '')} ${label}</span>`;
+}
+
+/* Every "this scan produced nothing usable" surface shares one message, so the reason is never
+   confused with a clean result. `what` names the section, e.g. "Vulnerabilities". */
+function emptyResultHtml(detail, what) {
+  return `<div class="state-panel empty"><span class="big">${ico('alert')}</span>
+    <div><strong>This scan produced no results</strong>
+      The analyzer exited successfully but stored no classes, functions, strings or entry points, so
+      ${esc(String(what || 'this section').toLowerCase())} cannot be trusted. Re-run the scan (avoid running two
+      scans of the same app at once) and check the <a href="#/scan/${esc(String(detail?.scan_id || ''))}/log">Log</a> tab.</div></div>`;
 }
 
 function sevBarHtml(c) {
@@ -1935,7 +1967,7 @@ function recentRowHtml(s, d) {
         <div class="rs-name" title="${escAttr(name)}">${esc(name)}</div>
         <div class="rs-meta"><span>${platformName(kind)}</span><span>${esc(fmtShort(s.created_at))}</span></div>
       </div>
-      <div class="rs-state">${statePill(state)}</div>
+      <div class="rs-state">${statePill(state, isEmptyScan(d))}</div>
       <div class="rs-count-cell" style="grid-area:count">${count}</div>
       <div class="rs-bar">${bar}</div>
       ${scanRowMenuHtml(s)}
@@ -1953,6 +1985,7 @@ async function loadRecentScans() {
     return;
   }
   if (!document.getElementById('recent-list')) return;   // navigated away meanwhile
+  _homeScans = Array.isArray(scans) ? scans : [];
   const top = (Array.isArray(scans) ? scans : []).slice(0, 5);
   const count = document.getElementById('recent-count');
   if (count) count.textContent = scans.length ? `${scans.length} total` : '';
@@ -2015,6 +2048,27 @@ route('home', async function() {
     el.addEventListener('drop', ev => { ev.preventDefault(); depth = 0; el.classList.remove('drag-over'); onFile(ev.dataTransfer.files[0]); });
   }
 
+  /* Two heavy scans of the same package running at once is what starved a real scan down to zero
+     results (see the empty_result guard). Warn — do not block: the user may know better. */
+  function duplicateScan() {
+    if (!pendingFile) return null;
+    const name = pendingFile.name.toLowerCase();
+    return _homeScans.find(s => String(s.filename || '').toLowerCase() === name
+      && (s.state === 'queued' || s.state === 'running')) || null;
+  }
+
+  function paintDupWarn() {
+    const box = document.getElementById('dup-warn');
+    if (!box) return;
+    const dup = duplicateScan();
+    box.hidden = !dup;
+    if (dup) {
+      box.innerHTML = `${ico('alert')}<span><strong>A scan of this file is already ${esc(dup.state)}</strong>
+        (${esc(dup.scan_id.slice(0, 8))}). Running a second one at the same time can starve both — wait for it
+        to finish first.</span>`;
+    }
+  }
+
   function collectPrefs() {
     return {
       mode: $('#llm-mode').value,
@@ -2047,6 +2101,8 @@ route('home', async function() {
 
   async function doUpload(file) {
     showRunError('');
+    const dup = duplicateScan();
+    if (dup && !confirm('A scan of this file is already ' + dup.state + '. Running another one now can starve both scans and produce an incomplete result. Continue anyway?')) return;
     const mode = $('#llm-mode').value;
     if (mode === 'offensive' && !$('#llm-enabled').checked) { $('#llm-enabled').checked = true; onLlmToggle(true); }
     const llmOn = $('#llm-enabled').checked;
@@ -2145,6 +2201,7 @@ route('home', async function() {
     onProviderChange(LLM_PROVIDERS.some(p => p.value === prefs.provider) ? (prefs.model || '') : '');
     onLlmToggle(true);
     onLlmModeChange();
+    paintDupWarn();
     window.scrollTo({top: 0});
   }
   paintUploadCard();
@@ -2178,7 +2235,8 @@ function scanKindOf(s) {
 
 function scanStateGroup(s) {
   const st = String(s.state || 'queued').toLowerCase();
-  return st === 'done' ? 'done' : st === 'error' ? 'error' : 'active';
+  if (st === 'done') return isEmptyScan(_recentDetails.get(s.scan_id)) ? 'error' : 'done';
+  return st === 'error' ? 'error' : 'active';
 }
 
 function scanSortValue(s, key) {
@@ -2228,6 +2286,7 @@ function filteredScans() {
 function scanFindingsParts(s, d) {
   const state = String(s.state || 'queued').toLowerCase();
   if (state === 'done') {
+    if (isEmptyScan(d)) return {count: '<span class="rs-count muted">No results</span>', bar: '<div class="sev-bar"></div>'};
     const c = d?.vulnerability_counts;
     if (d === undefined) return {count: '<span class="skel" style="width:70px"></span>', bar: '<span class="skel"></span>'};
     if (!c) return {count: '<span class="rs-count muted">—</span>', bar: '<div class="sev-bar"></div>'};
@@ -2273,7 +2332,7 @@ function scanListRowHtml(s, d) {
         <div class="rs-meta"><span>${platformName(kind)}</span><span class="mono" title="${escAttr(id)}">${esc(id.slice(0, 8))}</span><span class="m-only">${esc(fmtShort(s.created_at))}</span></div>
       </div>
       <div class="sl-mode"><span class="chip mode-chip" title="${escAttr(scanModeLabel(s.llm_mode) + (llm ? ' · LLM: ' + s.llm_provider : ''))}">${ico(llm ? 'sparkles' : (SCAN_MODES[s.llm_mode]?.icon || 'zap'))} ${esc(scanModeLabel(s.llm_mode))}</span></div>
-      <div class="rs-state">${statePill(state)}</div>
+      <div class="rs-state">${statePill(state, isEmptyScan(d))}</div>
       <div class="sl-find">${count}${bar}</div>
       <div class="sl-date" title="${escAttr(fmt(s.created_at))}">${esc(fmtShort(s.created_at))}</div>
       <div class="sl-dur">${dur(s.started_at, s.finished_at)}</div>
@@ -2801,6 +2860,7 @@ window.copyText = async function(text, btn) {
 /* Every result tab shows the same "no results yet" panel while a scan is still running (or when it
    failed), so a tab that hasn't been given data never looks like a different kind of error. */
 function notReadyHtml(detail, what) {
+  if (isEmptyScan(detail)) return emptyResultHtml(detail, what);
   const st = String(detail?.state || '').toLowerCase();
   const pending = st === 'running' || st === 'queued';
   const title = pending ? (st === 'queued' ? 'Scan is queued' : 'Scan is running') : 'Scan did not finish';
@@ -2839,7 +2899,7 @@ route('scan', async function(id, tab='summary') {
     <section class="panel sd-head">
       ${platTile(kind)}
       <div class="sd-main">
-        <div class="sd-title-row"><h1 class="sd-title">${esc(detail.bundle_id || detail.filename)}</h1>${statePill(detail.state)}</div>
+        <div class="sd-title-row"><h1 class="sd-title">${esc(detail.bundle_id || detail.filename)}</h1>${statePill(detail.state, isEmptyScan(detail))}</div>
         <div class="sd-meta">
           <span title="Uploaded file">${ico('fileText')} ${esc(detail.filename)}</span>
           <span>${platformName(kind)}</span>
@@ -2908,6 +2968,12 @@ async function renderTab(id, tab, detail) {
   document.getElementById('app')?.classList.toggle('main-wide', tab === 'functions');
   if (typeof closeLlmDrawer === 'function') closeLlmDrawer();
   if (typeof closeAssessDrawer === 'function') closeAssessDrawer();
+  // A scan that stored nothing must never be read as "no findings": every data tab says why it is
+  // empty instead. Summary still renders (it shows the banner and lets you re-run / open the log).
+  if (isEmptyScan(detail) && !['summary', 'log', 'downloads'].includes(tab)) {
+    el.innerHTML = emptyResultHtml(detail, tabLabel(tab));
+    return;
+  }
   try {
     switch(tab) {
       case 'summary':
@@ -3641,6 +3707,25 @@ async function startLiveLog(id) {
 }
 
 async function tabSummary(d) {
+  if (isEmptyScan(d)) {
+    const ciE = d.ci_pipeline_url || d.ci_commit_sha || d.ci_triggered_by;
+    const kv = (k, v) => `<span class="kv-key">${k}</span><span class="kv-val">${v}</span>`;
+    return emptyResultHtml(d, 'This scan') + `
+      <div class="card" style="margin-top:1rem">
+        <div class="card-title">${ico('scanSearch')} What was attempted</div>
+        <div class="kv">
+          ${kv('Scan ID', esc(d.scan_id))}
+          ${kv('File', esc(d.filename))}
+          ${kv('Platform', esc(String(d.platform || '—')))}
+          ${kv('Decompiler', d.decompiler === 'asc' ? 'Droid ASC' : d.decompiler === 'jadx' ? 'JADX' : '—')}
+          ${kv('Scan mode', esc(scanModeLabel(d.llm_mode)))}
+          ${kv('Started', esc(fmt(d.started_at)))}
+          ${kv('Duration', dur(d.started_at, d.finished_at))}
+          ${kv('Exit code', esc(String(d.exit_code ?? '—')))}
+          ${ciE ? kv('CI', esc([d.ci_triggered_by, d.ci_commit_sha && d.ci_commit_sha.slice(0, 12)].filter(Boolean).join(' · '))) : ''}
+        </div>
+      </div>`;
+  }
   if (d.state !== 'done') {
     const isPending = d.state === 'queued' || d.state === 'running';
     if (isPending) {
