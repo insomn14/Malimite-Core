@@ -1073,6 +1073,39 @@ tr:hover td{background:#fafaff}
 .api-row .m{font-size:.64rem;font-weight:800;color:#15803d;background:#dcfce7;border-radius:5px;padding:.05rem .35rem}
 .api-row a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:720px){.dl-grid{grid-template-columns:1fr}.sd-actions{width:100%}}
+
+/* ── Config tab (centralized LLM provider credentials) ── */
+.cfgp-intro{display:flex;align-items:center;gap:1rem;padding:1rem 1.2rem;background:linear-gradient(135deg,#eef0ff,#f7f3ff);border:1px solid #e0e2f7;border-radius:14px;margin-bottom:1.25rem}
+.cfgp-intro .si{width:42px;height:42px;border-radius:12px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;flex:none}
+.cfgp-intro-main{flex:1;min-width:0}
+.cfgp-intro-main h2{font-size:1rem;margin:0 0 .15rem}
+.cfgp-intro-main p{font-size:.82rem;color:var(--muted);margin:0}
+.cfgp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;gap:.8rem;flex-wrap:wrap}
+.cfgp-head h2{font-size:1.05rem;margin:0}
+.cfgp-head p{font-size:.8rem;color:var(--muted);margin:.15rem 0 0}
+.cfgp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.85rem}
+.cfgp-card{display:flex;flex-direction:column;gap:.6rem;padding:1rem 1.1rem;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,.04);min-width:0}
+.cfgp-card.is-configured{border-color:#bbf7d0}
+.cfgp-card-top{display:flex;align-items:flex-start;gap:.7rem}
+.cfgp-icon{width:38px;height:38px;border-radius:10px;background:#eef0ff;color:var(--accent);display:flex;align-items:center;justify-content:center;flex:none;font-weight:800;font-size:.8rem}
+.cfgp-main{flex:1;min-width:0}
+.cfgp-name{font-weight:650;font-size:.92rem;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.cfgp-desc{font-size:.76rem;color:var(--muted);margin-top:.1rem}
+.cfgp-meta{font-size:.72rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.3rem .7rem;margin-top:.2rem}
+.cfgp-actions{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.1rem}
+.cfgp-actions .btn{flex:1;min-width:0}
+.cfgp-badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;font-weight:700;padding:.1rem .5rem;border-radius:999px}
+.cfgp-badge.on{background:#dcfce7;color:#15803d}
+.cfgp-badge.off{background:#f1f2f4;color:var(--muted)}
+.cfgp-badge.default{background:#ede9fe;color:#6d28d9}
+.cfgp-form{display:flex;flex-direction:column;gap:.55rem;margin-top:.3rem;padding-top:.6rem;border-top:1px dashed var(--border)}
+.cfgp-form label{display:flex;flex-direction:column;gap:.2rem;font-size:.74rem;color:var(--muted)}
+.cfgp-form .ctl{height:34px;font-size:.8rem}
+.cfgp-form .cfgp-row2{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.cfgp-note{font-size:.72rem;color:var(--muted);line-height:1.4}
+.cfgp-note.err{color:#b91c1c}
+.cfgp-note.ok{color:#15803d}
+@media(max-width:600px){.cfgp-grid{grid-template-columns:1fr}}
 </style>
 <!-- Vendored, self-hosted (not a CDN) so the Functions tab's syntax highlighting works offline — see THIRD_PARTY_NOTICES.md -->
 <link rel="stylesheet" href="/vendor/hljs/styles/atom-one-dark.min.css"/>
@@ -1098,6 +1131,7 @@ tr:hover td{background:#fafaff}
   <a class="nav-link" href="#/" data-route="home">Home</a>
   <a class="nav-link" href="#/scans" data-route="scans">Scans</a>
   <a class="nav-link" href="#/learned" data-route="learned">Learned Rules</a>
+  <a class="nav-link" href="#/config" data-route="config">Config</a>
   <span class="nav-spacer"></span>
   <span class="nav-apikey">
     <label for="nav-key">API Key</label>
@@ -1161,9 +1195,22 @@ const LLM_MODEL_CATALOG = {
     {value:'deepseek-chat', label:'deepseek-chat (legacy alias)'},
     {value:'deepseek-reasoner', label:'deepseek-reasoner (reasoning)'},
   ],
+  bedrock: [
+    {value:'anthropic.claude-sonnet-5-20260101-v1:0', label:'Claude Sonnet 5 on Bedrock (default)'},
+    {value:'anthropic.claude-opus-5-20260101-v1:0', label:'Claude Opus 5 on Bedrock'},
+    {value:'anthropic.claude-haiku-4-5-20251001-v1:0', label:'Claude Haiku 4.5 on Bedrock (fast, cheap)'},
+  ],
+  glm: [
+    {value:'glm-4.6', label:'glm-4.6 (default)'},
+    {value:'glm-4.5', label:'glm-4.5'},
+    {value:'glm-4.5-air', label:'glm-4.5-air (fast, cheap)'},
+  ],
 };
 const LLM_MODEL_CUSTOM = '__custom__';
 
+// Every provider the upload form / AI Assistant / AI Fix can pick from. `keyPh` providers need
+// an API key (or, for bedrock, an access key/secret pair — see CONFIG_PROVIDER_META below for
+// its extra fields); `noKey` providers never prompt for one at all.
 const LLM_PROVIDERS = [
   {value:'openai',       label:'OpenAI',       keyPh:'sk-…'},
   {value:'claude',       label:'Claude',       keyPh:'sk-ant-…'},
@@ -1172,39 +1219,54 @@ const LLM_PROVIDERS = [
   {value:'deepseek',     label:'DeepSeek',     keyPh:'sk-…'},
   {value:'ollama',       label:'Ollama',       noKey:'Not required',
    note:'Runs against the Ollama instance configured on the server — no API key needed.'},
+  {value:'bedrock',      label:'AWS Bedrock',  keyPh:'AWS access key / secret',
+   note:'Anthropic models hosted on AWS Bedrock. Needs an AWS access key ID + secret (set up in the Config tab).'},
+  {value:'glm',          label:'Zai GLM',      keyPh:'…'},
 ];
-function providerNeedsKey(p) { return p === 'openai' || p === 'claude' || p === 'deepseek'; }
+function providerNeedsKey(p) { return p === 'openai' || p === 'claude' || p === 'deepseek' || p === 'bedrock' || p === 'glm'; }
 function providerLabel(p) { return (LLM_PROVIDERS.find(x => x.value === p) || {label: p}).label; }
 const LLM_KEY_NOTE = 'Your API key is sent only to this server to authenticate with the provider. It is never stored.';
-function llmDefaultNote() {
-  const p = document.getElementById('llm-provider')?.value;
-  return (LLM_PROVIDERS.find(x => x.value === p) || {}).note || LLM_KEY_NOTE;
-}
 
-/* Upload form: re-shape the Model + API key cells for the chosen provider. `keepModel` restores a
-   remembered model (scan prefs) instead of resetting to the provider's default. */
+/* ── Config tab provider metadata ──────────────────────────────────────────── */
+// Display/form shape for every card on the Config page. `fields` drives the "Connect" form:
+// each entry is {key, label, placeholder, type}; `key`/`access_key_id`/`secret_access_key`/
+// `region`/`base_url`/`model_id` map 1:1 to LlmProviderConfigRequest's body fields
+// (POST /api/v1/config/providers/{provider}).
+const CONFIG_PROVIDER_META = {
+  openai: {name: 'OpenAI', textIcon: 'OA', desc: "Use OpenAI's models like GPT-4o and GPT-5 for LLM-enriched scans and the AI Assistant.",
+    fields: [{key:'api_key', label:'API Key', placeholder:'sk-…', type:'password'}]},
+  claude: {name: 'Anthropic (API Key)', textIcon: 'AN', desc: 'Pay-per-token Claude access via an Anthropic API key.',
+    fields: [{key:'api_key', label:'API Key', placeholder:'sk-ant-…', type:'password'}]},
+  'claude-oauth': {name: 'Claude (Pro/Max OAuth)', textIcon: 'CC',
+    desc: 'Use a Claude Pro/Max subscription instead of a pay-per-token key — authenticates with a browser login session stored on the server.',
+    oauth: true},
+  deepseek: {name: 'DeepSeek', textIcon: 'DS', desc: 'DeepSeek chat models — fast and inexpensive.',
+    fields: [{key:'api_key', label:'API Key', placeholder:'sk-…', type:'password'},
+             {key:'base_url', label:'Base URL (optional)', placeholder:'https://api.deepseek.com', type:'text'}]},
+  ollama: {name: 'Ollama', textIcon: 'OL', desc: 'Local models served by an Ollama instance — no API key required.',
+    fields: [{key:'base_url', label:'Base URL', placeholder:'http://localhost:11434', type:'text'}]},
+  bedrock: {name: 'AWS Bedrock', textIcon: 'AB', desc: 'Anthropic models hosted on AWS Bedrock, signed with an AWS access key.',
+    fields: [{key:'access_key_id', label:'AWS Access Key ID', placeholder:'AKIA…', type:'password'},
+             {key:'secret_access_key', label:'AWS Secret Access Key', placeholder:'…', type:'password'},
+             {key:'region', label:'AWS Region', placeholder:'us-east-1', type:'text'},
+             {key:'model_id', label:'Default model ID (optional)', placeholder:'anthropic.claude-sonnet-5-…', type:'text'}]},
+  glm: {name: 'Zai GLM', textIcon: 'ZG', desc: 'Zhipu/Zai GLM models via an OpenAI-compatible endpoint.',
+    fields: [{key:'api_key', label:'API Key', placeholder:'…', type:'password'},
+             {key:'base_url', label:'Base URL (optional)', placeholder:'https://open.bigmodel.cn/api/paas/v4', type:'text'}]},
+};
+const CONFIG_PROVIDER_ORDER = ['openai', 'claude', 'claude-oauth', 'deepseek', 'ollama', 'bedrock', 'glm'];
+
+/* Upload form: re-shape the Model cell for the chosen provider. `keepModel` restores a
+   remembered model (scan prefs) instead of resetting to the provider's default. API key
+   collection lives entirely in the Config tab now — this only ever runs against providers
+   the form's own provider <select> already filtered to "configured" (see
+   renderScanOptionsHtml's providerOpts), so there is nothing to validate here. */
 window.onProviderChange = function(keepModel) {
-  const provider = document.getElementById('llm-provider')?.value || 'openai';
-  const keyRow = document.getElementById('llm-key-row');
-  if (!keyRow) return;
-  const meta = LLM_PROVIDERS.find(x => x.value === provider) || {};
-  const needsKey = providerNeedsKey(provider);
-  keyRow.hidden = !needsKey;
-  const noKey = document.getElementById('llm-key-none');
-  noKey.hidden = needsKey;
-  noKey.querySelector('span').textContent = meta.noKey || 'Not required';
-  document.getElementById('llm-key-label').innerHTML = needsKey ? 'API Key <span class="req">*</span>' : 'API Key';
-  document.getElementById('llm-api-key').placeholder = meta.keyPh || '';
-  const oauthHint = document.getElementById('llm-oauth-hint');
-  if (oauthHint) {
-    oauthHint.hidden = provider !== 'claude-oauth';
-    if (provider === 'claude-oauth') refreshOauthStatus();
-  }
-
+  const provider = document.getElementById('llm-provider')?.value || '';
   const modelEl = document.getElementById('llm-model');
   const modelSelect = document.getElementById('llm-model-select');
   if (modelEl && modelSelect) {
-    const catalog = LLM_MODEL_CATALOG[provider];
+    const catalog = LLM_MODEL_CATALOG[provider === 'claude-oauth' ? 'claude' : provider];
     const want = typeof keepModel === 'string' ? keepModel : '';
     if (catalog) {
       // Bare model IDs fit the compact cell; the descriptive label stays available as a tooltip.
@@ -1224,8 +1286,6 @@ window.onProviderChange = function(keepModel) {
       modelEl.placeholder = 'e.g. llama3 (empty = default)';
     }
   }
-  clearKeyError();
-  resetLlmTest();
   updateRunSummary();
 };
 
@@ -1236,7 +1296,6 @@ window.onModelSelectChange = function() {
   const custom = modelSelect.value === LLM_MODEL_CUSTOM;
   modelEl.hidden = !custom;
   if (custom) { modelEl.value = ''; modelEl.placeholder = 'Type the exact model name'; modelEl.focus(); }
-  resetLlmTest();
   updateRunSummary();
 };
 
@@ -1249,76 +1308,21 @@ function currentLlmModel() {
   return (document.getElementById('llm-model')?.value || '').trim();
 }
 
-function setLlmNote(kind, text) {
-  const note = document.getElementById('llm-note');
-  if (!note) return;
-  const icon = {ok: 'circleCheck', warn: 'alert', err: 'circleX'}[kind] || 'info';
-  note.className = 'cfg-note' + (kind ? ' ' + kind : '');
-  note.innerHTML = ico(icon) + `<span>${esc(text)}</span>`;
-}
-
-function resetLlmTest() {
-  const btn = document.getElementById('llm-test');
-  if (!btn || btn.disabled) return;
-  btn.classList.remove('is-ok', 'is-err');
-  btn.innerHTML = ico('plug') + ' Test Connection';
-  setLlmNote('', llmDefaultNote());
-}
-
-window.testLlmConnection = async function() {
-  const btn = document.getElementById('llm-test');
-  if (!btn) return;
-  const provider = document.getElementById('llm-provider').value;
-  const apiKeyVal = (document.getElementById('llm-api-key')?.value || '').trim();
-  btn.disabled = true;
-  btn.classList.remove('is-ok', 'is-err');
-  btn.innerHTML = ico('loader', 'ico-spin') + ' Testing…';
-  let ok = false;
-  try {
-    const r = await api('/llm/test', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({provider, api_key: providerNeedsKey(provider) ? apiKeyVal : '', model: currentLlmModel()}),
-    });
-    ok = !!r.ok;
-    setLlmNote(ok ? (r.model_found === false ? 'warn' : 'ok') : 'err', r.message || (ok ? 'Connected.' : 'Connection failed.'));
-  } catch (e) {
-    setLlmNote('err', e.message || String(e));
-  } finally {
-    btn.disabled = false;
-    btn.classList.add(ok ? 'is-ok' : 'is-err');
-    btn.innerHTML = ico(ok ? 'check' : 'refresh') + (ok ? ' Connected' : ' Retry test');
-  }
-};
-
 window.onLlmToggle = function(fromMode) {
   const on = !!document.getElementById('llm-enabled')?.checked;
   const mode = document.getElementById('llm-mode')?.value;
   if (!on && mode === 'offensive' && !fromMode) {
     document.getElementById('llm-enabled').checked = true;
-    setLlmNote('warn', 'Offensive mode requires LLM Enrichment — switch the scan mode first to turn it off.');
     return;
   }
   const card = document.getElementById('llm-card');
   card.classList.toggle('is-off', !on);
   card.classList.toggle('is-on', on);
-  card.querySelectorAll('.llm-body select, .llm-body input, .llm-body button').forEach(el => { el.disabled = !on; });
+  card.querySelectorAll('.llm-body select, .llm-body input, .llm-body button, .llm-body a').forEach(el => { el.disabled = !on; });
   const pill = document.getElementById('llm-state');
   pill.textContent = on ? 'Enabled' : 'Off';
   pill.classList.toggle('on', on);
-  if (!on) clearKeyError();
   updateRunSummary();
-};
-
-window.toggleKeyVisibility = function() {
-  const input = document.getElementById('llm-api-key');
-  const btn = document.getElementById('key-eye');
-  if (!input || !btn) return;
-  const show = input.type === 'password';
-  input.type = show ? 'text' : 'password';
-  btn.innerHTML = ico(show ? 'eyeOff' : 'eye');
-  btn.setAttribute('aria-label', show ? 'Hide API key' : 'Show API key');
-  btn.setAttribute('aria-pressed', String(show));
 };
 
 /* Same dropdown-with-Custom-escape-hatch pattern as the upload form's "Model override" field,
@@ -1351,61 +1355,41 @@ window.onChatModelSelectChange = function() {
   if (custom) { modelEl.value = ''; modelEl.focus(); }
 };
 
-window.clearKeyError = function() {
-  const keyInput = document.getElementById('llm-api-key');
-  const keyError = document.getElementById('llm-key-error');
-  if (keyInput) keyInput.classList.remove('invalid');
-  if (keyError) keyError.hidden = true;
-};
-
-/* ── Claude OAuth status/import (provider = claude-oauth) ── */
-window.refreshOauthStatus = async function() {
-  const textEl = document.getElementById('oauth-status-text');
-  const ccRow = document.getElementById('oauth-claude-code-row');
-  if (!textEl) return;
-  try {
-    const s = await api('/auth/claude-oauth/status');
-    textEl.textContent = s.configured
-      ? ' A session is already stored on the server — ready to use.'
-      : ' No session stored on the server yet.';
-    if (ccRow) ccRow.hidden = !(s.claude_code_detected && !s.configured);
-  } catch (e) {
-    textEl.textContent = ' Could not check status: ' + (e.message || e);
-  }
-};
-
+/* ── Claude OAuth status/import (provider = claude-oauth) ──
+   Shared by the Config tab's OAuth card (see renderConfigOauthCard/refreshOauthStatusCfg) —
+   both the generic (#oauth-*) and Config-page-scoped (#oauth-*-cfg) element ids are refreshed
+   here so this keeps working from wherever it's invoked. */
 window.importFromClaudeCode = async function() {
   const errEl = document.getElementById('oauth-import-err');
-  errEl.innerHTML = '';
+  if (errEl) errEl.innerHTML = '';
   try {
     const r = await api('/auth/claude-oauth/import-claude-code', {method: 'POST'});
-    if (r.changed) {
-      errEl.innerHTML = `<div class="alert alert-info" style="margin-top:.4rem">Imported a new token (${esc(r.token_fingerprint)}).</div>`;
-    } else {
+    const msg = r.changed
+      ? `<div class="alert alert-info" style="margin-top:.4rem">Imported a new token (${esc(r.token_fingerprint)}).</div>`
       // Same access_token as what was already stored — most likely sync-claude-oauth.sh
       // (run on the host) hadn't finished writing a fresh one yet when this ran. Say so
       // plainly instead of a bare "ok" that looks identical to a real new import.
-      errEl.innerHTML = `<div class="alert alert-warn" style="margin-top:.4rem">
+      : `<div class="alert alert-warn" style="margin-top:.4rem">
         Imported the <strong>same</strong> token that was already stored (${esc(r.token_fingerprint)}) — nothing changed.
         If chat/scans still fail after this, the server operator likely needs to re-run
         <code>./sync-claude-oauth.sh</code> on the host and wait for it to finish
         <strong>before</strong> clicking Import again.
       </div>`;
-    }
-    refreshOauthStatus();
+    if (errEl) errEl.innerHTML = msg;
+    if (typeof refreshOauthStatusCfg === 'function') refreshOauthStatusCfg();
   } catch (e) {
-    errEl.innerHTML = `<div class="alert alert-error" style="margin-top:.4rem">${esc(e.message || String(e))}</div>`;
+    if (errEl) errEl.innerHTML = `<div class="alert alert-error" style="margin-top:.4rem">${esc(e.message || String(e))}</div>`;
   }
 };
 
 window.importOauthToken = async function() {
   const errEl = document.getElementById('oauth-import-err');
-  errEl.innerHTML = '';
-  const access_token = document.getElementById('oauth-imp-access').value.trim();
-  const refresh_token = document.getElementById('oauth-imp-refresh').value.trim();
-  const expires_at_ms = parseInt(document.getElementById('oauth-imp-expires').value.trim(), 10);
+  if (errEl) errEl.innerHTML = '';
+  const access_token = (document.getElementById('oauth-imp-access')?.value || '').trim();
+  const refresh_token = (document.getElementById('oauth-imp-refresh')?.value || '').trim();
+  const expires_at_ms = parseInt((document.getElementById('oauth-imp-expires')?.value || '').trim(), 10);
   if (!access_token || !refresh_token || !Number.isFinite(expires_at_ms)) {
-    errEl.innerHTML = '<div class="alert alert-error" style="margin-top:.4rem">Fill in all three fields (expiresAt must be a number).</div>';
+    if (errEl) errEl.innerHTML = '<div class="alert alert-error" style="margin-top:.4rem">Fill in all three fields (expiresAt must be a number).</div>';
     return;
   }
   try {
@@ -1414,12 +1398,13 @@ window.importOauthToken = async function() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({access_token, refresh_token, expires_at_ms}),
     });
-    document.getElementById('oauth-imp-access').value = '';
-    document.getElementById('oauth-imp-refresh').value = '';
-    document.getElementById('oauth-imp-expires').value = '';
-    refreshOauthStatus();
+    ['oauth-imp-access', 'oauth-imp-refresh', 'oauth-imp-expires'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    if (typeof refreshOauthStatusCfg === 'function') refreshOauthStatusCfg();
   } catch (e) {
-    errEl.innerHTML = `<div class="alert alert-error" style="margin-top:.4rem">${esc(e.message || String(e))}</div>`;
+    if (errEl) errEl.innerHTML = `<div class="alert alert-error" style="margin-top:.4rem">${esc(e.message || String(e))}</div>`;
   }
 };
 
@@ -1450,7 +1435,6 @@ window.onLlmModeChange = function() {
   if (mode === 'offensive' && llm && !llm.checked) {
     llm.checked = true;
     onLlmToggle(true);
-    setLlmNote('warn', 'LLM Enrichment was switched on — Offensive mode requires it.');
   }
   updateRunSummary();
 };
@@ -1749,15 +1733,28 @@ function renderDropZoneHtml() {
     </div>`;
 }
 
-function renderScanOptionsHtml(file, prefs) {
+/** Providers the upload form's dropdown may actually select — whatever the Config tab reports
+    as configured (GET /api/v1/config/providers), fetched once per Home render and cached in
+    _configCache (see fetchConfigProviders). Unconfigured providers still show up in the list
+    (so the form explains WHERE to go, not just that the option vanished) but are disabled. */
+function configuredProviderValues(configData) {
+  const set = new Set();
+  for (const p of (configData?.providers || [])) if (p.configured) set.add(p.provider);
+  return set;
+}
+
+function renderScanOptionsHtml(file, prefs, configData) {
   const kind = packageKindOf(file.name);
   const xapk = file.name.toLowerCase().endsWith('.xapk');
   const mode = SCAN_MODES[prefs.mode] ? prefs.mode : 'summarize';
-  const provider = LLM_PROVIDERS.some(p => p.value === prefs.provider) ? prefs.provider : 'openai';
+  const configuredSet = configuredProviderValues(configData);
+  const anyConfigured = configuredSet.size > 0;
+  const provider = configuredSet.has(prefs.provider) ? prefs.provider
+    : (LLM_PROVIDERS.find(p => configuredSet.has(p.value))?.value || prefs.provider || '');
   const modeOpts = Object.entries(SCAN_MODES)
     .map(([v, m]) => `<option value="${v}"${v === mode ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
   const providerOpts = LLM_PROVIDERS
-    .map(p => `<option value="${p.value}"${p.value === provider ? ' selected' : ''}>${esc(p.label)}</option>`).join('');
+    .map(p => `<option value="${p.value}"${p.value === provider ? ' selected' : ''}${configuredSet.has(p.value) ? '' : ' disabled'}>${esc(p.label)}${configuredSet.has(p.value) ? '' : ' — not connected'}</option>`).join('');
   const useAsc = prefs.decompiler === 'asc';
   return `
   <fieldset class="plain" id="scan-form">
@@ -1796,10 +1793,12 @@ function renderScanOptionsHtml(file, prefs) {
           <span class="cfg-head-r">
             <span class="state-pill" id="llm-state">Off</span>
             <label class="switch"><input type="checkbox" id="llm-enabled" role="switch"
-              aria-label="Enable LLM enrichment"${prefs.llmOn ? ' checked' : ''}/><span class="switch-track"></span></label>
+              aria-label="Enable LLM enrichment"${prefs.llmOn && anyConfigured ? ' checked' : ''}${anyConfigured ? '' : ' disabled'}/><span class="switch-track"></span></label>
           </span>
         </div>
-        <p class="cfg-desc">Improve finding descriptions and security analysis with AI.</p>
+        <p class="cfg-desc">Improve finding descriptions and security analysis with AI. Providers are
+          connected once in <a href="#/config">Config</a> — no key needed here.</p>
+        ${anyConfigured ? `
         <div class="llm-body">
           <div class="llm-fields">
             <label class="field"><span class="field-label">LLM Provider</span>
@@ -1809,41 +1808,12 @@ function renderScanOptionsHtml(file, prefs) {
                 <select id="llm-model-select" class="ctl" hidden></select>
                 <input id="llm-model" class="ctl" type="text" autocomplete="off" placeholder="empty = default"/>
               </span></label>
-            <div class="field">
-              <span class="field-label" id="llm-key-label">API Key</span>
-              <div class="key-wrap" id="llm-key-row">
-                <input id="llm-api-key" class="ctl" type="password" autocomplete="off" spellcheck="false" aria-labelledby="llm-key-label"/>
-                <button type="button" class="key-eye" id="key-eye" aria-label="Show API key" aria-pressed="false">${ico('eye')}</button>
-              </div>
-              <div class="ctl ctl-static" id="llm-key-none" hidden>${ico('key')}<span></span></div>
-            </div>
-            <button type="button" class="btn btn-outline btn-test" id="llm-test">${ico('plug')} Test Connection</button>
           </div>
-          <div class="cfg-note" id="llm-key-error" hidden>${ico('circleX')}<span>An API key is required to use this provider.</span></div>
-          <div class="cfg-note" id="llm-note">${ico('info')}<span>${esc(LLM_KEY_NOTE)}</span></div>
-          <div id="llm-oauth-hint" class="oauth-box" hidden>
-            Uses the Claude Pro/Max subscription signed in on the <strong>server host</strong> — no API key needed here.
-            <span id="oauth-status-text">Checking status…</span>
-            <div id="oauth-claude-code-row" hidden style="margin-top:.5rem;display:flex;flex-wrap:wrap;align-items:center;gap:.5rem">
-              <button type="button" class="btn btn-outline btn-sm" onclick="importFromClaudeCode()">Import from Claude Code CLI</button>
-              <span style="font-size:.72rem">Found a <code>claude /login</code> session on this server — one click reuses it.</span>
-            </div>
-            <details style="margin-top:.5rem">
-              <summary style="cursor:pointer;font-weight:600">…or paste a token manually</summary>
-              <p style="font-size:.72rem;margin:.4rem 0">
-                From <code>~/.claude/.credentials.json</code>'s <code>claudeAiOauth</code> object (wherever you last
-                ran <code>claude /login</code>). Sent straight to this server — never shown elsewhere.
-              </p>
-              <div style="display:flex;flex-direction:column;gap:.35rem;max-width:420px">
-                <input id="oauth-imp-access" class="ctl" type="password" placeholder="accessToken (sk-ant-oat01-...)"/>
-                <input id="oauth-imp-refresh" class="ctl" type="password" placeholder="refreshToken (sk-ant-ort01-...)"/>
-                <input id="oauth-imp-expires" class="ctl" type="text" placeholder="expiresAt (epoch milliseconds)"/>
-                <button type="button" class="btn btn-outline btn-sm" onclick="importOauthToken()" style="align-self:flex-start">Import token</button>
-              </div>
-            </details>
-            <div id="oauth-import-err"></div>
-          </div>
-        </div>
+          <div class="cfg-note" id="llm-note">${ico('info')}<span>Using the provider connected in <a href="#/config">Config</a>.</span></div>
+        </div>` : `
+        <div class="cfg-alert warn">${ico('alert')}
+          <span>No LLM provider is connected yet. <a href="#/config">Open the Config tab</a> to add an API key or OAuth session, then come back here.</span>
+        </div>`}
       </section>
 
       <section class="cfg-card span-2">
@@ -2072,8 +2042,8 @@ route('home', async function() {
   function collectPrefs() {
     return {
       mode: $('#llm-mode').value,
-      llmOn: !!$('#llm-enabled').checked,
-      provider: $('#llm-provider').value,
+      llmOn: !!$('#llm-enabled')?.checked,
+      provider: $('#llm-provider')?.value || '',
       model: currentLlmModel(),
       assessment: $('#assessment-enabled').checked,
       decompiler: $('#decompiler-asc')?.checked ? 'asc' : (loadScanPrefs().decompiler || 'jadx'),
@@ -2104,16 +2074,15 @@ route('home', async function() {
     const dup = duplicateScan();
     if (dup && !confirm('A scan of this file is already ' + dup.state + '. Running another one now can starve both scans and produce an incomplete result. Continue anyway?')) return;
     const mode = $('#llm-mode').value;
-    if (mode === 'offensive' && !$('#llm-enabled').checked) { $('#llm-enabled').checked = true; onLlmToggle(true); }
-    const llmOn = $('#llm-enabled').checked;
-    const provider = llmOn ? $('#llm-provider').value : 'none';
-    const apiKeyVal = ($('#llm-api-key')?.value || '').trim();
-    if (llmOn && providerNeedsKey(provider) && !apiKeyVal) {
-      const keyInput = $('#llm-api-key');
-      keyInput.classList.add('invalid');
-      $('#llm-key-error').hidden = false;
-      keyInput.scrollIntoView({block: 'center', behavior: 'smooth'});
-      keyInput.focus({preventScroll: true});
+    if (mode === 'offensive' && !$('#llm-enabled')?.checked) { if ($('#llm-enabled')) { $('#llm-enabled').checked = true; onLlmToggle(true); } }
+    const llmOn = !!$('#llm-enabled')?.checked;
+    // No API key is collected here at all — the provider dropdown only ever offers providers
+    // the Config tab already reports as connected (see renderScanOptionsHtml's providerOpts),
+    // so there's nothing left to validate client-side. The server still re-checks (create_scan
+    // in main.py) in case Config changed in another tab between page load and Run Scan.
+    const provider = llmOn ? ($('#llm-provider')?.value || 'none') : 'none';
+    if (mode === 'offensive' && provider === 'none') {
+      showRunError('Offensive mode requires an LLM provider. Connect one in the Config tab first.');
       return;
     }
     saveScanPrefs(collectPrefs());
@@ -2124,7 +2093,6 @@ route('home', async function() {
     fd.append('llm_provider', provider);
     fd.append('llm_mode', mode);
     fd.append('llm_model', llmOn ? currentLlmModel() : '');
-    fd.append('llm_api_key', llmOn && providerNeedsKey(provider) ? apiKeyVal : '');
     fd.append('assessment_enabled', $('#assessment-enabled')?.checked !== false);
     fd.append('ios_light', !!$('#ios-light')?.checked);
     const ascEl = $('#decompiler-asc');
@@ -2172,7 +2140,7 @@ route('home', async function() {
 
   // Only the upload slot swaps between the drop zone (step 1) and the configuration form (step 2)
   // as the user picks/changes a file — never the whole page. Nothing touches the server until Run Scan.
-  function paintUploadCard() {
+  async function paintUploadCard() {
     const slot = $('#upload-slot');
     if (!slot) return;
     $('#recent-panel').hidden = !!pendingFile;
@@ -2185,20 +2153,22 @@ route('home', async function() {
       return;
     }
     const prefs = loadScanPrefs();
-    slot.innerHTML = renderScanOptionsHtml(pendingFile, prefs);
+    // Needed up front so the provider <select> can disable anything not connected yet (see
+    // renderScanOptionsHtml) — fetched fresh each time step 2 paints so a key added in the
+    // Config tab in another browser tab shows up on the very next file pick.
+    let configData;
+    try { configData = await fetchConfigProviders(); } catch (_) { configData = {providers: []}; }
+    slot.innerHTML = renderScanOptionsHtml(pendingFile, prefs, configData);
     $('#change-file').addEventListener('click', () => fileEl.click());
     wireDrop($('#picked'), pickFile);
     $('#run-scan-btn').addEventListener('click', () => doUpload(pendingFile));
     $('#llm-mode').addEventListener('change', onLlmModeChange);
-    $('#llm-enabled').addEventListener('change', () => onLlmToggle(false));
-    $('#llm-provider').addEventListener('change', () => onProviderChange());
-    $('#llm-model-select').addEventListener('change', onModelSelectChange);
-    $('#llm-model').addEventListener('input', () => { resetLlmTest(); updateRunSummary(); });
-    $('#llm-api-key').addEventListener('input', () => { clearKeyError(); resetLlmTest(); });
-    $('#key-eye').addEventListener('click', toggleKeyVisibility);
-    $('#llm-test').addEventListener('click', testLlmConnection);
+    $('#llm-enabled')?.addEventListener('change', () => onLlmToggle(false));
+    $('#llm-provider')?.addEventListener('change', () => onProviderChange());
+    $('#llm-model-select')?.addEventListener('change', onModelSelectChange);
+    $('#llm-model')?.addEventListener('input', updateRunSummary);
     $$('#scan-form input[name=decompiler], #assessment-enabled, #ios-light').forEach(el => el.addEventListener('change', updateRunSummary));
-    onProviderChange(LLM_PROVIDERS.some(p => p.value === prefs.provider) ? (prefs.model || '') : '');
+    if ($('#llm-provider')) onProviderChange(prefs.provider === $('#llm-provider').value ? (prefs.model || '') : '');
     onLlmToggle(true);
     onLlmModeChange();
     paintDupWarn();
@@ -2810,6 +2780,250 @@ route('learned', async function() {
 });
 
 
+/* ── Config page (centralized LLM provider credentials) ──────────────────────
+   Single source of truth for every API key / OAuth session the server uses for LLM
+   Enrichment, the AI Assistant and AI Fix — the upload form (Home) never collects a key
+   itself; it only shows providers this page reports as configured. */
+let _configCache = null;   // last GET /config/providers response, reused by renderHomeOptions()
+let _configOpenForm = null; // provider id whose inline Connect/Edit form is expanded
+
+function configProviderStatus(data, provider) {
+  return (data?.providers || []).find(p => p.provider === provider) || {configured: false, source: 'none', masked: {}, fields: {}};
+}
+
+async function fetchConfigProviders() {
+  _configCache = await api('/config/providers');
+  return _configCache;
+}
+
+function cfgpBadgeHtml(st) {
+  if (st.configured) return `<span class="cfgp-badge on">${ico('circleCheck')} Connected</span>`;
+  return `<span class="cfgp-badge off">${ico('circleX')} Not connected</span>`;
+}
+
+function cfgpSourceLabel(st) {
+  if (!st.configured) return '';
+  if (st.source === 'env') return 'Configured via server .env';
+  if (st.updated_at) return `Connected · updated ${fmtShort(st.updated_at)}`;
+  return 'Connected';
+}
+
+function cfgpFieldsSummaryHtml(st) {
+  const bits = [];
+  for (const [k, v] of Object.entries(st.masked || {})) bits.push(`${k.replace(/_/g,' ')}: <code>${esc(v)}</code>`);
+  for (const [k, v] of Object.entries(st.fields || {})) {
+    if (k === 'updated_at') continue;
+    bits.push(`${k.replace(/_/g,' ')}: <code>${esc(String(v))}</code>`);
+  }
+  return bits.length ? `<div class="cfgp-meta">${bits.join(' · ')}</div>` : '';
+}
+
+function renderConfigProviderForm(provider, meta, st) {
+  const fieldsHtml = meta.fields.map(f => `
+    <label>${esc(f.label)}
+      <input class="ctl" type="${f.type}" id="cfgp-f-${provider}-${f.key}" placeholder="${escAttr(f.placeholder)}" autocomplete="off" spellcheck="false"/>
+    </label>`).join('');
+  return `
+    <div class="cfgp-form" id="cfgp-form-${provider}">
+      ${fieldsHtml}
+      <div class="cfgp-note" id="cfgp-note-${provider}">${esc(LLM_KEY_NOTE)}</div>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveConfigProvider('${provider}')">${ico('check')} Save</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="testConfigProvider('${provider}')" id="cfgp-test-${provider}">${ico('plug')} Test Connection</button>
+        ${st.configured ? `<button type="button" class="btn btn-ghost btn-sm" onclick="deleteConfigProvider('${provider}')">${ico('trash')} Remove</button>` : ''}
+        <button type="button" class="btn btn-ghost btn-sm" onclick="toggleConfigForm('${provider}', false)">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function renderConfigOauthCard(data) {
+  const st = configProviderStatus(data, 'claude-oauth');
+  const meta = CONFIG_PROVIDER_META['claude-oauth'];
+  const isDefault = data.default_provider === 'claude-oauth';
+  return `
+    <div class="cfgp-card${st.configured ? ' is-configured' : ''}" id="cfgp-card-claude-oauth">
+      <div class="cfgp-card-top">
+        <div class="cfgp-icon">${esc(meta.textIcon)}</div>
+        <div class="cfgp-main">
+          <div class="cfgp-name">${esc(meta.name)} ${cfgpBadgeHtml(st)} ${isDefault ? '<span class="cfgp-badge default">Default</span>' : ''}</div>
+          <div class="cfgp-desc">${esc(meta.desc)}</div>
+        </div>
+      </div>
+      <div class="cfgp-meta" id="oauth-status-text-cfg">Checking status…</div>
+      <div class="cfgp-actions">
+        ${!isDefault ? `<button type="button" class="btn btn-outline btn-sm" onclick="setConfigDefault('claude-oauth')">Set as default</button>` : ''}
+      </div>
+      <div id="oauth-claude-code-row-cfg" hidden style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem">
+        <button type="button" class="btn btn-outline btn-sm" onclick="importFromClaudeCode()">Import from Claude Code CLI</button>
+        <span style="font-size:.72rem;color:var(--muted)">Found a <code>claude /login</code> session on this server — one click reuses it.</span>
+      </div>
+      <details>
+        <summary style="cursor:pointer;font-weight:600;font-size:.78rem">…or paste a token manually</summary>
+        <p style="font-size:.72rem;margin:.4rem 0;color:var(--muted)">
+          From <code>~/.claude/.credentials.json</code>'s <code>claudeAiOauth</code> object (wherever you last
+          ran <code>claude /login</code>). Sent straight to this server — never shown elsewhere.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:.35rem;max-width:420px">
+          <input id="oauth-imp-access" class="ctl" type="password" placeholder="accessToken (sk-ant-oat01-...)"/>
+          <input id="oauth-imp-refresh" class="ctl" type="password" placeholder="refreshToken (sk-ant-ort01-...)"/>
+          <input id="oauth-imp-expires" class="ctl" type="text" placeholder="expiresAt (epoch milliseconds)"/>
+          <button type="button" class="btn btn-outline btn-sm" onclick="importOauthToken()" style="align-self:flex-start">Import token</button>
+        </div>
+      </details>
+      <div id="oauth-import-err"></div>
+    </div>`;
+}
+
+function renderConfigProviderCard(data, provider) {
+  if (provider === 'claude-oauth') return renderConfigOauthCard(data);
+  const st = configProviderStatus(data, provider);
+  const meta = CONFIG_PROVIDER_META[provider];
+  const isDefault = data.default_provider === provider;
+  const openForm = _configOpenForm === provider;
+  return `
+    <div class="cfgp-card${st.configured ? ' is-configured' : ''}" id="cfgp-card-${provider}">
+      <div class="cfgp-card-top">
+        <div class="cfgp-icon">${esc(meta.textIcon)}</div>
+        <div class="cfgp-main">
+          <div class="cfgp-name">${esc(meta.name)} ${cfgpBadgeHtml(st)} ${isDefault ? '<span class="cfgp-badge default">Default</span>' : ''}</div>
+          <div class="cfgp-desc">${esc(meta.desc)}</div>
+          ${cfgpFieldsSummaryHtml(st)}
+          ${st.configured ? `<div class="cfgp-meta">${esc(cfgpSourceLabel(st))}</div>` : ''}
+        </div>
+      </div>
+      <div class="cfgp-actions">
+        <button type="button" class="btn ${st.configured ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="toggleConfigForm('${provider}', ${!openForm})">
+          ${ico(st.configured ? 'settings' : 'plug')} ${st.configured ? 'Edit' : 'Connect'}
+        </button>
+        ${st.configured && !isDefault ? `<button type="button" class="btn btn-ghost btn-sm" onclick="setConfigDefault('${provider}')">Set as default</button>` : ''}
+      </div>
+      ${openForm ? renderConfigProviderForm(provider, meta, st) : ''}
+    </div>`;
+}
+
+function renderConfigPage(data) {
+  const cards = CONFIG_PROVIDER_ORDER.map(p => renderConfigProviderCard(data, p)).join('');
+  return `
+    <div class="page-wrap" id="config-page">
+      <div class="cfgp-intro">
+        <div class="si">${ico('sparkles')}</div>
+        <div class="cfgp-intro-main">
+          <h2>Connect your LLM providers</h2>
+          <p>Add an API key or OAuth session once here — the upload form and AI Assistant pick from whatever is connected. Keys are stored only on this server, never in the browser.</p>
+        </div>
+      </div>
+      <div class="cfgp-head">
+        <div>
+          <h2>Your LLM Providers</h2>
+          <p>Manage connected providers, set a default, and test connections.</p>
+        </div>
+      </div>
+      <div class="cfgp-grid">${cards}</div>
+    </div>`;
+}
+
+window.toggleConfigForm = function(provider, open) {
+  _configOpenForm = open ? provider : null;
+  if (_configCache) render(renderConfigPage(_configCache));
+  if (provider === 'claude-oauth') refreshOauthStatusCfg();
+};
+
+window.saveConfigProvider = async function(provider) {
+  const meta = CONFIG_PROVIDER_META[provider];
+  const note = document.getElementById(`cfgp-note-${provider}`);
+  const body = {};
+  for (const f of meta.fields) {
+    body[f.key] = (document.getElementById(`cfgp-f-${provider}-${f.key}`)?.value || '').trim();
+  }
+  const anyFilled = Object.values(body).some(v => v);
+  if (!anyFilled) {
+    if (note) { note.textContent = 'Fill in at least one field.'; note.className = 'cfgp-note err'; }
+    return;
+  }
+  try {
+    await api(`/config/providers/${provider}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+    });
+    _configOpenForm = null;
+    await fetchConfigProviders();
+    render(renderConfigPage(_configCache));
+  } catch (e) {
+    if (note) { note.textContent = e.message || String(e); note.className = 'cfgp-note err'; }
+  }
+};
+
+window.testConfigProvider = async function(provider) {
+  const meta = CONFIG_PROVIDER_META[provider];
+  const note = document.getElementById(`cfgp-note-${provider}`);
+  const btn = document.getElementById(`cfgp-test-${provider}`);
+  const body = {provider, api_key: '', model: ''};
+  for (const f of meta.fields) {
+    const v = (document.getElementById(`cfgp-f-${provider}-${f.key}`)?.value || '').trim();
+    if (f.key === 'api_key') body.api_key = v;
+    else if (['access_key_id','secret_access_key','region'].includes(f.key)) body[f.key] = v;
+  }
+  if (btn) { btn.disabled = true; btn.innerHTML = ico('loader', 'ico-spin') + ' Testing…'; }
+  try {
+    const r = await api('/llm/test', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if (note) { note.textContent = r.message || (r.ok ? 'Connected.' : 'Connection failed.'); note.className = 'cfgp-note ' + (r.ok ? 'ok' : 'err'); }
+  } catch (e) {
+    if (note) { note.textContent = e.message || String(e); note.className = 'cfgp-note err'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = ico('plug') + ' Test Connection'; }
+  }
+};
+
+window.deleteConfigProvider = async function(provider) {
+  if (!confirm(`Remove the stored credentials for ${CONFIG_PROVIDER_META[provider]?.name || provider}? Scans/chat will fall back to the server's .env configuration for this provider, if any.`)) return;
+  try {
+    await api(`/config/providers/${provider}`, {method: 'DELETE'});
+    _configOpenForm = null;
+    await fetchConfigProviders();
+    render(renderConfigPage(_configCache));
+  } catch (e) {
+    alert('Remove failed: ' + (e.message || e));
+  }
+};
+
+window.setConfigDefault = async function(provider) {
+  try {
+    await api('/config/default', {method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({provider, model: ''})});
+    await fetchConfigProviders();
+    render(renderConfigPage(_configCache));
+  } catch (e) {
+    alert('Could not set default: ' + (e.message || e));
+  }
+};
+
+/* Config page's own OAuth status refresh — same backend call as the old upload-form widget
+   (refreshOauthStatus), but targets this page's element ids so both can coexist harmlessly
+   during the transition and nothing breaks if one half of the DOM isn't mounted. */
+window.refreshOauthStatusCfg = async function() {
+  const textEl = document.getElementById('oauth-status-text-cfg');
+  const ccRow = document.getElementById('oauth-claude-code-row-cfg');
+  if (!textEl) return;
+  try {
+    const s = await api('/auth/claude-oauth/status');
+    textEl.textContent = s.configured
+      ? 'A session is already stored on the server — ready to use.'
+      : 'No session stored on the server yet. Run \'malimite claude-login\' on the server, or import below.';
+    if (ccRow) ccRow.hidden = !(s.claude_code_detected && !s.configured);
+  } catch (e) {
+    textEl.textContent = 'Could not check status: ' + (e.message || e);
+  }
+};
+
+route('config', async function() {
+  render('<div class="page-wrap"><div class="loading"><div class="spinner"></div></div></div>');
+  let data;
+  try { data = await fetchConfigProviders(); }
+  catch (e) { render(`<div class="page-wrap"><div class="alert alert-error">${esc(e.message)}</div></div>`); return; }
+  _configOpenForm = null;
+  render(renderConfigPage(data));
+  refreshOauthStatusCfg();
+});
+
+
 /* ── scan detail view ── */
 const TABS = ['summary','vulnerabilities','assessment','functions','strings','resources','entrypoints','llm','assistant','log','downloads'];
 
@@ -3274,6 +3488,7 @@ async function tabAssistant(el, id, detail) {
           <option value="">Scan default${detail.llm_provider && detail.llm_provider !== 'none' ? ' (' + esc(detail.llm_provider) + ')' : ''}</option>
           <option value="claude">claude</option><option value="claude-oauth">claude (OAuth)</option><option value="openai">openai</option>
           <option value="deepseek">deepseek</option><option value="ollama">ollama</option>
+          <option value="bedrock">bedrock</option><option value="glm">glm</option>
         </select>
         <select id="chat-model-select" hidden title="Model override" onchange="onChatModelSelectChange()"></select>
         <input id="chat-model" placeholder="${escAttr(detail.llm_model || 'model (default)')}" title="Model override"/>
@@ -5177,6 +5392,7 @@ function renderAiFixPanel(v) {
             <option value="claude">claude</option><option value="claude-oauth">claude (OAuth)</option>
             <option value="openai">openai</option><option value="deepseek">deepseek</option>
             <option value="ollama">ollama</option>
+            <option value="bedrock">bedrock</option><option value="glm">glm</option>
           </select>
         </label>
         <label>Model override (optional)
@@ -5324,6 +5540,8 @@ const AE_PROVIDERS = [
   {value: 'claude-oauth', label: 'Claude (Pro/Max OAuth)'},
   {value: 'deepseek',     label: 'DeepSeek'},
   {value: 'ollama',       label: 'Ollama'},
+  {value: 'bedrock',      label: 'AWS Bedrock'},
+  {value: 'glm',          label: 'Zai GLM'},
 ];
 
 const AE = {

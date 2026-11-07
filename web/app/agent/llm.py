@@ -1,4 +1,5 @@
-"""Minimal streaming tool-calling clients: Anthropic and OpenAI-compatible (openai/deepseek/ollama).
+"""Minimal streaming tool-calling clients: Anthropic, OpenAI-compatible (openai/deepseek/ollama/glm),
+and Bedrock (Anthropic models hosted on AWS Bedrock, SigV4-signed, AWS event-stream framing).
 
 Neutral message format = Anthropic block lists:
   {"role": "user"|"assistant", "content": [text | image | tool_use | tool_result blocks]}
@@ -7,6 +8,7 @@ chat_step() yields events: {"type":"text","text"} | {"type":"tool_use","id","nam
                            | {"type":"stop","reason"}
 """
 import asyncio
+import base64
 import json
 import logging
 import random
@@ -18,21 +20,23 @@ import httpx
 
 from .. import scanner
 from ..config import settings
-from . import anthropic_oauth
+from . import anthropic_oauth, aws_eventstream, aws_sigv4
 
 _log = logging.getLogger("malimite")
 
-PROVIDERS = ("claude", "claude-oauth", "openai", "deepseek", "ollama")
+PROVIDERS = ("claude", "claude-oauth", "openai", "deepseek", "ollama", "bedrock", "glm")
 _DEFAULT_MODEL = {"claude": "claude-sonnet-5", "claude-oauth": "claude-sonnet-5",
-                  "openai": "gpt-4o-mini", "deepseek": "deepseek-flash", "ollama": "llama3.1"}
-_KEY_ENV = {"claude": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
+                  "openai": "gpt-4o-mini", "deepseek": "deepseek-flash", "ollama": "llama3.1",
+                  "bedrock": "anthropic.claude-sonnet-5-20260101-v1:0", "glm": "glm-4.6"}
+_KEY_ENV = {"claude": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "deepseek": "DEEPSEEK_API_KEY",
+           "glm": "GLM_API_KEY"}
 # Providers whose chat/completions transport format accepts an image content block at all. This is
 # a provider (wire-format) capability, not a per-model one — DeepSeek's chat models and most
 # Ollama-pulled models (anything that isn't llava/bakllava/moondream/etc.) will still reject or
 # silently ignore an image even though the provider is listed here; there is no reliable way to
 # query "does this exact model support vision" without a provider-specific models API call, so a
 # non-vision model's own error response is left to surface instead of guessing per-model.
-VISION_CAPABLE_PROVIDERS = frozenset({"claude", "claude-oauth", "openai", "ollama"})
+VISION_CAPABLE_PROVIDERS = frozenset({"claude", "claude-oauth", "openai", "ollama", "bedrock", "glm"})
 TRUNCATED = frozenset({"length", "max_tokens"})  # stop reasons meaning "cut off by the output limit" (openai-compat / anthropic)
 
 # Transient HTTP statuses worth retrying — same set pi-ai's provider-retry layer uses
@@ -92,6 +96,10 @@ class LlmCfg:
     model: str
     api_key: str
     base_url: str
+    # Bedrock-only: SigV4 needs the raw credential pair + region, not a bearer token.
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_region: str = ""
 
 
 def resolve_llm(scan_provider: str, scan_model: str,
@@ -113,6 +121,13 @@ def resolve_llm(scan_provider: str, scan_model: str,
     # chat_step() (it can expire mid-session and needs an async refresh this sync
     # function can't do) — api_key stays empty here and is filled in just before
     # the HTTP call instead. ollama needs no key either; every other provider does.
+    if p == "bedrock":
+        if not env.get("AWS_ACCESS_KEY_ID") or not env.get("AWS_SECRET_ACCESS_KEY"):
+            raise LlmError(
+                "AWS Bedrock is not configured on the server. Add an access key/secret in the "
+                "Config tab.")
+        return LlmCfg(p, m, "", "", env["AWS_ACCESS_KEY_ID"], env["AWS_SECRET_ACCESS_KEY"],
+                     env.get("AWS_REGION", "us-east-1"))
     if p not in ("ollama", "claude-oauth"):
         key = env.get(_KEY_ENV.get(p, ""), "")
         if not key:
@@ -126,7 +141,8 @@ def resolve_llm(scan_provider: str, scan_model: str,
     base = {"claude": "https://api.anthropic.com", "claude-oauth": "https://api.anthropic.com",
             "openai": "https://api.openai.com",
             "deepseek": env.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
-            "ollama": env.get("OLLAMA_BASE_URL", "http://localhost:11434")}[p]
+            "ollama": env.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+            "glm": env.get("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")}[p]
     return LlmCfg(p, m, key, base.rstrip("/"))
 
 
@@ -275,11 +291,94 @@ async def _sse(resp: httpx.Response) -> AsyncIterator[str]:
             yield line[5:].strip()
 
 
+async def _bedrock_sse(resp: httpx.Response) -> AsyncIterator[str]:
+    """Unwraps Bedrock's event-stream framing into the same bare-JSON-string shape _sse()
+    yields, so parse_anthropic() (built for the native Messages API's SSE) can be reused
+    unchanged — InvokeModelWithResponseStream's per-chunk payload IS an Anthropic
+    content_block_delta/message_start/etc. event, just base64-wrapped inside one more
+    JSON envelope ({"bytes": "<b64>", ...}) and framed as an AWS event-stream message
+    instead of a `data: ...` SSE line."""
+    async for ev_headers, payload in aws_eventstream.iter_events(resp.aiter_bytes()):
+        if ev_headers.get(":event-type") == "exception" or ev_headers.get(":message-type") == "exception":
+            try:
+                detail = json.loads(payload.decode("utf-8", "replace"))
+            except ValueError:
+                detail = {}
+            raise LlmError(f"bedrock stream error: {str(detail.get('message') or payload)[:200]}")
+        try:
+            envelope = json.loads(payload.decode("utf-8", "replace"))
+        except ValueError:
+            continue
+        b64 = envelope.get("bytes")
+        if not b64:
+            continue
+        try:
+            yield base64.b64decode(b64).decode("utf-8", "replace")
+        except (ValueError, TypeError):
+            continue
+
+
 async def chat_step(cfg: LlmCfg, system: str, messages: list[dict], tools: list[dict],
                     client: Optional[httpx.AsyncClient] = None, allow_tools: bool = True) -> AsyncIterator[dict]:
     """allow_tools=False keeps the tool definitions (history may contain tool blocks) but forbids new calls."""
     own = client is None
     client = client or httpx.AsyncClient(timeout=httpx.Timeout(120, connect=15))
+
+    if cfg.provider == "bedrock":
+        # Bedrock's Anthropic-model wire format is the Messages API body (system/messages/
+        # tools, same shape _tools_anthropic() already builds) MINUS "model" — the model id
+        # is part of the URL path instead, not a JSON field. anthropic_version replaces the
+        # claude/claude-oauth branch's "anthropic-version" HEADER (Bedrock wants it IN the
+        # body); max_tokens is still required.
+        region = cfg.aws_region or "us-east-1"
+        host = f"bedrock-runtime.{region}.amazonaws.com"
+        url_path = f"/model/{cfg.model}/invoke-with-response-stream"
+        url = f"https://{host}{url_path}"
+        body = {"anthropic_version": "bedrock-2023-05-31", "max_tokens": settings.chat_max_output_tokens,
+                "system": system, "messages": messages, "tools": _tools_anthropic(tools)}
+        if not allow_tools:
+            body["tool_choice"] = {"type": "none"}
+        body_bytes = json.dumps(body).encode("utf-8")
+        headers = aws_sigv4.sign_request(
+            method="POST", url_path=url_path, region=region, service="bedrock",
+            access_key_id=cfg.aws_access_key_id, secret_access_key=cfg.aws_secret_access_key,
+            host=host, body=body_bytes,
+            extra_headers={"content-type": "application/json", "accept": "application/vnd.amazon.eventstream"},
+        )
+        try:
+            max_retries = RETRYABLE_STATUS_MAX_RETRIES
+            for attempt in range(max_retries + 1):
+                if attempt > 0:
+                    # SigV4 signatures are timestamped (X-Amz-Date) and AWS rejects a request
+                    # signed more than ~5 minutes in the past — cheap to re-sign per attempt
+                    # rather than risk a stale signature on a slow backoff.
+                    headers = aws_sigv4.sign_request(
+                        method="POST", url_path=url_path, region=region, service="bedrock",
+                        access_key_id=cfg.aws_access_key_id, secret_access_key=cfg.aws_secret_access_key,
+                        host=host, body=body_bytes,
+                        extra_headers={"content-type": "application/json",
+                                      "accept": "application/vnd.amazon.eventstream"},
+                    )
+                async with client.stream("POST", url, headers=headers, content=body_bytes) as resp:
+                    if resp.status_code in RETRYABLE_STATUS and attempt < max_retries:
+                        await asyncio.sleep(_retry_delay_seconds(resp.headers, attempt))
+                        continue
+                    if resp.status_code != 200:
+                        raw = (await resp.aread()).decode("utf-8", "replace")
+                        try:
+                            msg = json.loads(raw).get("message", raw)
+                        except ValueError:
+                            msg = raw
+                        raise LlmError(f"bedrock returned HTTP {resp.status_code}: {(msg or '')[:200]}")
+                    async for ev in parse_anthropic(_bedrock_sse(resp)):
+                        yield ev
+                    return
+        except httpx.HTTPError as e:
+            raise LlmError(f"bedrock request failed: {type(e).__name__}") from None
+        finally:
+            if own:
+                await client.aclose()
+        return
 
     if cfg.provider in ("claude", "claude-oauth"):
         url = f"{cfg.base_url}/v1/messages"

@@ -19,8 +19,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import auto_enhance, db, finding_fix, llm_probe, offensive_phases, scanner
-from .agent import anthropic_oauth, loop as agent_loop, ondemand, store as chat_store
-from .agent.llm import VISION_CAPABLE_PROVIDERS, LlmError, resolve_llm
+from .agent import anthropic_oauth, llm_config, loop as agent_loop, ondemand, store as chat_store
+from .agent.llm import PROVIDERS as LLM_PROVIDERS, VISION_CAPABLE_PROVIDERS, LlmError, resolve_llm
 from .agent.tools import Ctx, valid_class_name
 from .config import settings
 from .models import ScanDetail, ScanMeta
@@ -131,25 +131,29 @@ async def create_scan(
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
-    needs_key = llm_enabled and llm_provider in ("openai", "claude", "deepseek")
-    if llm_provider == "openai":
-        effective_key = llm_api_key.strip() or settings.openai_api_key
-        provider_label = "OPENAI_API_KEY"
-    elif llm_provider == "claude":
-        effective_key = llm_api_key.strip() or settings.anthropic_api_key
-        provider_label = "ANTHROPIC_API_KEY"
-    elif llm_provider == "deepseek":
-        effective_key = llm_api_key.strip() or settings.deepseek_api_key
-        provider_label = "DEEPSEEK_API_KEY"
-    else:
-        effective_key = ""
-        provider_label = ""
-    if needs_key and not effective_key:
-        raise HTTPException(
-            status_code=422,
-            detail=f"{provider_label} is required when using provider '{llm_provider}'. "
-                   f"Pass it in the llm_api_key field or set {provider_label} in the server .env.",
-        )
+    # Credential source, in priority order: (1) llm_api_key — a per-upload override, kept only
+    # for CI pipelines/scripts that still POST it directly and never touch the Config tab;
+    # (2) the Config tab's stored credentials; (3) the server's own *_API_KEY/.env bootstrap.
+    # The upload form itself no longer collects a key at all — see index.html's
+    # renderScanOptionsHtml(), which only offers providers llm_config already reports as
+    # configured. This keeps a bare `curl -F llm_api_key=...` working unchanged.
+    needs_key = llm_enabled and llm_provider in ("openai", "claude", "deepseek", "bedrock", "glm")
+    if needs_key:
+        env = scanner.llm_env(llm_provider, llm_api_key.strip())
+        key_env_name = {
+            "openai": "OPENAI_API_KEY", "claude": "ANTHROPIC_API_KEY", "deepseek": "DEEPSEEK_API_KEY",
+            "glm": "GLM_API_KEY",
+        }.get(llm_provider)
+        if llm_provider == "bedrock":
+            configured = bool(env.get("AWS_ACCESS_KEY_ID") and env.get("AWS_SECRET_ACCESS_KEY"))
+        else:
+            configured = bool(env.get(key_env_name))
+        if not configured:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Provider '{llm_provider}' is not configured on this server. "
+                       f"Add it in the Config tab (or pass llm_api_key with this request).",
+            )
     mode_norm = (llm_mode or "").strip().lower().replace("-", "_").replace(" ", "_")
     if mode_norm in _OFFENSIVE_MODE_ALIASES:
         if not llm_enabled or llm_provider in ("none", ""):
@@ -935,18 +939,116 @@ class LlmTestRequest(BaseModel):
     provider: str
     api_key: str = Field("", max_length=4096)
     model: str = Field("", max_length=200)
+    # Bedrock-only probe fields (see llm_probe._probe_bedrock); harmless no-ops for every
+    # other provider. Kept on the shared request model rather than a bedrock-specific
+    # endpoint so the Config tab's "Test Connection" button can POST the same shape
+    # regardless of which provider card it's testing.
+    access_key_id: str = Field("", max_length=256)
+    secret_access_key: str = Field("", max_length=256)
+    region: str = Field("", max_length=64)
 
 
 @app.post("/api/v1/llm/test")
 async def llm_test_connection(request: Request, req: LlmTestRequest):
-    """Backs the upload form's "Test Connection" button: lists the provider's models with the
-    given key (or the server's own key when none is supplied). Never spends a completion and
-    never echoes the key back."""
+    """Backs the Config tab's (and the legacy upload form's) "Test Connection" button: lists
+    the provider's models with the given key (or the server's own key when none is supplied).
+    Never spends a completion and never echoes the key back."""
     _check_auth(request)
+    extra = {"access_key_id": req.access_key_id, "secret_access_key": req.secret_access_key,
+            "region": req.region} if req.provider == "bedrock" else None
     try:
-        return await llm_probe.probe(req.provider, req.api_key, req.model)
+        return await llm_probe.probe(req.provider, req.api_key, req.model, extra=extra)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+
+# ── Config tab: persistent LLM provider credentials ─────────────────────────────
+
+class LlmProviderConfigRequest(BaseModel):
+    """Every field is optional and provider-specific; only non-empty ones are persisted
+    (see llm_config.set_provider — a blank field never erases a previously saved value, use
+    DELETE to actually remove a provider's config)."""
+    api_key: str = Field("", max_length=4096)
+    base_url: str = Field("", max_length=500)
+    access_key_id: str = Field("", max_length=256)
+    secret_access_key: str = Field("", max_length=256)
+    region: str = Field("", max_length=64)
+    model_id: str = Field("", max_length=200)
+
+
+class LlmDefaultRequest(BaseModel):
+    provider: str = Field("", max_length=64)
+    model: str = Field("", max_length=200)
+
+
+def _require_known_provider(provider: str) -> str:
+    p = (provider or "").strip().lower()
+    if p not in llm_config.KNOWN_PROVIDERS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown provider '{provider}'. Known: {', '.join(llm_config.KNOWN_PROVIDERS)}.",
+        )
+    return p
+
+
+@app.get("/api/v1/config/providers")
+async def list_config_providers(request: Request):
+    """Every provider the upload form / AI Assistant / AI Fix can select, with its connection
+    status (never a raw key — see llm_config.provider_status). claude-oauth is included here
+    too (status proxied from anthropic_oauth) so the Config tab can show every provider card
+    in one list instead of special-casing OAuth separately."""
+    _check_auth(request)
+    providers = [llm_config.provider_status(p) for p in llm_config.KNOWN_PROVIDERS]
+    oauth_configured = anthropic_oauth.is_configured()
+    providers.insert(1, {  # same visual slot as the old upload-form dropdown (right after "claude")
+        "provider": "claude-oauth",
+        "configured": oauth_configured,
+        "source": "ui" if oauth_configured else "none",
+        "masked": {},
+        "fields": {},
+        "updated_at": None,
+    })
+    data = llm_config.load()
+    return {
+        "providers": providers,
+        "default_provider": data["default_provider"],
+        "default_model": data["default_model"],
+    }
+
+
+@app.post("/api/v1/config/providers/{provider}")
+async def set_config_provider(request: Request, provider: str, req: LlmProviderConfigRequest):
+    """Saves (merges) one provider's credentials. claude-oauth is deliberately excluded —
+    it has no key fields of its own; use /api/v1/auth/claude-oauth/* instead."""
+    _check_auth(request)
+    if provider == "claude-oauth":
+        raise HTTPException(status_code=422, detail="claude-oauth has no key fields; use "
+                                                     "/api/v1/auth/claude-oauth/import-token or "
+                                                     "/import-claude-code instead.")
+    p = _require_known_provider(provider)
+    stored = llm_config.set_provider(
+        p, api_key=req.api_key, base_url=req.base_url, access_key_id=req.access_key_id,
+        secret_access_key=req.secret_access_key, region=req.region, model_id=req.model_id,
+    )
+    return {"ok": True, "status": llm_config.provider_status(p), "updated_at": stored.get("updated_at")}
+
+
+@app.delete("/api/v1/config/providers/{provider}", status_code=204)
+async def delete_config_provider(request: Request, provider: str):
+    _check_auth(request)
+    p = _require_known_provider(provider)
+    llm_config.delete_provider(p)
+
+
+@app.put("/api/v1/config/default")
+async def set_config_default(request: Request, req: LlmDefaultRequest):
+    """Sets the provider/model the upload form pre-selects. An empty provider clears the
+    default (form falls back to the first configured provider)."""
+    _check_auth(request)
+    if req.provider and req.provider not in (*llm_config.KNOWN_PROVIDERS, "claude-oauth"):
+        raise HTTPException(status_code=422, detail=f"Unknown provider '{req.provider}'.")
+    data = llm_config.set_default(req.provider, req.model)
+    return {"ok": True, "default_provider": data["default_provider"], "default_model": data["default_model"]}
 
 
 # ── file downloads ────────────────────────────────────────────────────────────

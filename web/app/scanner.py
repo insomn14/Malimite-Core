@@ -485,24 +485,51 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
 
 
 def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
-    """Env vars the CLI (and the chat agent) need for the given LLM provider."""
+    """Env vars the CLI (and the chat agent) need for the given LLM provider.
+
+    Resolution order: an explicit per-request key (legacy upload-form override, kept for
+    backward compatibility — see create_scan()) wins first, then whatever the Config tab has
+    stored for this provider (agent.llm_config), then the server's own *_API_KEY/.env
+    bootstrap (Settings) as the last fallback. The Config tab is the intended path going
+    forward; per_req_key and the bare .env vars both still work so existing CI pipelines and
+    docker-compose-only deployments keep working unchanged.
+    """
+    from .agent import llm_config  # local import: avoids a module-load cycle with agent.llm
+
+    fields = llm_config.effective_fields(provider)
     env: dict[str, str] = {}
     if provider == "openai":
-        key = per_req_key or settings.openai_api_key
+        key = per_req_key or fields.get("api_key", "")
         if key:
             env["OPENAI_API_KEY"] = key
     elif provider == "claude":
-        key = per_req_key or settings.anthropic_api_key
+        key = per_req_key or fields.get("api_key", "")
         if key:
             env["ANTHROPIC_API_KEY"] = key
     elif provider == "deepseek":
-        key = per_req_key or settings.deepseek_api_key
+        key = per_req_key or fields.get("api_key", "")
         if key:
             env["DEEPSEEK_API_KEY"] = key
-        if settings.deepseek_base_url:
-            env["DEEPSEEK_BASE_URL"] = settings.deepseek_base_url
+        base = fields.get("base_url") or settings.deepseek_base_url
+        if base:
+            env["DEEPSEEK_BASE_URL"] = base
     elif provider == "ollama":
-        env["OLLAMA_BASE_URL"] = settings.ollama_base_url or "http://localhost:11434"
+        env["OLLAMA_BASE_URL"] = fields.get("base_url") or settings.ollama_base_url or "http://localhost:11434"
+    elif provider == "bedrock":
+        if fields.get("access_key_id"):
+            env["AWS_ACCESS_KEY_ID"] = fields["access_key_id"]
+        if fields.get("secret_access_key"):
+            env["AWS_SECRET_ACCESS_KEY"] = fields["secret_access_key"]
+        env["AWS_REGION"] = fields.get("region") or settings.aws_region or "us-east-1"
+        if fields.get("model_id"):
+            env["BEDROCK_MODEL_ID"] = fields["model_id"]
+    elif provider == "glm":
+        key = per_req_key or fields.get("api_key", "")
+        if key:
+            env["GLM_API_KEY"] = key
+        base = fields.get("base_url") or settings.glm_base_url
+        if base:
+            env["GLM_BASE_URL"] = base
     return env
 
 

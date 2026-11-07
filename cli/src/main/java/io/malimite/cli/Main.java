@@ -60,7 +60,7 @@ public class Main implements Callable<Integer> {
     private boolean llm;
 
     @Option(names = "--llm-provider",
-            description = "LLM provider: openai|claude|deepseek|ollama  (env: LLM_PROVIDER)",
+            description = "LLM provider: openai|claude|claude-oauth|deepseek|ollama|bedrock|glm  (env: LLM_PROVIDER)",
             defaultValue = "${env:LLM_PROVIDER:-none}")
     private String llmProvider;
 
@@ -269,6 +269,15 @@ public class Main implements Callable<Integer> {
         cfg.put("DEEPSEEK_API_KEY",    envOr("DEEPSEEK_API_KEY", ""));
         cfg.put("DEEPSEEK_BASE_URL",   envOr("DEEPSEEK_BASE_URL", "https://api.deepseek.com"));
         cfg.put("OLLAMA_BASE_URL",     envOr("OLLAMA_BASE_URL", "http://localhost:11434"));
+        // Set by web/app/scanner.py's llm_env() (from the Config tab or the server's own
+        // bootstrap env) before this CLI is spawned as a subprocess — see LlmProviderFactory's
+        // javadoc for the full credential-resolution chain.
+        cfg.put("AWS_ACCESS_KEY_ID",     envOr("AWS_ACCESS_KEY_ID", ""));
+        cfg.put("AWS_SECRET_ACCESS_KEY", envOr("AWS_SECRET_ACCESS_KEY", ""));
+        cfg.put("AWS_REGION",            envOr("AWS_REGION", "us-east-1"));
+        cfg.put("BEDROCK_MODEL_ID",      envOr("BEDROCK_MODEL_ID", ""));
+        cfg.put("GLM_API_KEY",           envOr("GLM_API_KEY", ""));
+        cfg.put("GLM_BASE_URL",          envOr("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"));
         return cfg;
     }
 

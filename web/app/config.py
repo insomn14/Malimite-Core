@@ -29,6 +29,20 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     ollama_base_url: str = "http://localhost:11434"
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_region: str = "us-east-1"
+    bedrock_model_id: str = ""
+    glm_api_key: str = ""
+    glm_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
+
+    # Config tab: where the "Your LLM Providers" page persists API keys/settings entered
+    # through the UI (POST /api/v1/config/providers), so a user never has to re-paste a
+    # key into the upload form again. Same mount/ownership story as anthropic_oauth_path
+    # (shared ~/.malimite-docker volume, 0600, atomic write) — see agent/llm_config.py.
+    # Values stored here take priority over the *_API_KEY env vars above, which remain a
+    # valid bootstrap/CI path (operator-managed, no UI interaction needed).
+    llm_config_path: str = str(Path.home() / ".malimite" / "llm-config.json")
 
     # Anthropic OAuth (Claude Pro/Max subscription usage, no ANTHROPIC_API_KEY needed).
     # Written by `java -jar cli/target/malimite-cli.jar claude-login` (run wherever a
