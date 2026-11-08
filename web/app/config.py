@@ -90,6 +90,21 @@ class Settings(BaseSettings):
     # finer-grained scheduling.
     scan_retention_days: int = 0
 
+    # Outbound Slack notification when a scan finishes (see web/app/notify.py). Empty webhook =
+    # notifications are off entirely (the default: a fresh install must not try to reach Slack).
+    # One-way only — a text summary, no file uploads — and deliberately not tied to how the scan
+    # was started, so a scan uploaded from the Web UI or picked up by the watcher alerts exactly
+    # like one that came from tools/malimite-ci.
+    slack_webhook_url: str = ""
+    # Only alert when the scan's unique-issue counts reach this severity. Uses the SAME semantics
+    # as --fail-on (HIGH = critical/high only, MEDIUM = adds medium, LOW = any finding at all,
+    # NONE = alert on nothing except failed scans) so operators only have to learn one vocabulary.
+    slack_notify_min_severity: str = "HIGH"
+    # Optional externally reachable base URL (e.g. https://malimite.internal) used to build the
+    # "view report" link in the Slack message. The server cannot reliably infer this behind a
+    # reverse proxy, so it is explicit; blank = the message omits the link rather than guessing.
+    public_base_url: str = ""
+
     model_config = {"env_file": str(_WEB / ".env"), "env_file_encoding": "utf-8"}
 
 

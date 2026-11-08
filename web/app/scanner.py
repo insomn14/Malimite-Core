@@ -15,6 +15,7 @@ from fastapi import HTTPException
 
 from .config import settings
 from .models import ScanDetail, ScanMeta
+from . import db, notify
 
 log = logging.getLogger(__name__)
 
@@ -535,6 +536,19 @@ def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
 
 # ── background runner ─────────────────────────────────────────────────────────
 
+async def _counts_for_notification(scan_id: str) -> dict:
+    """Unique-issue severity counts for the outbound alert, read the same way the Vulnerabilities
+    tab reads them. Returns {} when the scan database is missing or unreadable — the notifier
+    treats that as "nothing to report" rather than letting a broken database kill the alert path
+    (a scan that produced no database already reports state=error, which alerts regardless)."""
+    scan_json = _read_scan_json(scan_id) or {}
+    db_path = scan_json.get("dbPath")
+    executable = scan_json.get("bundleExecutable")
+    if not db_path or not executable or not Path(db_path).exists():
+        return {}
+    return await db.get_vulnerability_counts(db_path, executable)
+
+
 async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
     # Stays "queued" (the state create_scan() already wrote) while waiting for a concurrency
     # slot — a scan blocked behind max_concurrent_scans other running scans is NOT "running" yet,
@@ -569,3 +583,17 @@ async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
         meta["finished_at"] = _now()
         meta["exit_code"] = exit_code
         _write_meta(scan_id, meta)
+
+        # Outbound Slack alert. Fires for every scan regardless of how it was started, so a scan
+        # uploaded through the Web UI or picked up by the watcher alerts exactly like one from a
+        # CI pipeline. Deliberately scheduled as its own task: the concurrency slot is released
+        # here, so a slow or unreachable webhook can never keep a scan "running" from the queue's
+        # point of view. All failures are swallowed inside notify.
+        try:
+            counts = await _counts_for_notification(scan_id)
+        except Exception:
+            log.warning("could not compute severity counts for the scan-finished alert", exc_info=True)
+            counts = {}
+        notify.schedule_scan_finished(
+            scan_id, meta.get("filename") or scan_id, meta["state"], counts,
+            executable=(_read_scan_json(scan_id) or {}).get("bundleExecutable"))

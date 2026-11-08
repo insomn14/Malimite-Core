@@ -136,7 +136,11 @@ class RetentionLifespanIntegrationTests(unittest.TestCase):
         """A leaked, never-cancelled asyncio.Task across repeated TestClient context-manager
         enter/exits (one per test across the whole suite) would eventually surface as warnings
         or resource exhaustion — this exercises the finally: block's cancel + await explicitly."""
+        # api_key pinned to "": this test is about lifespan shutdown, not auth — without it the
+        # test 401s whenever the developer's web/.env configures an API key (a real flake here
+        # before, and the same class of bug as the two env-dependent failures CI hits).
         with patch.object(main.settings, "scan_retention_days", 0), \
+             patch.object(main.settings, "api_key", ""), \
              patch.object(main, "_RETENTION_INTERVAL_S", 999999):
             with TestClient(main.app) as client:
                 r = client.get("/api/v1/scans")
