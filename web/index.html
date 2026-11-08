@@ -1091,7 +1091,9 @@ tr:hover td{background:#fafaff}
 .cfgp-main{flex:1;min-width:0}
 .cfgp-name{font-weight:650;font-size:.92rem;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
 .cfgp-desc{font-size:.76rem;color:var(--muted);margin-top:.1rem}
-.cfgp-meta{font-size:.72rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.3rem .7rem;margin-top:.2rem}
+.cfgp-meta{font-size:.72rem;color:var(--muted);display:flex;flex-direction:column;gap:.25rem;margin-top:.2rem;min-width:0}
+.cfgp-kv{display:block;min-width:0;max-width:100%}
+.cfgp-kv code{display:inline-block;max-width:100%;vertical-align:bottom;word-break:break-all;overflow-wrap:anywhere;white-space:normal;background:rgba(0,0,0,.04);padding:.05rem .35rem;border-radius:5px;font-size:.7rem}
 .cfgp-actions{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.1rem}
 .cfgp-actions .btn{flex:1;min-width:0}
 .cfgp-badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;font-weight:700;padding:.1rem .5rem;border-radius:999px}
@@ -2810,12 +2812,12 @@ function cfgpSourceLabel(st) {
 
 function cfgpFieldsSummaryHtml(st) {
   const bits = [];
-  for (const [k, v] of Object.entries(st.masked || {})) bits.push(`${k.replace(/_/g,' ')}: <code>${esc(v)}</code>`);
+  for (const [k, v] of Object.entries(st.masked || {})) bits.push(`<span class="cfgp-kv">${k.replace(/_/g,' ')}: <code>${esc(v)}</code></span>`);
   for (const [k, v] of Object.entries(st.fields || {})) {
     if (k === 'updated_at') continue;
-    bits.push(`${k.replace(/_/g,' ')}: <code>${esc(String(v))}</code>`);
+    bits.push(`<span class="cfgp-kv">${k.replace(/_/g,' ')}: <code>${esc(String(v))}</code></span>`);
   }
-  return bits.length ? `<div class="cfgp-meta">${bits.join(' · ')}</div>` : '';
+  return bits.length ? `<div class="cfgp-meta">${bits.join('')}</div>` : '';
 }
 
 function renderConfigProviderForm(provider, meta, st) {
