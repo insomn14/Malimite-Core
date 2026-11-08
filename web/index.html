@@ -5517,7 +5517,10 @@ const AE_ICONS = {
   risk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M12 8v5M12 16h0" stroke-linecap="round"/></svg>',
   poc_steps: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>',
   remediation: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
-  refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg>',
+  // Clockwise refresh arrows. The old glyph was the counter-clockwise variant, so its arrows
+  // pointed against the CSS rotation (.ae-run-icon.spin rotates clockwise) and the whole
+  // "AI Enhancement in Progress" icon read as spinning backwards.
+  refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a8 8 0 0 1 14.3-4.9L20 8"/><path d="M20 3v5h-5"/><path d="M20 13a8 8 0 0 1-14.3 4.9L4 16"/><path d="M4 21v-5h5"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   checkFilled: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 7v6M12 16.5v.01"/></svg>',
@@ -5557,12 +5560,18 @@ const AE = {
 function aeRows() {
   return AE.groups.map(g => {
     const v = g.representative;
+    // AI Fix can legitimately re-assess severity (Risk Analysis is one of the fixable fields),
+    // and groupFindingsByRule prefers the HIGHEST-severity occurrence as representative. So an
+    // enhanced occurrence can stop being the representative, which made the "AI-enhanced" badge
+    // vanish even though the fix was stored. Judge the whole group instead of just its head.
+    const fixedCount = g.occurrences.filter(o => o.ai_fix_status === 'applied').length;
     return {
       id: v.id, rule_id: v.rule_id || '', title: v.title || '',
       sev: String(v.effective_severity || v.override_severity || v.severity || 'INFO').toUpperCase(),
       cvss: Number(v.effective_cvss_score ?? v.cvss_score ?? 0),
       category: v.category || '', status: (v.status || 'open').toLowerCase(),
-      fixed: v.ai_fix_status === 'applied', occ: g.occurrences.length,
+      fixedCount, fixed: fixedCount > 0, allFixed: fixedCount === g.occurrences.length,
+      occ: g.occurrences.length,
     };
   }).sort((a, b) => (SEV_RANK[b.sev] || 0) - (SEV_RANK[a.sev] || 0) || b.cvss - a.cvss);
 }
@@ -5646,14 +5655,23 @@ window.closeAutoEnhance = function() {
 };
 
 function aeStatusCell(r) {
-  if (r.fixed) return '<span class="badge badge-aifix">✨ AI-enhanced</span>';
+  if (r.fixed) {
+    // Partially-enhanced groups (some occurrences fixed, some not) say so explicitly — otherwise
+    // "AI-enhanced" on a group with 1 of 3 occurrences rewritten overstates what was done.
+    const partial = r.fixedCount < r.occ;
+    const label = partial ? `✨ AI-enhanced ${r.fixedCount}/${r.occ}` : '✨ AI-enhanced';
+    const title = partial
+      ? `Rewritten by AI Fix for ${r.fixedCount} of ${r.occ} occurrences`
+      : 'Rewritten by AI Fix';
+    return `<span class="badge badge-aifix" title="${title}">${label}</span>`;
+  }
   if (r.status !== 'open') return `<span class="badge badge-${statusKey(r.status)}">${statusLabel(r.status)}</span>`;
   return '<span style="color:var(--muted)">—</span>';
 }
 
 function aeSelectPane() {
   const rows = aeVisibleRows();
-  const selectable = rows.filter(r => !r.fixed);
+  const selectable = rows.filter(r => !r.allFixed);
   const allSel = selectable.length > 0 && selectable.every(r => AE.selected.has(r.id));
   const sevOpt = (v, l) => `<option value="${v}" ${AE.sev === v ? 'selected' : ''}>${l}</option>`;
   const body = rows.length ? rows.map(r => `
@@ -6078,7 +6096,7 @@ window.aeToggleRow = (ev, id) => {
 };
 window.aeSelectAll = on => {
   // Only findings not yet AI-enhanced; a re-run stays an explicit per-row choice.
-  for (const r of aeVisibleRows()) if (!r.fixed) on ? AE.selected.add(r.id) : AE.selected.delete(r.id);
+  for (const r of aeVisibleRows()) if (!r.allFixed) on ? AE.selected.add(r.id) : AE.selected.delete(r.id);
   aeRender();
 };
 window.aeClear = () => { AE.selected.clear(); aeRender(); };
