@@ -119,12 +119,14 @@ def help_message() -> list[dict]:
         {"type": "header", "text": {"type": "plain_text", "text": "Malimite Slack Bot"}},
         {"type": "section", "text": {"type": "mrkdwn",
             "text": "*How to use:*\n"
-                    "• Send (or DM) any `.ipa` or `.apk` file to start a scan.\n"
+                    "• Send (or DM) any `.ipa`, `.apk` or `.xapk` file to start a scan.\n"
                     "• I'll reply in this thread when the analysis is complete.\n"
                     "• HTML report and SARIF will be attached to the result message.\n\n"
                     "*Commands:*\n"
                     "• `malimite help` — this help\n"
-                    "• `malimite version` — bot + CLI version info"}},
+                    "• `malimite version` — which Malimite server this bot talks to"}},
         {"type": "context", "elements": [{"type": "mrkdwn",
-            "text": "_Scans run locally on the bot host. No data leaves your infrastructure unless LLM enrichment is enabled._"}]},
+            "text": "_Scans run on your Malimite web server (the same one as the web UI), so "
+                    "they also show up there for triage. The file is not sent anywhere else "
+                    "unless LLM enrichment is turned on for this bot._"}]},
     ]

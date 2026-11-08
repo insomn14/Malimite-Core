@@ -72,3 +72,24 @@ jobs:
       - name: Unit tests
         # zero third-party deps by design — no install step needed
         run: python -m unittest discover tools/malimite-ci -p "test_*.py"
+
+  slack-bot:
+    name: Slack bot API client tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install httpx
+        # test_api_client.py mocks the HTTP layer, so only httpx is needed — not slack-bolt,
+        # which slack_bot.py imports but the tests never touch.
+        run: pip install "httpx>=0.27.0"
+
+      - name: Unit tests
+        run: python -m unittest discover bot/python -p "test_*.py"
+

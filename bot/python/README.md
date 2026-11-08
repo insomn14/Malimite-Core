@@ -1,10 +1,21 @@
-# Malimite — Slack Bot (standalone)
+# Malimite — Slack Bot
 
-Run Malimite from Slack with **no web service required**.
+Run Malimite from Slack. The bot is a thin client: it sends the uploaded file to a running
+**malimite-web** server and posts the results back into the Slack thread.
 
-- Listens via **Socket Mode** — bot connects outbound to Slack over WebSocket, so you don't need a public HTTPS endpoint, ngrok, or a reverse proxy.
-- Uploads an `.ipa` in DM or a channel where the bot is invited → bot replies in a thread with a severity-sorted summary, top findings, plus the full HTML report and SARIF as attachments.
-- No FastAPI, no Redis, no MinIO. One Python process + the existing Malimite CLI JAR.
+- Listens via **Socket Mode** — the bot connects outbound to Slack over WebSocket, so you don't
+  need a public HTTPS endpoint, ngrok, or a reverse proxy.
+- Drop an `.ipa` / `.apk` / `.xapk` in a DM or a channel where the bot is invited → it asks the
+  server to scan the file and replies in a thread with a severity summary, the top findings, and
+  the full HTML report + SARIF as attachments.
+- **The bot does not scan locally.** It calls the same `POST /api/v1/scans` the web UI uses, so
+  every scan it starts also shows up in the web UI for triage / AI Fix / Auto Enhance afterwards,
+  and the bot host needs no Ghidra/JADX install — just Python.
+
+> Looking for one-way notifications instead (a text alert when a scan finds something serious,
+> with no interaction at all)? That is built into the server itself — set `SLACK_WEBHOOK_URL` in
+> `web/.env` and see [`web/app/notify.py`](../../web/app/notify.py). It covers **every** scan,
+> including uploads from the web UI and the watcher, not just Slack ones.
 
 ---
 
@@ -15,12 +26,13 @@ Run Malimite from Slack with **no web service required**.
 
 2. **Enable Socket Mode**
    *Sidebar → Socket Mode* → toggle **Enable Socket Mode** ON.
-   Slack will prompt you to create an **app-level token**. Give it a name (e.g. `socket-mode`) and the scope `connections:write`. Save the `xapp-…` token — this becomes `SLACK_APP_TOKEN`.
+   Slack will prompt you to create an **app-level token**. Give it a name (e.g. `socket-mode`) and
+   the scope `connections:write`. Save the `xapp-…` token — this becomes `SLACK_APP_TOKEN`.
 
 3. **Add OAuth Bot scopes**
    *Sidebar → OAuth & Permissions → Scopes → Bot Token Scopes*. Add these:
    - `chat:write` — post messages
-   - `files:read` — download uploaded IPAs
+   - `files:read` — download the uploaded app package
    - `files:write` — upload report.html / findings.sarif back to Slack
    - `channels:history` *(optional, for channel uploads)*
    - `im:history` *(for DM uploads)*
@@ -40,70 +52,72 @@ Run Malimite from Slack with **no web service required**.
 
 ---
 
-## 2. Configure the bot host
+## 2. Prerequisites
 
-```bash
-cd /home/vagrant/Tools/RE/Malimite-Core/bot/python
-cp .env.example .env
-$EDITOR .env       # paste xapp- and xoxb- tokens, set Ghidra path
-```
+You need a reachable **malimite-web** server. See
+[`deploy/EC2_DEPLOYMENT.md`](../../deploy/EC2_DEPLOYMENT.md) for standing one up (or run
+`python -m uvicorn app.main:app` locally from `web/`).
 
-Required:
-- `SLACK_APP_TOKEN` = the `xapp-…` from step 2
-- `SLACK_BOT_TOKEN` = the `xoxb-…` from step 5
-- `GHIDRA_HOME` = where Ghidra is installed (default `/usr/share/ghidra`)
-- `MALIMITE_CLI_JAR` = path to the built fat JAR (default `../../cli/target/malimite-cli.jar`)
-
-Optional LLM enrichment:
-- `LLM_PROVIDER=deepseek` + `DEEPSEEK_API_KEY=sk-…` (models: `deepseek-flash` default, `deepseek-v4-pro`, `deepseek-chat`, `deepseek-reasoner`; the pre-V4.1 id `deepseek-v4-flash` is still accepted)
-- `LLM_PROVIDER=claude` + `ANTHROPIC_API_KEY=sk-ant-…`, or
-- `LLM_PROVIDER=claude-oauth` — Claude Pro/Max subscription, **no API key**. Run `java -jar ../../cli/target/malimite-cli.jar claude-login` once on the bot host first (see the root [`README.md`](../../README.md#claude-promax-oauth-no-separately-billed-api-key)); the bot just needs `LLM_PROVIDER=claude-oauth` in `.env`, or
-- `LLM_PROVIDER=openai` + `OPENAI_API_KEY=sk-…`, or
-- `LLM_PROVIDER=ollama` (local — set `OLLAMA_BASE_URL` if not localhost)
+The bot host only needs Python 3.9+ and outbound HTTPS to Slack and to that server.
 
 ---
 
-## 3. Build the CLI JAR (if you haven't yet)
-
-```bash
-cd /home/vagrant/Tools/RE/Malimite-Core
-mvn package -DskipTests -pl core,cli
-# Produces cli/target/malimite-cli.jar
-```
-
----
-
-## 4. Start the bot
+## 3. Configure the bot
 
 ```bash
 cd bot/python
+cp .env.example .env
+$EDITOR .env
+```
+
+Required:
+- `SLACK_APP_TOKEN` — the `xapp-…` from step 2
+- `SLACK_BOT_TOKEN` — the `xoxb-…` from step 5
+- `MALIMITE_URL` — base URL of the server, e.g. `http://malimite.internal:7070`
+- `MALIMITE_API_KEY` — the server's `API_KEY`, if it has one set (otherwise requests get 401)
+
+Recommended in a shared workspace:
+- `ALLOWED_SLACK_CHANNELS` — comma-separated channel IDs allowed to start scans. Without it, any
+  channel the bot is invited to can start scans (and spend the server's capacity / LLM quota).
+
+Optional:
+- `LLM_ENABLED=true` — ask the server for LLM enrichment (slower, costs its LLM quota). The
+  provider and key are configured on the **server** (`web/.env`), not here.
+- `MAX_IPA_MB`, `TOP_FINDINGS`, `SCAN_TIMEOUT_S`, `POLL_INTERVAL_S` — tuning knobs, see
+  [`.env.example`](.env.example).
+
+Install and start:
+
+```bash
+cd bot/python
+pip install -r requirements.txt
 ./run.sh
 ```
 
 You should see:
 ```
-INFO malimite.slack: Malimite Slack bot starting (Socket Mode) — CLI=…/malimite-cli.jar
+INFO malimite.slack: Malimite Slack bot starting (Socket Mode) — server=http://malimite.internal:7070
 INFO slack_bolt.AsyncApp: A new session has been established
 ```
 
 ---
 
-## 5. Use it
+## 4. Use it
 
 In any DM with the bot, or in a channel where you've invited it:
 
 | What you do | What the bot does |
 |---|---|
-| Drop an `.ipa` file | :hourglass_flowing_sand: queues + scans + replies in thread |
+| Drop an `.ipa` / `.apk` / `.xapk` | :hourglass_flowing_sand: queues on the server, then replies in the thread |
 | `malimite help` | shows usage |
-| `malimite version` | shows CLI/Ghidra/LLM config |
+| `malimite version` | shows which server this bot talks to, and its settings |
 | `@malimite` mention | shows help |
 
 The bot replies in a **thread** off the original upload, so the channel stays clean.
 
 ---
 
-## 6. As a systemd service (optional)
+## 5. As a systemd service (optional)
 
 ```ini
 # /etc/systemd/system/malimite-slack.service
@@ -132,28 +146,31 @@ sudo journalctl -fu malimite-slack
 
 ---
 
-## Architecture diagram
+## Architecture
 
 ```
 ┌──────────┐   WebSocket (Socket Mode)    ┌────────────────────┐
 │  Slack   │ ◀────────────────────────────│ slack_bot.py       │
 │  Cloud   │                              │  (Python + Bolt)   │
 └──────────┘                              └──┬─────────────────┘
-                                             │ subprocess
+                                             │ HTTP: POST /api/v1/scans,
+                                             │       GET  /scans/{id},
+                                             │       GET  /vulnerabilities, /report, /sarif
                                              ▼
-                                          ┌────────────────────┐
-                                          │ malimite-cli.jar   │
-                                          │  → analyzeHeadless │
-                                          │  → MSTG scanner    │
-                                          │  → optional LLM    │
-                                          │  → report.html,    │
-                                          │    findings.sarif  │
-                                          └────────────────────┘
+                                          ┌────────────────────────────┐
+                                          │ malimite-web (FastAPI)     │
+                                          │  → malimite-cli.jar        │
+                                          │  → Ghidra / JADX           │
+                                          │  → report.html, SARIF      │
+                                          │  → same scan shown in the  │
+                                          │    web UI for triage       │
+                                          └────────────────────────────┘
 ```
 
-- Bot host needs outbound HTTPS to Slack (port 443) and to LLM provider if enabled.
-- No inbound traffic. Bot is invisible to the internet.
-- All scan artifacts stay on the bot host under `SCAN_ROOT`.
+- Bot host needs outbound HTTPS to Slack (443) and to the Malimite server only. No inbound traffic.
+- Scan artifacts live on the **server** (under its `SCAN_DIR`), not on the bot host.
+- `api_client.py` is the whole server interface — it has unit tests that mock HTTP, so no server or
+  Slack workspace is required to run them: `python -m unittest discover bot/python -p "test_*.py"`.
 
 ---
 
@@ -161,9 +178,12 @@ sudo journalctl -fu malimite-slack
 
 | Symptom | Cause |
 |---|---|
+| `ERROR: MALIMITE_URL must be set` on start | `.env` missing `MALIMITE_URL` |
+| Bot replies "scan failed" with HTTP 401 | `MALIMITE_API_KEY` missing/wrong for a server that has `API_KEY` set |
 | `"socket_mode_request_failed"` on startup | `SLACK_APP_TOKEN` wrong scope — must have `connections:write` |
-| Bot sees file but never starts a scan | `file_shared` event not subscribed, or bot not in the channel |
+| Bot sees the file but never starts a scan | `file_shared` event not subscribed, or bot not in the channel |
+| ":no_entry_sign: This channel isn't allowed…" | `ALLOWED_SLACK_CHANNELS` is set and this channel isn't in it |
 | `not_in_channel` when uploading reports | Bot needs to be invited to the channel (`/invite @malimite`) |
 | `file_upload_failed` | Missing `files:write` bot scope |
-| Scan hangs > 10 min | Check `analysis.log` under `SCAN_ROOT/<scan_id>/` — usually Ghidra issue |
-| LLM ignored | `LLM_PROVIDER` is `none`, or API key env var missing |
+| Scan appears stuck | The scan runs on the server — check its log at `SCAN_DIR/<scan_id>/analysis.log` |
+| LLM ignored | `LLM_ENABLED` is false here, or the **server** has no provider/API key configured |
