@@ -1745,6 +1745,26 @@ function configuredProviderValues(configData) {
   return set;
 }
 
+/** <option> list for a "scan default or pick one" provider <select> (AI Fix panel, Auto
+    Enhance modal, AI Assistant chat bar) — built from whatever the Config tab reports as
+    connected (_configCache), same source of truth the upload form's provider dropdown uses.
+    Connected providers only: unlike the upload form (which still lists unconfigured ones as
+    disabled, to point the user at Config), these smaller pickers just omit them outright —
+    there's no first-time setup flow happening here, only a choice among already-usable providers.
+    `selected` pre-selects a value when it's still in the connected set; otherwise the dropdown
+    falls back to "Scan default" so a provider disconnected after a prior selection never looks
+    silently picked. */
+function providerDropdownOptionsHtml(configData, selected, defaultLabel) {
+  const configuredSet = configuredProviderValues(configData);
+  const known = selected && LLM_PROVIDERS.some(p => p.value === selected) && configuredSet.has(selected);
+  const opts = [`<option value=""${known ? '' : ' selected'}>${esc(defaultLabel || 'Scan default')}</option>`];
+  for (const p of LLM_PROVIDERS) {
+    if (!configuredSet.has(p.value)) continue;
+    opts.push(`<option value="${escAttr(p.value)}"${selected === p.value ? ' selected' : ''}>${esc(p.label)}</option>`);
+  }
+  return opts.join('');
+}
+
 function renderScanOptionsHtml(file, prefs, configData) {
   const kind = packageKindOf(file.name);
   const xapk = file.name.toLowerCase().endsWith('.xapk');
@@ -3098,6 +3118,10 @@ route('scan', async function(id, tab='summary') {
   let detail;
   try { detail = await api('/scans/'+id); }
   catch(e) { render(`<div class="alert alert-error">${esc(e.message)}</div>`); return; }
+  // AI Fix / Auto Enhance's provider dropdowns only offer providers the Config tab reports as
+  // connected — refresh _configCache here so a scan opened via a direct link (no Home visit
+  // first) still has it before the Vulnerabilities tab renders.
+  try { await fetchConfigProviders(); } catch (_) { /* dropdowns fall back to "no providers" below */ }
 
   const tabs = tabsForDetail(detail);
   if (tab === 'offensive' && !tabs.includes('offensive')) tab = 'summary';
@@ -5390,11 +5414,7 @@ function renderAiFixPanel(v) {
       <form class="triage-form" onsubmit="return false">
         <label>LLM Provider
           <select id="aifix-provider-${v.id}" onchange="onAiFixProviderChange(${v.id})">
-            <option value="">Scan default</option>
-            <option value="claude">claude</option><option value="claude-oauth">claude (OAuth)</option>
-            <option value="openai">openai</option><option value="deepseek">deepseek</option>
-            <option value="ollama">ollama</option>
-            <option value="bedrock">bedrock</option><option value="glm">glm</option>
+            ${providerDropdownOptionsHtml(_configCache)}
           </select>
         </label>
         <label>Model override (optional)
@@ -5549,6 +5569,21 @@ const AE_PROVIDERS = [
   {value: 'glm',          label: 'Zai GLM'},
 ];
 
+/** Auto Enhance modal's provider <select> options — like providerDropdownOptionsHtml, but
+    keeps AE_PROVIDERS' own labels ("Claude (API key)" vs LLM_PROVIDERS' "Claude") and the
+    scan-default option's dynamic label (shows the scan's own provider/model). Only providers
+    the Config tab reports as connected are offered; AE.provider is kept selected only while
+    it's still in that connected set, so a provider disconnected mid-session falls back to
+    "Scan default" instead of silently submitting a now-unusable choice. */
+function aeProviderOptionsHtml(scanDefaultLabel) {
+  const configuredSet = configuredProviderValues(_configCache);
+  const stillValid = AE.provider && configuredSet.has(AE.provider);
+  return AE_PROVIDERS
+    .filter(p => !p.value || configuredSet.has(p.value))
+    .map(p => `<option value="${p.value}" ${p.value ? (stillValid && AE.provider === p.value ? 'selected' : '') : (stillValid ? '' : 'selected')}>${p.value ? p.label : esc(scanDefaultLabel)}</option>`)
+    .join('');
+}
+
 const AE = {
   scanId: null, detail: null, groups: [],
   selected: new Set(), fields: new Set(AE_FIELDS.map(f => f.key)),
@@ -5625,6 +5660,10 @@ window.openAutoEnhance = function(tab) {
     AE.model = cat ? (cat.some(m => m.value === AE.detail.llm_model) ? AE.detail.llm_model : cat[0].value) : '';
     AE.customModel = cat ? '' : (AE.detail.llm_model || '');
   }
+  // Best-effort refresh: a provider connected in the Config tab after this scan page first
+  // loaded (no reload in between) should show up in the dropdown next time the modal opens,
+  // not just after a hard refresh. Silently keeps the existing _configCache on failure.
+  fetchConfigProviders().then(() => { if (AE.open) aeRender(); }).catch(() => {});
   let ov = document.getElementById('ae-overlay');
   if (!ov) {
     ov = document.createElement('div');
@@ -5998,7 +6037,7 @@ function aeRender() {
         <div class="ae-llm">
           <label>LLM Provider
             <select onchange="aeSetProvider(this.value)" ${aeRunning() ? 'disabled' : ''}>
-              ${AE_PROVIDERS.map(p => `<option value="${p.value}" ${AE.provider === p.value ? 'selected' : ''}>${p.value ? p.label : esc(scanDefault)}</option>`).join('')}
+              ${aeProviderOptionsHtml(scanDefault)}
             </select>
           </label>
           <label>Model ${modelCtl}</label>
