@@ -4165,15 +4165,25 @@ function fnIsAndroid(detail) {
 // Android: ClassName is a dotted package ("com.foo.Bar"); inner classes ("Bar$Inner") become
 // leaves nested under their outer class. iOS/Mach-O class names carry no such path convention,
 // so the tree falls back to a flat sorted list rather than fabricating a fake hierarchy.
+//
+// `children` is Object.create(null) (no prototype), not a plain {} — a package/class segment
+// literally named "constructor" (seen in real, likely-obfuscated APKs) would otherwise resolve
+// node.children['constructor'] to the inherited Object.prototype.constructor function instead
+// of undefined. That function is truthy, so `||` never builds a real tree node for it, and the
+// very next segment access (node.children[nextSegment] on that function, which has no .children
+// of its own) throws "Cannot read properties of undefined (reading '<nextSegment>')" — this
+// exact bug, reported against an app with a "constructor" package segment followed by a class
+// named AbstractConstruct. "__proto__", "hasOwnProperty", etc. are equally real class/package
+// names in the wild and would hit the same failure mode.
 function fnBuildTree(classNames, detail) {
   if (!fnIsAndroid(detail)) return {flat: true, items: classNames.slice().sort((a,b)=>a.localeCompare(b))};
-  const root = {children: {}};
+  const root = {children: Object.create(null)};
   for (const full of classNames) {
     const dotParts = full.split('.');
     const parts = dotParts.flatMap((seg,i) => i === dotParts.length-1 ? seg.split('$') : [seg]);
     let node = root;
     for (let i = 0; i < parts.length; i++) {
-      node = node.children[parts[i]] || (node.children[parts[i]] = {children: {}});
+      node = node.children[parts[i]] || (node.children[parts[i]] = {children: Object.create(null)});
       if (i === parts.length-1) node.className = full;
     }
   }
