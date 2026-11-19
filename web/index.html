@@ -1525,6 +1525,13 @@ const routes = {};
 function route(pattern, fn) { routes[pattern] = fn; }
 
 function router() {
+  // A "Login with Claude" poll (see claudeOauthPollStatus) must not keep running once the
+  // operator navigates away from the Config tab — otherwise it'd silently keep firing network
+  // requests in the background on every other page, and reconstruct a status note for a card
+  // that no longer exists when it finally resolves. _claudeOauthLogin stays set (still a valid
+  // in-flight login on the server) in case they navigate back to Config before it resolves;
+  // only the timer itself is torn down here.
+  if (typeof _claudeOauthStopPolling === 'function') _claudeOauthStopPolling();
   const hash = location.hash.replace(/^#\/?/,'') || '';
   document.querySelectorAll('.nav-link').forEach(a => {
     const r = a.dataset.route;
@@ -2833,17 +2840,52 @@ function renderConfigProviderForm(provider, meta, st) {
     </div>`;
 }
 
-// Holds the login_id of the browser login currently awaiting a pasted code — set by
-// startClaudeOauthLogin(), consumed (and cleared) by submitClaudeOauthCode(). Module-level
-// rather than per-render state because the Config page's own re-renders (e.g. a
-// fetchConfigProviders() refresh while the paste form is open) must not lose it.
-let _claudeOauthLoginId = null;
-let _claudeOauthPasteOpen = false;
+// State machine for the in-progress "Login with Claude" attempt — module-level (not
+// per-render) because Config page re-renders (e.g. fetchConfigProviders() refreshing while a
+// login is in flight) must not lose it, and the polling interval below outlives any single
+// render. _claudeOauthLogin is null when idle; otherwise:
+//   {loginId, mode: 'local'}  — local loopback listener (see anthropic_oauth.py's start_login)
+//                               is waiting for the browser redirect; pollTimer is running and
+//                               GET /login-status is the only thing that can resolve this.
+//   {loginId, mode: 'remote'} — no local listener (port busy, or explicitly requested); the
+//                               paste-code form is shown and submitClaudeOauthCode() resolves it.
+//
+// Also mirrored into localStorage (see _claudeOauthSaveLogin/_claudeOauthLoadLogin) — purely
+// in-memory state didn't survive a page reload mid-login, which stops the poll below without
+// the server knowing anything changed: the local-listener path's loopback port (53692) then
+// sits bound and unusable until its own TTL/background sweep clears it (see
+// anthropic_oauth.py's start_prune_loop/_LOCAL_LOGIN_TTL_SECONDS) — a real incident this exact
+// shape caused during testing. route('config', ...) below reads the stored value back and
+// resumes polling the SAME login_id, so a reload mid-login just picks up where it left off
+// instead of abandoning a listener the operator is probably still mid-authorize on.
+let _claudeOauthLogin = null;
+let _claudeOauthPollTimer = null;
+const _CLAUDE_OAUTH_LOGIN_STORAGE_KEY = 'malimite.claudeOauthLogin';
+
+function _claudeOauthSaveLogin(login) {
+  try { localStorage.setItem(_CLAUDE_OAUTH_LOGIN_STORAGE_KEY, JSON.stringify(login)); }
+  catch (_) { /* storage unavailable (private browsing, quota) — polling still works for this tab/session */ }
+}
+
+function _claudeOauthLoadLogin() {
+  try {
+    const raw = localStorage.getItem(_CLAUDE_OAUTH_LOGIN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed.loginId === 'string' && (parsed.mode === 'local' || parsed.mode === 'remote'))
+      ? parsed : null;
+  } catch (_) { return null; }
+}
+
+function _claudeOauthClearLogin() {
+  try { localStorage.removeItem(_CLAUDE_OAUTH_LOGIN_STORAGE_KEY); } catch (_) {}
+}
 
 function renderConfigOauthCard(data) {
   const st = configProviderStatus(data, 'claude-oauth');
   const meta = CONFIG_PROVIDER_META['claude-oauth'];
   const isDefault = data.default_provider === 'claude-oauth';
+  const login = _claudeOauthLogin;
   return `
     <div class="cfgp-card${st.configured ? ' is-configured' : ''}" id="cfgp-card-claude-oauth">
       <div class="cfgp-card-top">
@@ -2855,18 +2897,34 @@ function renderConfigOauthCard(data) {
       </div>
       <div class="cfgp-meta" id="oauth-status-text-cfg">Checking status…</div>
       <div class="cfgp-actions">
-        <button type="button" class="btn ${st.configured ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="startClaudeOauthLogin()">
+        <button type="button" class="btn ${st.configured ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="startClaudeOauthLogin()" ${login ? 'disabled' : ''}>
           ${ico('plug')} ${st.configured ? 'Re-login with Claude' : 'Login with Claude'}
         </button>
         ${!isDefault ? `<button type="button" class="btn btn-outline btn-sm" onclick="setConfigDefault('claude-oauth')">Set as default</button>` : ''}
       </div>
-      ${_claudeOauthPasteOpen ? `
+      ${login?.mode === 'local' ? `
+      <div class="cfgp-form" id="oauth-paste-form">
+        <p style="font-size:.76rem;margin:0;color:var(--muted);display:flex;align-items:center;gap:.4rem">
+          ${ico('loader', 'ico-spin')} Waiting for you to finish signing in in the new tab — this page
+          picks it up automatically, nothing to paste here.
+        </p>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="cancelClaudeOauthLogin()">Cancel</button>
+        </div>
+        <div id="oauth-paste-note" class="cfgp-note"></div>
+      </div>` : ''}
+      ${login?.mode === 'remote' ? `
       <div class="cfgp-form" id="oauth-paste-form">
         <p style="font-size:.76rem;margin:0;color:var(--muted)">
           A new tab opened to Claude's sign-in page. After you authorize, it shows an
           <strong>authentication code</strong> — paste it below (the whole thing, including
           anything after a <code>#</code>).
         </p>
+        <div class="cfgp-note warn" style="margin:0">
+          Claude may ask you to verify a 6-digit code sent to your email first — that's an extra
+          step Anthropic adds for this login path, enter it <strong>on Claude's page</strong>
+          (not here). The authentication code to paste below shows up right after.
+        </div>
         <label>Authentication code
           <input id="oauth-paste-code" class="ctl" type="text" autocomplete="off" spellcheck="false"
                  placeholder="paste the code Claude showed you"/>
@@ -2885,10 +2943,16 @@ function renderConfigOauthCard(data) {
     </div>`;
 }
 
+function _claudeOauthStopPolling() {
+  if (_claudeOauthPollTimer) { clearInterval(_claudeOauthPollTimer); _claudeOauthPollTimer = null; }
+}
+
 /** "Login with Claude": asks the server for a fresh authorize URL (PKCE handled entirely
-    server-side — no secret ever reaches this script), opens it in a new tab, and reveals the
-    "paste the code back" form. Mirrors clicking `claude /login` from a terminal that has no
-    browser of its own: a separate browser does the signing-in, and a short code comes back. */
+    server-side — no secret ever reaches this script), opens it in a new tab, and either starts
+    polling (server opened a local loopback listener — the default, same approach `claude
+    /login` itself uses: see anthropic_oauth.py's module docstring for why this path skips an
+    extra Anthropic identity-verification step the copy-paste fallback below does not) or shows
+    the "paste the code back" form (server couldn't bind the local listener). */
 window.startClaudeOauthLogin = async function() {
   // Opened synchronously, in the SAME tick as the click, same pattern the report-download
   // handler uses below (search window.open('', '_blank')) — most popup blockers only allow a
@@ -2898,28 +2962,74 @@ window.startClaudeOauthLogin = async function() {
   const popup = window.open('', '_blank', 'noopener');
   try {
     const r = await api('/auth/claude-oauth/start', {method: 'POST'});
-    _claudeOauthLoginId = r.login_id;
-    _claudeOauthPasteOpen = true;
+    _claudeOauthLogin = {loginId: r.login_id, mode: r.mode};
+    _claudeOauthSaveLogin(_claudeOauthLogin);
     if (popup) popup.location = r.authorize_url;
     if (_configCache) render(renderConfigPage(_configCache));
     if (!popup) {
       const n = document.getElementById('oauth-paste-note');
       if (n) {
         n.className = 'cfgp-note warn';
-        n.innerHTML = `Your browser blocked the popup — <a href="${escAttr(r.authorize_url)}" target="_blank" rel="noopener">open Claude's sign-in page manually</a>, then paste the code it shows you below.`;
+        n.innerHTML = `Your browser blocked the popup — <a href="${escAttr(r.authorize_url)}" target="_blank" rel="noopener">open Claude's sign-in page manually</a>${r.mode === 'remote' ? ', then paste the code it shows you below.' : '.'}`;
       }
     }
-    setTimeout(() => document.getElementById('oauth-paste-code')?.focus(), 50);
+    if (r.mode === 'local') {
+      _claudeOauthStopPolling();
+      _claudeOauthPollTimer = setInterval(claudeOauthPollStatus, 1500);
+    } else {
+      setTimeout(() => document.getElementById('oauth-paste-code')?.focus(), 50);
+    }
   } catch (e) {
     if (popup) popup.close();
     alert('Could not start Claude login: ' + (e.message || e));
   }
 };
 
+/** Polled every 1.5s (see startClaudeOauthLogin) while the local-listener path waits for the
+    browser's redirect. The server does the actual token exchange the moment it sees a code —
+    this just asks "are we done yet" and reacts to the answer. */
+async function claudeOauthPollStatus() {
+  const login = _claudeOauthLogin;
+  if (!login || login.mode !== 'local') { _claudeOauthStopPolling(); return; }
+  let r;
+  try {
+    r = await api('/auth/claude-oauth/login-status?' + new URLSearchParams({login_id: login.loginId}));
+  } catch (e) {
+    return; // transient network hiccup — next tick retries; nothing to show the user yet
+  }
+  if (r.state === 'waiting') return;
+  _claudeOauthStopPolling();
+  _claudeOauthLogin = null;
+  _claudeOauthClearLogin();
+  if (r.state === 'not_found') {
+    if (_configCache) render(renderConfigPage(_configCache));
+    return;
+  }
+  // r.state === 'done'
+  if (r.ok) {
+    await fetchConfigProviders();
+    render(renderConfigPage(_configCache));
+    refreshOauthStatusCfg();
+  } else {
+    if (_configCache) render(renderConfigPage(_configCache));
+    const n = document.getElementById('oauth-import-err');
+    if (n) n.innerHTML = `<div class="alert alert-error" style="margin-top:.4rem">${esc(r.error || 'Sign-in failed.')}</div>`;
+  }
+}
+
 window.cancelClaudeOauthLogin = function() {
-  _claudeOauthLoginId = null;
-  _claudeOauthPasteOpen = false;
+  const login = _claudeOauthLogin;
+  _claudeOauthStopPolling();
+  _claudeOauthLogin = null;
+  _claudeOauthClearLogin();
   if (_configCache) render(renderConfigPage(_configCache));
+  // Best-effort: release the server's local-listener port right away instead of waiting out
+  // its TTL/background sweep (see anthropic_oauth.cancel_login()). Fire-and-forget — the sweep
+  // is a correct backstop either way, so a failed DELETE here (network hiccup, server already
+  // restarted) isn't worth surfacing to the user over what's already a cancel action.
+  if (login?.loginId) {
+    api('/auth/claude-oauth/login/' + encodeURIComponent(login.loginId), {method: 'DELETE'}).catch(() => {});
+  }
 };
 
 window.submitClaudeOauthCode = async function() {
@@ -2931,7 +3041,7 @@ window.submitClaudeOauthCode = async function() {
     if (note) { note.textContent = 'Paste the authentication code first.'; note.className = 'cfgp-note err'; }
     return;
   }
-  if (!_claudeOauthLoginId) {
+  if (!_claudeOauthLogin) {
     if (note) { note.textContent = 'This login attempt expired — click Login with Claude again.'; note.className = 'cfgp-note err'; }
     return;
   }
@@ -2939,10 +3049,10 @@ window.submitClaudeOauthCode = async function() {
   try {
     await api('/auth/claude-oauth/exchange', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({login_id: _claudeOauthLoginId, code}),
+      body: JSON.stringify({login_id: _claudeOauthLogin.loginId, code}),
     });
-    _claudeOauthLoginId = null;
-    _claudeOauthPasteOpen = false;
+    _claudeOauthLogin = null;
+    _claudeOauthClearLogin();
     await fetchConfigProviders();
     render(renderConfigPage(_configCache));
     refreshOauthStatusCfg();
@@ -3098,8 +3208,22 @@ route('config', async function() {
   try { data = await fetchConfigProviders(); }
   catch (e) { render(`<div class="page-wrap"><div class="alert alert-error">${esc(e.message)}</div></div>`); return; }
   _configOpenForm = null;
+  // Resume an in-flight "Login with Claude" attempt — either the in-memory state survived
+  // (navigated away and back without a reload: router() tore down just the poll TIMER, not
+  // this) or it didn't (a hard reload wiped _claudeOauthLogin entirely) but localStorage still
+  // has the login_id from before the reload. Either way, one immediate poll picks up a login
+  // that already finished while this tab was gone/reloading, instead of showing a stale
+  // "waiting" state for something the server resolved minutes ago.
+  if (!_claudeOauthLogin) {
+    const saved = _claudeOauthLoadLogin();
+    if (saved) _claudeOauthLogin = saved;
+  }
   render(renderConfigPage(data));
   refreshOauthStatusCfg();
+  if (_claudeOauthLogin?.mode === 'local') {
+    claudeOauthPollStatus();
+    _claudeOauthPollTimer = setInterval(claudeOauthPollStatus, 1500);
+  }
 });
 
 

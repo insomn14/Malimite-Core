@@ -1,19 +1,31 @@
 """Runs the Claude Code-style OAuth login (Config tab) and refreshes the resulting credential.
 
-Counterpart to AnthropicOAuthCredentials.java / AnthropicOAuthLogin.java, but using the
-*remote* variant of their flow instead of the *local-callback-server* one: this process has no
-browser of its own and the browser doing the signing-in is the operator's, on a different
-machine — a loopback redirect_uri (http://localhost:53692/callback, what the Java CLI and
-Claude Code itself use when a browser runs on the SAME machine) would redirect the operator's
-browser to a port on THEIR OWN machine that nothing is listening on. Anthropic has a second,
-equally first-party redirect_uri for exactly this situation — the one Claude Code itself
-switches to for remote/headless sessions (SSH, containers, CI) — that instead shows the user a
-page with the authorization code to copy, no listener required on their end:
-https://platform.claude.com/oauth/code/callback (confirmed via Claude Code's own remote-session
-behavior and third-party reimplementations that special-cased it, e.g.
-github.com/cheaper-inference/OmniRoute commit bb89379 "Use Anthropic's registered redirect_uri
-... instead of dynamic server URL"). That page hands back the code as `<code>#<state>` in one
-string — see _split_code_and_state().
+Counterpart to AnthropicOAuthCredentials.java / AnthropicOAuthLogin.java. Unlike that file's
+single flow, this module tries TWO redirect_uri strategies, in order:
+
+1. LOCAL_REDIRECT_URI (http://127.0.0.1:53692/callback) — same loopback callback approach the
+   Java CLI and Claude Code itself use, and the default here. This only works when the browser
+   doing the signing-in and this server process share localhost (true for the normal "open
+   http://127.0.0.1:7070 in your own browser" deployment — see start_login()'s `local` param).
+   Anthropic trusts this redirect_uri as proof the request is coming from a real, present
+   browser on the signing-in device, and skips any extra verification step.
+
+2. REMOTE_REDIRECT_URI (https://platform.claude.com/oauth/code/callback) — Anthropic's own
+   "show the code, let the user copy it" page, for when no local listener is reachable (the
+   operator's browser is on a DIFFERENT machine than this server — a remote/SSH deployment).
+   CONFIRMED BY DIRECT TESTING to trigger an *extra* identity-verification step (a 6-digit
+   email code) that the localhost redirect does not: Anthropic appears to treat a non-loopback
+   redirect_uri as less trustworthy and adds friction accordingly. Expect this step when using
+   the remote path; it is normal and not a sign anything here is broken — enter the 6-digit
+   code ON ANTHROPIC'S OWN PAGE, and the authorization-code page (the one with a code to paste
+   back here) follows once that verification succeeds. Confirmed working in both code paths via
+   earendil-works/pi's "copy_code" login method (same two redirect_uris, same client_id).
+
+Either way the code comes back as `<code>#<state>` in one string if the user ends up pasting
+it manually (REMOTE_REDIRECT_URI path, or a failed/raced LOCAL_REDIRECT_URI listen) — see
+_split_code_and_state(). The local path normally needs no manual paste at all: the Config
+tab polls claude_oauth_login_status() until the loopback listener reports a code, then
+exchanges it automatically — see POLL_INTERVAL_SECONDS below and main.py's /login-status route.
 
 See core/src/main/java/io/malimite/core/AnthropicOAuthLogin.java for the full OAuth 2.0
 Authorization Code + PKCE flow (shared client_id/scopes/token_url) and for why the Messages API
@@ -41,11 +53,30 @@ TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
 # Same public native-app OAuth client id Claude Code itself uses; not a secret
 # (see AnthropicOAuthLogin.java for the full explanation).
 CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-# The "show the code, let the user copy it" redirect_uri — see module docstring. Not a secret;
-# it is Anthropic's own registered URL, not a server this app controls.
-REDIRECT_URI = "https://platform.claude.com/oauth/code/callback"
+
+# Loopback listener this process opens for itself — identical host/port/path to
+# AnthropicOAuthLogin.java's CALLBACK_HOST/CALLBACK_PORT/CALLBACK_PATH, so Anthropic's
+# authorization server (which keys trust partly off this exact, well-known redirect_uri) treats
+# a login started here the same as one started by `claude /login` or the Java CLI.
+LOCAL_CALLBACK_HOST = "127.0.0.1"
+LOCAL_CALLBACK_PORT = 53692
+LOCAL_CALLBACK_PATH = "/callback"
+LOCAL_REDIRECT_URI = f"http://{LOCAL_CALLBACK_HOST}:{LOCAL_CALLBACK_PORT}{LOCAL_CALLBACK_PATH}"
+# Anthropic's own "show the code, let the user copy it" redirect_uri — see module docstring.
+# Not a secret; it is Anthropic's own registered URL, not a server this app controls.
+REMOTE_REDIRECT_URI = "https://platform.claude.com/oauth/code/callback"
+
+# Back-compat alias: anything importing REDIRECT_URI (this module's own earlier shape, before
+# the local-callback path existed) keeps working, pointed at the new default strategy.
+REDIRECT_URI = LOCAL_REDIRECT_URI
+
 SCOPES = ("org:create_api_key user:profile user:inference "
          "user:sessions:claude_code user:mcp_servers user:file_upload")
+
+# How often the Config tab polls claude_oauth_login_status() while LOCAL_REDIRECT_URI's listener
+# waits for the browser to redirect back. Exposed as a constant so the route/UI can agree on it
+# without hardcoding the number twice.
+POLL_INTERVAL_SECONDS = 1.5
 
 # Required for the Messages API to accept an OAuth bearer token at all.
 BETA_HEADER_VALUE = "claude-code-20250219,oauth-2025-04-20"
@@ -325,40 +356,92 @@ def import_from_claude_code() -> Optional[ImportResult]:
 
 # ── Browser login (Config tab "Login with Claude") ──────────────────────────
 #
-# Mirrors AnthropicOAuthLogin.java's interactive flow, minus the local HTTP callback
-# server (see module docstring for why): generate PKCE + an authorize URL, let the
-# operator open it in THEIR browser, and accept the authorization code Anthropic's
-# code-display page shows back instead of running our own loopback listener.
+# Mirrors AnthropicOAuthLogin.java's interactive flow much more closely than this module's
+# first version did: start_login() now opens the SAME loopback HTTP listener the Java CLI and
+# `claude /login` do (LOCAL_REDIRECT_URI), falling back to REMOTE_REDIRECT_URI (no listener,
+# user pastes the code back by hand) only when that bind fails — e.g. the port is already in
+# use, or this process genuinely has no local browser reachable at all. See module docstring
+# for why REMOTE_REDIRECT_URI triggers an extra Anthropic-side identity-verification step that
+# the local path does not.
 #
-# code_verifier never leaves this process — only an opaque, server-generated login_id
-# is handed to the browser, so a client can never submit an exchange for a verifier it
+# code_verifier never leaves this process — only an opaque, server-generated login_id is
+# handed to the browser/client, so a client can never submit an exchange for a verifier it
 # never had. Pending logins live in memory only (not on disk): they are secrets with a
-# lifetime of minutes, not a credential worth persisting across a restart, and every
-# consumer of this module already treats "click Login again" as a fine fallback.
+# lifetime of minutes, not a credential worth persisting across a restart, and every consumer
+# of this module already treats "click Login again" as a fine fallback.
 
-_LOGIN_TTL_SECONDS = 10 * 60  # generous vs. AnthropicOAuthLogin.java's 5-minute CLI default —
-                               # a web tab left idle mid-flow is a more common/forgivable
-                               # delay than a terminal session is.
+# Local-listener logins (the default, and the path that avoids Anthropic's extra 6-digit
+# email-verification step — see module docstring) expire much sooner than remote/copy-paste
+# ones: a browser login is normally seconds, and a LEFT-OPEN local listener holds a real OS
+# port (53692) that nothing else on the machine can bind until it's released — including a
+# second Malimite login attempt, AnthropicOAuthLogin.java's own CLI, or any other local tool
+# that happens to want that exact port. Found in testing: reloading the Config tab mid-login
+# drops the browser-side poll (the in-memory JS state start_login() needs to resume polling is
+# gone after a reload) while the SERVER-side listener keeps waiting — a short TTL plus the
+# background sweep below (not just the old "only pruned when some other request happens to call
+# _prune_expired_logins()" behavior) are what actually bounds how long that port stays stuck.
+_LOCAL_LOGIN_TTL_SECONDS = 3 * 60
+# Remote/copy-paste logins hold no OS resource, just an in-memory dict entry — fine to give the
+# operator more slack reading a 6-digit email code, finding the right tab, etc. Still shorter
+# than AnthropicOAuthLogin.java's 5-minute CLI default would suggest, deliberately: an abandoned
+# remote login is pure dead weight once no longer needed, no reason to keep it around 10 minutes.
+_REMOTE_LOGIN_TTL_SECONDS = 5 * 60
+# How often the background sweep (see start_prune_loop()) runs, independent of whether any
+# request happens to come in. Short enough that a reload-abandoned local listener's port is
+# usable again well within a human's "oh, let me try that again" timeframe.
+_PRUNE_SWEEP_INTERVAL_SECONDS = 20
 
 
 @dataclass
 class _PendingLogin:
     code_verifier: str
     state: str
+    redirect_uri: str
     created_at: float
+    # Populated only for the local-listener path (see _try_start_local_server()). A asyncio
+    # Server plus the single-shot result slot its handler fills in; None on the remote
+    # (copy-paste) path, which has nothing to listen for.
+    server: Optional[asyncio.base_events.Server] = None
+    result: "Optional[asyncio.Future]" = None
 
     @property
     def is_expired(self) -> bool:
-        return time.time() - self.created_at >= _LOGIN_TTL_SECONDS
+        ttl = _LOCAL_LOGIN_TTL_SECONDS if self.server is not None else _REMOTE_LOGIN_TTL_SECONDS
+        return time.time() - self.created_at >= ttl
+
+    async def close_server(self) -> None:
+        if self.server is not None:
+            self.server.close()
+            try:
+                await self.server.wait_closed()
+            except Exception:
+                pass  # best-effort cleanup only — never let this mask the real result/error
 
 
 _pending_logins: dict[str, _PendingLogin] = {}
 
 
-def _prune_expired_logins() -> None:
+async def _prune_expired_logins() -> None:
     expired = [k for k, v in _pending_logins.items() if v.is_expired]
     for k in expired:
-        del _pending_logins[k]
+        pending = _pending_logins.pop(k, None)
+        if pending is not None:
+            await pending.close_server()
+
+
+async def start_prune_loop() -> None:
+    """Background sweep that closes expired listeners even when nothing else happens to call
+    _prune_expired_logins() — see _PRUNE_SWEEP_INTERVAL_SECONDS and _LOCAL_LOGIN_TTL_SECONDS's
+    docstring for why this matters specifically for the local-listener path. Intended to be
+    wrapped in an asyncio.create_task() from main.py's lifespan, alongside the existing
+    retention sweep — cancel that task on shutdown the same way.
+    """
+    while True:
+        try:
+            await _prune_expired_logins()
+        except Exception:
+            pass  # best-effort; a failed sweep this tick is recovered by the next one
+        await asyncio.sleep(_PRUNE_SWEEP_INTERVAL_SECONDS)
 
 
 def _random_url_safe(num_bytes: int = 32) -> str:
@@ -370,12 +453,121 @@ def _code_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-def start_login() -> dict:
-    """Begins a new browser login: generates PKCE, stores the verifier server-side under a
-    fresh opaque login_id, and returns the authorize URL to open plus that login_id (the
-    Config tab's "Submit code" call must echo it back — see exchange_login_code()).
+_CALLBACK_SUCCESS_HTML = (
+    "<!doctype html><meta charset=utf-8><title>Signed in</title>"
+    "<body style=font-family:system-ui;padding:2rem>"
+    "<h2>Anthropic authentication completed.</h2>"
+    "<p>You can close this tab and return to Malimite.</p></body>"
+)
+_CALLBACK_ERROR_HTML = (
+    "<!doctype html><meta charset=utf-8><title>Sign-in failed</title>"
+    "<body style=font-family:system-ui;padding:2rem>"
+    "<h2>{message}</h2></body>"
+)
+
+
+async def _handle_callback_connection(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+                                      expected_state: str, result: "asyncio.Future") -> None:
+    """Minimal single-request HTTP/1.1 handler — just enough to read one GET request line,
+    answer it, and close. No routing, no keep-alive: AnthropicOAuthLogin.java's
+    com.sun.net.httpserver.HttpServer does the equivalent with a real HTTP library; this uses
+    raw asyncio streams instead purely to avoid adding a new dependency for one request.
     """
-    _prune_expired_logins()
+    try:
+        request_line = await asyncio.wait_for(reader.readline(), timeout=10)
+        # Drain and discard headers — nothing here is read past the request line.
+        while True:
+            line = await asyncio.wait_for(reader.readline(), timeout=10)
+            if not line or line in (b"\r\n", b"\n"):
+                break
+
+        try:
+            method, target, _ = request_line.decode("latin-1").strip().split(" ", 2)
+        except ValueError:
+            method, target = "", ""
+
+        parsed = urlparse(target)
+
+        # A request to anything other than our one known path never touches `result` at all —
+        # this listener has no other routes, but the loopback port is still reachable by
+        # anything local (a stray browser prefetch, a port scanner, curl out of curiosity) and
+        # none of that should be able to fail an in-flight login out from under the real
+        # Anthropic redirect that's still coming. Only a GET to LOCAL_CALLBACK_PATH itself —
+        # whether it's the success case or Anthropic's own error/state-mismatch response —
+        # resolves (or fails) the pending login.
+        if method != "GET" or parsed.path != LOCAL_CALLBACK_PATH:
+            status, body = 404, _CALLBACK_ERROR_HTML.format(message="Not found.")
+        else:
+            q = parse_qs(parsed.query)
+            code = (q.get("code") or [None])[0]
+            state = (q.get("state") or [None])[0]
+            error = (q.get("error") or [None])[0]
+
+            if error:
+                status, body = 400, _CALLBACK_ERROR_HTML.format(message=f"Anthropic reported an error: {error}")
+            elif not code or not state:
+                status, body = 400, _CALLBACK_ERROR_HTML.format(message="Missing code or state parameter.")
+            elif state != expected_state:
+                status, body = 400, _CALLBACK_ERROR_HTML.format(message="State mismatch.")
+            else:
+                status, body = 200, _CALLBACK_SUCCESS_HTML
+
+            if not result.done():
+                if status == 200:
+                    result.set_result((code, state))
+                else:
+                    result.set_exception(AnthropicOAuthError(
+                        "Anthropic's redirect to this server was missing or invalid — click "
+                        "\"Login with Claude\" again."))
+
+        body_bytes = body.encode("utf-8")
+        response = (
+            f"HTTP/1.1 {status} {'OK' if status == 200 else 'Error'}\r\n"
+            f"Content-Type: text/html; charset=utf-8\r\n"
+            f"Content-Length: {len(body_bytes)}\r\n"
+            f"Connection: close\r\n\r\n"
+        ).encode("ascii") + body_bytes
+        writer.write(response)
+        await writer.drain()
+    except Exception as e:
+        if not result.done():
+            result.set_exception(AnthropicOAuthError(f"Local callback handler failed: {type(e).__name__}"))
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+
+
+async def _try_start_local_server(state: str) -> "Optional[tuple[asyncio.base_events.Server, asyncio.Future]]":
+    """Attempts to bind LOCAL_CALLBACK_HOST:LOCAL_CALLBACK_PORT. Returns (server, result_future)
+    on success, or None if the bind itself fails (port already in use — e.g. another Malimite
+    login in flight, or AnthropicOAuthLogin.java's own CLI login running concurrently on this
+    same host — or any other OS-level reason) so the caller can fall back to the remote/copy
+    path instead of failing the whole login outright.
+    """
+    result: "asyncio.Future" = asyncio.get_event_loop().create_future()
+    try:
+        server = await asyncio.start_server(
+            lambda r, w: _handle_callback_connection(r, w, state, result),
+            host=LOCAL_CALLBACK_HOST, port=LOCAL_CALLBACK_PORT)
+    except OSError:
+        return None
+    return server, result
+
+
+async def start_login(local: bool = True) -> dict:
+    """Begins a new browser login: generates PKCE, stores the verifier server-side under a
+    fresh opaque login_id, and returns the authorize URL to open plus that login_id (callers
+    poll login_status(login_id) — the local path resolves on its own once the browser redirects
+    back; the remote/copy-paste path needs exchange_login_code() called explicitly instead).
+
+    `local=False` skips straight to REMOTE_REDIRECT_URI without attempting the loopback bind —
+    used by main.py's route only if the operator explicitly asks for the copy-paste path (e.g.
+    they already know this server and their browser are on different machines).
+    """
+    await _prune_expired_logins()
     verifier = _random_url_safe(32)
     challenge = _code_challenge(verifier)
     # Claude Code / AnthropicOAuthLogin.java reuse the verifier itself as the OAuth "state"
@@ -383,19 +575,34 @@ def start_login() -> dict:
     # (code_verifier, which state is derived from, is never exposed to the client either way).
     state = verifier
     login_id = secrets.token_urlsafe(24)
-    _pending_logins[login_id] = _PendingLogin(code_verifier=verifier, state=state, created_at=time.time())
+
+    server = result = None
+    redirect_uri = REMOTE_REDIRECT_URI
+    if local:
+        started = await _try_start_local_server(state)
+        if started is not None:
+            server, result = started
+            redirect_uri = LOCAL_REDIRECT_URI
+
+    _pending_logins[login_id] = _PendingLogin(
+        code_verifier=verifier, state=state, redirect_uri=redirect_uri,
+        created_at=time.time(), server=server, result=result)
 
     params = {
         "code": "true",
         "client_id": CLIENT_ID,
         "response_type": "code",
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "scope": SCOPES,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
         "state": state,
     }
-    return {"login_id": login_id, "authorize_url": f"{AUTHORIZE_URL}?{urlencode(params)}"}
+    return {
+        "login_id": login_id,
+        "authorize_url": f"{AUTHORIZE_URL}?{urlencode(params)}",
+        "mode": "local" if server is not None else "remote",
+    }
 
 
 def _split_code_and_state(pasted: str, expected_state: str) -> tuple[str, str]:
@@ -436,28 +643,12 @@ def _split_code_and_state(pasted: str, expected_state: str) -> tuple[str, str]:
     return pasted, expected_state
 
 
-async def exchange_login_code(login_id: str, pasted_code: str,
-                              client: Optional[httpx.AsyncClient] = None) -> ImportResult:
-    """Completes a login started by start_login(): parses whatever the operator pasted back,
-    exchanges it for tokens, and persists the result. The pending login is consumed (removed)
-    whether this succeeds or fails — a stale/failed attempt never lingers for a second try with
-    the same login_id; the Config tab's only recovery path is clicking Login again, which is
-    also what a human does with Claude Code itself on a failed paste.
+async def _exchange_tokens(code: str, state: str, redirect_uri: str, code_verifier: str,
+                           client: Optional[httpx.AsyncClient] = None) -> ImportResult:
+    """Shared token-exchange POST — called with a manually-pasted code (exchange_login_code())
+    or one the local callback listener captured automatically (login_status()). Does not touch
+    _pending_logins; callers own popping/closing that themselves.
     """
-    _prune_expired_logins()
-    pending = _pending_logins.pop(login_id, None)
-    if pending is None:
-        raise AnthropicOAuthError(
-            "This login attempt has expired or was already used — click \"Login with Claude\" again.")
-
-    code, state = _split_code_and_state(pasted_code, pending.state)
-    if not code:
-        raise AnthropicOAuthError("Could not find an authorization code in what you pasted.")
-    if state != pending.state:
-        raise AnthropicOAuthError(
-            "The pasted code doesn't match this login attempt (state mismatch) — "
-            "click \"Login with Claude\" again and paste the code it shows you.")
-
     own = client is None
     client = client or httpx.AsyncClient(timeout=httpx.Timeout(30, connect=10))
     try:
@@ -467,8 +658,8 @@ async def exchange_login_code(login_id: str, pasted_code: str,
                 "client_id": CLIENT_ID,
                 "code": code,
                 "state": state,
-                "redirect_uri": REDIRECT_URI,
-                "code_verifier": pending.code_verifier,
+                "redirect_uri": redirect_uri,
+                "code_verifier": code_verifier,
             })
         except httpx.HTTPError as e:
             raise AnthropicOAuthError(f"Token exchange request failed: {type(e).__name__}") from None
@@ -496,3 +687,92 @@ async def exchange_login_code(login_id: str, pasted_code: str,
     cred = _Credential(access_token, refresh_token, expires_at)
     _save(cred)
     return ImportResult(changed=changed, fingerprint=_fingerprint(access_token))
+
+
+async def exchange_login_code(login_id: str, pasted_code: str,
+                              client: Optional[httpx.AsyncClient] = None) -> ImportResult:
+    """Completes a login started by start_login(): parses whatever the operator pasted back,
+    exchanges it for tokens, and persists the result. The pending login is consumed (removed)
+    whether this succeeds or fails — a stale/failed attempt never lingers for a second try with
+    the same login_id; the Config tab's only recovery path is clicking Login again, which is
+    also what a human does with Claude Code itself on a failed paste. Works for EITHER redirect
+    strategy (pending.redirect_uri carries whichever start_login() picked) — this is the manual
+    path used by the remote/copy-paste flow and as a fallback if the local listener's own
+    automatic capture (see login_status()) never fires.
+    """
+    await _prune_expired_logins()
+    pending = _pending_logins.pop(login_id, None)
+    if pending is None:
+        raise AnthropicOAuthError(
+            "This login attempt has expired or was already used — click \"Login with Claude\" again.")
+    await pending.close_server()
+
+    code, state = _split_code_and_state(pasted_code, pending.state)
+    if not code:
+        raise AnthropicOAuthError("Could not find an authorization code in what you pasted.")
+    if state != pending.state:
+        raise AnthropicOAuthError(
+            "The pasted code doesn't match this login attempt (state mismatch) — "
+            "click \"Login with Claude\" again and paste the code it shows you.")
+
+    return await _exchange_tokens(code, state, pending.redirect_uri, pending.code_verifier, client)
+
+
+async def login_status(login_id: str, client: Optional[httpx.AsyncClient] = None) -> dict:
+    """Polled by the Config tab (see main.py's GET /auth/claude-oauth/login-status) while a
+    local-listener login (start_login()'s default path) waits for the browser to redirect back.
+
+    Returns one of:
+      {"state": "waiting", "mode": "local"}                — still waiting, listener healthy.
+      {"state": "waiting", "mode": "remote"}                — remote/copy-paste path; nothing to
+                                                                poll for, caller must call
+                                                                exchange_login_code() once the
+                                                                user pastes a code.
+      {"state": "done", "ok": true, "changed": ..., "token_fingerprint": ...}
+      {"state": "done", "ok": false, "error": "..."}        — exchange failed; login_id is
+                                                                already consumed either way.
+      {"state": "not_found"}                                — unknown/expired/already-consumed
+                                                                login_id.
+    """
+    await _prune_expired_logins()
+    pending = _pending_logins.get(login_id)
+    if pending is None:
+        return {"state": "not_found"}
+
+    if pending.server is None or pending.result is None:
+        return {"state": "waiting", "mode": "remote"}
+
+    if not pending.result.done():
+        return {"state": "waiting", "mode": "local"}
+
+    # The listener resolved (or errored) — consume the pending login exactly once, same as
+    # exchange_login_code()'s single-use contract, regardless of which path got there first.
+    _pending_logins.pop(login_id, None)
+    await pending.close_server()
+
+    try:
+        code, state = pending.result.result()
+    except AnthropicOAuthError as e:
+        return {"state": "done", "ok": False, "error": str(e)}
+
+    try:
+        result = await _exchange_tokens(code, state, pending.redirect_uri, pending.code_verifier, client)
+    except AnthropicOAuthError as e:
+        return {"state": "done", "ok": False, "error": str(e)}
+
+    return {"state": "done", "ok": True, "changed": result.changed, "token_fingerprint": result.fingerprint}
+
+
+async def cancel_login(login_id: str) -> bool:
+    """Backs the Config tab's "Cancel" button: immediately releases a local-listener login's
+    OS port (53692) instead of waiting out _LOCAL_LOGIN_TTL_SECONDS/the background sweep (see
+    start_prune_loop()) — those are the backstop for an ABANDONED login (closed tab, crashed
+    browser), not the primary path for a deliberate cancel, which should free the port right
+    away for whatever the operator tries next. Returns False (a no-op, not an error) for an
+    unknown/already-finished login_id — cancelling something that's already gone is fine.
+    """
+    pending = _pending_logins.pop(login_id, None)
+    if pending is None:
+        return False
+    await pending.close_server()
+    return True

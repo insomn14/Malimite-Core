@@ -64,14 +64,23 @@ async def _lifespan(_: FastAPI):
         log.warning("API_KEY is not set: anyone who can reach this port can upload scans, read results and "
                     "spend this server's LLM quota through the AI Assistant. Set API_KEY and/or bind to 127.0.0.1.")
     retention_task = asyncio.create_task(_retention_loop())
+    # Closes any "Login with Claude" local-listener (port 53692) left dangling by an abandoned
+    # or reloaded-mid-login Config tab, well before its TTL would otherwise require a NEW
+    # request to happen to trigger the prune — see anthropic_oauth.start_prune_loop()'s
+    # docstring for why a background sweep (not just reactive pruning) matters here: that port
+    # is a single shared OS resource a stuck listener can keep every other login attempt (this
+    # server's own retry, AnthropicOAuthLogin.java's CLI, etc.) from using.
+    oauth_prune_task = asyncio.create_task(anthropic_oauth.start_prune_loop())
     try:
         yield
     finally:
         retention_task.cancel()
-        try:
-            await retention_task
-        except asyncio.CancelledError:
-            pass
+        oauth_prune_task.cancel()
+        for task in (retention_task, oauth_prune_task):
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(title="Malimite", version="0.1.0", docs_url="/docs", redoc_url=None, lifespan=_lifespan)
@@ -874,15 +883,24 @@ async def get_learned_rules(request: Request, platform: Optional[str] = None):
 
 # ── Claude OAuth (claude-oauth provider) ────────────────────────────────────
 #
-# Two independent ways to get a session: (1) the browser login below — the Config tab
-# opens Anthropic's own sign-in page, the operator authorizes there, and pastes back the
-# single authentication code Anthropic's code-display page shows them (see
-# anthropic_oauth.py's module docstring for why this app uses that redirect_uri instead
-# of a loopback callback server: this process has no browser of its own, and the
-# operator's browser is typically on a different machine than this server); (2) importing
-# an already-completed `claude /login` session, auto-detected from the official `claude`
-# CLI's own session file — the same path `malimite claude-login --import` exposes on the
-# CLI side (see ClaudeLoginCommand.java).
+# Two independent ways to get a session: (1) the browser login below — the Config tab opens
+# Anthropic's own sign-in page; by default this server also opens a local loopback listener
+# (same host/port AnthropicOAuthLogin.java and `claude /login` use) so the browser's redirect
+# lands there automatically and the Config tab just polls login-status until it resolves, no
+# copy/paste needed. If that local bind fails (port in use, or truly no local browser — see
+# anthropic_oauth.py's module docstring), it falls back to Anthropic's own code-display page,
+# which the operator copies the code from and pastes into /exchange directly — NOTE this
+# fallback path triggers an extra Anthropic-side identity-verification step (a 6-digit email
+# code) that the local-listener path does not, which is expected and not a sign of a bug here;
+# (2) importing an already-completed `claude /login` session, auto-detected from the official
+# `claude` CLI's own session file — the same path `malimite claude-login --import` exposes on
+# the CLI side (see ClaudeLoginCommand.java).
+
+class StartLoginRequest(BaseModel):
+    # False only if the operator explicitly knows this server and their browser are on
+    # different machines and wants to skip straight to the copy-paste path.
+    local: bool = True
+
 
 class ExchangeCodeRequest(BaseModel):
     login_id: str = Field(..., max_length=200)
@@ -900,19 +918,44 @@ async def claude_oauth_status(request: Request):
 
 
 @app.post("/api/v1/auth/claude-oauth/start")
-async def claude_oauth_start(request: Request):
-    """Backs the Config tab's "Login with Claude" button: generates PKCE and an Anthropic
-    authorize URL. The browser opens this URL itself (new tab) — this endpoint never talks
-    to Anthropic; it only prepares the request the operator's own browser will make."""
+async def claude_oauth_start(request: Request, req: StartLoginRequest = StartLoginRequest()):
+    """Backs the Config tab's "Login with Claude" button: generates PKCE, tries to open the
+    local loopback listener (unless req.local is False), and returns an Anthropic authorize
+    URL. The browser opens this URL itself (new tab) — this endpoint never talks to Anthropic;
+    it only prepares the request the operator's own browser will make. The response's "mode"
+    field ("local" or "remote") tells the Config tab whether to start polling login-status
+    (local) or show the paste-code form right away (remote)."""
     _check_auth(request)
-    return anthropic_oauth.start_login()
+    return await anthropic_oauth.start_login(local=req.local)
+
+
+@app.get("/api/v1/auth/claude-oauth/login-status")
+async def claude_oauth_login_status(request: Request, login_id: str):
+    """Polled by the Config tab while a local-listener login (the default /start path) waits
+    for the browser to redirect back — see anthropic_oauth.login_status() for the exact
+    response shapes. Exchanges and persists the token automatically the moment the listener
+    captures a code; no separate /exchange call needed for this path."""
+    _check_auth(request)
+    return await anthropic_oauth.login_status(login_id)
+
+
+@app.delete("/api/v1/auth/claude-oauth/login/{login_id}", status_code=204)
+async def claude_oauth_cancel_login(request: Request, login_id: str):
+    """Backs the Config tab's "Cancel" button: releases a local-listener login's port
+    immediately rather than leaving it to anthropic_oauth.start_prune_loop()'s background sweep
+    — see cancel_login()'s docstring. Always 204, even for an unknown/already-finished
+    login_id — cancelling is idempotent from the caller's point of view."""
+    _check_auth(request)
+    await anthropic_oauth.cancel_login(login_id)
+    return Response(status_code=204)
 
 
 @app.post("/api/v1/auth/claude-oauth/exchange")
 async def claude_oauth_exchange(request: Request, req: ExchangeCodeRequest):
-    """Backs the Config tab's "Submit code" button: exchanges the authentication code the
-    operator pasted back (from Anthropic's code-display page) for a token pair, scoped to
-    the login_id claude_oauth_start returned. Never echoes the code or any token value back."""
+    """Backs the Config tab's "Submit code" button (remote/copy-paste path, or a manual
+    fallback if the local listener's automatic capture never resolves): exchanges the
+    authentication code the operator pasted back for a token pair, scoped to the login_id
+    claude_oauth_start returned. Never echoes the code or any token value back."""
     _check_auth(request)
     try:
         result = await anthropic_oauth.exchange_login_code(req.login_id, req.code)
