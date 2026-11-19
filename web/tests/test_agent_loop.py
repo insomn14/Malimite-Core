@@ -261,6 +261,168 @@ class LoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(msgs[0]["content"][0]["content"], "x" * 1000)  # input untouched
 
 
+CONFIRM_TOOL = {"type": "tool_use", "id": "t1", "name": "propose_finding",
+                "input": {"title": "x", "severity": "HIGH", "description": "y"}}
+CONFIRM_TOOL_2 = {"type": "tool_use", "id": "t2", "name": "apply_triage", "input": {"vuln_id": 1, "status": "fixed"}}
+
+
+class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
+    """propose_finding/apply_triage (loop.CONFIRM_REQUIRED) pause the loop instead of executing
+    immediately — see tools.py's _spec(requires_confirmation=True) docstring for why."""
+
+    async def asyncSetUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = store.path_for(Path(self.tmp.name))
+        self.sid = await store.create_session(self.db, "claude", "m")
+        self.ctx = Ctx("s", "/nope", "e", "android", Path(self.tmp.name), {})
+
+    async def asyncTearDown(self):
+        self.tmp.cleanup()
+
+    async def test_confirm_required_tool_pauses_without_executing(self):
+        ran = []
+
+        async def run(ctx, name, args):
+            ran.append(name)
+            return True, "<tool_data>ok</tool_data>"
+
+        step = scripted([{"type": "text", "text": "I found something"}, CONFIRM_TOOL,
+                         {"type": "stop", "reason": "tool_use"}])
+        evs = [e async for e in loop.run_chat(self.ctx, self.db, self.sid, "investigate", CFG, step=step, run=run)]
+        self.assertEqual(ran, [])  # never executed
+        self.assertEqual([e["type"] for e in evs][-2:], ["tool_confirm_needed", "awaiting_confirmation"])
+        self.assertEqual(evs[-1]["pending_ids"], ["t1"])
+        self.assertEqual(evs[-2]["name"], "propose_finding")
+        self.assertEqual(evs[-2]["args"], CONFIRM_TOOL["input"])
+
+    async def test_assistant_turn_persisted_but_no_tool_result_yet(self):
+        async def run(ctx, name, args):
+            return True, "x"
+        step = scripted([{"type": "text", "text": "ok"}, CONFIRM_TOOL, {"type": "stop", "reason": "tool_use"}])
+        async for _ in loop.run_chat(self.ctx, self.db, self.sid, "q", CFG, step=step, run=run):
+            pass
+        hist = await store.history(self.db, self.sid)
+        self.assertEqual([m["role"] for m in hist], ["user", "assistant"])
+        self.assertEqual([b["type"] for b in hist[-1]["content"]], ["text", "tool_use"])
+
+    async def test_mixed_round_with_one_confirm_required_tool_pauses_the_whole_round(self):
+        """A read-only tool sharing a round with a confirm-required one cannot execute either —
+        both providers reject a partial tool_result set for one response (see run_chat's
+        needs_confirm comment)."""
+        READ_ONLY = {"type": "tool_use", "id": "r1", "name": "get_vulnerabilities", "input": {}}
+        ran = []
+
+        async def run(ctx, name, args):
+            ran.append(name)
+            return True, "x"
+        step = scripted([{"type": "text", "text": "ok"}, READ_ONLY, CONFIRM_TOOL,
+                         {"type": "stop", "reason": "tool_use"}])
+        evs = [e async for e in loop.run_chat(self.ctx, self.db, self.sid, "q", CFG, step=step, run=run)]
+        self.assertEqual(ran, [])
+        confirm_events = [e for e in evs if e["type"] == "tool_confirm_needed"]
+        self.assertEqual(len(confirm_events), 1)
+        self.assertEqual(confirm_events[0]["id"], "t1")
+
+    async def test_resume_approved_executes_and_continues(self):
+        async def run(ctx, name, args):
+            return True, "<tool_data>ok</tool_data>"
+        step1 = scripted([{"type": "text", "text": "ok"}, CONFIRM_TOOL, {"type": "stop", "reason": "tool_use"}])
+        async for _ in loop.run_chat(self.ctx, self.db, self.sid, "q", CFG, step=step1, run=run):
+            pass
+
+        step2 = scripted([{"type": "text", "text": "Added!"}, {"type": "stop", "reason": "end_turn"}])
+        evs = [e async for e in loop.resume_after_confirmation(self.ctx, self.db, self.sid, {"t1": True}, CFG,
+                                                               step=step2, run=run)]
+        self.assertEqual(evs[0], {"type": "tool_result", "id": "t1", "name": "propose_finding",
+                                  "ok": True, "preview": "<tool_data>ok</tool_data>", "truncated": False})
+        self.assertEqual(evs[-1], {"type": "done"})
+        hist = await store.history(self.db, self.sid)
+        self.assertEqual([m["role"] for m in hist], ["user", "assistant", "user", "assistant"])
+        self.assertEqual(hist[2]["content"][0]["tool_use_id"], "t1")
+        self.assertNotIn("is_error", hist[2]["content"][0])
+
+    async def test_resume_declined_never_calls_run_and_marks_error(self):
+        ran = []
+
+        async def run(ctx, name, args):
+            ran.append(name)
+            return True, "should not happen"
+        step1 = scripted([{"type": "text", "text": "ok"}, CONFIRM_TOOL_2, {"type": "stop", "reason": "tool_use"}])
+        async for _ in loop.run_chat(self.ctx, self.db, self.sid, "q", CFG, step=step1, run=run):
+            pass
+
+        step2 = scripted([{"type": "text", "text": "Okay, not doing that."}, {"type": "stop", "reason": "end_turn"}])
+        evs = [e async for e in loop.resume_after_confirmation(self.ctx, self.db, self.sid, {"t2": False}, CFG,
+                                                               step=step2, run=run)]
+        self.assertEqual(ran, [])
+        self.assertFalse(evs[0]["ok"])
+        self.assertIn("declined", evs[0]["preview"].lower())
+        hist = await store.history(self.db, self.sid)
+        self.assertTrue(hist[2]["content"][0]["is_error"])
+
+    async def test_resume_without_a_pending_confirmation_raises(self):
+        async def run(ctx, name, args):
+            return True, "x"
+        with self.assertRaises(ValueError):
+            async for _ in loop.resume_after_confirmation(self.ctx, self.db, self.sid, {"t1": True}, CFG,
+                                                           step=scripted([]), run=run):
+                pass
+
+    async def test_resume_after_already_resolved_raises(self):
+        async def run(ctx, name, args):
+            return True, "x"
+        step1 = scripted([{"type": "text", "text": "ok"}, CONFIRM_TOOL, {"type": "stop", "reason": "tool_use"}])
+        async for _ in loop.run_chat(self.ctx, self.db, self.sid, "q", CFG, step=step1, run=run):
+            pass
+        step2 = scripted([{"type": "text", "text": "done"}, {"type": "stop", "reason": "end_turn"}])
+        async for _ in loop.resume_after_confirmation(self.ctx, self.db, self.sid, {"t1": True}, CFG,
+                                                       step=step2, run=run):
+            pass
+        with self.assertRaises(ValueError):
+            async for _ in loop.resume_after_confirmation(self.ctx, self.db, self.sid, {"t1": True}, CFG,
+                                                           step=scripted([]), run=run):
+                pass
+
+    async def test_resume_with_partial_decisions_raises(self):
+        async def run(ctx, name, args):
+            return True, "x"
+        step1 = scripted([{"type": "text", "text": "ok"}, CONFIRM_TOOL, CONFIRM_TOOL_2,
+                          {"type": "stop", "reason": "tool_use"}])
+        async for _ in loop.run_chat(self.ctx, self.db, self.sid, "q", CFG, step=step1, run=run):
+            pass
+        with self.assertRaises(ValueError):
+            async for _ in loop.resume_after_confirmation(self.ctx, self.db, self.sid, {"t1": True}, CFG,
+                                                           step=scripted([]), run=run):
+                pass
+
+    async def test_resume_with_extra_unknown_decision_raises(self):
+        async def run(ctx, name, args):
+            return True, "x"
+        step1 = scripted([{"type": "text", "text": "ok"}, CONFIRM_TOOL, {"type": "stop", "reason": "tool_use"}])
+        async for _ in loop.run_chat(self.ctx, self.db, self.sid, "q", CFG, step=step1, run=run):
+            pass
+        with self.assertRaises(ValueError):
+            async for _ in loop.resume_after_confirmation(self.ctx, self.db, self.sid, {"t1": True, "bogus": True},
+                                                           CFG, step=scripted([]), run=run):
+                pass
+
+    async def test_two_confirm_required_tools_in_one_round_both_execute_on_resume(self):
+        async def run(ctx, name, args):
+            return True, f"<tool_data>{name} ok</tool_data>"
+        step1 = scripted([{"type": "text", "text": "ok"}, CONFIRM_TOOL, CONFIRM_TOOL_2,
+                          {"type": "stop", "reason": "tool_use"}])
+        evs1 = [e async for e in loop.run_chat(self.ctx, self.db, self.sid, "q", CFG, step=step1, run=run)]
+        self.assertEqual(evs1[-1]["pending_ids"], ["t1", "t2"])
+
+        step2 = scripted([{"type": "text", "text": "Both done!"}, {"type": "stop", "reason": "end_turn"}])
+        evs2 = [e async for e in loop.resume_after_confirmation(self.ctx, self.db, self.sid, {"t1": True, "t2": False},
+                                                                 CFG, step=step2, run=run)]
+        results = [e for e in evs2 if e["type"] == "tool_result"]
+        self.assertEqual(len(results), 2)
+        self.assertTrue(results[0]["ok"])   # t1 approved -> ran for real
+        self.assertFalse(results[1]["ok"])  # t2 declined -> never ran
+
+
 class BuildUserBlocksTests(unittest.TestCase):
     def test_text_only_message_is_one_text_block(self):
         blocks = loop._build_user_blocks("hello", None)

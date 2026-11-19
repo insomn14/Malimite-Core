@@ -48,6 +48,10 @@ PREVIEW = 2000
 PING_EVERY = 15
 _TIMEOUT = {"decompile": lambda: settings.ghidra_ondemand_timeout}
 
+# Tool names that must not execute until a human explicitly approves — see tools.py's _spec()
+# docstring. Read once at import time: TOOLS is a static module-level list, not per-request.
+CONFIRM_REQUIRED = {t["name"] for t in TOOLS if t.get("requires_confirmation")}
+
 
 def clip(messages: list[dict], budget: int = HISTORY_BUDGET) -> list[dict]:
     """Elide the oldest tool_result bodies once their total exceeds the budget."""
@@ -90,20 +94,85 @@ async def run_chat(
     step: Optional[Callable] = None,
     run: Callable[[Ctx, str, dict], Awaitable[tuple[bool, str]]] = run_tool,
 ) -> AsyncIterator[dict]:
+    """Appends the user's new message, then runs the LLM<->tool loop until a visible answer, a
+    tool_confirm_needed pause (see CONFIRM_REQUIRED/_loop), or the turn budget is exhausted.
+    """
     step = step or chat_step  # resolved at call time so tests can patch loop.chat_step
     msgs = await store.history(chat_db, sid)
     await store.set_title_if_empty(chat_db, sid, user_text)
     user = _build_user_blocks(user_text, attachments)
     await store.append(chat_db, sid, "user", user)
     msgs.append({"role": "user", "content": user})
+    async for ev in _loop(ctx, chat_db, sid, msgs, cfg, step, run):
+        yield ev
 
+
+async def resume_after_confirmation(
+    ctx: Ctx, chat_db: str, sid: str, decisions: dict[str, bool], cfg: LlmCfg, *,
+    step: Optional[Callable] = None,
+    run: Callable[[Ctx, str, dict], Awaitable[tuple[bool, str]]] = run_tool,
+) -> AsyncIterator[dict]:
+    """Settles a tool_confirm_needed pause and continues the loop. `decisions` maps every
+    tool_use_id the paused round yielded (see run_chat's `awaiting_confirmation` event's
+    pending_ids) to True (run it for real) or False (the user declined). Raises ValueError —
+    caught by main.py's route as a 409/422, never surfaced to the model — when the session's
+    last turn isn't actually a pending confirmation, or `decisions` doesn't cover every pending
+    id: a partial tool_result set is invalid to every provider's API, so this never sends one.
+    """
+    step = step or chat_step
+    msgs = await store.history(chat_db, sid)
+    if not msgs or msgs[-1]["role"] != "assistant":
+        raise ValueError("no pending confirmation for this session")
+    pending = [b for b in msgs[-1]["content"] if b.get("type") == "tool_use" and b["name"] in CONFIRM_REQUIRED]
+    if not pending:
+        raise ValueError("no pending confirmation for this session")
+    pending_ids = {b["id"] for b in pending}
+    if pending_ids != set(decisions):
+        raise ValueError(f"decisions must cover exactly the pending tool_use ids {sorted(pending_ids)}")
+
+    # Every tool_use from that paused round needs a tool_result now — the confirmation-required
+    # ones per `decisions` (run for real, or a declined placeholder), any read-only siblings
+    # that shared the same round executed for real unconditionally (they were never gated; see
+    # run_chat's needs_confirm comment for why they couldn't run earlier even though they
+    # themselves don't require approval).
+    all_in_round = [b for b in msgs[-1]["content"] if b.get("type") == "tool_use"]
+    results = []
+    for tu in all_in_round:
+        if tu["id"] in pending_ids and not decisions[tu["id"]]:
+            ok, out = False, "<tool_data>User declined this action; nothing was changed.</tool_data>"
+        else:
+            timeout = _TIMEOUT.get(tu["name"], lambda: 20)()
+            try:
+                ok, out = await asyncio.wait_for(run(ctx, tu["name"], tu["input"]), timeout)
+            except asyncio.TimeoutError:
+                ok, out = False, f"<tool_data>tool '{tu['name']}' timed out after {timeout}s</tool_data>"
+            except Exception as e:  # tool bug must not kill the chat
+                ok, out = False, f"<tool_data>tool '{tu['name']}' failed: {type(e).__name__}</tool_data>"
+        results.append({"type": "tool_result", "tool_use_id": tu["id"], "content": out,
+                        **({} if ok else {"is_error": True})})
+        yield {"type": "tool_result", "id": tu["id"], "name": tu["name"], "ok": ok,
+               "preview": out[:PREVIEW], "truncated": len(out) > PREVIEW}
+
+    await store.append(chat_db, sid, "user", results)
+    msgs.append({"role": "user", "content": results})
+    async for ev in _loop(ctx, chat_db, sid, msgs, cfg, step, run):
+        yield ev
+
+
+async def _loop(
+    ctx: Ctx, chat_db: str, sid: str, msgs: list[dict], cfg: LlmCfg,
+    step: Callable, run: Callable[[Ctx, str, dict], Awaitable[tuple[bool, str]]],
+) -> AsyncIterator[dict]:
+    """The LLM<->tool round-trip core shared by run_chat() (fresh user message) and
+    resume_after_confirmation() (a pending round's tool_result just settled) — `msgs` already
+    ends with whatever new turn the caller appended, in-memory AND in `store`."""
     turns = settings.chat_max_turns
     turn = 0
     carry, conts = "", 0   # text of an answer that hit the output limit and is being continued (persisted once, whole)
     while turn < turns:
         last = turn == turns - 1   # forced wrap-up: a visible answer beats a "max rounds" error
         text, tool_uses, results = "", [], []
-        stop, defer = "", False
+        stop, defer, awaiting_confirm = "", False, None
         task = None
         try:
             try:
@@ -147,6 +216,23 @@ async def run_chat(
                 text += note
                 yield {"type": "token", "text": note}
 
+            needs_confirm = [tu for tu in tool_uses if tu["name"] in CONFIRM_REQUIRED]
+            if needs_confirm:
+                # Every tool_use in THIS round shares one provider-side response and must get
+                # exactly one matching tool_result before the model can be asked anything else
+                # (both Anthropic's and OpenAI-compatible APIs reject a partial set) — so even
+                # the read-only ones here cannot run yet if even one sibling needs a human's
+                # explicit yes/no. Persisting the assistant turn and yielding happens in the
+                # `finally` block below (awaiting_confirm short-circuits it to skip execution
+                # and the normal auto-fill-cancelled-results behavior) — resume_after_confirmation()
+                # appends the matching tool_result turn later, once every pending id has been
+                # approved or declined.
+                awaiting_confirm = needs_confirm
+                for tu in needs_confirm:
+                    yield {"type": "tool_confirm_needed", "id": tu["id"], "name": tu["name"], "args": tu["input"]}
+                yield {"type": "awaiting_confirmation", "pending_ids": [tu["id"] for tu in needs_confirm]}
+                return
+
             for tu in tool_uses:
                 yield {"type": "tool_call", "id": tu["id"], "name": tu["name"], "args": tu["input"]}
                 timeout = _TIMEOUT.get(tu["name"], lambda: 20)()
@@ -176,15 +262,23 @@ async def run_chat(
                     if blocks:
                         await store.append(chat_db, sid, "assistant", blocks)
                         msgs.append({"role": "assistant", "content": blocks})
-                    if tool_uses:
+                    if tool_uses and not awaiting_confirm:
                         have = {r["tool_use_id"] for r in results}
                         results += [{"type": "tool_result", "tool_use_id": t["id"], "is_error": True,
                                      "content": "<tool_data>cancelled</tool_data>"}
                                     for t in tool_uses if t["id"] not in have]
                         await store.append(chat_db, sid, "user", results)
                         msgs.append({"role": "user", "content": results})
+                    # awaiting_confirm: the assistant turn above (with its tool_use blocks) is
+                    # exactly what a client reconnecting via GET /chat needs to render the
+                    # pending confirmation UI again — nothing else to persist here.
+                    # resume_after_confirmation() appends the matching tool_result turn once
+                    # every pending id is resolved, same shape run_tool()'s own results list
+                    # would have produced had this not paused.
                 carry = ""
 
+        if awaiting_confirm:
+            return
         if not tool_uses:
             yield {"type": "done"}
             return

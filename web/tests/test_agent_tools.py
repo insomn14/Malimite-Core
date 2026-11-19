@@ -169,7 +169,7 @@ class ToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(d1["issues"][0]["evidence"]), 3)  # rule_id => every occurrence listed
 
     def test_group_issues_respects_triage_overrides_and_suppression(self):
-        row = lambda **k: {"rule_id": "A", "title": "t", "category": "c", "severity": "MEDIUM", "cvss": 5.0,  # noqa: E731
+        row = lambda **k: {"id": 1, "rule_id": "A", "title": "t", "category": "c", "severity": "MEDIUM", "cvss": 5.0,  # noqa: E731
                            "cwe": None, "affected_name": "n", "evidence": "e", "status": "open",
                            "override_severity": None, "override_cvss": None, **k}
         g = db.group_issues([row(override_severity="LOW", override_cvss=2.0), row(status="open")])
@@ -178,6 +178,18 @@ class ToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([x["rule_id"] for x in g], ["B", "A"])  # suppressed issues sort last
         g = db.group_issues([row(override_severity="LOW", override_cvss=2.0)])
         self.assertEqual((g[0]["severity"], g[0]["cvss"]), ("LOW", 2.0))
+
+    def test_group_issues_exposes_id_on_the_representative_and_every_evidence_entry(self):
+        """apply_triage's vuln_id (see tools.py's _vulns()) is only usable if get_vulnerabilities
+        actually surfaces a real row id — this was missing entirely before this fix, which made
+        the assistant unable to target a specific occurrence it just read about without the user
+        first opening the chat from a specific finding's "Discuss with AI" button."""
+        row = lambda **k: {"id": 1, "rule_id": "A", "title": "t", "category": "c", "severity": "MEDIUM",  # noqa: E731
+                           "cvss": 5.0, "cwe": None, "affected_name": "n", "evidence": "e", "status": "open",
+                           "override_severity": None, "override_cvss": None, **k}
+        g = db.group_issues([row(id=10), row(id=11, severity="HIGH")])
+        self.assertEqual(g[0]["id"], 11)   # representative is the higher-severity occurrence
+        self.assertEqual({e["id"] for e in g[0]["evidence"]}, {10, 11})
 
     async def test_errors_become_text_not_exceptions(self):
         ok, out = await tools.run_tool(self.ctx, "search_code", {})
@@ -455,6 +467,173 @@ class HookTargetToolTests(unittest.IsolatedAsyncioTestCase):
         spec = next(t for t in tools.TOOLS if t["name"] == "recommend_hook_targets")
         self.assertEqual(spec["schema"]["type"], "object")
         self.assertIn("recommend_hook_targets", __import__("web.app.agent.loop", fromlist=["SYSTEM"]).SYSTEM)
+
+
+class WriteToolTests(unittest.IsolatedAsyncioTestCase):
+    """propose_finding/apply_triage — the only write-capable tools (every other tool in this
+    module is read-only by design, see tools.py's module docstring). Both are flagged
+    requires_confirmation=True; this file tests their actual DB-write logic in isolation —
+    test_agent_loop.py's ConfirmationTests covers the pause/resume gate around them."""
+
+    def setUp(self):
+        h = tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False)
+        h.close()
+        self.path = h.name
+        c = sqlite3.connect(self.path)
+        c.executescript("""CREATE TABLE Vulnerabilities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, RuleId TEXT, Title TEXT, Category TEXT,
+            Severity TEXT, CvssScore REAL, Cwe TEXT, Description TEXT, AffectedType TEXT,
+            AffectedName TEXT, Evidence TEXT, EvidenceLocation TEXT, PocSteps TEXT,
+            Remediation TEXT, ReferenceUrl TEXT, ExecutableName TEXT, CreatedAt INTEGER)""")
+        c.execute(
+            """INSERT INTO Vulnerabilities
+               (RuleId, Title, Category, Severity, CvssScore, Cwe, Description, AffectedType,
+                AffectedName, Evidence, EvidenceLocation, PocSteps, Remediation, ReferenceUrl,
+                ExecutableName, CreatedAt)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            ("MSTG-STORAGE-1", "Hardcoded API key", "STORAGE", "CRITICAL", 9.1, "CWE-798",
+             "Original description", "STRING", "0x1234", "api_key=abc", "0x1234",
+             "1. find it", "Use Keychain", "https://x", "app", 0))
+        c.commit()
+        c.close()
+        self.ctx = Ctx("s1", self.path, "app", "android", Path("/tmp"), {})
+
+    def tearDown(self):
+        Path(self.path).unlink(missing_ok=True)
+
+    def body(self, wrapped):
+        return json.loads(wrapped.removeprefix("<tool_data>\n").removesuffix("\n</tool_data>"))
+
+    # ── propose_finding ──
+
+    async def test_propose_finding_inserts_a_new_row(self):
+        ok, out = await tools.run_tool(self.ctx, "propose_finding", {
+            "title": "Found during chat", "severity": "high",
+            "description": "Discussed in chat, confirmed with the user.",
+            "evidence": "static final String X = ...", "cvss_score": 7.5,
+            "cwe": "CWE-798", "category": "CRYPTO", "affected_class": "com.example.Foo",
+        })
+        self.assertTrue(ok, out)
+        body = self.body(out)
+        self.assertTrue(body["ok"])
+        new_id = body["vuln_id"]
+        rows = await db.get_vulnerabilities(self.path, "app")
+        new_row = next(r for r in rows if r["id"] == new_id)
+        self.assertEqual(new_row["title"], "Found during chat")
+        self.assertEqual(new_row["severity"], "HIGH")
+        self.assertEqual(new_row["status"], "open")
+        self.assertEqual(new_row["source"], "ai_assistant")
+        self.assertTrue(new_row["rule_id"].startswith("AI-ASSISTANT-"))
+        self.assertEqual(new_row["affected_type"], "CLASS")
+        self.assertEqual(new_row["affected_name"], "com.example.Foo")
+        # the pre-existing rule-based row is untouched and still reports as such
+        old_row = next(r for r in rows if r["id"] != new_id)
+        self.assertEqual(old_row["source"], "rule")
+
+    async def test_propose_finding_affected_function_wins_over_affected_class(self):
+        ok, out = await tools.run_tool(self.ctx, "propose_finding", {
+            "title": "x", "severity": "LOW", "description": "y",
+            "affected_class": "com.example.Foo", "affected_function": "doStuff",
+        })
+        body = self.body(out)
+        rows = await db.get_vulnerabilities(self.path, "app")
+        new_row = next(r for r in rows if r["id"] == body["vuln_id"])
+        self.assertEqual(new_row["affected_type"], "FUNCTION")
+        self.assertEqual(new_row["affected_name"], "doStuff")
+
+    async def test_propose_finding_requires_title(self):
+        ok, out = await tools.run_tool(self.ctx, "propose_finding",
+                                       {"severity": "HIGH", "description": "y"})
+        self.assertFalse(ok)
+        self.assertIn("title", out)
+
+    async def test_propose_finding_requires_description(self):
+        ok, out = await tools.run_tool(self.ctx, "propose_finding", {"title": "x", "severity": "HIGH"})
+        self.assertFalse(ok)
+        self.assertIn("description", out)
+
+    async def test_propose_finding_rejects_invalid_severity(self):
+        ok, out = await tools.run_tool(self.ctx, "propose_finding",
+                                       {"title": "x", "severity": "ULTRA", "description": "y"})
+        self.assertFalse(ok)
+        self.assertIn("severity", out)
+
+    async def test_propose_finding_rejects_out_of_range_cvss(self):
+        ok, out = await tools.run_tool(self.ctx, "propose_finding",
+                                       {"title": "x", "severity": "HIGH", "description": "y", "cvss_score": 11})
+        self.assertFalse(ok)
+
+    async def test_propose_finding_schema_is_registered_and_requires_confirmation(self):
+        spec = next(t for t in tools.TOOLS if t["name"] == "propose_finding")
+        self.assertTrue(spec["requires_confirmation"])
+        self.assertEqual(set(spec["schema"]["required"]), {"title", "severity", "description"})
+
+    # ── apply_triage ──
+
+    async def test_apply_triage_updates_status_and_note(self):
+        ok, out = await tools.run_tool(self.ctx, "apply_triage",
+                                       {"vuln_id": 1, "status": "accepted_risk", "note": "Discussed with team."})
+        self.assertTrue(ok, out)
+        rows = await db.get_vulnerabilities(self.path, "app")
+        row = next(r for r in rows if r["id"] == 1)
+        self.assertEqual(row["status"], "accepted_risk")
+        self.assertEqual(row["override_note"], "Discussed with team.")
+        # severity/CVSS untouched when not asked to change
+        self.assertEqual(row["severity"], "CRITICAL")
+
+    async def test_apply_triage_only_touches_fields_actually_passed(self):
+        await tools.run_tool(self.ctx, "apply_triage", {"vuln_id": 1, "note": "just a note"})
+        rows = await db.get_vulnerabilities(self.path, "app")
+        row = next(r for r in rows if r["id"] == 1)
+        self.assertEqual(row["status"], "open")   # unchanged
+        self.assertEqual(row["override_note"], "just a note")
+
+    async def test_apply_triage_override_severity_and_cvss(self):
+        ok, out = await tools.run_tool(self.ctx, "apply_triage",
+                                       {"vuln_id": 1, "override_severity": "low", "override_cvss_score": 2.1})
+        self.assertTrue(ok, out)
+        rows = await db.get_vulnerabilities(self.path, "app")
+        row = next(r for r in rows if r["id"] == 1)
+        self.assertEqual(row["effective_severity"], "LOW")
+        self.assertEqual(row["effective_cvss_score"], 2.1)
+        self.assertEqual(row["severity"], "CRITICAL")   # original untouched
+
+    async def test_apply_triage_empty_string_clears_override_severity(self):
+        await tools.run_tool(self.ctx, "apply_triage", {"vuln_id": 1, "override_severity": "HIGH"})
+        ok, out = await tools.run_tool(self.ctx, "apply_triage", {"vuln_id": 1, "override_severity": ""})
+        self.assertTrue(ok, out)
+        rows = await db.get_vulnerabilities(self.path, "app")
+        row = next(r for r in rows if r["id"] == 1)
+        self.assertIsNone(row["override_severity"])
+
+    async def test_apply_triage_unknown_vuln_id_fails(self):
+        ok, out = await tools.run_tool(self.ctx, "apply_triage", {"vuln_id": 9999, "status": "fixed"})
+        self.assertFalse(ok)
+        self.assertIn("9999", out)
+
+    async def test_apply_triage_requires_integer_vuln_id(self):
+        ok, out = await tools.run_tool(self.ctx, "apply_triage", {"vuln_id": "not-an-int", "status": "fixed"})
+        self.assertFalse(ok)
+
+    async def test_apply_triage_rejects_invalid_status(self):
+        ok, out = await tools.run_tool(self.ctx, "apply_triage", {"vuln_id": 1, "status": "bogus"})
+        self.assertFalse(ok)
+        self.assertIn("status", out)
+
+    async def test_apply_triage_rejects_invalid_override_severity(self):
+        ok, out = await tools.run_tool(self.ctx, "apply_triage", {"vuln_id": 1, "override_severity": "ULTRA"})
+        self.assertFalse(ok)
+
+    async def test_apply_triage_schema_is_registered_and_requires_confirmation(self):
+        spec = next(t for t in tools.TOOLS if t["name"] == "apply_triage")
+        self.assertTrue(spec["requires_confirmation"])
+        self.assertEqual(spec["schema"]["required"], ["vuln_id"])
+
+    def test_read_only_tools_do_not_require_confirmation(self):
+        confirm_tools = {"propose_finding", "apply_triage"}
+        for spec in tools.TOOLS:
+            if spec["name"] not in confirm_tools:
+                self.assertFalse(spec.get("requires_confirmation"), spec["name"])
 
 
 if __name__ == "__main__":

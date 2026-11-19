@@ -1313,6 +1313,65 @@ async def chat(request: Request, scan_id: str, req: ChatRequest):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+class ConfirmToolRequest(BaseModel):
+    # tool_use_id -> approved. Must cover EXACTLY the ids the paused round's awaiting_confirmation
+    # event listed — see agent/loop.py's resume_after_confirmation() docstring for why a partial
+    # set is rejected rather than silently accepted.
+    decisions: dict[str, bool] = Field(..., min_length=1)
+
+
+@app.post("/api/v1/scans/{scan_id}/chat/{session_id}/confirm-tool")
+async def confirm_chat_tool(request: Request, scan_id: str, session_id: str, req: ConfirmToolRequest):
+    """Settles a tool_confirm_needed pause from a prior /chat stream (propose_finding or
+    apply_triage — see agent/tools.py) and continues the conversation, streamed the same way
+    /chat is. Approved tools write to the scan DB and are followed by a report regenerate so a
+    subsequent download reflects the change immediately, same as the Triage/AI-Fix endpoints."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    _chat_rate_limit()
+
+    detail = scanner.get_scan_detail(scan_id)
+    scan_dir = scanner._scan_dir(scan_id)
+    chat_db = chat_store.path_for(scan_dir)
+    sess = await chat_store.get_session(chat_db, session_id)
+    if not sess:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    try:
+        cfg = resolve_llm(sess["provider"], sess["model"], None, None)
+    except LlmError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if session_id in _ACTIVE_CHATS:
+        raise HTTPException(status_code=409, detail="This chat session is already generating")
+
+    ctx = Ctx(scan_id=scan_id, db_path=db_path, exe=exe, platform=detail.platform or "",
+              scan_dir=scan_dir, meta=scanner._read_scan_json(scan_id) or {})
+
+    async def gen():
+        if session_id in _ACTIVE_CHATS:
+            yield _sse({"type": "error", "message": "This chat session is already generating"})
+            return
+        _ACTIVE_CHATS.add(session_id)
+        wrote = False
+        try:
+            async for ev in agent_loop.resume_after_confirmation(ctx, chat_db, session_id, req.decisions, cfg):
+                if ev["type"] == "tool_result" and ev["ok"] and ev["name"] in ("propose_finding", "apply_triage"):
+                    wrote = True
+                yield _sse(ev)
+        except ValueError as e:
+            yield _sse({"type": "error", "message": str(e)})
+        except Exception:
+            import logging
+            logging.getLogger("malimite").exception("confirm-tool failed for scan %s", scan_id)
+            yield _sse({"type": "error", "message": "internal error"})
+        finally:
+            _ACTIVE_CHATS.discard(session_id)
+            if wrote:
+                await scanner.regenerate_report(scan_id)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.get("/api/v1/scans/{scan_id}/chat")
 async def get_chat(request: Request, scan_id: str, session_id: Optional[str] = None):
     _check_auth(request)

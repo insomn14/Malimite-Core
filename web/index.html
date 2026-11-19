@@ -904,7 +904,7 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 .chat-tool summary{cursor:pointer;color:var(--muted);overflow-wrap:anywhere}
 .chat-hint{color:var(--muted);font-size:.85rem}
 .chat-chips{display:flex;flex-wrap:wrap;gap:.4rem}
-.chat-input{display:flex;gap:.5rem;margin-top:.75rem;align-items:flex-end}
+.chat-input{display:flex;gap:.5rem;margin-top:.75rem;align-items:flex-end;position:relative}
 .chat-input textarea{flex:1;min-width:0;padding:.5rem;border:1px solid var(--border);border-radius:var(--radius);font:inherit;resize:vertical}
 .chat-note{margin-top:.5rem;font-size:.7rem;color:var(--muted)}
 .chat-attachments{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
@@ -914,6 +914,24 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 .chat-attach-chip button:hover{color:var(--red)}
 .chat-msg-images{display:flex;flex-wrap:wrap;gap:.4rem;margin:.35rem 0}
 .chat-msg-images img{max-width:220px;max-height:220px;border-radius:6px;border:1px solid var(--border);cursor:zoom-in}
+.badge-confirm{background:#ede9fe;color:#6d28d9}
+.badge-muted{background:#f1f5f9;color:var(--muted)}
+.chat-confirm{margin:.3rem 0;padding:.6rem .7rem;border:1px solid #c4b5fd;border-radius:8px;background:#f5f3ff;font-size:.8rem}
+.chat-confirm-head{display:flex;align-items:center;gap:.5rem;font-weight:600;margin-bottom:.4rem}
+.chat-confirm-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.3rem .8rem;font-size:.76rem;margin-bottom:.3rem}
+.chat-confirm-fields .k{color:var(--muted);margin-right:.3rem}
+.chat-confirm-fields .v{font-weight:600}
+.chat-confirm-block{margin:.35rem 0;font-size:.78rem}
+.chat-confirm-block .k{color:var(--muted);font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.15rem}
+.chat-confirm-block p{margin:0;white-space:pre-wrap}
+.chat-confirm-actions{display:flex;gap:.4rem;margin-top:.5rem}
+.chat-confirm-decided{font-size:.75rem;color:var(--muted);font-style:italic}
+.chat-slash-menu{position:absolute;bottom:100%;left:0;right:0;margin-bottom:.3rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(16,24,40,.12);max-height:220px;overflow-y:auto;z-index:20}
+.chat-slash-item{display:flex;flex-direction:column;gap:.1rem;padding:.5rem .7rem;cursor:pointer;border-bottom:1px solid var(--border)}
+.chat-slash-item:last-child{border-bottom:none}
+.chat-slash-item:hover,.chat-slash-item.active{background:var(--bg)}
+.chat-slash-item .cmd{font-weight:700;font-size:.82rem;font-family:ui-monospace,monospace}
+.chat-slash-item .desc{font-size:.72rem;color:var(--muted)}
 
 /* ══ design refresh: shared components (applies to every scan-result tab) ══ */
 .card{border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 4px 16px rgba(16,24,40,.04);padding:1.15rem 1.25rem}
@@ -3298,13 +3316,45 @@ async function renderTab(id, tab, detail) {
 
 /* ── AI Assistant tab ── */
 const chatState = {};
-function chatSt(id) { return chatState[id] || (chatState[id] = {sid: null, fresh: false, sessions: [], ctrl: null, busy: false, attachedFiles: []}); }
+function chatSt(id) { return chatState[id] || (chatState[id] = {sid: null, fresh: false, sessions: [], ctrl: null, busy: false, attachedFiles: [],
+  // Set from the awaiting_confirmation SSE event while a /add-finding or /triage tool call is
+  // paused waiting for the user's Approve/Decline click (see confirmPending) —
+  // {toolUseIds: [...], decisions: {...}}. Cleared once confirmPending() sends the complete set.
+  pendingConfirm: null,
+  // Left by renderVulnCard's "Discuss with AI" button (see fnSt.id's prefill pattern above) so
+  // the /triage slash command can reference the right finding without the user re-typing its id
+  // — {id, rule_id, title}. Consumed (read, not cleared) by chooseSlashCommand(); stays set
+  // across multiple /triage uses in the same chat since "the finding we're discussing" doesn't
+  // change just because one slash command was inserted.
+  pendingFindingContext: null}); }
+
+// Tool names the backend pauses for an explicit human decision before executing — mirrors
+// agent/loop.py's CONFIRM_REQUIRED (derived from tools.py's _spec(requires_confirmation=True)).
+// Used only to decide which already-rendered tool_use block gets Approve/Decline buttons instead
+// of the normal "running"/"done" status; the server is the actual gate either way.
+const CHAT_CONFIRM_TOOLS = new Set(['propose_finding', 'apply_triage']);
 
 const CHAT_PROMPTS = [
   'Give me a security overview of this app',
   'Find crypto misuse (weak algorithms, ECB, hardcoded keys)',
   'Find hardcoded secrets, tokens and URLs',
   'Where is certificate pinning implemented?',
+];
+
+/* Slash commands: typing "/" at the START of an empty textarea opens a small menu (see
+   chatUpdateSlashMenu/chatInsertSlashCommand below). Choosing one fills the textarea with a
+   ready-to-edit prompt — same "prefill, never auto-send" rule as every other quick-prompt chip
+   and the Functions tab's "Ask AI Assistant" button — the model only actually calls
+   propose_finding/apply_triage (see agent/tools.py) once the user reviews/sends the message
+   themselves, and even then only after an explicit Approve click (see chatToolHtml's confirm
+   card). `template` keeps {finding} as a literal placeholder when no finding context is open —
+   chatOpenSlashCommand replaces it with the real "[finding #N] ..." line prefillFinding() builds
+   (see renderVulnCard's "Discuss with AI" button) when one is. */
+const SLASH_COMMANDS = [
+  {cmd: '/add-finding', label: 'Add finding', desc: 'Add a new finding to Vulnerabilities from what we just discussed',
+   template: 'Based on what we discussed, please add this as a new finding to the Vulnerabilities tab (use propose_finding).'},
+  {cmd: '/triage', label: 'Triage', desc: 'Change a finding\u2019s status, severity override or note',
+   template: '{finding}Please update the triage for this finding: '},
 ];
 
 /* mini markdown (headings, bold/italic, `code`, fenced code, lists, tables, quotes, hr).
@@ -3400,8 +3450,8 @@ function chatProgressStart() {
   const paint = () => {
     if (!el.isConnected) { clearInterval(timer); return; }
     const writing = phase === 'writing';
-    el.querySelector('.lbl').textContent = phase === 'tool' ? 'Running tool' : writing ? 'Writing answer' : 'Thinking';
-    el.querySelector('.sub').textContent = phase === 'tool' ? (toolName || '') : '';
+    el.querySelector('.lbl').textContent = phase === 'tool' ? 'Running tool' : phase === 'confirm' ? 'Waiting for confirmation' : writing ? 'Writing answer' : 'Thinking';
+    el.querySelector('.sub').textContent = (phase === 'tool' || phase === 'confirm') ? (toolName || '') : '';
     el.querySelector('.t').textContent = chatElapsed(Date.now() - t0);
     el.classList.toggle('is-writing', writing);
   };
@@ -3424,12 +3474,68 @@ function chatProgressStart() {
   };
 }
 
+/** Human-readable preview of a propose_finding/apply_triage call's args, shown while it waits
+    for Approve/Decline — deliberately NOT the raw JSON chatToolHtml() shows for every other
+    tool, since this is the one place the user is asked to actually read and judge a write
+    before it happens. */
+function chatConfirmPreviewHtml(tu) {
+  // Two different shapes feed this: live SSE tool_confirm_needed events use `args` (see
+  // loop.py's yield), but a reloaded/re-rendered history turn (GET /chat, consumed by
+  // chatRenderHistory) is the raw persisted Anthropic-style tool_use block, which uses `input`
+  // instead — same field, different key depending on the source. Both must resolve here or a
+  // confirmation card survives a page reload with an empty, unreadable preview.
+  const a = tu.args || tu.input || {};
+  if (tu.name === 'propose_finding') {
+    const rows = [
+      ['Title', a.title], ['Severity', a.severity], ['CVSS', a.cvss_score], ['CWE', a.cwe],
+      ['Category', a.category], ['Affected', a.affected_function || a.affected_class],
+    ].filter(([, v]) => v != null && v !== '');
+    return `<div class="chat-confirm-fields">
+        ${rows.map(([k, v]) => `<div><span class="k">${esc(k)}</span><span class="v">${esc(String(v))}</span></div>`).join('')}
+      </div>
+      ${a.description ? `<div class="chat-confirm-block"><div class="k">Description</div><p>${esc(a.description)}</p></div>` : ''}
+      ${a.evidence ? `<div class="chat-confirm-block"><div class="k">Evidence</div><pre class="chat-code">${esc(a.evidence)}</pre></div>` : ''}
+      ${a.poc_steps ? `<div class="chat-confirm-block"><div class="k">Proof of Concept</div><p>${esc(a.poc_steps)}</p></div>` : ''}
+      ${a.remediation ? `<div class="chat-confirm-block"><div class="k">Remediation</div><p>${esc(a.remediation)}</p></div>` : ''}`;
+  }
+  if (tu.name === 'apply_triage') {
+    const rows = [
+      ['Finding', a.vuln_id != null ? '#' + a.vuln_id : null],
+      ['New status', a.status], ['Severity override', a.override_severity],
+      ['CVSS override', a.override_cvss_score], ['Note', a.note],
+    ].filter(([, v]) => v != null && v !== '');
+    return `<div class="chat-confirm-fields">
+      ${rows.map(([k, v]) => `<div><span class="k">${esc(k)}</span><span class="v">${esc(String(v))}</span></div>`).join('')}
+    </div>`;
+  }
+  return `<pre class="chat-code">${esc(JSON.stringify(a, null, 1))}</pre>`;
+}
+
+const CHAT_CONFIRM_LABEL = {propose_finding: 'Add this finding to Vulnerabilities?',
+                            apply_triage: 'Apply this triage change?'};
+
 function chatToolHtml(tu, result) {
+  if (!result && CHAT_CONFIRM_TOOLS.has(tu.name)) {
+    return `<div class="chat-confirm" data-tid="${escAttr(tu.id)}" data-tool="${escAttr(tu.name)}">
+      <div class="chat-confirm-head">
+        <span class="badge badge-confirm">needs confirmation</span>
+        <span>${esc(CHAT_CONFIRM_LABEL[tu.name] || 'Confirm this action?')}</span>
+      </div>
+      ${chatConfirmPreviewHtml(tu)}
+      <div class="chat-confirm-actions">
+        <button type="button" class="btn btn-primary btn-sm" data-confirm-approve="${escAttr(tu.id)}">${ico('check')} Approve</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-confirm-decline="${escAttr(tu.id)}">Decline</button>
+      </div>
+    </div>`;
+  }
   const status = !result ? 'running' : (result.is_error || result.ok === false ? 'error' : 'ok');
   const body = result ? esc(result.preview != null ? result.preview : result.content) : '';
+  const label = (CHAT_CONFIRM_TOOLS.has(tu.name) && result)
+    ? (result.is_error ? 'declined' : 'approved')
+    : null;
   return `<details class="chat-tool" data-tid="${escAttr(tu.id)}">
     <summary>${esc(tu.name)}(${esc(JSON.stringify(tu.args != null ? tu.args : tu.input))})
-      <span class="badge badge-${status === 'ok' ? 'done' : status === 'error' ? 'error' : 'running'}">${status}</span></summary>
+      <span class="badge badge-${label === 'approved' ? 'done' : label === 'declined' ? 'muted' : status === 'ok' ? 'done' : status === 'error' ? 'error' : 'running'}">${label || status}</span></summary>
     <pre class="chat-code">${body}</pre></details>`;
 }
 
@@ -3520,7 +3626,11 @@ async function exportChat(id, st, detail) {
   URL.revokeObjectURL(a.href);
 }
 
-function chatRenderHistory(messages) {
+/** `st` is optional (only tabAssistant's own loadSession() passes it) — when given, a trailing
+    assistant turn with an unresolved propose_finding/apply_triage tool_use (the chat was closed
+    or the page reloaded mid-confirmation) repopulates st.pendingConfirm so the Approve/Decline
+    buttons chatToolHtml() rendered for it are clickable again, not just visually present. */
+function chatRenderHistory(messages, st) {
   const box = document.getElementById('chat-msgs');
   if (!box) return;
   box.innerHTML = '';
@@ -3544,6 +3654,13 @@ function chatRenderHistory(messages) {
     }
   });
   if (!messages.length) chatShowPrompts();
+  if (st) {
+    const last = messages[messages.length - 1];
+    const pendingIds = last && last.role === 'assistant'
+      ? last.content.filter(b => b.type === 'tool_use' && CHAT_CONFIRM_TOOLS.has(b.name) && !results[b.id]).map(b => b.id)
+      : [];
+    st.pendingConfirm = pendingIds.length ? {toolUseIds: pendingIds} : null;
+  }
 }
 
 function chatShowPrompts() {
@@ -3634,18 +3751,16 @@ async function tabAssistant(el, id, detail) {
     if (want !== data.session_id) data = await api('/scans/' + id + '/chat?session_id=' + encodeURIComponent(want));
     st.sid = want; st.fresh = false; saveSid(want);
     renderSessions();
-    chatRenderHistory(data.messages);
+    chatRenderHistory(data.messages, st);
   }
 
-  async function send(text) {
-    text = (text || '').trim();
-    const files = st.attachedFiles;
-    if ((!text && !files.length) || st.busy) return;
-    st.busy = true; setBusy(true); showErr('');
-    document.querySelectorAll('.chat-hint,.chat-chips').forEach(n => n.remove());
-    const savedInput = $in.value;   // restored below if the request is rejected before streaming starts
-    const echoEl = chatAddUserEcho(text, files);
-    $in.value = '';
+  /** Shared by send() (a fresh user message) and confirmPending() (an Approve/Decline decision
+      resuming a paused tool_confirm_needed round) — both are "fetch an SSE stream, paint tokens/
+      tool blocks as they arrive, persist nothing client-side (the server already did)". Takes an
+      already-started fetch() Promise so each caller builds its own request body/URL/echo first.
+      Returns normally when the stream completes (including a clean awaiting_confirmation pause);
+      throws only for a genuine transport/HTTP failure, same as the old inline try in send(). */
+  async function streamChat(fetchPromise) {
     let bubble = null, buf = '', raf = 0, streaming = true;
     const paint = () => {
       raf = 0;
@@ -3680,7 +3795,7 @@ async function tabAssistant(el, id, detail) {
         buf += ev.text;
         if (!raf) raf = requestAnimationFrame(paint);
       }
-      else if (ev.type === 'tool_call') {
+      else if (ev.type === 'tool_call' || ev.type === 'tool_confirm_needed') {
         bubble = null; buf = '';  // next text starts a fresh bubble after the tool block
         const d = chatAdd('chat-ai', chatToolHtml(ev, null));
         if (d) {
@@ -3690,37 +3805,22 @@ async function tabAssistant(el, id, detail) {
           if (det) det.open = true;   // expanded while it runs; collapsed once the result lands
         }
         progress.keepLast();
-        progress.setPhase('tool', ev.name);
+        progress.setPhase(ev.type === 'tool_confirm_needed' ? 'confirm' : 'tool', ev.name);
       } else if (ev.type === 'tool_result') {
         const d = toolEls[ev.id];
         if (d) d.innerHTML = chatToolHtml({id: ev.id, name: ev.name, args: JSON.parse(d.dataset.args || 'null')}, ev);
         progress.setPhase('thinking');   // back to waiting for the model's next step
+      } else if (ev.type === 'awaiting_confirmation') {
+        st.pendingConfirm = {toolUseIds: ev.pending_ids};
       } else if (ev.type === 'error') { showErr(ev.message); }
     };
-    st.ctrl = new AbortController();
     try {
-      const body = {message: text, session_id: st.sid || null,
-        attachments: files.map(f => f.kind === 'image'
-          ? {kind: 'image', name: f.name, content: f.content, media_type: f.mediaType}
-          : {kind: 'text', name: f.name, content: f.content}),
-        provider: document.getElementById('chat-provider')?.value || null,
-        model: (() => {
-          const sel = document.getElementById('chat-model-select');
-          if (sel && !sel.hidden && sel.value !== LLM_MODEL_CUSTOM) return sel.value;
-          return document.getElementById('chat-model')?.value.trim() || null;
-        })()};
-      const r = await fetch('/api/v1/scans/' + id + '/chat', {method: 'POST', signal: st.ctrl.signal,
-        headers: headers({'Content-Type': 'application/json'}), body: JSON.stringify(body)});
+      const r = await fetchPromise;
       if (!r.ok) {
         let d = await r.text();
         try { const j = JSON.parse(d); if (j && j.detail != null) d = formatApiErrorDetail(j.detail); } catch (_) {}
         throw new Error(d || r.statusText);
       }
-      // Only now — request accepted by the server — is it safe to drop the user's typed text and
-      // attachments. Clearing this any earlier (as the single-attachment version of this code did)
-      // loses the user's attachments/text on every validation error (wrong provider, too-large
-      // file, rate limit, …), forcing them to re-pick files after simply fixing the provider.
-      st.attachedFiles = []; renderAttachment();
       const reader = r.body.getReader(), dec = new TextDecoder();
       let sse = '';
       for (;;) {
@@ -3733,6 +3833,41 @@ async function tabAssistant(el, id, detail) {
           if (chunk.startsWith('data: ')) { try { handle(JSON.parse(chunk.slice(6))); } catch (_) {} }
         }
       }
+    } finally {
+      if (raf) cancelAnimationFrame(raf);
+      paint();
+      stopStatus();
+    }
+  }
+
+  async function send(text) {
+    text = (text || '').trim();
+    const files = st.attachedFiles;
+    if ((!text && !files.length) || st.busy) return;
+    st.busy = true; setBusy(true); showErr('');
+    document.querySelectorAll('.chat-hint,.chat-chips').forEach(n => n.remove());
+    const savedInput = $in.value;   // restored below if the request is rejected before streaming starts
+    const echoEl = chatAddUserEcho(text, files);
+    $in.value = '';
+    st.ctrl = new AbortController();
+    try {
+      const body = {message: text, session_id: st.sid || null,
+        attachments: files.map(f => f.kind === 'image'
+          ? {kind: 'image', name: f.name, content: f.content, media_type: f.mediaType}
+          : {kind: 'text', name: f.name, content: f.content}),
+        provider: document.getElementById('chat-provider')?.value || null,
+        model: (() => {
+          const sel = document.getElementById('chat-model-select');
+          if (sel && !sel.hidden && sel.value !== LLM_MODEL_CUSTOM) return sel.value;
+          return document.getElementById('chat-model')?.value.trim() || null;
+        })()};
+      const fetchPromise = fetch('/api/v1/scans/' + id + '/chat', {method: 'POST', signal: st.ctrl.signal,
+        headers: headers({'Content-Type': 'application/json'}), body: JSON.stringify(body)});
+      // Only once the request is actually in flight — not necessarily accepted yet, but
+      // streamChat() throws before painting anything if it 4xx/5xxs — is it safe to drop the
+      // user's typed text/attachments; a validation error still restores them below.
+      await streamChat(fetchPromise);
+      st.attachedFiles = []; renderAttachment();
     } catch (e) {
       if (e.name !== 'AbortError') {
         showErr(e.message);
@@ -3745,12 +3880,47 @@ async function tabAssistant(el, id, detail) {
         if (echoEl && echoEl.isConnected) echoEl.remove();
       }
     } finally {
-      if (raf) cancelAnimationFrame(raf);
-      paint();
-      stopStatus();
       st.busy = false; st.ctrl = null;
       if (document.getElementById('chat-in')) { setBusy(false); document.getElementById('chat-in').focus(); }
       loadSession(st.sid).catch(() => {});  // refresh the list/titles; replays what the server persisted
+    }
+  }
+
+  /** Approve/Decline click handler for a propose_finding/apply_triage confirmation card — see
+      chatToolHtml()'s data-confirm-approve/decline buttons and streamChat()'s
+      awaiting_confirmation handling (st.pendingConfirm = {toolUseIds, decisions}). The server
+      rejects anything but a decision for EVERY pending id in one request (see loop.py's
+      resume_after_confirmation — every tool_use in a round needs exactly one matching
+      tool_result before the model can be asked anything else); in practice a round only ever
+      asks for one confirmation today, so this almost always sends immediately, but a future
+      round with more than one just waits for each visible card's own click before sending the
+      complete set. */
+  async function confirmPending(toolUseId, approved) {
+    if (!st.pendingConfirm || st.busy) return;
+    const card = document.querySelector(`.chat-confirm[data-tid="${CSS.escape(toolUseId)}"]`);
+    if (card) {
+      const actions = card.querySelector('.chat-confirm-actions');
+      if (actions) actions.innerHTML = `<span class="chat-confirm-decided">${approved ? '✓ Approved' : 'Declined'} — waiting for the result…</span>`;
+    }
+    st.pendingConfirm.decisions = st.pendingConfirm.decisions || {};
+    st.pendingConfirm.decisions[toolUseId] = approved;
+    const {toolUseIds, decisions} = st.pendingConfirm;
+    if (toolUseIds.some(tid => !(tid in decisions))) return;   // still waiting on another card
+
+    st.pendingConfirm = null;
+    st.busy = true; setBusy(true); showErr('');
+    st.ctrl = new AbortController();
+    try {
+      const fetchPromise = fetch(`/api/v1/scans/${id}/chat/${encodeURIComponent(st.sid)}/confirm-tool`,
+        {method: 'POST', signal: st.ctrl.signal, headers: headers({'Content-Type': 'application/json'}),
+         body: JSON.stringify({decisions})});
+      await streamChat(fetchPromise);
+    } catch (e) {
+      if (e.name !== 'AbortError') showErr(e.message);
+    } finally {
+      st.busy = false; st.ctrl = null;
+      if (document.getElementById('chat-in')) { setBusy(false); document.getElementById('chat-in').focus(); }
+      loadSession(st.sid).catch(() => {});
     }
   }
 
@@ -3835,13 +4005,67 @@ async function tabAssistant(el, id, detail) {
 
   document.getElementById('chat-export').onclick = () => exportChat(id, st, detail);
 
+  // ── slash command menu ──
+  // Only opens when "/" is the FIRST character of an otherwise-empty textarea (not "/" anywhere
+  // in running text) — matches how this feels in chat apps generally and avoids hijacking every
+  // path-looking or division-looking string the user types mid-sentence.
+  let slashIdx = -1;   // index into SLASH_COMMANDS of the currently highlighted item, or -1 = none
+  const closeSlashMenu = () => { document.getElementById('chat-slash-menu')?.remove(); slashIdx = -1; };
+  const paintSlashMenu = () => {
+    const menu = document.getElementById('chat-slash-menu');
+    if (!menu) return;
+    menu.querySelectorAll('.chat-slash-item').forEach((el, i) => el.classList.toggle('active', i === slashIdx));
+  };
+  const openSlashMenu = () => {
+    closeSlashMenu();
+    const menu = document.createElement('div');
+    menu.className = 'chat-slash-menu';
+    menu.id = 'chat-slash-menu';
+    menu.innerHTML = SLASH_COMMANDS.map((c, i) =>
+      `<div class="chat-slash-item" data-i="${i}"><span class="cmd">${esc(c.cmd)}</span><span class="desc">${esc(c.desc)}</span></div>`
+    ).join('');
+    menu.onmousedown = e => {   // mousedown (not click): fires before the textarea's blur steals focus
+      const item = e.target.closest('.chat-slash-item');
+      if (item) { e.preventDefault(); chooseSlashCommand(Number(item.dataset.i)); }
+    };
+    document.querySelector('.chat-input')?.appendChild(menu);
+    slashIdx = 0;
+    paintSlashMenu();
+  };
+  const chooseSlashCommand = i => {
+    const c = SLASH_COMMANDS[i];
+    if (!c) return;
+    const findingLine = st.pendingFindingContext ? `[finding #${st.pendingFindingContext.id}] ` : '';
+    $in.value = c.template.replace('{finding}', findingLine);
+    closeSlashMenu();
+    $in.focus();
+    // Cursor at the end — most templates end mid-sentence ("...please update the triage for
+    // this finding: ") expecting the user to keep typing right there.
+    $in.setSelectionRange($in.value.length, $in.value.length);
+  };
+  $in.addEventListener('input', () => {
+    if ($in.value === '/') openSlashMenu();
+    else if (slashIdx >= 0 && !$in.value.startsWith('/')) closeSlashMenu();
+  });
+  $in.addEventListener('blur', () => setTimeout(closeSlashMenu, 150));   // delay: let the mousedown above land first
+
   document.getElementById('chat-send').onclick = () => send($in.value);
   document.getElementById('chat-stop').onclick = () => st.ctrl && st.ctrl.abort();
-  $in.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($in.value); } };
+  $in.onkeydown = e => {
+    if (slashIdx >= 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); slashIdx = (slashIdx + 1) % SLASH_COMMANDS.length; paintSlashMenu(); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); slashIdx = (slashIdx - 1 + SLASH_COMMANDS.length) % SLASH_COMMANDS.length; paintSlashMenu(); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); chooseSlashCommand(slashIdx); return; }
+      if (e.key === 'Escape') { e.preventDefault(); closeSlashMenu(); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($in.value); }
+  };
   document.getElementById('chat-msgs').onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.p) send(b.dataset.p);
     else if (b.dataset.fill != null) { $in.value = b.dataset.fill; $in.focus(); }
+    else if (b.dataset.confirmApprove) confirmPending(b.dataset.confirmApprove, true);
+    else if (b.dataset.confirmDecline) confirmPending(b.dataset.confirmDecline, false);
   };
   document.getElementById('chat-new').onclick = () => { if (!st.busy) startFresh(); };
   document.getElementById('chat-del').onclick = async () => {
@@ -3989,6 +4213,23 @@ function extractErrorReason(log) {
 /* ── summary tab ── */
 let vulnPendingSev = null;   // severity to pre-filter the Vulnerabilities tab with (set from Summary)
 window.openVulnsAt = function(id, sev) { vulnPendingSev = sev || null; goTab(id, 'vulnerabilities'); };
+
+/** "Discuss with AI" button on a Vulnerabilities card (see renderVulnCard): opens the AI
+    Assistant with this finding's id/rule_id/title left in chatSt(id).pendingFindingContext —
+    the /triage slash command (SLASH_COMMANDS' {finding} placeholder) reads that back so
+    "update the status of this finding" never needs the user to look up and retype a numeric id.
+    Same prefill-only, never-auto-send contract as every other cross-tab handoff in this file —
+    tabAssistant's own prefill consumption still decides when the textarea actually gets filled.
+    renderVulnCard() has no scan id of its own to pass in (same as submitTriage() below it —
+    see its own location.hash comment), so this reads it from the URL the same way. */
+window.discussFindingWithAi = function(vulnId, ruleId, title) {
+  const scanId = location.hash.split('/')[2];
+  if (!scanId) return;
+  const st = chatSt(scanId);
+  st.pendingFindingContext = {id: vulnId, rule_id: ruleId, title};
+  st.prefill = `[finding #${vulnId}] ${ruleId ? ruleId + ' — ' : ''}${title}\n\n`;
+  goTab(scanId, 'assistant');
+};
 
 /* Keeps the running scan's "Live log" panel fed until the scan finishes or the panel goes away. */
 async function startLiveLog(id) {
@@ -5439,6 +5680,13 @@ function renderVulnCard(group, i) {
             <button class="btn-link" onclick="toggleTriage(${v.id})">Edit</button>
           </div>
           <div id="triage-${v.id}" hidden>${renderTriageForm(v)}</div>
+        </div>
+        <div class="vuln-section">
+          <button class="btn btn-outline btn-sm"
+                  onclick="discussFindingWithAi(${v.id}, '${escAttr(v.rule_id || '')}', '${escAttr(v.title || '')}')">
+            ${ico('message')} Discuss with AI
+          </button>
+          <span style="font-size:.7rem;color:var(--muted);margin-left:.5rem">Opens the AI Assistant with this finding's context — try <code>/triage</code> there to change its status from the conversation.</span>
         </div>
       </div>
     </div>`;

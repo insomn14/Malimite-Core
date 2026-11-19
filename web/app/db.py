@@ -1,5 +1,7 @@
 """Async SQLite queries against the analysis.sqlite produced by the CLI."""
 import json
+import time
+import uuid
 
 import aiosqlite
 from pathlib import Path
@@ -32,6 +34,14 @@ _TRIAGE_COLUMNS = [
     ("UpdatedAt",         "INTEGER"),
 ]
 
+# 'rule' (default — the scan engine's own rule-based findings) or 'ai_assistant' (added by a
+# human confirming the AI Assistant's /add-finding proposal — see
+# agent/tools.py's propose_finding()). Purely informational: it never changes how a row is
+# triaged, scored, or reported, only how the Vulnerabilities tab labels its origin for a
+# reviewer. Existing rows backfill to 'rule' (the only thing that could have created them before
+# this column existed).
+_SOURCE_COLUMN = [("Source", "TEXT DEFAULT 'rule'")]
+
 # Columns added for the "AI Fix" feature: LLM-rewritten report text, stored as reversible
 # overrides (never touch Description/Evidence/PocSteps/Remediation). Risk (severity/CVSS)
 # reuses the triage OverrideSeverity/OverrideCvssScore columns above; AiFixSeverityWasAi
@@ -51,11 +61,11 @@ _AI_FIX_COLUMNS = [
 
 
 async def _ensure_triage_columns(db) -> None:
-    """ALTER TABLE Vulnerabilities to add any missing triage / AI-fix columns."""
+    """ALTER TABLE Vulnerabilities to add any missing triage / AI-fix / source columns."""
     async with db.execute("PRAGMA table_info(Vulnerabilities)") as cur:
         rows = await cur.fetchall()
     existing = {r[1].lower() for r in rows}  # column names (case-insensitive)
-    for col, decl in _TRIAGE_COLUMNS + _AI_FIX_COLUMNS:
+    for col, decl in _TRIAGE_COLUMNS + _AI_FIX_COLUMNS + _SOURCE_COLUMN:
         if col.lower() not in existing:
             try:
                 await db.execute(f"ALTER TABLE Vulnerabilities ADD COLUMN {col} {decl}")
@@ -317,7 +327,8 @@ async def get_vulnerabilities(db_path: str, executable: str) -> list[dict]:
                       COALESCE(Status,'open'), OverrideSeverity, OverrideCvssScore,
                       OverrideNote, UpdatedAt,
                       OverrideDescription, OverrideEvidence, OverridePocSteps, OverrideRemediation,
-                      COALESCE(AiFixStatus,'none'), AiFixProvider, AiFixModel, AiFixAt
+                      COALESCE(AiFixStatus,'none'), AiFixProvider, AiFixModel, AiFixAt,
+                      COALESCE(Source,'rule')
                FROM Vulnerabilities WHERE ExecutableName=?
                ORDER BY
                  CASE WHEN COALESCE(Status,'open') IN ('false_positive','fixed') THEN 1 ELSE 0 END,
@@ -377,6 +388,9 @@ async def get_vulnerabilities(db_path: str, executable: str) -> list[dict]:
             "ai_fix_provider":  r[25],
             "ai_fix_model":     r[26],
             "ai_fix_at":        r[27],
+            # 'rule' (scan engine) or 'ai_assistant' (added via /add-finding — see
+            # agent/tools.py's propose_finding()). Display-only, never affects triage/scoring.
+            "source":           r[28],
             # derived: effective text after AI Fix override (falls back to the original)
             "effective_description": override_description or description,
             "effective_evidence":    override_evidence or evidence,
@@ -474,6 +488,53 @@ async def update_vulnerability_ai_fix(
         async with db.execute(sql, args) as cur:
             await db.commit()
             return cur.rowcount > 0
+
+
+async def insert_vulnerability_manual(
+    db_path: str,
+    executable: str,
+    *,
+    title: str,
+    severity: str,
+    cvss_score: Optional[float] = None,
+    cwe: Optional[str] = None,
+    category: Optional[str] = None,
+    description: Optional[str] = None,
+    evidence: Optional[str] = None,
+    evidence_location: Optional[str] = None,
+    poc_steps: Optional[str] = None,
+    remediation: Optional[str] = None,
+    reference_url: Optional[str] = None,
+    affected_type: Optional[str] = None,
+    affected_name: Optional[str] = None,
+) -> int:
+    """Inserts one new finding the AI Assistant's /add-finding proposed and a human confirmed —
+    see agent/tools.py's propose_finding(). Unlike every other row in this table, this one was
+    never produced by the rule-based scan engine, so RuleId is a synthesized, guaranteed-unique
+    `AI-ASSISTANT-<uuid4 hex>` (the schema allows any TEXT/NULL there — nothing downstream
+    assumes a rule-catalog RuleId format) and Source='ai_assistant' marks it as such for the
+    Vulnerabilities tab to badge distinctly. Participates in the same triage/AI-Fix/report
+    pipeline as every other row from this point on — this function's only job is the one-time
+    insert; status defaults to 'open' like a freshly scanned finding.
+
+    Returns the new row's id."""
+    rule_id = f"AI-ASSISTANT-{uuid.uuid4().hex}"
+    now_ms = int(time.time() * 1000)
+    async with aiosqlite.connect(db_path) as db:
+        await _ensure_triage_columns(db)
+        async with db.execute(
+            """INSERT INTO Vulnerabilities
+                 (RuleId, Title, Category, Severity, CvssScore, Cwe, Description,
+                  AffectedType, AffectedName, Evidence, EvidenceLocation,
+                  PocSteps, Remediation, ReferenceUrl, ExecutableName, CreatedAt,
+                  Status, Source)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'open','ai_assistant')""",
+            (rule_id, title, category, severity.upper(), cvss_score, cwe, description,
+             affected_type, affected_name, evidence, evidence_location,
+             poc_steps, remediation, reference_url, executable, now_ms),
+        ) as cur:
+            await db.commit()
+            return cur.lastrowid
 
 
 async def revert_vulnerability_ai_fix(db_path: str, vuln_id: int) -> bool:
@@ -776,25 +837,30 @@ _SUPPRESSED = ("false_positive", "fixed")
 
 
 async def get_vulnerabilities_brief(db_path: str, executable: str) -> list[dict]:
-    """Raw finding rows for the assistant. Strictly read-only: never runs the triage-column migration."""
+    """Raw finding rows for the assistant. Strictly read-only: never runs the triage-column migration.
+    Includes `id` — the only writable identifier apply_triage() accepts — so the assistant can act on a
+    specific occurrence it just read about without ever having to guess or infer a row id."""
     async with _ro(db_path) as db:
         async with db.execute("PRAGMA table_info(Vulnerabilities)") as cur:
             cols = {r[1] for r in await cur.fetchall()}
         sel = lambda c, default: c if c in cols else default  # noqa: E731
         async with db.execute(
-            f"""SELECT RuleId, Title, Category, Severity, CvssScore, Cwe, AffectedType, AffectedName, Evidence,
+            f"""SELECT id, RuleId, Title, Category, Severity, CvssScore, Cwe, AffectedType, AffectedName, Evidence,
                        EvidenceLocation, COALESCE({sel('Status', 'NULL')}, 'open'), {sel('OverrideSeverity', 'NULL')},
                        {sel('OverrideCvssScore', 'NULL')}
                 FROM Vulnerabilities WHERE ExecutableName=?""", (executable,)) as cur:
             rows = await cur.fetchall()
-    keys = ("rule_id", "title", "category", "severity", "cvss", "cwe", "affected_type", "affected_name", "evidence",
-            "evidence_location", "status", "override_severity", "override_cvss")
+    keys = ("id", "rule_id", "title", "category", "severity", "cvss", "cwe", "affected_type", "affected_name",
+            "evidence", "evidence_location", "status", "override_severity", "override_cvss")
     return [dict(zip(keys, r)) for r in rows]
 
 
 def group_issues(rows: list[dict]) -> list[dict]:
     """Same grouping as the Vulnerabilities tab: one issue per RuleId, effective (override) severity/CVSS,
-    `hits` = number of occurrences. Active issues first, then by severity."""
+    `hits` = number of occurrences. Active issues first, then by severity. Each `evidence` entry carries
+    its own `id` (the specific row apply_triage()/propose_finding's "don't duplicate this" check need) —
+    the representative's `id` alone isn't enough once a rule_id has more than one occurrence, since a
+    human/assistant may need to act on one that ISN'T the representative."""
     groups: dict[str, list[dict]] = {}
     for i, r in enumerate(rows):
         groups.setdefault(r["rule_id"] or f"__row_{i}", []).append(r)
@@ -808,8 +874,9 @@ def group_issues(rows: list[dict]) -> list[dict]:
         out.append({
             "rule_id": None if key.startswith("__row_") else key, "title": rep["title"],
             "severity": sev(rep), "cvss": cvss, "cwe": rep["cwe"], "category": rep["category"],
-            "status": (rep["status"] or "open").lower(), "hits": len(rs),
-            "evidence": [{"where": r["affected_name"], "evidence": (r["evidence"] or "")[:200]} for r in rs[:5]],
+            "status": (rep["status"] or "open").lower(), "hits": len(rs), "id": rep["id"],
+            "evidence": [{"id": r["id"], "where": r["affected_name"], "evidence": (r["evidence"] or "")[:200]}
+                        for r in rs[:5]],
         })
     out.sort(key=lambda g: (g["status"] in _SUPPRESSED, _SEV_ORDER.get(g["severity"], 5), -(g["cvss"] or 0)))
     return out
