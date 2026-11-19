@@ -1107,6 +1107,7 @@ tr:hover td{background:#fafaff}
 .cfgp-note{font-size:.72rem;color:var(--muted);line-height:1.4}
 .cfgp-note.err{color:#b91c1c}
 .cfgp-note.ok{color:#15803d}
+.cfgp-note.warn{color:#92400e}
 @media(max-width:600px){.cfgp-grid{grid-template-columns:1fr}}
 </style>
 <!-- Vendored, self-hosted (not a CDN) so the Functions tab's syntax highlighting works offline — see THIRD_PARTY_NOTICES.md -->
@@ -1378,32 +1379,6 @@ window.importFromClaudeCode = async function() {
         <strong>before</strong> clicking Import again.
       </div>`;
     if (errEl) errEl.innerHTML = msg;
-    if (typeof refreshOauthStatusCfg === 'function') refreshOauthStatusCfg();
-  } catch (e) {
-    if (errEl) errEl.innerHTML = `<div class="alert alert-error" style="margin-top:.4rem">${esc(e.message || String(e))}</div>`;
-  }
-};
-
-window.importOauthToken = async function() {
-  const errEl = document.getElementById('oauth-import-err');
-  if (errEl) errEl.innerHTML = '';
-  const access_token = (document.getElementById('oauth-imp-access')?.value || '').trim();
-  const refresh_token = (document.getElementById('oauth-imp-refresh')?.value || '').trim();
-  const expires_at_ms = parseInt((document.getElementById('oauth-imp-expires')?.value || '').trim(), 10);
-  if (!access_token || !refresh_token || !Number.isFinite(expires_at_ms)) {
-    if (errEl) errEl.innerHTML = '<div class="alert alert-error" style="margin-top:.4rem">Fill in all three fields (expiresAt must be a number).</div>';
-    return;
-  }
-  try {
-    await api('/auth/claude-oauth/import-token', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({access_token, refresh_token, expires_at_ms}),
-    });
-    ['oauth-imp-access', 'oauth-imp-refresh', 'oauth-imp-expires'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
     if (typeof refreshOauthStatusCfg === 'function') refreshOauthStatusCfg();
   } catch (e) {
     if (errEl) errEl.innerHTML = `<div class="alert alert-error" style="margin-top:.4rem">${esc(e.message || String(e))}</div>`;
@@ -2858,6 +2833,13 @@ function renderConfigProviderForm(provider, meta, st) {
     </div>`;
 }
 
+// Holds the login_id of the browser login currently awaiting a pasted code — set by
+// startClaudeOauthLogin(), consumed (and cleared) by submitClaudeOauthCode(). Module-level
+// rather than per-render state because the Config page's own re-renders (e.g. a
+// fetchConfigProviders() refresh while the paste form is open) must not lose it.
+let _claudeOauthLoginId = null;
+let _claudeOauthPasteOpen = false;
+
 function renderConfigOauthCard(data) {
   const st = configProviderStatus(data, 'claude-oauth');
   const meta = CONFIG_PROVIDER_META['claude-oauth'];
@@ -2873,28 +2855,103 @@ function renderConfigOauthCard(data) {
       </div>
       <div class="cfgp-meta" id="oauth-status-text-cfg">Checking status…</div>
       <div class="cfgp-actions">
+        <button type="button" class="btn ${st.configured ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="startClaudeOauthLogin()">
+          ${ico('plug')} ${st.configured ? 'Re-login with Claude' : 'Login with Claude'}
+        </button>
         ${!isDefault ? `<button type="button" class="btn btn-outline btn-sm" onclick="setConfigDefault('claude-oauth')">Set as default</button>` : ''}
       </div>
+      ${_claudeOauthPasteOpen ? `
+      <div class="cfgp-form" id="oauth-paste-form">
+        <p style="font-size:.76rem;margin:0;color:var(--muted)">
+          A new tab opened to Claude's sign-in page. After you authorize, it shows an
+          <strong>authentication code</strong> — paste it below (the whole thing, including
+          anything after a <code>#</code>).
+        </p>
+        <label>Authentication code
+          <input id="oauth-paste-code" class="ctl" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="paste the code Claude showed you"/>
+        </label>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+          <button type="button" class="btn btn-primary btn-sm" id="oauth-paste-submit" onclick="submitClaudeOauthCode()">${ico('check')} Submit code</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="cancelClaudeOauthLogin()">Cancel</button>
+        </div>
+        <div id="oauth-paste-note" class="cfgp-note"></div>
+      </div>` : ''}
       <div id="oauth-claude-code-row-cfg" hidden style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem">
         <button type="button" class="btn btn-outline btn-sm" onclick="importFromClaudeCode()">Import from Claude Code CLI</button>
         <span style="font-size:.72rem;color:var(--muted)">Found a <code>claude /login</code> session on this server — one click reuses it.</span>
       </div>
-      <details>
-        <summary style="cursor:pointer;font-weight:600;font-size:.78rem">…or paste a token manually</summary>
-        <p style="font-size:.72rem;margin:.4rem 0;color:var(--muted)">
-          From <code>~/.claude/.credentials.json</code>'s <code>claudeAiOauth</code> object (wherever you last
-          ran <code>claude /login</code>). Sent straight to this server — never shown elsewhere.
-        </p>
-        <div style="display:flex;flex-direction:column;gap:.35rem;max-width:420px">
-          <input id="oauth-imp-access" class="ctl" type="password" placeholder="accessToken (sk-ant-oat01-...)"/>
-          <input id="oauth-imp-refresh" class="ctl" type="password" placeholder="refreshToken (sk-ant-ort01-...)"/>
-          <input id="oauth-imp-expires" class="ctl" type="text" placeholder="expiresAt (epoch milliseconds)"/>
-          <button type="button" class="btn btn-outline btn-sm" onclick="importOauthToken()" style="align-self:flex-start">Import token</button>
-        </div>
-      </details>
       <div id="oauth-import-err"></div>
     </div>`;
 }
+
+/** "Login with Claude": asks the server for a fresh authorize URL (PKCE handled entirely
+    server-side — no secret ever reaches this script), opens it in a new tab, and reveals the
+    "paste the code back" form. Mirrors clicking `claude /login` from a terminal that has no
+    browser of its own: a separate browser does the signing-in, and a short code comes back. */
+window.startClaudeOauthLogin = async function() {
+  // Opened synchronously, in the SAME tick as the click, same pattern the report-download
+  // handler uses below (search window.open('', '_blank')) — most popup blockers only allow a
+  // new tab opened directly from a user gesture; by the time the /start response below comes
+  // back (an awaited network round-trip), that gesture has already lapsed. An empty about:blank
+  // tab opened right now and redirected once the real URL is known survives that restriction.
+  const popup = window.open('', '_blank', 'noopener');
+  try {
+    const r = await api('/auth/claude-oauth/start', {method: 'POST'});
+    _claudeOauthLoginId = r.login_id;
+    _claudeOauthPasteOpen = true;
+    if (popup) popup.location = r.authorize_url;
+    if (_configCache) render(renderConfigPage(_configCache));
+    if (!popup) {
+      const n = document.getElementById('oauth-paste-note');
+      if (n) {
+        n.className = 'cfgp-note warn';
+        n.innerHTML = `Your browser blocked the popup — <a href="${escAttr(r.authorize_url)}" target="_blank" rel="noopener">open Claude's sign-in page manually</a>, then paste the code it shows you below.`;
+      }
+    }
+    setTimeout(() => document.getElementById('oauth-paste-code')?.focus(), 50);
+  } catch (e) {
+    if (popup) popup.close();
+    alert('Could not start Claude login: ' + (e.message || e));
+  }
+};
+
+window.cancelClaudeOauthLogin = function() {
+  _claudeOauthLoginId = null;
+  _claudeOauthPasteOpen = false;
+  if (_configCache) render(renderConfigPage(_configCache));
+};
+
+window.submitClaudeOauthCode = async function() {
+  const input = document.getElementById('oauth-paste-code');
+  const btn = document.getElementById('oauth-paste-submit');
+  const note = document.getElementById('oauth-paste-note');
+  const code = (input?.value || '').trim();
+  if (!code) {
+    if (note) { note.textContent = 'Paste the authentication code first.'; note.className = 'cfgp-note err'; }
+    return;
+  }
+  if (!_claudeOauthLoginId) {
+    if (note) { note.textContent = 'This login attempt expired — click Login with Claude again.'; note.className = 'cfgp-note err'; }
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.innerHTML = ico('loader', 'ico-spin') + ' Submitting…'; }
+  try {
+    await api('/auth/claude-oauth/exchange', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({login_id: _claudeOauthLoginId, code}),
+    });
+    _claudeOauthLoginId = null;
+    _claudeOauthPasteOpen = false;
+    await fetchConfigProviders();
+    render(renderConfigPage(_configCache));
+    refreshOauthStatusCfg();
+  } catch (e) {
+    if (note) { note.textContent = e.message || String(e); note.className = 'cfgp-note err'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = ico('check') + ' Submit code'; }
+  }
+};
 
 function renderConfigProviderCard(data, provider) {
   if (provider === 'claude-oauth') return renderConfigOauthCard(data);

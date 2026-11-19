@@ -874,18 +874,19 @@ async def get_learned_rules(request: Request, platform: Optional[str] = None):
 
 # ── Claude OAuth (claude-oauth provider) ────────────────────────────────────
 #
-# No browser flow lives here: this container has no browser, and the loopback
-# callback server the flow needs (localhost:53692) isn't reachable from a
-# browser running on the host anyway. These routes only import an
-# already-completed login — either auto-detected from the official `claude`
-# CLI's own session file, or pasted directly — the same two paths
-# `malimite claude-login --import` / `--access-token ...` expose on the CLI
-# side (see ClaudeLoginCommand.java).
+# Two independent ways to get a session: (1) the browser login below — the Config tab
+# opens Anthropic's own sign-in page, the operator authorizes there, and pastes back the
+# single authentication code Anthropic's code-display page shows them (see
+# anthropic_oauth.py's module docstring for why this app uses that redirect_uri instead
+# of a loopback callback server: this process has no browser of its own, and the
+# operator's browser is typically on a different machine than this server); (2) importing
+# an already-completed `claude /login` session, auto-detected from the official `claude`
+# CLI's own session file — the same path `malimite claude-login --import` exposes on the
+# CLI side (see ClaudeLoginCommand.java).
 
-class ImportTokenRequest(BaseModel):
-    access_token: str
-    refresh_token: str
-    expires_at_ms: int
+class ExchangeCodeRequest(BaseModel):
+    login_id: str = Field(..., max_length=200)
+    code: str = Field(..., max_length=4096)
 
 
 @app.get("/api/v1/auth/claude-oauth/status")
@@ -898,15 +899,26 @@ async def claude_oauth_status(request: Request):
     }
 
 
-@app.post("/api/v1/auth/claude-oauth/import-token")
-async def claude_oauth_import_token(request: Request, req: ImportTokenRequest):
+@app.post("/api/v1/auth/claude-oauth/start")
+async def claude_oauth_start(request: Request):
+    """Backs the Config tab's "Login with Claude" button: generates PKCE and an Anthropic
+    authorize URL. The browser opens this URL itself (new tab) — this endpoint never talks
+    to Anthropic; it only prepares the request the operator's own browser will make."""
     _check_auth(request)
-    if not req.access_token.startswith("sk-ant-oat"):
-        raise HTTPException(status_code=422,
-                             detail="access_token doesn't look like an OAuth token "
-                                    "(expected it to start with 'sk-ant-oat').")
-    anthropic_oauth.import_manual(req.access_token, req.refresh_token, req.expires_at_ms)
-    return {"ok": True}
+    return anthropic_oauth.start_login()
+
+
+@app.post("/api/v1/auth/claude-oauth/exchange")
+async def claude_oauth_exchange(request: Request, req: ExchangeCodeRequest):
+    """Backs the Config tab's "Submit code" button: exchanges the authentication code the
+    operator pasted back (from Anthropic's code-display page) for a token pair, scoped to
+    the login_id claude_oauth_start returned. Never echoes the code or any token value back."""
+    _check_auth(request)
+    try:
+        result = await anthropic_oauth.exchange_login_code(req.login_id, req.code)
+    except anthropic_oauth.AnthropicOAuthError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"ok": True, "changed": result.changed, "token_fingerprint": result.fingerprint}
 
 
 @app.post("/api/v1/auth/claude-oauth/import-claude-code")
@@ -1023,8 +1035,8 @@ async def set_config_provider(request: Request, provider: str, req: LlmProviderC
     _check_auth(request)
     if provider == "claude-oauth":
         raise HTTPException(status_code=422, detail="claude-oauth has no key fields; use "
-                                                     "/api/v1/auth/claude-oauth/import-token or "
-                                                     "/import-claude-code instead.")
+                                                     "/api/v1/auth/claude-oauth/start + /exchange "
+                                                     "(Login with Claude) or /import-claude-code instead.")
     p = _require_known_provider(provider)
     stored = llm_config.set_provider(
         p, api_key=req.api_key, base_url=req.base_url, access_key_id=req.access_key_id,
