@@ -5324,6 +5324,27 @@ async function tabVulnerabilities(el, id, detail) {
   }
 }
 
+/** Finds the occurrence within a group whose AI Fix text should be shown. Representative
+    selection (groupFindingsByRule) is driven by status+severity so filters/counts/sort stay
+    meaningful — it is deliberately NOT changed here (see aeRows()'s identical pattern in the
+    Auto Enhance modal, which this mirrors). The bug this fixes: changing an AI-fixed
+    occurrence's triage status can make a DIFFERENT, never-fixed occurrence become the
+    representative (status is the #1 sort key) — the card then silently showed that other
+    occurrence's unmodified text, which looked exactly like the AI Fix had been reverted even
+    though it's untouched in the database. Prefers the representative itself when IT is the
+    fixed one (the common case — nothing to reconcile); otherwise falls back to the
+    most-recently-fixed occurrence elsewhere in the group, if any. */
+function pickAiFixSource(group) {
+  const v = group.representative;
+  if (v.ai_fix_status === 'applied') return v;
+  let best = null;
+  for (const o of group.occurrences) {
+    if (o.ai_fix_status !== 'applied') continue;
+    if (!best || (o.ai_fix_at || 0) > (best.ai_fix_at || 0)) best = o;
+  }
+  return best;
+}
+
 function renderVulnCard(group, i) {
   const v = group.representative;
   const assets = uniqueAffectedAssets(group.occurrences);
@@ -5337,12 +5358,20 @@ function renderVulnCard(group, i) {
   const sevClass  = effSev.toLowerCase();
   const status    = (v.status || 'open').toLowerCase();
   const isFp      = status === 'false_positive';
-  const isAiFixed = v.ai_fix_status === 'applied';
+  // "Is this GROUP AI-fixed" (shown as the badge/strip/text source) is judged across every
+  // occurrence, not just the representative — see pickAiFixSource()'s comment.
+  const aiFixSource = pickAiFixSource(group);
+  const isAiFixed = aiFixSource != null;
+  const aiFixOnOtherOccurrence = isAiFixed && aiFixSource.id !== v.id;
   // AI Fix overrides win over the original scanned text (see db.get_vulnerabilities effective_*).
-  const descText  = v.effective_description ?? v.description;
-  const evText    = v.effective_evidence ?? v.evidence;
-  const pocText   = v.effective_poc_steps ?? v.poc_steps;
-  const remText   = v.effective_remediation ?? v.remediation;
+  // Sourced from aiFixSource (which may be a different occurrence than `v` — see above), not `v`
+  // directly, so the fixed text keeps showing regardless of which occurrence triage made
+  // current. Risk (severity/CVSS/status) above still reflects `v` — those stay governed by
+  // THIS occurrence's own triage state, independent of which occurrence carries the AI text.
+  const descText  = aiFixSource ? (aiFixSource.effective_description ?? aiFixSource.description) : v.description;
+  const evText    = aiFixSource ? (aiFixSource.effective_evidence ?? aiFixSource.evidence) : v.evidence;
+  const pocText   = aiFixSource ? (aiFixSource.effective_poc_steps ?? aiFixSource.poc_steps) : v.poc_steps;
+  const remText   = aiFixSource ? (aiFixSource.effective_remediation ?? aiFixSource.remediation) : v.remediation;
   const assetSearch = assets.map(a => [a.affected_name, a.affected_type, a.evidence_location].filter(Boolean).join(' ')).join(' ');
   const search    = [v.rule_id, v.title, v.category, effSev, assetSearch, evText, status]
     .filter(Boolean).join(' ').toLowerCase();
@@ -5359,8 +5388,9 @@ function renderVulnCard(group, i) {
     </div>` : '';
   const aiFixStrip = isAiFixed ? `
     <div class="vuln-status-strip vuln-status-strip-ai">
-      <span>✨ <span class="label">AI Fix applied</span>${v.ai_fix_provider ? ` by ${esc(v.ai_fix_provider)}${v.ai_fix_model ? '/' + esc(v.ai_fix_model) : ''}` : ''}</span>
+      <span>✨ <span class="label">AI Fix applied</span>${aiFixSource.ai_fix_provider ? ` by ${esc(aiFixSource.ai_fix_provider)}${aiFixSource.ai_fix_model ? '/' + esc(aiFixSource.ai_fix_model) : ''}` : ''}</span>
       <span>· Description/Evidence/PoC/Remediation and/or Risk above may be AI-rewritten.</span>
+      ${aiFixOnOtherOccurrence ? `<span>· Shown from occurrence #${aiFixSource.id} of this issue — this card's own Risk/Status (#${v.id}) is tracked separately below.</span>` : ''}
     </div>` : '';
 
   return `
@@ -5429,8 +5459,9 @@ function renderVulnCard(group, i) {
         <div class="vuln-section">
           <div class="vuln-section-title" style="display:flex;justify-content:space-between;align-items:center">
             <span>✨ AI Fix <em style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(applies to finding #${v.id})</em></span>
-            <button class="btn-link" onclick="toggleAiFix(${v.id})">${isAiFixed ? 'Manage' : 'Run'}</button>
+            <button class="btn-link" onclick="toggleAiFix(${v.id})">${v.ai_fix_status === 'applied' ? 'Manage' : 'Run'}</button>
           </div>
+          ${aiFixOnOtherOccurrence ? `<p style="font-size:.72rem;color:var(--muted);margin:.2rem 0 0">This occurrence (#${v.id}) hasn't been AI-fixed itself — the text above comes from occurrence #${aiFixSource.id}. Running AI Fix here rewrites #${v.id} independently.</p>` : ''}
           <div id="aifix-${v.id}" hidden>${renderAiFixPanel(v)}</div>
         </div>
         <div class="vuln-section">
