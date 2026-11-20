@@ -523,7 +523,8 @@ class WriteToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(new_row["severity"], "HIGH")
         self.assertEqual(new_row["status"], "open")
         self.assertEqual(new_row["source"], "ai_assistant")
-        self.assertTrue(new_row["rule_id"].startswith("AI-ASSISTANT-"))
+        self.assertTrue(new_row["rule_id"].startswith("AI-"))
+        self.assertEqual(len(new_row["rule_id"]), len("AI-") + 8)   # short, readable MSTG-ID-column id
         self.assertEqual(new_row["affected_type"], "CLASS")
         self.assertEqual(new_row["affected_name"], "com.example.Foo")
         # the pre-existing rule-based row is untouched and still reports as such

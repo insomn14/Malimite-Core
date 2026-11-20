@@ -287,8 +287,19 @@ select.ctl{appearance:none;-webkit-appearance:none;padding-right:2.1rem;cursor:p
 .vuln-section{margin-top:1rem}
 .vuln-section p{font-size:.85rem;line-height:1.55;color:var(--text)}
 .vuln-section-title{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem}
-.vuln-code,.vuln-poc{background:#111;color:#e2e8f0;padding:.65rem .85rem;border-radius:6px;font-family:monospace;font-size:.72rem;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto}
+/* line-height 1.6 (was 1.45) and a touch more side padding: an AI Assistant finding's Evidence
+   (see propose_finding in agent/tools.py) is often several sentences of prose rather than a
+   short code/data snippet, and the tighter monospace defaults made a long one feel like one
+   dense wall of text — this keeps the same code-block treatment for every finding (no
+   prose/code classification, which turned out to be too unreliable to risk — see git history)
+   but gives long text more breathing room without changing how short snippets look. */
+.vuln-code,.vuln-poc{background:#111;color:#e2e8f0;padding:.7rem .9rem;border-radius:6px;font-family:monospace;font-size:.74rem;line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:340px;overflow-y:auto}
 .vuln-poc{background:#0c1a2b;color:#bcd9ff}
+/* A PoC that split into real steps (splitPocSteps) reads as numbered prose, not a code block —
+   regular font/line-height, same as .vuln-section p above, not monospace like .vuln-poc. */
+.vuln-poc-list{margin:0;padding-left:1.3rem;font-size:.85rem;line-height:1.6;color:var(--text)}
+.vuln-poc-list li{margin-bottom:.3rem}
+.vuln-poc-list li:last-child{margin-bottom:0}
 
 /* triage editor */
 .vuln-card.is-fp{opacity:.55}
@@ -316,6 +327,14 @@ select.ctl{appearance:none;-webkit-appearance:none;padding-right:2.1rem;cursor:p
 .vuln-card.is-ai-fixed{box-shadow:inset 3px 0 0 #8b5cf6}
 .vuln-card.is-overridden.is-ai-fixed{box-shadow:inset 3px 0 0 var(--accent),inset 6px 0 0 #8b5cf6}
 .vuln-status-strip-ai{background:#f5f3ff;color:#6d28d9}
+
+/* "Added via AI Assistant" (propose_finding) — deliberately a different color family than AI
+   Fix above: one marks the ROW ITSELF as added outside the scan engine, the other marks TEXT
+   as rewritten on an existing scan-engine row; a finding can be either, both, or neither. */
+.badge-ai-added{background:#ccfbf1;color:#0f766e;border:1px solid #99f6e4}
+.vuln-card.is-ai-added{box-shadow:inset 3px 0 0 #14b8a6}
+.vuln-card.is-ai-fixed.is-ai-added{box-shadow:inset 3px 0 0 #8b5cf6,inset 6px 0 0 #14b8a6}
+.vuln-status-strip-added{background:#f0fdfa;color:#0f766e}
 .aifix-panel{background:var(--bg);border-radius:6px;padding:.8rem;margin-top:.85rem}
 .aifix-status{font-size:.78rem;color:var(--muted);margin-bottom:.7rem;line-height:1.5}
 .aifix-fields{display:flex;flex-wrap:wrap;gap:.5rem .9rem}
@@ -1624,6 +1643,40 @@ function isEmptyField(s) {
 }
 function fieldOr(s, fallback) {
   return isEmptyField(s) ? fallback : s;
+}
+
+// Matches "N) " / "N. " right after a step boundary (start of string, or preceded by
+// whitespace) — used only as a FALLBACK splitter below, so it never fires on an ordinary
+// sentence that happens to contain a number mid-text (e.g. "CVSS 7.2. Also..."). Mirrors
+// HtmlReporter.java's splitSteps() (same pattern, same two-stage newline-then-inline fallback
+// logic) so a PoC reads the same way here as in the downloaded HTML/PDF report.
+const INLINE_STEP_MARKER = /(?:^|(?<=\s))(\d+)[.)]\s+/g;
+
+/** Splits PoC-steps text into an array of steps, or null when it couldn't find more than one
+    (the caller falls back to a plain <pre> block in that case — see renderVulnCard). */
+function splitPocSteps(text) {
+  const byLine = String(text).split(/\r?\n/)
+    .map(line => line.replace(/^\s*\d+[.)]\s*/, '').trim())
+    .filter(Boolean);
+  if (byLine.length > 1) return byLine;   // newlines alone already produced real steps
+  // Single line (or no newlines at all) — an LLM-authored PoC (see propose_finding in
+  // agent/tools.py) commonly writes every step as one inline-numbered paragraph with no
+  // newline at all, which the split above can't break up. Re-split on inline numbering markers
+  // against the ORIGINAL text (not byLine[0], which already had its own leading marker
+  // stripped and would silently lose the first inline step from the count below).
+  const whole = String(text).trim();
+  const markers = [...whole.matchAll(INLINE_STEP_MARKER)];
+  if (markers.length > 1) {
+    const inline = [];
+    for (let i = 0; i < markers.length; i++) {
+      const from = markers[i].index + markers[i][0].length;
+      const to = i + 1 < markers.length ? markers[i + 1].index : whole.length;
+      const step = whole.slice(from, to).trim();
+      if (step) inline.push(step);
+    }
+    if (inline.length > 1) return inline;
+  }
+  return null;
 }
 
 /* ── home view ──
@@ -5407,7 +5460,17 @@ function fnComponentNameFromEvidence(evidence) {
 function fnAffectedLink(a) {
   if (a.affected_type === 'FUNCTION') {
     const cls = fnClassFromFunctionLocation(a.affected_name, a.evidence_location);
-    return cls ? {label: cls, tab: 'functions', target: cls} : null;
+    if (cls) return {label: cls, tab: 'functions', target: cls};
+    // No evidence_location to extract a class from (e.g. a /add-finding AI Assistant proposal —
+    // see agent/tools.py's propose_finding(), which never sets evidence_location) — still worth
+    // opening the Functions tab itself, just not pre-targeted at a specific class, rather than
+    // showing no link at all for every such finding.
+    return {label: null, tab: 'functions', target: null};
+  }
+  if (a.affected_type === 'CLASS') {
+    // Unlike FUNCTION, affected_name here already IS the class's own fully-qualified name (see
+    // propose_finding()'s affected_class) — no evidence_location suffix-stripping needed.
+    return a.affected_name ? {label: a.affected_name, tab: 'functions', target: a.affected_name} : null;
   }
   if (a.affected_type === 'RESOURCE' && a.affected_name === 'Component') {
     const cls = fnComponentNameFromEvidence(a.evidence);
@@ -5579,17 +5642,38 @@ function renderVulnCard(group, i) {
   const status    = (v.status || 'open').toLowerCase();
   const isFp      = status === 'false_positive';
   const isAiFixed = v.ai_fix_status === 'applied';
+  // Distinct from isAiFixed/aiFixBadge below: this finding's row itself was created via the AI
+  // Assistant's /add-finding (propose_finding — see db.insert_vulnerability_manual()'s
+  // Source='ai_assistant'), not a rule-engine scan result whose TEXT was later AI-rewritten. A
+  // finding can be either, both, or neither — keep the two badges visually and semantically apart.
+  const isAiAdded = v.source === 'ai_assistant';
   // AI Fix overrides win over the original scanned text (see db.get_vulnerabilities effective_*).
   const descText  = v.effective_description ?? v.description;
   const evText    = v.effective_evidence ?? v.evidence;
   const pocText   = v.effective_poc_steps ?? v.poc_steps;
   const remText   = v.effective_remediation ?? v.remediation;
+  const pocSteps  = pocText ? splitPocSteps(pocText) : null;
+  // A real multi-step PoC renders as a numbered list (same as the downloaded HTML/PDF report —
+  // see HtmlReporter.java's splitSteps()); anything that didn't split into more than one step
+  // stays a plain code block, same as before this change.
+  const pocHtml   = pocSteps
+    ? `<ol class="vuln-poc-list">${pocSteps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>`
+    : `<pre class="vuln-poc">${esc(fieldOr(pocText, 'No PoC provided.'))}</pre>`;
+  // Same numbered-list treatment as PoC above, and for the same reason — a multi-step
+  // remediation (e.g. an AI Assistant proposal written as "1) ... 2) ... 3) ...") reads much
+  // better as steps than as one dense paragraph. Mirrors HtmlReporter.java's remediation_steps.
+  const remSteps  = remText ? splitPocSteps(remText) : null;
+  const remHtml   = remSteps
+    ? `<ol class="vuln-poc-list">${remSteps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>`
+    : `<p>${esc(fieldOr(remText, 'No remediation guidance provided.'))}</p>`;
+
   const assetSearch = assets.map(a => [a.affected_name, a.affected_type, a.evidence_location].filter(Boolean).join(' ')).join(' ');
   const search    = [v.rule_id, v.title, v.category, effSev, assetSearch, evText, status]
     .filter(Boolean).join(' ').toLowerCase();
 
   const statusBadge = status !== 'open' ? `<span class="badge badge-${statusKey(status)}">${statusLabel(status)}</span>` : '';
   const aiFixBadge = isAiFixed ? `<span class="badge badge-aifix" title="Rewritten by AI Fix">✨ AI-enhanced</span>` : '';
+  const aiAddedBadge = isAiAdded ? `<span class="badge badge-ai-added" title="Added through the AI Assistant chat, confirmed by a reviewer">💬 Added via AI Assistant</span>` : '';
   const locBadge = locCount > 1
     ? `<span class="vuln-loc-count" title="${occCount} occurrence${occCount===1?'':'s'}">${locCount} locations</span>`
     : (occCount > 1 ? `<span class="vuln-loc-count">${occCount} hits</span>` : '');
@@ -5603,9 +5687,14 @@ function renderVulnCard(group, i) {
       <span>✨ <span class="label">AI Fix applied</span>${v.ai_fix_provider ? ` by ${esc(v.ai_fix_provider)}${v.ai_fix_model ? '/' + esc(v.ai_fix_model) : ''}` : ''}</span>
       <span>· Description/Evidence/PoC/Remediation and/or Risk above may be AI-rewritten.</span>
     </div>` : '';
+  const aiAddedStrip = isAiAdded ? `
+    <div class="vuln-status-strip vuln-status-strip-added">
+      <span>💬 <span class="label">Added via AI Assistant</span></span>
+      <span>· This finding was proposed in a chat and confirmed by a reviewer before being saved — not produced by the rule-based scan engine.</span>
+    </div>` : '';
 
   return `
-    <div class="vuln-card ${isFp?'is-fp':''} ${overridden?'is-overridden':''} ${isAiFixed?'is-ai-fixed':''}"
+    <div class="vuln-card ${isFp?'is-fp':''} ${overridden?'is-overridden':''} ${isAiFixed?'is-ai-fixed':''} ${isAiAdded?'is-ai-added':''}"
          id="vuln-${v.id}" data-severity="${escAttr(effSev)}" data-status="${escAttr(status)}" data-search="${escAttr(search)}"
          data-rule-id="${escAttr(v.rule_id||'')}" data-rep-id="${v.id}">
       <div class="vuln-head" onclick="toggleVuln(${i})">
@@ -5616,6 +5705,7 @@ function renderVulnCard(group, i) {
           <span class="vuln-title">${esc(v.title||'')}</span>
           ${statusBadge}
           ${aiFixBadge}
+          ${aiAddedBadge}
           ${locBadge}
         </div>
         <div class="vuln-head-r">
@@ -5626,6 +5716,7 @@ function renderVulnCard(group, i) {
       <div class="vuln-body" id="vbody-${i}" hidden>
         ${overrideStrip}
         ${aiFixStrip}
+        ${aiAddedStrip}
         <div class="vuln-section">
           <div class="vuln-section-title">Description</div>
           <p>${esc(fieldOr(descText, 'No description provided for this finding.'))}</p>
@@ -5653,11 +5744,11 @@ function renderVulnCard(group, i) {
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Proof of Concept (steps to reproduce)</div>
-          <pre class="vuln-poc">${esc(fieldOr(pocText, 'No PoC provided.'))}</pre>
+          ${pocHtml}
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Remediation</div>
-          <p>${esc(fieldOr(remText, 'No remediation guidance provided.'))}</p>
+          ${remHtml}
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title">Reference</div>

@@ -204,6 +204,130 @@ class HtmlReporterTest {
         assertEquals("find key", poc.getString(1));
     }
 
+    @Test void pocStepsSplitsOnInlineNumberingWhenThereAreNoNewlines(@TempDir Path tmp) throws Exception {
+        // An LLM-authored PoC (propose_finding, see web/app/agent/tools.py) commonly writes
+        // every step as one inline-numbered paragraph with no newline at all — the pre-existing
+        // newline-only splitter left the whole thing as a single unreadable block.
+        var aiFinding = finding(2L, "AI-deadbeef", "JS injection via rawData", "CODE",
+                "HIGH", 8.3, "FUNCTION", "evaluateJavascript", "KromWebView.evaluateJavascript");
+        var report = reportWithFindings(withPoc(aiFinding,
+                "1) Hook getRawData() to return a payload. 2) Open the Yearly Recap screen. "
+                + "3) Observe window.Android bridge calls. 4) Capture exfiltrated data via a test collector."));
+        JSONArray poc = renderedData(report, tmp).getJSONArray("findings").getJSONObject(0).getJSONArray("poc");
+        assertEquals(4, poc.length());
+        assertEquals("Hook getRawData() to return a payload.", poc.getString(0));
+        assertEquals("Open the Yearly Recap screen.", poc.getString(1));
+        assertEquals("Observe window.Android bridge calls.", poc.getString(2));
+        assertEquals("Capture exfiltrated data via a test collector.", poc.getString(3));
+    }
+
+    @Test void pocStepsInlineSplitNeverFiresOnAnOrdinarySentenceWithANumber(@TempDir Path tmp) throws Exception {
+        // Guards the "only when there's more than one real marker" rule in splitSteps(): a
+        // single sentence that happens to contain "7.2." must stay one step, not get chopped at
+        // the number.
+        var f = finding(2L, "MSTG-TEST-9999", "x", "CODE", "LOW", 1.0, "FUNCTION", "x", "x");
+        var report = reportWithFindings(withPoc(f, "Decrypt the blob; CVSS was 7.2. Confirm plaintext leaks the token."));
+        JSONArray poc = renderedData(report, tmp).getJSONArray("findings").getJSONObject(0).getJSONArray("poc");
+        assertEquals(1, poc.length());
+        assertEquals("Decrypt the blob; CVSS was 7.2. Confirm plaintext leaks the token.", poc.getString(0));
+    }
+
+    @Test void pocStepsWithRealNewlinesIsUnaffectedByTheInlineFallback(@TempDir Path tmp) throws Exception {
+        // Regression guard: the existing newline-based splitting (already covered by
+        // rendersFindingCoreFields above) must still win whenever it actually produced more
+        // than one step — the inline fallback only runs when newlines did NOT.
+        var f = finding(2L, "MSTG-TEST-8888", "x", "CODE", "LOW", 1.0, "FUNCTION", "x", "x");
+        var report = reportWithFindings(withPoc(f, "1. First step here.\n2. Second step here."));
+        JSONArray poc = renderedData(report, tmp).getJSONArray("findings").getJSONObject(0).getJSONArray("poc");
+        assertEquals(2, poc.length());
+        assertEquals("First step here.", poc.getString(0));
+        assertEquals("Second step here.", poc.getString(1));
+    }
+
+    /** finding() with just its pocSteps field swapped — avoids adding yet another finding()
+     * overload for the handful of tests above that only care about this one field. */
+    private static AnalysisReport.VulnerabilityRecord withPoc(AnalysisReport.VulnerabilityRecord f, String poc) {
+        return new AnalysisReport.VulnerabilityRecord(
+                f.id(), f.ruleId(), f.title(), f.category(), f.severity(), f.cvssScore(), f.cwe(),
+                f.description(), f.affectedType(), f.affectedName(), f.evidence(), f.evidenceLocation(),
+                poc, f.remediation(), f.referenceUrl(), f.status(), f.overrideSeverity(),
+                f.overrideCvssScore(), f.overrideNote(), f.overrideDescription(), f.overrideEvidence(),
+                f.overridePocSteps(), f.overrideRemediation(), f.aiFixStatus(), f.aiFixProvider(), f.aiFixModel());
+    }
+
+    private static AnalysisReport.VulnerabilityRecord withRemediation(AnalysisReport.VulnerabilityRecord f, String rem) {
+        return new AnalysisReport.VulnerabilityRecord(
+                f.id(), f.ruleId(), f.title(), f.category(), f.severity(), f.cvssScore(), f.cwe(),
+                f.description(), f.affectedType(), f.affectedName(), f.evidence(), f.evidenceLocation(),
+                f.pocSteps(), rem, f.referenceUrl(), f.status(), f.overrideSeverity(),
+                f.overrideCvssScore(), f.overrideNote(), f.overrideDescription(), f.overrideEvidence(),
+                f.overridePocSteps(), f.overrideRemediation(), f.aiFixStatus(), f.aiFixProvider(), f.aiFixModel());
+    }
+
+    @Test void remediationSplitsIntoStepsTheSameWayPocDoes(@TempDir Path tmp) throws Exception {
+        var f = finding(2L, "AI-cafebabe", "x", "CODE", "LOW", 1.0, "FUNCTION", "x", "x");
+        var report = reportWithFindings(withRemediation(f,
+                "1) Ganti konkatenasi string ke JavaScript dengan WebViewCompat.postMessage. "
+                + "2) Validasi origin terhadap allowlist. 3) Terapkan CSP ketat pada halaman."));
+        JSONObject found = renderedData(report, tmp).getJSONArray("findings").getJSONObject(0);
+        JSONArray steps = found.getJSONArray("remediation_steps");
+        assertEquals(3, steps.length());
+        assertEquals("Ganti konkatenasi string ke JavaScript dengan WebViewCompat.postMessage.", steps.getString(0));
+        assertEquals("Validasi origin terhadap allowlist.", steps.getString(1));
+        assertEquals("Terapkan CSP ketat pada halaman.", steps.getString(2));
+        assertEquals(found.getString("remediation"),   // full original text still kept too
+                "1) Ganti konkatenasi string ke JavaScript dengan WebViewCompat.postMessage. "
+                + "2) Validasi origin terhadap allowlist. 3) Terapkan CSP ketat pada halaman.");
+    }
+
+    @Test void remediationWithOneSentenceDoesNotGetARemediationStepsField(@TempDir Path tmp) throws Exception {
+        // Most rule-engine remediation text is one recommendation sentence, not numbered steps —
+        // remediation_steps must only appear when splitSteps() actually found more than one.
+        var f = finding(2L, "MSTG-TEST-7777", "x", "CODE", "LOW", 1.0, "FUNCTION", "x", "x");
+        var report = reportWithFindings(withRemediation(f, "Use the Android Keystore instead of a hardcoded key."));
+        JSONObject found = renderedData(report, tmp).getJSONArray("findings").getJSONObject(0);
+        assertFalse(found.has("remediation_steps"));
+        assertEquals("Use the Android Keystore instead of a hardcoded key.", found.getString("remediation"));
+    }
+
+    @Test void aiAssistantFindingGetsItsOwnSourceTagAndNote(@TempDir Path tmp) throws Exception {
+        // RuleId shape is exactly db.insert_vulnerability_manual()'s "AI-<8 hex chars>" — see
+        // web/app/db.py — distinct from this scanner's own LLM-ASSISTED SCAN MODE prefix "LLM-".
+        var aiFinding = finding(2L, "AI-36893cdf", "Hardcoded secret found in chat", "CRYPTO",
+                "HIGH", 7.5, "CLASS", "com.example.Foo", "FQCN");
+        var report = reportWithFindings(aiFinding);
+        JSONArray findings = renderedData(report, tmp).getJSONArray("findings");
+        assertEquals(1, findings.length());
+        assertEquals("AI_ASSISTANT", findings.getJSONObject(0).getString("source"));
+
+        String html = Files.readString(HtmlReporter.generate(report, tmp));
+        assertTrue(html.contains("aiAssistantNote"), "template must carry the AI Assistant disclosure copy");
+    }
+
+    @Test void llmAssistedFindingStillGetsTheOlderLlmSourceTag(@TempDir Path tmp) throws Exception {
+        // Regression guard: adding the "AI-" prefix check must not reclassify this scanner's own
+        // pre-existing LLM-ASSISTED SCAN MODE findings (RuleId prefix "LLM-", unrelated to the
+        // AI Assistant chat feature) as AI_ASSISTANT.
+        var llmFinding = finding(3L, "LLM-001", "Suspicious reflection use", "CODE",
+                "MEDIUM", 5.0, "FUNCTION", "invoke", "com.example.Bar.invoke");
+        JSONArray findings = renderedData(reportWithFindings(llmFinding), tmp).getJSONArray("findings");
+        assertEquals("LLM", findings.getJSONObject(0).getString("source"));
+    }
+
+    /** sampleReport() with its one VulnerabilityRecord replaced — every other field (app/team/
+     * entry points/...) stays the same, since these tests only care about finding-level fields. */
+    private static AnalysisReport reportWithFindings(AnalysisReport.VulnerabilityRecord... recs) {
+        var base = sampleReport();
+        return new AnalysisReport(
+                base.scanId(), base.bundleExecutable(), base.bundleIdentifier(),
+                base.isSwift(), base.isUniversal(), base.architectures(), base.durationMs(),
+                base.classCount(), base.functionCount(), base.stringCount(),
+                base.classes(), base.strings(), base.entryPoints(),
+                base.bundleTeamId(), base.provisioningProfile(), base.provisioningExpiry(),
+                base.llmFindings(), List.of(recs), base.dbPath(), base.platform(), base.assessments(),
+                base.androidManifest());
+    }
+
     @Test void falsePositiveExcludedFromFindingsJson(@TempDir Path tmp) throws Exception {
         var fpFinding = new AnalysisReport.VulnerabilityRecord(
                 2L, "MSTG-RESILIENCE-1", "No jailbreak detection", "RESILIENCE",

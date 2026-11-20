@@ -113,6 +113,7 @@ td.c,th.c{text-align:center}
 .st.PARTIAL,.st.IN_PROGRESS{background:var(--med-bg);color:var(--med)}
 .tag{display:inline-block;padding:1px 7px;border:1px solid var(--line);border-radius:5px;font-size:11px;color:var(--muted);margin-right:4px}
 .tag.LLM{border-color:var(--med);color:var(--med)}
+.tag.AI_ASSISTANT{border-color:#8b5cf6;color:#8b5cf6}
 /* stat cards */
 .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:8px 0 18px}
 @media (max-width:700px){.stats{grid-template-columns:repeat(3,1fr)}}
@@ -234,6 +235,7 @@ const L = {
   remediation:["Rekomendasi Perbaikan","Remediation"], reference:["Referensi","Reference"],
   rule:["Aturan","Rule"], cwe:["CWE","CWE"], masvs:["MASVS","MASVS"],
   llmNote:["Temuan ini dihasilkan analisis berbasis LLM dan perlu diverifikasi manual sebelum ditindaklanjuti.","This finding was produced by LLM-assisted analysis and requires manual verification before action."],
+  aiAssistantNote:["Temuan ini ditambahkan secara manual melalui AI Assistant dan telah dikonfirmasi oleh peninjau sebelum disimpan.","This finding was manually added through the AI Assistant and was confirmed by a reviewer before being saved."],
   matrix:["Pemetaan MASVS","MASVS Mapping"],
   appendix:["Lampiran","Appendix"], surface:["Permukaan Kode","Code Surface"], entry:["Entry Points","Entry Points"],
   epType:["Tipe","Type"], component:["Komponen / Kelas","Component / Class"], topClasses:["Kelas dengan Fungsi Terbanyak","Classes with the Most Functions"],
@@ -406,9 +408,12 @@ const details = `
         <div class="affected">${(f.affected||[]).map(a=>`<span title="${esc(a.type||"")} ${esc(a.location||"")}">${esc(a.name)}${a.type?` · ${esc(a.type)}`:""}</span>`).join("")}</div></div>
       ${f.evidence?`<div class="f-sec"><div class="h">${t("evidence")}</div><pre>${esc(f.evidence)}</pre></div>`:""}
       ${(f.poc||[]).length?`<div class="f-sec"><div class="h">${t("poc")}</div><ol>${f.poc.map(p=>`<li>${tx(p)}</li>`).join("")}</ol></div>`:""}
-      <div class="f-sec"><div class="h">${t("remediation")}</div><p>${tx(f.remediation)}</p></div>
+      <div class="f-sec"><div class="h">${t("remediation")}</div>${(f.remediation_steps||[]).length
+        ?`<ol>${f.remediation_steps.map(p=>`<li>${tx(p)}</li>`).join("")}</ol>`
+        :`<p>${tx(f.remediation)}</p>`}</div>
       ${f.reference?`<div class="f-sec"><div class="h">${t("reference")}</div><p class="small">${link(f.reference)}</p></div>`:""}
       ${f.source==="LLM"?`<div class="note">${t("llmNote")}</div>`:""}
+      ${f.source==="AI_ASSISTANT"?`<div class="note">${t("aiAssistantNote")}</div>`:""}
     </div>
   </article>`).join("")}
 </section>`;

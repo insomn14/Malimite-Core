@@ -13,3 +13,7 @@ incoming/
 reports/
 .env
 .claude/agents/*
+# Local Maven repo used for sandboxed/offline builds (mvn -Dmaven.repo.local=.m2-local) — never
+# meant to be committed, same reasoning as target/ above.
+.m2-local/
+.ua/

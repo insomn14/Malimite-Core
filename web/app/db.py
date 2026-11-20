@@ -510,15 +510,17 @@ async def insert_vulnerability_manual(
 ) -> int:
     """Inserts one new finding the AI Assistant's /add-finding proposed and a human confirmed —
     see agent/tools.py's propose_finding(). Unlike every other row in this table, this one was
-    never produced by the rule-based scan engine, so RuleId is a synthesized, guaranteed-unique
-    `AI-ASSISTANT-<uuid4 hex>` (the schema allows any TEXT/NULL there — nothing downstream
-    assumes a rule-catalog RuleId format) and Source='ai_assistant' marks it as such for the
-    Vulnerabilities tab to badge distinctly. Participates in the same triage/AI-Fix/report
-    pipeline as every other row from this point on — this function's only job is the one-time
-    insert; status defaults to 'open' like a freshly scanned finding.
+    never produced by the rule-based scan engine, so RuleId is a synthesized `AI-<8 hex chars>`
+    (the schema allows any TEXT/NULL there — nothing downstream assumes a rule-catalog RuleId
+    format; 8 hex chars is the same length convention as a git short hash, short enough to read
+    in the MSTG ID column and collision-safe for the realistic volume of manual findings one
+    scan accumulates) and Source='ai_assistant' marks it as such for the Vulnerabilities tab to
+    badge distinctly. Participates in the same triage/AI-Fix/report pipeline as every other row
+    from this point on — this function's only job is the one-time insert; status defaults to
+    'open' like a freshly scanned finding.
 
     Returns the new row's id."""
-    rule_id = f"AI-ASSISTANT-{uuid.uuid4().hex}"
+    rule_id = f"AI-{uuid.uuid4().hex[:8]}"
     now_ms = int(time.time() * 1000)
     async with aiosqlite.connect(db_path) as db:
         await _ensure_triage_columns(db)

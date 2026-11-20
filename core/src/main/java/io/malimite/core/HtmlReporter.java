@@ -12,6 +12,8 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Generates a self-contained, bilingual (Indonesian/English) Vulnerability Assessment report
@@ -227,7 +229,14 @@ public final class HtmlReporter {
             f.put("cvss", v.effectiveCvssScore());
             f.put("title", v.title());
             f.put("rule", v.ruleId());
-            f.put("source", v.ruleId() != null && v.ruleId().startsWith("LLM-") ? "LLM" : "MASTG");
+            // AI_ASSISTANT: added through the web UI's "AI Assistant" chat (propose_finding —
+            // see web/app/agent/tools.py and db.insert_vulnerability_manual()'s synthesized
+            // "AI-<8 hex chars>" RuleId), confirmed by a human reviewer before being written —
+            // distinct from LLM, which is this scanner's own LLM-ASSISTED SCAN MODE heuristic
+            // output (RuleId prefix "LLM-"), generated and written automatically with no
+            // per-finding human confirmation step.
+            f.put("source", v.ruleId() != null && v.ruleId().startsWith("AI-") ? "AI_ASSISTANT"
+                    : v.ruleId() != null && v.ruleId().startsWith("LLM-") ? "LLM" : "MASTG");
             f.put("category", v.category());
             f.put("cwe", v.cwe());
             String masvs = masvsCategory(v.category());
@@ -236,7 +245,13 @@ public final class HtmlReporter {
             f.put("affected", buildAffected(g.assets()));
             if (notBlank(v.effectiveEvidence())) f.put("evidence", v.effectiveEvidence());
             if (notBlank(v.effectivePocSteps())) f.put("poc", splitSteps(v.effectivePocSteps()));
-            if (notBlank(v.effectiveRemediation())) f.put("remediation", v.effectiveRemediation());
+            if (notBlank(v.effectiveRemediation())) {
+                f.put("remediation", v.effectiveRemediation());   // kept for any older template/consumer
+                JSONArray remSteps = splitSteps(v.effectiveRemediation());
+                // Same "only when it actually found more than one real step" rule as poc above —
+                // most rule-engine remediation text is one recommendation sentence, not steps.
+                if (remSteps.length() > 1) f.put("remediation_steps", remSteps);
+            }
             if (notBlank(v.referenceUrl())) f.put("reference", v.referenceUrl());
             f.put("status", templateStatus(v.status()));
             out.put(f);
@@ -258,14 +273,46 @@ public final class HtmlReporter {
 
     /** Splits PoC steps text (one reproduction step per line) into the template's {@code poc[]}
      * array; falls back to a single-element array when the text has no newlines. */
+    // Matches "N) " / "N. " right after a step boundary (start of string, or preceded by
+    // whitespace) — used only as a FALLBACK splitter below, so it never fires on an ordinary
+    // sentence that happens to contain a number mid-text (e.g. "CVSS 7.2. Also...").
+    private static final Pattern INLINE_STEP_MARKER = Pattern.compile("(?:^|(?<=\\s))(\\d+)[.)]\\s+");
+
     private static JSONArray splitSteps(String pocSteps) {
-        JSONArray out = new JSONArray();
+        JSONArray byLine = new JSONArray();
         for (String line : pocSteps.split("\\r?\\n")) {
             String trimmed = line.replaceFirst("^\\s*\\d+[.)]\\s*", "").trim();
-            if (!trimmed.isEmpty()) out.put(trimmed);
+            if (!trimmed.isEmpty()) byLine.put(trimmed);
         }
-        if (out.isEmpty()) out.put(pocSteps.trim());
-        return out;
+        if (byLine.length() > 1) return byLine;   // newlines alone already produced real steps
+        // Single line (or no newlines at all) — an LLM-authored PoC (see propose_finding in
+        // web/app/agent/tools.py) commonly writes every step as one inline-numbered paragraph
+        // ("1) Hook X. 2) Open Y. 3) Observe Z.") with no newline at all, which the loop above
+        // can't split. Re-split on inline numbering markers instead; only replace the
+        // newline-only result when this actually finds more than one step, so a single genuine
+        // sentence that merely contains a number is never chopped apart. Matches against the
+        // ORIGINAL text, not byLine's single entry — that one already had its own leading
+        // "N) "/"N. " marker stripped by the per-line replaceFirst() above, which would
+        // silently drop the very first inline marker from the count below.
+        String whole = pocSteps.trim();
+        Matcher m = INLINE_STEP_MARKER.matcher(whole);
+        List<Integer> markerEnds = new ArrayList<>();
+        List<Integer> markerStarts = new ArrayList<>();
+        while (m.find()) { markerStarts.add(m.start()); markerEnds.add(m.end()); }
+        if (markerStarts.size() > 1) {
+            JSONArray inline = new JSONArray();
+            for (int i = 0; i < markerStarts.size(); i++) {
+                int from = markerEnds.get(i);
+                int to = i + 1 < markerStarts.size() ? markerStarts.get(i + 1) : whole.length();
+                String step = whole.substring(from, to).trim();
+                if (!step.isEmpty()) inline.put(step);
+            }
+            if (inline.length() > 1) return inline;
+        }
+        if (byLine.length() > 0) return byLine;
+        JSONArray fallback = new JSONArray();
+        fallback.put(pocSteps.trim());
+        return fallback;
     }
 
     /** Malimite's internal triage status → the template's {@code OPEN|IN_PROGRESS|FIXED|ACCEPTED|FALSE_POSITIVE}. */
