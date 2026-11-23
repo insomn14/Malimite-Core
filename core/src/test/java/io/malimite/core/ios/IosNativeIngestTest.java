@@ -72,6 +72,9 @@ class IosNativeIngestTest {
         p += 48; ncmds++;
         b.putInt(p, 0x26).putInt(p + 4, 16).putInt(p + 8, FSTARTS).putInt(p + 12, 4);           // LC_FUNCTION_STARTS
         p += 16; ncmds++;
+        b.putInt(p, 0x2).putInt(p + 4, 24).putInt(p + 8, LINKEDIT + 0x80).putInt(p + 12, 1)     // LC_SYMTAB: 1 symbol
+                .putInt(p + 16, LINKEDIT + 0xa0).putInt(p + 20, 32);
+        p += 24; ncmds++;
         b.putInt(16, ncmds).putInt(20, p - 32);
 
         // strings
@@ -104,6 +107,9 @@ class IosNativeIngestTest {
         int q = LINKEDIT;
         q = bytes(b, q, 0x40); q = cstr(b, q, "_NSLog"); q = bytes(b, q, 0x51, 0x71, 0x00, 0x90);
         q = bytes(b, q, 0x40); q = cstr(b, q, "_objc_msgSend"); q = bytes(b, q, 0x51, 0x71, 0x08, 0x90, 0x00);
+        // symtab: one undefined external, _NSFileProtectionNone, whose name only exists in the string table
+        b.putInt(LINKEDIT + 0x80, 1).put(LINKEDIT + 0x84, (byte) 1);
+        cstr(b, LINKEDIT + 0xa1, "_NSFileProtectionNone");
         // function starts: ULEB(0x1000), +0x20, end
         bytes(b, FSTARTS, 0x80, 0x20, 0x20, 0x00);
         if (swift) {
@@ -163,6 +169,8 @@ class IosNativeIngestTest {
             assertTrue(code.contains("objc_msgSend(self, \"setObject:forKey:\", param_3, param_4);"), code);
 
             assertTrue(store.getMachoStrings("App", 100).stream().anyMatch(m -> "password=%@".equals(m.get("value"))));
+            assertTrue(store.getMachoStrings("App", 100).stream().anyMatch(m ->
+                    "_NSFileProtectionNone".equals(m.get("value")) && "__LINKEDIT".equals(m.get("segment"))));
             assertEquals(List.of("login:"), store.getClassesAndFunctions("App").get("Foo"));
             assertTrue(store.getClassesAndFunctions("App").get("Imports").contains("_NSLog"));
         }

@@ -288,6 +288,15 @@ class RuleQualityTest {
     }
 
     @Test
+    void mach_oUnderscoreOnImportsMarksGhidraOutput() {
+        assertTrue(RuleQuality.requiresGhidraSyntax("_swift_unknownObjectWeakAssign[\\s\\S]*_free\\s*\\("));
+        assertTrue(RuleQuality.requiresGhidraSyntax("_pthread_getspecific\\s*\\([^)]*\\)"));
+        assertFalse(RuleQuality.requiresGhidraSyntax("swift_unknownObjectWeakAssign[\\s\\S]*free\\s*\\("));
+        assertFalse(RuleQuality.requiresGhidraSyntax("my_free_list|swift_release"));
+        assertFalse(RuleQuality.requiresGhidraSyntax("\\bNSLog\\("));
+    }
+
+    @Test
     void ghidraOnlySyntaxIsDetectedConservatively() {
         assertTrue(RuleQuality.requiresGhidraSyntax("PTR_s_loadPersistentStoresWithCompleti"));
         assertTrue(RuleQuality.requiresGhidraSyntax("Foundation::URL::get_path[\\s\\S]{0,2000}URLForResource_withExtension_"));

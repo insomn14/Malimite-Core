@@ -101,6 +101,8 @@ public final class RuleQuality {
      */
     private static final Pattern GHIDRA_TOKEN = Pattern.compile(
             "PTR_|DAT_|FUN_|unaff_|\\b[a-z]Var\\d|in_stack|\\bin_[xw]\\d|[A-Za-z0-9_]::[A-Za-z_]|\\$\\$closure|\\bundefined\\d?\\b"
+                    // Ghidra prints imports with the Mach-O underscore (_swift_release); the native engine drops it
+                    + "|(?<![A-Za-z0-9])_(?:swift_|objc_|pthread_|dispatch_|os_|CC_|Sec[A-Z]|(?:free|malloc|memcpy|memmove|memset|strcpy|strcat|strlen)\\b)"
                     + "|\\\\\\*\\\\\\(\\w+ \\\\\\*\\\\\\)");
 
     /**

@@ -64,8 +64,14 @@ public final class IosNativeIngest {
             batch.add(new String[] {"0x" + Long.toHexString(e.addr()), e.value(), e.section(), ""});
             if (batch.size() >= 20_000) { store.insertMachoStrings(batch, exec); batch.clear(); }
         }
+        int symbolStrings = 0;
+        for (Map.Entry<Long, String> e : img.symbolStrings().entrySet()) {
+            batch.add(new String[] {"0x" + Long.toHexString(e.getKey()), e.getValue(), "__LINKEDIT", ""});
+            symbolStrings++;
+            if (batch.size() >= 20_000) { store.insertMachoStrings(batch, exec); batch.clear(); }
+        }
         if (!batch.isEmpty()) store.insertMachoStrings(batch, exec);
-        return all.size();
+        return all.size() + symbolStrings;
     }
 
     private static int ingestImports(MachOImage img, SqliteStore store, String exec) {

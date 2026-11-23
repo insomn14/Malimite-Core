@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map;
 
 /**
  * Memory-mapped, read-only view of one arm64 Mach-O slice. Parses just what the native iOS engine needs:
@@ -398,6 +399,25 @@ final class MachOImage implements AutoCloseable {
             int strx = buf.getInt(p), type = buf.get(p + 4) & 0xff, sect = buf.get(p + 5) & 0xff;
             if (strx <= 0 || strx >= strsize || (type & 0xe0) != 0) continue;  // skip stabs / unnamed
             out.add(new Symbol(cstr(stroff + strx), buf.getLong(p + 8), type, sect));
+        }
+        return out;
+    }
+
+    /**
+     * Symbol-table names keyed by the vm address of their bytes in the string table. Ghidra lists them as
+     * {@code __LINKEDIT} strings, which is where {@code STRINGS} rules look for imported constants such as
+     * {@code _NSFileProtectionNone} that have no literal in {@code __cstring}.
+     */
+    Map<Long, String> symbolStrings() {
+        Map<Long, String> out = new java.util.LinkedHashMap<>();
+        Segment le = segments.stream().filter(sg -> sg.name().equals("__LINKEDIT")).findFirst().orElse(null);
+        if (le == null || nsyms <= 0 || strsize <= 0) return out;
+        for (int i = 0; i < nsyms; i++) {
+            int p = symoff + i * 16;
+            if (p + 16 > buf.limit()) break;
+            int strx = buf.getInt(p), type = buf.get(p + 4) & 0xff;
+            if (strx <= 0 || strx >= strsize || (type & 0xe0) != 0) continue;
+            out.putIfAbsent(le.vmaddr() + (stroff + strx - le.fileoff()), cstr(stroff + strx));
         }
         return out;
     }
