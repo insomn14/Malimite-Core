@@ -65,4 +65,34 @@ class StructurerTest {
         String out = Structurer.render(List.of(Stmt.jump("flags.x", null, 0x20), p("a();"), Stmt.label(0x20)));
         assertEquals("if (flags.x) goto L_20;\na();\nL_20:\n", out);
     }
+
+    @Test
+    void ifElseBecomesBothBranchesAndKeepsLineCount() {
+        List<Stmt> s = List.of(skip(0x30), p("a();"), Stmt.jump(null, null, 0x40), Stmt.label(0x30), p("b();"), Stmt.label(0x40), p("return;"));
+        String out = Structurer.render(s);
+        assertEquals("if (x0 != 0) {\n  a();\n} else {\n\n  b();\n}\nreturn;\n", out);
+        assertEquals(s.size(), out.split("\n", -1).length - 1);
+    }
+
+    @Test
+    void topTestedLoopBecomesWhile() {
+        List<Stmt> s = List.of(Stmt.label(0x10), skip(0x50), p("work();"), Stmt.jump(null, null, 0x10), Stmt.label(0x50), p("return;"));
+        String out = Structurer.render(s);
+        assertEquals("while (x0 != 0) {\n\n  work();\n}\n\nreturn;\n", out);
+        assertEquals(s.size(), out.split("\n", -1).length - 1);
+    }
+
+    @Test
+    void ifInsideWhileNestsAndIndents() {
+        List<Stmt> s = List.of(Stmt.label(0x10), skip(0x60), Stmt.jump("x3 == 0", "x3 != 0", 0x40), p("a();"), Stmt.label(0x40),
+                Stmt.jump(null, null, 0x10), Stmt.label(0x60), p("return;"));
+        assertEquals("while (x0 != 0) {\n\n  if (x3 != 0) {\n    a();\n  }\n}\n\nreturn;\n", Structurer.render(s));
+    }
+
+    @Test
+    void loopWithAnExtraExitReferenceStaysGoto() {
+        List<Stmt> s = List.of(Stmt.label(0x10), skip(0x50), Stmt.jump("x3 == 0", "x3 != 0", 0x50), p("work();"),
+                Stmt.jump(null, null, 0x10), Stmt.label(0x50), p("return;"));
+        assertEquals(true, Structurer.render(s).contains("goto L_50;"));
+    }
 }
