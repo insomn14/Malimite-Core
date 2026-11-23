@@ -581,7 +581,9 @@ malimite [OPTIONS] <ipa|apk|xapk>
                            Mach-O/Objective-C engine with lifted pseudocode (imports, selectors and string
                            literals named); a ~50 MB app scans in seconds with ~1 GB RAM. Rules written for
                            Ghidra output syntax (36 of the 69 bundled learned iOS rules) do not match its
-                           pseudocode. arm64 only, decrypted binaries only (env MALIMITE_IOS_ENGINE)
+                           pseudocode. arm64 only, decrypted binaries only (env MALIMITE_IOS_ENGINE).
+                           With --llm, native skips unnamed sub_* functions and caps enrichment at 1500
+                           functions unless --max-enrich-functions is set
       --assessment / --no-assessment
                            Security-controls Assessment (default: on)
       --fail-on=<severity> Exit 1 if findings ≥ HIGH|MEDIUM|LOW

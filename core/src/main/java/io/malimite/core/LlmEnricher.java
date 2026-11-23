@@ -256,6 +256,16 @@ public class LlmEnricher {
 
     public LlmEnricher maxFunctions(int n) { this.maxFunctions = Math.max(0, n); return this; }
 
+    private static final String NATIVE_ORIGIN = "NATIVE";
+    /** Applied to NATIVE-engine scans when no explicit cap is given. */
+    static final int NATIVE_DEFAULT_MAX_FUNCTIONS = 1_500;
+
+    /** Address-named {@code sub_*} function from the native engine: no symbol for the model to reason about. */
+    static boolean isUnnamedNative(SqliteStore.DecompilationResult fn) {
+        return NATIVE_ORIGIN.equals(fn.resolvedOrigin()) && "Global".equals(fn.className())
+                && fn.functionName() != null && fn.functionName().startsWith("sub_");
+    }
+
     public LlmEnricher(LlmProvider provider, LlmMode mode, LlmCache cache, boolean isSwift) {
         this(provider, mode, cache, isSwift, PackagePlatform.IOS);
     }
@@ -334,17 +344,24 @@ public class LlmEnricher {
         ruleCorpus = fns.stream().map(SqliteStore.DecompilationResult::decompiledCode)
                 .filter(c -> c != null && !c.isEmpty()).collect(Collectors.toUnmodifiableList());
 
+        // The NATIVE engine lifts every function in the binary (100k+ on a big app), so unnamed sub_*
+        // are dropped and "no cap" gets a default; an explicit --max-enrich-functions still wins.
+        boolean isNative = fns.stream().anyMatch(fn -> NATIVE_ORIGIN.equals(fn.resolvedOrigin()));
+        if (isNative) fns.removeIf(LlmEnricher::isUnnamedNative);
+        int limit = maxFunctions > 0 ? maxFunctions : isNative ? NATIVE_DEFAULT_MAX_FUNCTIONS : 0;
+
         // Cap: for very large apps, bound the number of functions the LLM sees by
         // picking the largest (most code) in-scope functions first.
         int total = fns.size();
-        if (maxFunctions > 0 && fns.size() > maxFunctions) {
+        if (limit > 0 && fns.size() > limit) {
             fns = fns.stream()
                     .filter(fn -> fn.decompiledCode() != null && !fn.decompiledCode().isBlank() && filter.includeFunction(fn))
                     .sorted(Comparator.comparingInt((SqliteStore.DecompilationResult fn) ->
                             fn.decompiledCode() == null ? 0 : fn.decompiledCode().length()).reversed())
-                    .limit(maxFunctions)
+                    .limit(limit)
                     .collect(Collectors.toList());
-            log.info("LLM enrichment capped: {} -> {} functions (max-enrich-functions)", total, fns.size());
+            log.info("LLM enrichment capped: {} -> {} functions ({})", total, fns.size(),
+                    maxFunctions > 0 ? "max-enrich-functions" : "native default; raise with --max-enrich-functions");
         }
 
         log.info("LLM enrichment: mode={} platform={} provider={} functions={} scope={}",
