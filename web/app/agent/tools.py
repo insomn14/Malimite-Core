@@ -43,9 +43,16 @@ def _j(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False, indent=1)
 
 
-def _spec(name, description, props, required=()):
+def _spec(name, description, props, required=(), requires_confirmation=False):
+    """requires_confirmation is never sent to the provider (see llm.py's anthropic_tools/
+    openai_tools: both build the payload from an explicit {name, description, schema} allowlist,
+    not **spread) — it is read only by loop.py's run_chat() to decide whether this tool's call
+    needs an explicit human approval round-trip before run_tool() actually executes it. Every
+    OTHER tool in this module is read-only and runs immediately like before; only a tool with
+    this flag set pauses the loop — see loop.py's PENDING_CONFIRMATION handling."""
     return {"name": name, "description": description,
-            "schema": {"type": "object", "properties": props, "required": list(required)}}
+            "schema": {"type": "object", "properties": props, "required": list(required)},
+            "requires_confirmation": requires_confirmation}
 
 
 _S = {"type": "string"}
@@ -64,7 +71,8 @@ TOOLS = [
           {"query": _S, "limit": _I}, ["query"]),
     _spec("get_vulnerabilities", "The scan's rule-based findings exactly as the Vulnerabilities tab shows them: one "
           "entry per rule_id (unique issue) with severity, CVSS, CWE, `hits` (occurrences) and sample evidence. "
-          "Pass rule_id to list every occurrence of one issue.",
+          "Pass rule_id to list every occurrence of one issue — each `evidence` entry's `id` (and the issue's own "
+          "top-level `id`, its representative occurrence) is the exact vuln_id apply_triage expects; never guess one.",
           {"severity": _S, "rule_id": _S, "limit": _I}),
     _spec("get_references", "Callers or callees of a function. Only populated for Ghidra-decompiled scans.",
           {"function": _S, "direction": {"type": "string", "enum": ["callers", "callees"]}},
@@ -94,6 +102,45 @@ TOOLS = [
           {"category": {"type": "string",
                          "enum": ["ROOT_DETECTION", "JAILBREAK", "SSL_PINNING", "CRYPTO", "BIOMETRIC"]},
            "limit": _I}),
+    _spec("propose_finding",
+          "Adds a NEW finding to the Vulnerabilities tab, grounded in what was found during this conversation "
+          "(e.g. the user asked you to investigate something and you found a real issue that no scan rule "
+          "caught). This WRITES to the scan and always pauses for the user's explicit confirmation before "
+          "anything is saved — you will see the result only after they approve or decline, never silently. "
+          "Only call this for a concrete, evidence-backed issue you can point to specific code/evidence for; "
+          "never to restate an EXISTING finding (use get_vulnerabilities to check for rule_id/title overlap "
+          "first — if it's already there, discuss apply_triage on that one instead of a duplicate). "
+          "description/evidence/poc_steps/remediation MUST read exactly like a scan-engine or AI Fix "
+          "finding would — same terse, structured report style, not a conversational summary of the chat. "
+          "Follow each field's own format rule below exactly; never speculative, never longer than asked.",
+          {"title": _S, "severity": {"type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]},
+           "cvss_score": {"type": "number"}, "cwe": _S, "category": _S,
+           "description": {"type": "string", "description":
+               "1-3 sentences stating what the vulnerability is and why it's exploitable in THIS app — "
+               "same length/tone as an AI Fix description, not a narrative of how it was found in chat."},
+           "evidence": {"type": "string", "description":
+               "One concrete short snippet (code line, string, config value) under 300 characters, grounded "
+               "in what was actually gathered — not a paragraph explaining the evidence."},
+           "poc_steps": {"type": "string", "description":
+               "Newline-separated numbered steps, e.g. \"1. step one\\n2. step two\\n3. step three\" — concrete "
+               "and specific to this finding, each step a single short action, not prose paragraphs."},
+           "remediation": {"type": "string", "description":
+               "1-3 sentences of concrete, actionable fix guidance specific to this finding/evidence — same "
+               "terse style as the other fields, not a design essay."},
+           "reference_url": _S, "affected_class": _S, "affected_function": _S},
+          ["title", "severity", "description"], requires_confirmation=True),
+    _spec("apply_triage",
+          "Changes ONE finding's review status, severity/CVSS override, or reviewer note — same effect as a "
+          "human editing it in the Vulnerabilities tab's Triage form. This WRITES to the scan and always pauses "
+          "for the user's explicit confirmation before anything is saved. vuln_id MUST be a real id from "
+          "get_vulnerabilities (or from the finding the user opened this chat to discuss, if one was provided) "
+          "— if you are not certain which finding the user means, call get_vulnerabilities first and ask, never "
+          "guess an id. Only set the fields the user actually asked to change; leave the rest unset.",
+          {"vuln_id": _I, "status": {"type": "string",
+                                      "enum": ["open", "false_positive", "accepted_risk", "fixed"]},
+           "override_severity": {"type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", ""]},
+           "override_cvss_score": {"type": "number"}, "note": _S},
+          ["vuln_id"], requires_confirmation=True),
 ]
 
 
@@ -143,8 +190,10 @@ async def _vulns(ctx: Ctx, a: dict) -> str:
         issues = [g for g in issues if g["severity"] == sev]
     if rule:
         issues = [g for g in issues if g["rule_id"] == rule]
-        for g in issues:  # a specific rule was asked for: show every occurrence
-            g["evidence"] = [{"where": r["affected_name"], "evidence": (r["evidence"] or "")[:200]}
+        for g in issues:  # a specific rule was asked for: show every occurrence, each with its own id
+            # (apply_triage's vuln_id — see tools.py's _spec() — targets ONE occurrence, which may not
+            # be the representative; get_vulnerabilities_brief() guarantees "id" on every row for this)
+            g["evidence"] = [{"id": r["id"], "where": r["affected_name"], "evidence": (r["evidence"] or "")[:200]}
                              for r in rows if r["rule_id"] == rule]
     limit = max(1, min(int(a.get("limit", 30)), 100))
     return _j({"unique_issues": len(issues), "issues": issues[:limit]})
@@ -326,11 +375,108 @@ async def _hook_targets(ctx: Ctx, a: dict) -> str:
     return _j({"targets": targets[:limit], "note": _HOOK_NOTE})
 
 
+_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
+_STATUSES = {"open", "false_positive", "accepted_risk", "fixed"}
+
+# Observed live (claude-sonnet-5 via claude-oauth): a long free-text tool argument can end with
+# the model's own tool-call syntax bleeding into the string value, e.g. description ending in
+# `...the key-hardcoding issue.</description>\n<parameter name="evidence">new SecretKeySpec(...`
+# — a malformed-but-syntactically-valid JSON string the provider still sends as the argument.
+# The confirmation UI shows the raw value before a human approves, but this is defense in depth:
+# a confirmed-but-corrupted call must still fail loudly here rather than writing a report field
+# that silently ends mid-sentence with leaked internal syntax. Matches regardless of which XML
+# tool-call dialect leaked (Anthropic's own old XML format and others look similar enough that a
+# narrow Claude-only pattern isn't worth the fragility).
+_TOOL_SYNTAX_LEAK_RE = re.compile(
+    r"</\s*(?:parameter|function_calls?|invoke|tool_call|antml:invoke|antml:parameter)\s*>"
+    r"|<\s*(?:parameter|function_calls?|invoke|tool_call|antml:invoke|antml:parameter)\b",
+    re.IGNORECASE,
+)
+
+
+def _reject_tool_syntax_leak(value: Optional[str], field: str) -> None:
+    if value and _TOOL_SYNTAX_LEAK_RE.search(value):
+        raise ValueError(
+            f"{field} looks corrupted — it contains tool-call syntax that leaked into the text "
+            f"(e.g. '</parameter>' or '<invoke'). This usually means the model's response got "
+            f"garbled; nothing was saved. Try again, possibly with a shorter/simpler request.")
+
+
+async def _propose_finding(ctx: Ctx, a: dict) -> str:
+    """Only reachable after the user confirms (see loop.py) — by the time this runs, args have
+    already been shown to them verbatim and approved. Still validates: a confirmed-but-malformed
+    call (model sent a bad enum value despite the schema) must fail loudly, not insert garbage.
+    """
+    title = (a.get("title") or "").strip()
+    if not title:
+        raise ValueError("title is required")
+    severity = str(a.get("severity") or "").upper()
+    if severity not in _SEVERITIES:
+        raise ValueError(f"severity must be one of {sorted(_SEVERITIES)}")
+    description = (a.get("description") or "").strip()
+    if not description:
+        raise ValueError("description is required")
+    cvss = a.get("cvss_score")
+    if cvss is not None:
+        cvss = float(cvss)
+        if not (0.0 <= cvss <= 10.0):
+            raise ValueError("cvss_score must be between 0.0 and 10.0")
+    for field in ("title", "description", "evidence", "poc_steps", "remediation", "cwe",
+                  "category", "reference_url", "affected_class", "affected_function"):
+        _reject_tool_syntax_leak(a.get(field), field)
+    new_id = await db.insert_vulnerability_manual(
+        ctx.db_path, ctx.exe,
+        title=title, severity=severity, cvss_score=cvss,
+        cwe=a.get("cwe") or None, category=a.get("category") or None,
+        description=description, evidence=a.get("evidence") or None,
+        poc_steps=a.get("poc_steps") or None, remediation=a.get("remediation") or None,
+        reference_url=a.get("reference_url") or None,
+        affected_type="FUNCTION" if a.get("affected_function") else ("CLASS" if a.get("affected_class") else None),
+        affected_name=a.get("affected_function") or a.get("affected_class") or None,
+    )
+    return _j({"ok": True, "vuln_id": new_id, "title": title, "severity": severity,
+              "note": "Added to the Vulnerabilities tab (id={}). Tell the user it's there.".format(new_id)})
+
+
+async def _apply_triage(ctx: Ctx, a: dict) -> str:
+    """Same confirmed-before-reaching-here contract as _propose_finding() — see loop.py."""
+    vuln_id = a.get("vuln_id")
+    if not isinstance(vuln_id, int):
+        raise ValueError("vuln_id must be an integer")
+    row = await db.get_vulnerability_row(ctx.db_path, ctx.exe, vuln_id)
+    if row is None:
+        raise ValueError(f"no finding with id={vuln_id} in this scan")
+    status = a.get("status")
+    if status is not None and status not in _STATUSES:
+        raise ValueError(f"status must be one of {sorted(_STATUSES)}")
+    override_severity = a.get("override_severity")
+    if override_severity is not None and override_severity != "" and override_severity.upper() not in _SEVERITIES:
+        raise ValueError(f"override_severity must be one of {sorted(_SEVERITIES)} or empty to clear")
+    cvss = a.get("override_cvss_score")
+    if cvss is not None:
+        cvss = float(cvss)
+        if not (0.0 <= cvss <= 10.0):
+            raise ValueError("override_cvss_score must be between 0.0 and 10.0")
+    _reject_tool_syntax_leak(a.get("note"), "note")
+    ok = await db.update_vulnerability_triage(
+        ctx.db_path, vuln_id,
+        status=status,
+        override_severity=override_severity.upper() if override_severity else override_severity,
+        override_cvss_score=cvss,
+        override_note=a.get("note"),
+    )
+    if not ok:
+        raise ValueError(f"no finding with id={vuln_id} in this scan")
+    return _j({"ok": True, "vuln_id": vuln_id,
+              "note": "Triage updated. Tell the user what changed."})
+
+
 _RUN: dict[str, Callable[[Ctx, dict], Awaitable[str]]] = {
     "scan_overview": _overview, "list_classes": _list_classes, "search_code": _search_code,
     "get_source": _get_source, "search_strings": _search_strings, "get_vulnerabilities": _vulns,
     "get_references": _refs, "get_assessments": _assessments, "get_manifest": _manifest, "decompile": _decompile,
     "recommend_hook_targets": _hook_targets,
+    "propose_finding": _propose_finding, "apply_triage": _apply_triage,
 }
 
 
