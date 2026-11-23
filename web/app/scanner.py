@@ -404,7 +404,6 @@ async def create_scan(
     llm_model: str,
     llm_api_key: str = "",
     assessment_enabled: bool = True,
-    ios_light: bool = False,
     decompiler: str = "jadx",
     ci_pipeline_url: Optional[str] = None,
     ci_commit_sha: Optional[str] = None,
@@ -438,7 +437,6 @@ async def create_scan(
         "llm_mode": llm_mode,
         "llm_model": llm_model,
         "assessment_enabled": assessment_enabled,
-        "ios_light": ios_light,
         # iOS only: "native" = Ghidra-free engine (Mach-O + ObjC metadata + lifted pseudocode); anything else = Ghidra.
         "ios_engine": "native" if ios_engine == "native" else "",
         # LLM enrichment tuning; 0 = CLI/provider default. Clamped so a request cannot ask for an unbounded burst.
@@ -491,9 +489,7 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
     # jars with inverted --assessment polarity cannot disable the scan.
     if not meta.get("assessment_enabled", True):
         cmd += ["--no-assessment"]
-    if meta.get("ios_light"):
-        cmd += ["--ios-light"]
-    elif meta.get("ios_engine") == "native":
+    if meta.get("ios_engine") == "native":
         cmd += ["--ios-engine", "native"]
     # CLI default is jadx; only pass --decompiler when asc was explicitly picked (Android-only —
     # the CLI itself ignores this flag for .ipa). If droidasc isn't installed/configured on this

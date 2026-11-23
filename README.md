@@ -577,10 +577,7 @@ malimite [OPTIONS] <ipa|apk|xapk>
       --max-asc-classes=<n> Cap classes the ASC backend decompiles (0 = no cap; env MAX_ASC_CLASSES)
       --decompile-threads=<n>
                            Parallel ASC getclass workers (default 8; env DECOMPILE_THREADS)
-      --ios-light          iOS only: skip Ghidra, scan strings/imported symbols/plist only (no pseudocode;
-                           pseudocode-based rules report "not evaluated"). For binaries too large for
-                           Ghidra auto-analysis (env MALIMITE_IOS_LIGHT)
-      --ios-engine=<e>     iOS engine: ghidra (default) | native | light. native = built-in Ghidra-free
+      --ios-engine=<e>     iOS engine: ghidra (default) | native. native = built-in Ghidra-free
                            Mach-O/Objective-C engine with lifted pseudocode (imports, selectors and string
                            literals named, simple if/do-while blocks, Swift class methods named from their
                            vtable); a ~50 MB app scans in seconds with ~1 GB RAM. Rules that need Ghidra
@@ -614,8 +611,7 @@ malimite claude-login [OPTIONS]
 | `DEEPSEEK_BASE_URL` | Default `https://api.deepseek.com` |
 | `OLLAMA_BASE_URL` | Default `http://localhost:11434` |
 | `LLM_MODEL` / `LLM_MAX_TOKENS` | Override provider defaults |
-| `MALIMITE_IOS_LIGHT` | iOS only: same as `--ios-light` — skip Ghidra, scan strings/symbols/plist only |
-| `MALIMITE_IOS_ENGINE` | iOS only: same as `--ios-engine` (`ghidra` / `native` / `light`) |
+| `MALIMITE_IOS_ENGINE` | iOS only: same as `--ios-engine` (`ghidra` / `native`). The old `--ios-light` / `MALIMITE_IOS_LIGHT` / `light` still work as deprecated aliases of `native` |
 | `ASC_HOME` / `MAX_ASC_CLASSES` / `DECOMPILE_THREADS` / `MALIMITE_DECOMPILER` | Android Droid ASC decompiler backend settings — same as `--asc-home` / `--max-asc-classes` / `--decompile-threads` / `--decompiler` |
 | `MAX_ENRICH_FUNCTIONS` | Same as `--max-enrich-functions` |
 | `LLM_ENRICH_CONCURRENCY` | Same as `--llm-concurrency` |
@@ -669,7 +665,6 @@ See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 - ✅ AI Assistant: chat over the scan with tools, on-demand ASC / JADX / Ghidra decompilation, Frida hook-target recommendations
 - ✅ Functions Explorer: JADX-GUI-style file tree + source viewer for everything a scan decompiled
 - ✅ Claude Pro/Max OAuth as an LLM provider — no separately-billed `ANTHROPIC_API_KEY` required
-- ✅ iOS light scan mode (`--ios-light`): strings/symbols/plist only, for binaries too large for Ghidra auto-analysis
 - ✅ iOS native engine (`--ios-engine native`): Ghidra-free Mach-O + ObjC metadata + arm64 lifter that produces named pseudocode, so `DECOMPILED` rules, the LLM stage and the Functions Explorer work on binaries Ghidra cannot analyse
 - ✅ Triage workflow and AI Fix: reviewer overrides and LLM-rewritten finding text, both reversible and both reflected in `report.html`
 - ✅ `report.html` rewritten as a formal, bilingual (ID/EN) Vulnerability Assessment document — cover page, risk rating scale, MASVS mapping, approval sheet, glossary, Android manifest summary, print/PDF-ready

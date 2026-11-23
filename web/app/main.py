@@ -118,7 +118,7 @@ async def create_scan(
     llm_model: str = Form(""),
     llm_api_key: str = Form(""),
     assessment_enabled: bool = Form(True),
-    ios_light: bool = Form(False),
+    ios_light: bool = Form(False),   # deprecated alias of ios_engine=native (the light scan was removed)
     decompiler: str = Form("jadx"),
     ci_pipeline_url: Optional[str] = Form(None),
     ci_commit_sha: Optional[str] = Form(None),
@@ -176,8 +176,8 @@ async def create_scan(
     return await scanner.create_scan(
         data, file.filename,
         llm_enabled, llm_provider, llm_mode, llm_model, llm_api_key,
-        assessment_enabled, ios_light, decompiler,
-        ci_pipeline_url, ci_commit_sha, ci_triggered_by, ios_engine,
+        assessment_enabled, decompiler,
+        ci_pipeline_url, ci_commit_sha, ci_triggered_by, "native" if ios_light else ios_engine,
         llm_concurrency, max_enrich_functions,
     )
 

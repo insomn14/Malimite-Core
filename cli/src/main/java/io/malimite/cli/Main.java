@@ -115,17 +115,15 @@ public class Main implements Callable<Integer> {
             defaultValue = "${env:DECOMPILE_THREADS:-8}")
     private int decompileThreads;
 
-    @Option(names = "--ios-light",
-            description = "iOS only: skip Ghidra and scan strings, imported symbols and plist only (no "
-                    + "pseudocode; pseudocode-based rules are reported as not evaluated). For binaries too "
-                    + "large for Ghidra auto-analysis. (env: MALIMITE_IOS_LIGHT)",
+    /** Removed feature kept as an alias so existing scripts keep working: the native engine replaces it. */
+    @Option(names = "--ios-light", hidden = true,
+            description = "Deprecated: same as --ios-engine native. (env: MALIMITE_IOS_LIGHT)",
             defaultValue = "${env:MALIMITE_IOS_LIGHT:-false}")
     private boolean iosLight;
 
     @Option(names = "--ios-engine",
-            description = "iOS engine: ghidra (default, full auto-analysis), native (Ghidra-free Mach-O/ObjC engine "
-                    + "with lifted pseudocode; seconds, <1GB) or light (strings/imports only, same as --ios-light). "
-                    + "(env: MALIMITE_IOS_ENGINE)",
+            description = "iOS engine: ghidra (default, full auto-analysis) or native (Ghidra-free Mach-O/ObjC engine "
+                    + "with lifted pseudocode; seconds, <1GB). (env: MALIMITE_IOS_ENGINE)",
             defaultValue = "${env:MALIMITE_IOS_ENGINE:-ghidra}")
     private String iosEngine;
 
@@ -154,6 +152,13 @@ public class Main implements Callable<Integer> {
             description = "Exit 1 if SARIF results reach this severity: HIGH|MEDIUM|LOW",
             defaultValue = "NONE")
     private String failOn;
+
+    /** native engine requested directly, or through the removed light scan (flag or engine name). */
+    private boolean useNativeEngine() {
+        boolean legacy = iosLight || "light".equalsIgnoreCase(iosEngine);
+        if (legacy) System.err.println("warning: the iOS light scan was removed; using --ios-engine native instead");
+        return legacy || "native".equalsIgnoreCase(iosEngine);
+    }
 
     @Override
     public Integer call() throws Exception {
@@ -192,8 +197,7 @@ public class Main implements Callable<Integer> {
                 .ascHome(ascHome == null || ascHome.isBlank() ? null : Path.of(ascHome))
                 .maxAscClasses(maxAscClasses)
                 .decompileThreads(decompileThreads)
-                .iosLight(iosLight || "light".equalsIgnoreCase(iosEngine))
-                .iosNative("native".equalsIgnoreCase(iosEngine))
+                .iosNative(useNativeEngine())
                 .llmConcurrency(llmConcurrency)
                 .build();
 

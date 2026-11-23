@@ -15,7 +15,6 @@ class ScanMeta(BaseModel):
     llm_mode: str = "summarize"
     llm_model: str = ""
     assessment_enabled: bool = True
-    ios_light: bool = False
     ios_engine: str = ""
     llm_concurrency: int = 0         # 0 = default (2 for Claude OAuth, 8 for an API key)
     max_enrich_functions: int = 0    # 0 = default (native engine: 1500; others: no cap)
