@@ -256,6 +256,11 @@ public class LlmEnricher {
 
     public LlmEnricher maxFunctions(int n) { this.maxFunctions = Math.max(0, n); return this; }
 
+    private int concurrency = 0;
+
+    /** Explicit parallelism for the LLM calls (0 = provider default / LLM_ENRICH_CONCURRENCY). */
+    public LlmEnricher concurrency(int n) { this.concurrency = Math.max(0, n); return this; }
+
     private static final String NATIVE_ORIGIN = "NATIVE";
     /** Applied to NATIVE-engine scans when no explicit cap is given. */
     static final int NATIVE_DEFAULT_MAX_FUNCTIONS = 1_500;
@@ -317,6 +322,7 @@ public class LlmEnricher {
      * these defaults).
      */
     private int resolveConcurrency() {
+        if (concurrency > 0) return concurrency;
         String override = System.getenv("LLM_ENRICH_CONCURRENCY");
         if (override != null && !override.isBlank()) {
             try {

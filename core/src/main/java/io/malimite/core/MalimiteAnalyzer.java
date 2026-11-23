@@ -72,6 +72,7 @@ public class MalimiteAnalyzer {
 
         Path dbPath = opts.outputDir().resolve(scanId + ".sqlite");
         MobileProvision.ProvisionInfo provision = null;
+        List<String> nativeNotEvaluated = List.of();
 
         try (SqliteStore store = new SqliteStore(dbPath.toString())) {
             ResourceParser rp = new ResourceParser(store);
@@ -84,7 +85,7 @@ public class MalimiteAnalyzer {
                 MachoLightIngest.ingestImports(Path.of(execPath), store, execName);
             } else if (opts.iosNative()) {
                 CoreConfig config = new CoreConfig(opts.ghidraHome());  // Ghidra not needed; only for library prefixes
-                log.info("iOS native scan: Ghidra-free engine (lifted pseudocode); Ghidra-syntax learned rules will not match");
+                log.info("iOS native scan: Ghidra-free engine (lifted pseudocode); rules that need Ghidra output syntax are skipped and listed in scan.json");
                 io.malimite.core.ios.IosNativeIngest.ingest(Path.of(execPath), store, execName,
                         LibraryDefinitions.getActiveLibraries(config));
             } else {
@@ -103,8 +104,10 @@ public class MalimiteAnalyzer {
                     scope.scope(), scope.includeSecuritySdks(), info.getBundleIdentifier());
 
             try {
-                int vulnCount = new VulnerabilityScanner().scan(store, execName, PackagePlatform.IOS,
-                        LearnedRulesStore.forPlatform(PackagePlatform.IOS), scope);
+                VulnerabilityScanner scanner = new VulnerabilityScanner();
+                int vulnCount = scanner.scan(store, execName, PackagePlatform.IOS,
+                        LearnedRulesStore.forPlatform(PackagePlatform.IOS), scope, opts.iosNative());
+                nativeNotEvaluated = scanner.notEvaluated();
                 log.info("VulnerabilityScanner found {} finding(s)", vulnCount);
             } catch (StackOverflowError e) {
                 log.error("VulnerabilityScanner StackOverflowError — skipping rule scan");
@@ -116,7 +119,7 @@ public class MalimiteAnalyzer {
             if (!opts.iosLight()) runLlmIfEnabled(opts, store, execName, macho.isSwift(), PackagePlatform.IOS, scope);
         }
 
-        saveScanJsonIos(opts.outputDir().resolve("scan.json"), scanId, info, macho, opts, dbPath, provision);
+        saveScanJsonIos(opts.outputDir().resolve("scan.json"), scanId, info, macho, opts, dbPath, provision, nativeNotEvaluated);
 
         long dt = System.currentTimeMillis() - t0;
         log.info("scan={} done in {}ms  db={}", scanId, dt, dbPath);
@@ -294,6 +297,7 @@ public class MalimiteAnalyzer {
             if (llmProvider != null) {
                 new LlmEnricher(llmProvider, opts.llmMode(), LlmCache.NOOP, isSwift, platform)
                         .maxFunctions(opts.maxEnrichFunctions())
+                        .concurrency(opts.llmConcurrency())
                         .enrich(store, execName, scope);
             } else {
                 log.warn("llmEnabled=true but LLM_PROVIDER=none — skipping enrichment");
@@ -349,7 +353,7 @@ public class MalimiteAnalyzer {
 
     private void saveScanJsonIos(Path target, String scanId, InfoPlist info,
                                  Macho macho, AnalyzeOptions opts, Path dbPath,
-                                 MobileProvision.ProvisionInfo provision) {
+                                 MobileProvision.ProvisionInfo provision, List<String> nativeNotEvaluated) {
         try {
             var meta = new java.util.LinkedHashMap<String, Object>();
             meta.put("scanId", scanId);
@@ -366,6 +370,7 @@ public class MalimiteAnalyzer {
             putScopeMeta(meta, opts);
             meta.put("scanMode", opts.iosLight() ? "light" : opts.iosNative() ? "native" : "full");
             if (opts.iosLight()) meta.put("rulesNotEvaluated", lightSkippedRuleIds());
+            else if (opts.iosNative()) meta.put("rulesNotEvaluated", nativeNotEvaluated);
             if (provision != null) {
                 meta.put("bundleTeamId", provision.teamId());
                 meta.put("provisioningProfile", provision.profileName());

@@ -89,7 +89,7 @@ public final class IosNativeIngest {
         return out;
     }
 
-    private record Item(long start, List<ObjcMetadata.Method> methods, String symbol, Lifter.Lifted lifted) {}
+    private record Item(long start, List<ObjcMetadata.Method> methods, String symbol, SwiftTypes.Method swift, Lifter.Lifted lifted) {}
 
     /** Returns {classes, functions, functionsWithCode}. */
     private static int[] ingestFunctions(MachOImage img, ObjcMetadata objc, SqliteStore store, String exec,
@@ -99,6 +99,7 @@ public final class IosNativeIngest {
         Map<Long, String> symbols = definedSymbols(img);
         StubResolver stubs = new StubResolver(img, objc);
         Lifter lifter = new Lifter(img, objc, stubs, symbols);
+        SwiftTypes swiftTypes = new SwiftTypes(img);
         int[] withCode = {0};
         int[] unnamedKept = {0};
         Set<Long> handled = new HashSet<>();
@@ -115,9 +116,11 @@ public final class IosNativeIngest {
             Item[] items = java.util.stream.IntStream.range(c0, c1).parallel().mapToObj(i -> {
                 long start = st[i], end = i + 1 < st.length ? st[i + 1] : textEnd;
                 List<ObjcMetadata.Method> ms = objc.allByImp.get(start);
-                boolean allLib = ms != null && ms.stream().allMatch(m -> isLib(libs, m.cls()));
+                SwiftTypes.Method sw = ms == null ? swiftTypes.byImp.get(start) : null;
+                boolean allLib = ms != null ? ms.stream().allMatch(m -> isLib(libs, m.cls()))
+                        : sw != null && isLib(libs, sw.cls());
                 Lifter.Lifted l = allLib ? null : lifter.lift(start, end, ms != null);
-                return new Item(start, ms, symbols.get(start), l);
+                return new Item(start, ms, symbols.get(start), sw, l);
             }).toArray(Item[]::new);
 
             List<SqliteStore.DecompilationResult> rows = new ArrayList<>();
@@ -127,6 +130,8 @@ public final class IosNativeIngest {
                     handled.add(it.start());
                     for (ObjcMetadata.Method m : it.methods())
                         addMethod(m, it.lifted(), exec, libs, seen, rows, refs, classToFunctions, store, withCode);
+                } else if (it.swift() != null && it.symbol() == null) {
+                    addSwift(it.swift(), it.lifted(), exec, libs, seen, rows, refs, classToFunctions, withCode);
                 } else if (it.symbol() != null || (it.lifted() != null && it.lifted().interesting() && unnamedKept[0] < MAX_UNNAMED)) {
                     String fn = it.symbol() != null ? it.symbol() : "sub_" + Long.toHexString(it.start());
                     if (it.symbol() == null) unnamedKept[0]++;
@@ -155,6 +160,28 @@ public final class IosNativeIngest {
         for (Map.Entry<String, JSONArray> e : classToFunctions.entrySet())
             store.insertClass(e.getKey(), e.getValue().toString(), exec);
         return new int[] {classToFunctions.size(), seen.size(), withCode[0]};
+    }
+
+    /** A Swift class method known only from its vtable slot: {@code Module.Type} / {@code getter_3}. */
+    private static void addSwift(SwiftTypes.Method m, Lifter.Lifted lifted, String exec, List<String> libs,
+                                 Set<String> seen, List<SqliteStore.DecompilationResult> rows,
+                                 List<SyntaxParser.FunctionRefResult> refs, Map<String, JSONArray> classToFunctions,
+                                 int[] withCode) {
+        String fn = m.functionName();
+        boolean lib = isLib(libs, m.cls());
+        String parent = lib ? "Libraries" : m.cls();
+        String name = lib ? m.cls() + "::" + fn : fn;
+        if (!seen.add(parent + "\0" + name)) return;
+        String code = "";
+        if (!lib && lifted != null) {
+            code = "// Class: " + m.cls() + "\n// Function: " + fn + "\n\n"
+                    + (lifted.body().isEmpty() ? "// no resolved operations\n" : lifted.body());
+            for (Lifter.Ref r : lifted.refs())
+                refs.add(new SyntaxParser.FunctionRefResult(fn, m.cls(), r.target(), r.targetClass(), r.line(), exec));
+            withCode[0]++;
+        }
+        rows.add(new SqliteStore.DecompilationResult(name, parent, code, exec, ORIGIN));
+        classToFunctions.computeIfAbsent(parent, k -> new JSONArray()).put(name);
     }
 
     private static boolean isLib(List<String> libs, String cls) {

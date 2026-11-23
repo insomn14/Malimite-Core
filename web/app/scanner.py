@@ -410,6 +410,8 @@ async def create_scan(
     ci_commit_sha: Optional[str] = None,
     ci_triggered_by: Optional[str] = None,
     ios_engine: str = "",
+    llm_concurrency: int = 0,
+    max_enrich_functions: int = 0,
 ) -> ScanMeta:
     _check_scan_rate_limit()
     migrate_legacy_scan_dirs()
@@ -439,6 +441,9 @@ async def create_scan(
         "ios_light": ios_light,
         # iOS only: "native" = Ghidra-free engine (Mach-O + ObjC metadata + lifted pseudocode); anything else = Ghidra.
         "ios_engine": "native" if ios_engine == "native" else "",
+        # LLM enrichment tuning; 0 = CLI/provider default. Clamped so a request cannot ask for an unbounded burst.
+        "llm_concurrency": max(0, min(int(llm_concurrency or 0), MAX_LLM_CONCURRENCY)),
+        "max_enrich_functions": max(0, min(int(max_enrich_functions or 0), MAX_ENRICH_FUNCTIONS)),
         # Android-only (.apk/.xapk); ignored by the CLI for .ipa. "jadx" (default) or "asc"
         # (Droid ASC — falls back to jadx server-side if the asc/droidasc binary isn't installed).
         "decompiler": decompiler if decompiler in ("jadx", "asc") else "jadx",
@@ -458,6 +463,10 @@ async def create_scan(
 
 # ── CLI argv ──────────────────────────────────────────────────────────────────
 
+MAX_LLM_CONCURRENCY = 16
+MAX_ENRICH_FUNCTIONS = 50_000
+
+
 def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
     """Build malimite-cli argv. Scan scope comes from --llm-mode even when LLM is off."""
     mode = (meta.get("llm_mode") or "summarize").strip() or "summarize"
@@ -474,6 +483,10 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
         cmd += ["--llm", "--llm-provider", meta["llm_provider"]]
         if meta.get("llm_model"):
             cmd += ["--llm-model", meta["llm_model"]]
+        if meta.get("llm_concurrency"):
+            cmd += ["--llm-concurrency", str(meta["llm_concurrency"])]
+        if meta.get("max_enrich_functions"):
+            cmd += ["--max-enrich-functions", str(meta["max_enrich_functions"])]
     # Default CLI assessment=true; omit the flag when enabled so older picocli
     # jars with inverted --assessment polarity cannot disable the scan.
     if not meta.get("assessment_enabled", True):

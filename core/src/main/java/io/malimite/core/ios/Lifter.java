@@ -9,7 +9,8 @@ import java.util.Set;
 /**
  * Turns one function into compact C-like pseudocode: calls with resolved import/selector/class/literal arguments,
  * conditional branches as {@code if (...) goto}, string stores and returns. Register moves and arithmetic are folded
- * into the tracked values instead of printed. No loop/if structuring (linear labels and gotos only).
+ * into the tracked values instead of printed. Simple forward skips and backward loops become blocks ({@link Structurer});
+ * everything else stays a label and a goto.
  */
 final class Lifter {
 
@@ -62,14 +63,14 @@ final class Lifter {
 
         Run run = new Run(start, labels, objcMethod);
         for (int i = 0; i < n && run.lines < MAX_LINES; i++) run.step(ins[i], start + 4L * i, i);
-        if (run.lines >= MAX_LINES) run.out.append("// ... truncated\n");
-        return new Lifted(run.out.toString(), run.refs, run.interesting);
+        String body = Structurer.render(run.stmts) + (run.lines >= MAX_LINES ? "// ... truncated\n" : "");
+        return new Lifted(body, run.refs, run.interesting);
     }
 
     /** Per-function state. */
     private final class Run {
         final Tracker t = new Tracker(img, objc);
-        final StringBuilder out = new StringBuilder();
+        final List<Structurer.Stmt> stmts = new ArrayList<>();
         final List<Ref> refs = new ArrayList<>();
         final Set<Long> labels;
         final boolean objcMethod;
@@ -91,8 +92,18 @@ final class Lifter {
         }
 
         void emit(String stmt) {
-            out.append(stmt).append('\n');
+            stmts.add(Structurer.Stmt.plain(stmt));
             lines++;
+        }
+
+        /** {@code if (cond) goto target;} (or a bare goto when cond is null); {@code neg} is the opposite test, if known. */
+        void branch(String cond, String neg, long target) {
+            if (labels.contains(target)) {
+                stmts.add(Structurer.Stmt.jump(cond, neg, target));
+                lines++;
+            } else {
+                emit((cond == null ? "" : "if (" + cond + ") ") + "goto 0x" + Long.toHexString(target) + ";");
+            }
         }
 
         int nextLine() { return HEADER_LINES + lines + 1; }
@@ -106,7 +117,8 @@ final class Lifter {
             if (labels.contains(pc)) {
                 t.resetAll();
                 cmpA = cmpB = null;
-                emit("L_" + Long.toHexString(pc) + ":");
+                stmts.add(Structurer.Stmt.label(pc));
+                lines++;
             }
             switch (in.op()) {
                 case BL -> call(callee(in.imm()), false);
@@ -117,14 +129,14 @@ final class Lifter {
                     else emit("goto *" + text(in.rn()) + ";");  // jump table / computed branch
                 }
                 case B -> {
-                    if (labels.contains(in.imm())) emit("goto L_" + Long.toHexString(in.imm()) + ";");
+                    if (labels.contains(in.imm())) branch(null, null, in.imm());
                     else call(callee(in.imm()), true);
                 }
-                case BCOND -> emit("if (" + cond(in.aux()) + ") goto " + target(in.imm()) + ";");
-                case CBZ -> emit("if (" + text(in.rd()) + " == 0) goto " + target(in.imm()) + ";");
-                case CBNZ -> emit("if (" + text(in.rd()) + " != 0) goto " + target(in.imm()) + ";");
-                case TBZ -> emit("if ((" + text(in.rd()) + " & (1 << " + in.aux() + ")) == 0) goto " + target(in.imm()) + ";");
-                case TBNZ -> emit("if ((" + text(in.rd()) + " & (1 << " + in.aux() + ")) != 0) goto " + target(in.imm()) + ";");
+                case BCOND -> branch(cond(in.aux()), in.aux() < 14 ? cond(in.aux() ^ 1) : null, in.imm());
+                case CBZ -> branch(text(in.rd()) + " == 0", text(in.rd()) + " != 0", in.imm());
+                case CBNZ -> branch(text(in.rd()) + " != 0", text(in.rd()) + " == 0", in.imm());
+                case TBZ -> branch(bit(in.rd(), in.aux()) + " == 0", bit(in.rd(), in.aux()) + " != 0", in.imm());
+                case TBNZ -> branch(bit(in.rd(), in.aux()) + " != 0", bit(in.rd(), in.aux()) + " == 0", in.imm());
                 case CMP_IMM -> { cmpA = text(in.rn()); cmpB = Val.konst(in.imm()).show(); }
                 case CMP_REG -> { cmpA = text(in.rn()); cmpB = text(in.rm()); }
                 case RET -> {
@@ -150,8 +162,8 @@ final class Lifter {
             return v != null && v.k == Val.K.RET ? "x" + reg : text(reg);
         }
 
-        String target(long addr) {
-            return labels.contains(addr) ? "L_" + Long.toHexString(addr) : "0x" + Long.toHexString(addr);
+        String bit(int reg, int n) {
+            return "(" + text(reg) + " & (1 << " + n + "))";
         }
 
         String cond(int cc) {

@@ -39,16 +39,25 @@ class IosNativeIngestTest {
     static int ldrX(int rt, int rn, int imm) { return 0xf9400000 | ((imm >> 3) << 10) | (rn << 5) | rt; }
     static int bl(long pc, long target) { return 0x94000000 | (int) (((target - pc) >> 2) & 0x3ffffff); }
 
-    static byte[] tinyApp() {
+    static final int SWTYPES = 0x1400, SW_CLASS = 0x1440, SW_MODULE = 0x1500, SW_STR = 0x1580;
+
+    static byte[] tinyApp() { return tinyApp(false); }
+
+    static byte[] tinyApp(boolean swift) {
         ByteBuffer b = ByteBuffer.allocate(SIZE).order(ByteOrder.LITTLE_ENDIAN);
         // header + load commands
         b.putInt(0, 0xFEEDFACF).putInt(4, 0x0100000C).putInt(12, 2);
         int p = 32, ncmds = 0;
-        p = segment(b, p, "__TEXT", BASE, 0x4000, 0, 0x4000, new String[][] {
+        String[][] textSects = {
                 {"__text", "__TEXT", "" + (BASE + TEXT), "64", "" + TEXT, "0x80000400"},
                 {"__stubs", "__TEXT", "" + (BASE + STUBS), "24", "" + STUBS, "0x80000408"},
                 {"__cstring", "__TEXT", "" + (BASE + CSTR), "64", "" + CSTR, "2"},
-                {"__objc_methname", "__TEXT", "" + (BASE + METH), "64", "" + METH, "2"}});
+                {"__objc_methname", "__TEXT", "" + (BASE + METH), "64", "" + METH, "2"}};
+        if (swift) {
+            textSects = java.util.Arrays.copyOf(textSects, 5);
+            textSects[4] = new String[] {"__swift5_types", "__TEXT", "" + (BASE + SWTYPES), "4", "" + SWTYPES, "0"};
+        }
+        p = segment(b, p, "__TEXT", BASE, 0x4000, 0, 0x4000, textSects);
         ncmds++;
         p = segment(b, p, "__DATA", BASE + DATA, 0x4000, DATA, 0x4000, new String[][] {
                 {"__got", "__DATA", "" + (BASE + GOT), "16", "" + GOT, "6"},
@@ -95,8 +104,21 @@ class IosNativeIngestTest {
         int q = LINKEDIT;
         q = bytes(b, q, 0x40); q = cstr(b, q, "_NSLog"); q = bytes(b, q, 0x51, 0x71, 0x00, 0x90);
         q = bytes(b, q, 0x40); q = cstr(b, q, "_objc_msgSend"); q = bytes(b, q, 0x51, 0x71, 0x08, 0x90, 0x00);
-        // function starts: ULEB(0x1000), end
-        bytes(b, FSTARTS, 0x80, 0x20, 0x00);
+        // function starts: ULEB(0x1000), +0x20, end
+        bytes(b, FSTARTS, 0x80, 0x20, 0x20, 0x00);
+        if (swift) {
+            b.putInt(TEXT + 0x20, 0xd65f03c0);                                   // ret: the Swift getter's body
+            b.putInt(SWTYPES, SW_CLASS - SWTYPES);                                // __swift5_types[0] -> class descriptor
+            str(b, SW_STR, "Modu"); str(b, SW_STR + 0x10, "Thing");
+            b.putInt(SW_MODULE, 0).putInt(SW_MODULE + 8, SW_STR - (SW_MODULE + 8));            // module "Modu"
+            b.putInt(SW_CLASS, 0x80000050);                                       // class, unique, has vtable
+            b.putInt(SW_CLASS + 4, SW_MODULE - (SW_CLASS + 4));                   // parent = module
+            b.putInt(SW_CLASS + 8, SW_STR + 0x10 - (SW_CLASS + 8));               // name "Thing"
+            int vt = SW_CLASS + 44;
+            b.putInt(vt, 0).putInt(vt + 4, 2);                                    // vtable header: 2 slots
+            b.putInt(vt + 8, 0x12).putInt(vt + 12, (TEXT + 0x20) - (vt + 12));    // slot 0: getter -> ret
+            b.putInt(vt + 16, 0x10).putInt(vt + 20, 0);                           // slot 1: removed by the linker
+        }
         return b.array();
     }
 
@@ -193,5 +215,33 @@ class IosNativeIngestTest {
     void prettyClassKeepsObjcNamesAndSplitsSwiftOnes() {
         assertEquals("NSObject", ObjcMetadata.prettyClass("NSObject"));
         assertEquals("Krom.LoginViewController", ObjcMetadata.prettyClass("_TtC4Krom19LoginViewController"));
+    }
+
+    @Test
+    void namesSwiftClassMethodsFromTheirVtable(@TempDir Path tmp) throws Exception {
+        Path bin = tmp.resolve("App");
+        Files.write(bin, tinyApp(true));
+        try (SqliteStore store = new SqliteStore(tmp.resolve("t.sqlite").toString())) {
+            IosNativeIngest.ingest(bin, store, "App", List.of());
+            SqliteStore.DecompilationResult getter = store.getAllDecompiledFunctions("App").stream()
+                    .filter(f -> f.className().equals("Modu.Thing")).findFirst().orElseThrow();
+            assertEquals("getter_0", getter.functionName());
+            assertTrue(getter.decompiledCode().startsWith("// Class: Modu.Thing\n// Function: getter_0\n"), getter.decompiledCode());
+            assertEquals(List.of("getter_0"), store.getClassesAndFunctions("App").get("Modu.Thing"));
+        }
+    }
+
+    @Test
+    void swiftVtableEntriesSharedByManyMethodsStayUnnamed(@TempDir Path tmp) throws Exception {
+        byte[] app = tinyApp(true);
+        ByteBuffer b = ByteBuffer.wrap(app).order(ByteOrder.LITTLE_ENDIAN);
+        int vt = SW_CLASS + 44;
+        b.putInt(vt + 16, 0x12).putInt(vt + 20, (TEXT + 0x20) - (vt + 20));     // slot 1 -> the same function
+        Path bin = tmp.resolve("App");
+        Files.write(bin, app);
+        try (SqliteStore store = new SqliteStore(tmp.resolve("t.sqlite").toString())) {
+            IosNativeIngest.ingest(bin, store, "App", List.of());
+            assertTrue(store.getAllDecompiledFunctions("App").stream().noneMatch(f -> f.className().equals("Modu.Thing")));
+        }
     }
 }

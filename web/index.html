@@ -1881,6 +1881,12 @@ function renderScanOptionsHtml(file, prefs, configData) {
                 <select id="llm-model-select" class="ctl" hidden></select>
                 <input id="llm-model" class="ctl" type="text" autocomplete="off" placeholder="empty = default"/>
               </span></label>
+            <label class="field"><span class="field-label">Parallel calls</span>
+              <input id="llm-concurrency" class="ctl" type="number" min="0" max="16" step="1" inputmode="numeric" placeholder="default"
+                title="Parallel LLM calls (default 2 for Claude OAuth, 8 for an API key). Higher is faster but spends the shared rate limit sooner."/></label>
+            <label class="field"><span class="field-label">Max functions</span>
+              <input id="llm-max-functions" class="ctl" type="number" min="0" max="50000" step="1" inputmode="numeric" placeholder="default"
+                title="Cap on functions sent to the LLM, largest first (default: 1500 on the native iOS engine, no cap elsewhere)."/></label>
           </div>
           <div class="cfg-note" id="llm-note">${ico('info')}<span>Using the provider connected in <a href="#/config">Config</a>.</span></div>
         </div>` : `
@@ -2179,6 +2185,10 @@ route('home', async function() {
     fd.append('llm_provider', provider);
     fd.append('llm_mode', mode);
     fd.append('llm_model', llmOn ? currentLlmModel() : '');
+    if (llmOn) {
+      fd.append('llm_concurrency', String(Math.max(0, parseInt($('#llm-concurrency')?.value, 10) || 0)));
+      fd.append('max_enrich_functions', String(Math.max(0, parseInt($('#llm-max-functions')?.value, 10) || 0)));
+    }
     fd.append('assessment_enabled', $('#assessment-enabled')?.checked !== false);
     fd.append('ios_light', !!$('#ios-light')?.checked);
     fd.append('ios_engine', $('#ios-native')?.checked && !$('#ios-light')?.checked ? 'native' : '');
@@ -3307,7 +3317,7 @@ route('scan', async function(id, tab='summary') {
       </div>
     </section>
     ${detail.scan_mode==='light'?`<div class="alert alert-warn" style="margin-bottom:.75rem"><strong>Light scan</strong> — Ghidra was skipped, so there is no pseudocode. ${(detail.rules_not_evaluated||[]).length} pseudocode-based rule(s) were <strong>not evaluated</strong> (${(detail.rules_not_evaluated||[]).map(esc).join(', ')}); absence of a finding for them does not mean the app is safe. Decompile single functions on demand from the Functions tab or the AI Assistant.</div>`:''}
-    ${detail.scan_mode==='native'?`<div class="alert alert-info" style="margin-bottom:.75rem"><strong>Native engine</strong> — Ghidra was skipped. Functions are lifted pseudocode (registers and gotos remain) with imports, selectors and string literals named; rules written for Ghidra output syntax may not match.</div>`:''}
+    ${detail.scan_mode==='native'?`<div class="alert alert-info" style="margin-bottom:.75rem"><strong>Native engine</strong> — Ghidra was skipped. Functions are lifted pseudocode (registers and gotos remain) with imports, selectors and string literals named; ${(detail.rules_not_evaluated||[]).length} rule(s) that need Ghidra output syntax were <strong>not evaluated</strong>${(detail.rules_not_evaluated||[]).length?` (${(detail.rules_not_evaluated||[]).map(esc).join(', ')})`:''}; absence of a finding for them does not mean the app is safe.</div>`:''}
     <div class="tabs sd-tabs" role="tablist" aria-label="Scan result sections">${tabsHtml}</div>
     <div id="tab-content"><div class="loading"><div class="spinner"></div></div></div>`);
 

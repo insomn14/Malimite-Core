@@ -26,7 +26,9 @@ public record AnalyzeOptions(
         /** iOS only: skip Ghidra, scan strings/symbols/plist (no pseudocode). For binaries too big for auto-analysis. */
         boolean iosLight,
         /** iOS only: Ghidra-free native engine (Mach-O + ObjC metadata + lifted pseudocode); wins over Ghidra, loses to {@code iosLight}. */
-        boolean iosNative) {
+        boolean iosNative,
+        /** Parallel LLM calls during enrichment (0 = provider default / LLM_ENRICH_CONCURRENCY). */
+        int llmConcurrency) {
 
     public AnalyzeOptions {
         if (llmMode == null) llmMode = LlmMode.SUMMARIZE;
@@ -52,7 +54,7 @@ public record AnalyzeOptions(
     public AnalyzeOptions withPackagePath(Path p) {
         return new AnalyzeOptions(p, ghidraHome, outputDir, llmEnabled, llmMode, llmConfig, jadxHome,
                 assessmentEnabled, extraPackagePrefixes, maxEnrichFunctions, decompiler, ascHome, maxAscClasses,
-                decompileThreads, iosLight, iosNative);
+                decompileThreads, iosLight, iosNative, llmConcurrency);
     }
 
     public static Builder builder() { return new Builder(); }
@@ -71,6 +73,7 @@ public record AnalyzeOptions(
         private int decompileThreads = 8;
         private boolean iosLight;
         private boolean iosNative;
+        private int llmConcurrency;
 
         public Builder ipaPath(Path p)      { this.ipaPath = p; return this; }
         /** Preferred alias — same as {@link #ipaPath(Path)}. */
@@ -102,12 +105,15 @@ public record AnalyzeOptions(
         /** iOS only: native (Ghidra-free) engine with lifted pseudocode. */
         public Builder iosNative(boolean b) { this.iosNative = b; return this; }
 
+        /** Parallel LLM calls during enrichment (0 = provider default). */
+        public Builder llmConcurrency(int n) { this.llmConcurrency = n; return this; }
+
         public AnalyzeOptions build() {
             if (ipaPath == null || outputDir == null)
                 throw new IllegalArgumentException("packagePath and outputDir required");
             return new AnalyzeOptions(ipaPath, ghidraHome, outputDir, llmEnabled, llmMode, llmConfig,
                     jadxHome, assessmentEnabled, extraPackagePrefixes, maxEnrichFunctions,
-                    decompiler, ascHome, maxAscClasses, decompileThreads, iosLight, iosNative);
+                    decompiler, ascHome, maxAscClasses, decompileThreads, iosLight, iosNative, llmConcurrency);
         }
     }
 }

@@ -85,6 +85,13 @@ public class Main implements Callable<Integer> {
             defaultValue = "${env:MAX_ENRICH_FUNCTIONS:-0}")
     private int maxEnrichFunctions;
 
+    @Option(names = "--llm-concurrency",
+            description = "Parallel LLM calls during enrichment (0 = provider default: 2 for Claude OAuth, "
+                    + "8 for an API key). Raising it speeds up large scans but spends the shared rate-limit "
+                    + "budget faster (env: LLM_ENRICH_CONCURRENCY)",
+            defaultValue = "${env:LLM_ENRICH_CONCURRENCY:-0}")
+    private int llmConcurrency;
+
     @Option(names = "--decompiler",
             description = "Decompiler backend: 'jadx' (default) or 'asc' (Droid ASC — "
                     + "on-demand, zero-preprocessing). (env: MALIMITE_DECOMPILER)",
@@ -187,6 +194,7 @@ public class Main implements Callable<Integer> {
                 .decompileThreads(decompileThreads)
                 .iosLight(iosLight || "light".equalsIgnoreCase(iosEngine))
                 .iosNative("native".equalsIgnoreCase(iosEngine))
+                .llmConcurrency(llmConcurrency)
                 .build();
 
         AnalysisResult r = new MalimiteAnalyzer().analyze(opts);

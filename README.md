@@ -566,6 +566,9 @@ malimite [OPTIONS] <ipa|apk|xapk>
                            offensive                      (first-party + security SDKs; requires --llm)
       --include-package=<p> Extra first-party Java package prefix (repeatable)
       --llm-model=<x>      Override default model per provider
+      --llm-concurrency=<n>
+                           Parallel LLM calls (0 = default: 2 for Claude OAuth, 8 for an API key; env LLM_ENRICH_CONCURRENCY).
+                           Higher is faster but spends the shared rate-limit budget sooner
       --max-enrich-functions=<n>
                            Cap functions the LLM enricher inspects (0 = no cap; env MAX_ENRICH_FUNCTIONS)
       --decompiler=<x>     Android decompiler backend: jadx (default) | asc — Droid ASC, on-demand,
@@ -579,9 +582,11 @@ malimite [OPTIONS] <ipa|apk|xapk>
                            Ghidra auto-analysis (env MALIMITE_IOS_LIGHT)
       --ios-engine=<e>     iOS engine: ghidra (default) | native | light. native = built-in Ghidra-free
                            Mach-O/Objective-C engine with lifted pseudocode (imports, selectors and string
-                           literals named); a ~50 MB app scans in seconds with ~1 GB RAM. Rules written for
-                           Ghidra output syntax (36 of the 69 bundled learned iOS rules) do not match its
-                           pseudocode. arm64 only, decrypted binaries only (env MALIMITE_IOS_ENGINE).
+                           literals named, simple if/do-while blocks, Swift class methods named from their
+                           vtable); a ~50 MB app scans in seconds with ~1 GB RAM. Rules that need Ghidra
+                           output syntax (27 of the 69 bundled learned iOS rules) are skipped and listed
+                           under rulesNotEvaluated in scan.json. arm64 only, decrypted binaries only
+                           (env MALIMITE_IOS_ENGINE).
                            With --llm, native skips unnamed sub_* functions and caps enrichment at 1500
                            functions unless --max-enrich-functions is set
       --assessment / --no-assessment
@@ -613,6 +618,7 @@ malimite claude-login [OPTIONS]
 | `MALIMITE_IOS_ENGINE` | iOS only: same as `--ios-engine` (`ghidra` / `native` / `light`) |
 | `ASC_HOME` / `MAX_ASC_CLASSES` / `DECOMPILE_THREADS` / `MALIMITE_DECOMPILER` | Android Droid ASC decompiler backend settings — same as `--asc-home` / `--max-asc-classes` / `--decompile-threads` / `--decompiler` |
 | `MAX_ENRICH_FUNCTIONS` | Same as `--max-enrich-functions` |
+| `LLM_ENRICH_CONCURRENCY` | Same as `--llm-concurrency` |
 | `SCAN_DIR` | Web service scan output directory |
 | `API_KEY` | Optional `X-Api-Key` for web API |
 | `CHAT_RATE_PER_MIN` | Shared rate limit for chat, AI Fix, and Auto Enhance (default 30/min; an Auto Enhance run counts once, not per finding) |
