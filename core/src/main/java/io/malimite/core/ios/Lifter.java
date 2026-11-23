@@ -141,7 +141,7 @@ final class Lifter {
                 case CMP_REG -> { cmpA = text(in.rn()); cmpB = text(in.rm()); }
                 case RET -> {
                     Val x0 = t.reg(0);
-                    emit(x0 != null && (x0.isLiteral() || x0.k == Val.K.RET || x0.k == Val.K.CONST)
+                    emit(x0 != null && (x0.isLiteral() || x0.k == Val.K.RET || x0.k == Val.K.CONST || x0.k == Val.K.MEM)
                             ? "return " + x0.show() + ";" : "return;");
                 }
                 case STR_IMM -> {

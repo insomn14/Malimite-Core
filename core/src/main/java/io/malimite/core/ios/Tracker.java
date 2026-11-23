@@ -7,6 +7,7 @@ final class Tracker {
 
     private final MachOImage img;
     private final ObjcMetadata objc;
+    private static final int MAX_FIELD_EXPR = 60;
     final Val[] r = new Val[32];
 
     Tracker(MachOImage img, ObjcMetadata objc) {
@@ -49,7 +50,10 @@ final class Tracker {
             }
             case LDR_IMM -> {
                 Val b = in.rn() == 31 ? null : r[in.rn()];
-                set(in.rd(), in.aux() == 3 && b != null && b.k == Val.K.ADDR ? load(b.n + in.imm()) : null);
+                Val loaded = in.aux() == 3 && b != null && b.k == Val.K.ADDR ? load(b.n + in.imm()) : null;
+                if (loaded == null && b != null && (b.k == Val.K.NAMED || b.k == Val.K.MEM) && b.s.length() < MAX_FIELD_EXPR)
+                    loaded = Val.mem("*(" + b.s + " + 0x" + Long.toHexString(in.imm()) + ")");
+                set(in.rd(), loaded);
             }
             case LDR_LIT -> set(in.rd(), in.aux() == 3 ? load(in.imm()) : null);
             case OTHER -> {

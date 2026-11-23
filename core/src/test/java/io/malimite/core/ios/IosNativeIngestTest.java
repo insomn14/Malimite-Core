@@ -212,6 +212,19 @@ class IosNativeIngestTest {
     }
 
     @Test
+    void fieldLoadsFromParametersKeepTheirExpression() {
+        Tracker t = new Tracker(null, null);
+        t.r[0] = Val.named("self");
+        t.step(Arm64Decoder.decode(ldrX(1, 0, 0x30), 0));
+        assertEquals("*(self + 0x30)", t.reg(1).show());
+        t.step(Arm64Decoder.decode(ldrX(2, 1, 0x8), 4));
+        assertEquals("*(*(self + 0x30) + 0x8)", t.reg(2).show());
+        t.r[3] = Val.konst(5);
+        t.step(Arm64Decoder.decode(ldrX(4, 3, 0x8), 8));
+        assertNull(t.reg(4));
+    }
+
+    @Test
     void decoderRecognisesAddressAndBranchForms() {
         long pc = BASE + TEXT;
         Arm64Decoder.Insn a = Arm64Decoder.decode(adrp(3, pc, BASE + 0x5000), pc);
