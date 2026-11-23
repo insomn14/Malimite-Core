@@ -110,11 +110,23 @@ TOOLS = [
           "Only call this for a concrete, evidence-backed issue you can point to specific code/evidence for; "
           "never to restate an EXISTING finding (use get_vulnerabilities to check for rule_id/title overlap "
           "first — if it's already there, discuss apply_triage on that one instead of a duplicate). "
-          "description/evidence/poc_steps/remediation should read exactly like a scan-engine finding would: "
-          "concrete, specific to this app, grounded in tool output you already gathered — never speculative.",
+          "description/evidence/poc_steps/remediation MUST read exactly like a scan-engine or AI Fix "
+          "finding would — same terse, structured report style, not a conversational summary of the chat. "
+          "Follow each field's own format rule below exactly; never speculative, never longer than asked.",
           {"title": _S, "severity": {"type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]},
            "cvss_score": {"type": "number"}, "cwe": _S, "category": _S,
-           "description": _S, "evidence": _S, "poc_steps": _S, "remediation": _S,
+           "description": {"type": "string", "description":
+               "1-3 sentences stating what the vulnerability is and why it's exploitable in THIS app — "
+               "same length/tone as an AI Fix description, not a narrative of how it was found in chat."},
+           "evidence": {"type": "string", "description":
+               "One concrete short snippet (code line, string, config value) under 300 characters, grounded "
+               "in what was actually gathered — not a paragraph explaining the evidence."},
+           "poc_steps": {"type": "string", "description":
+               "Newline-separated numbered steps, e.g. \"1. step one\\n2. step two\\n3. step three\" — concrete "
+               "and specific to this finding, each step a single short action, not prose paragraphs."},
+           "remediation": {"type": "string", "description":
+               "1-3 sentences of concrete, actionable fix guidance specific to this finding/evidence — same "
+               "terse style as the other fields, not a design essay."},
            "reference_url": _S, "affected_class": _S, "affected_function": _S},
           ["title", "severity", "description"], requires_confirmation=True),
     _spec("apply_triage",
@@ -366,6 +378,29 @@ async def _hook_targets(ctx: Ctx, a: dict) -> str:
 _SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
 _STATUSES = {"open", "false_positive", "accepted_risk", "fixed"}
 
+# Observed live (claude-sonnet-5 via claude-oauth): a long free-text tool argument can end with
+# the model's own tool-call syntax bleeding into the string value, e.g. description ending in
+# `...the key-hardcoding issue.</description>\n<parameter name="evidence">new SecretKeySpec(...`
+# — a malformed-but-syntactically-valid JSON string the provider still sends as the argument.
+# The confirmation UI shows the raw value before a human approves, but this is defense in depth:
+# a confirmed-but-corrupted call must still fail loudly here rather than writing a report field
+# that silently ends mid-sentence with leaked internal syntax. Matches regardless of which XML
+# tool-call dialect leaked (Anthropic's own old XML format and others look similar enough that a
+# narrow Claude-only pattern isn't worth the fragility).
+_TOOL_SYNTAX_LEAK_RE = re.compile(
+    r"</\s*(?:parameter|function_calls?|invoke|tool_call|antml:invoke|antml:parameter)\s*>"
+    r"|<\s*(?:parameter|function_calls?|invoke|tool_call|antml:invoke|antml:parameter)\b",
+    re.IGNORECASE,
+)
+
+
+def _reject_tool_syntax_leak(value: Optional[str], field: str) -> None:
+    if value and _TOOL_SYNTAX_LEAK_RE.search(value):
+        raise ValueError(
+            f"{field} looks corrupted — it contains tool-call syntax that leaked into the text "
+            f"(e.g. '</parameter>' or '<invoke'). This usually means the model's response got "
+            f"garbled; nothing was saved. Try again, possibly with a shorter/simpler request.")
+
 
 async def _propose_finding(ctx: Ctx, a: dict) -> str:
     """Only reachable after the user confirms (see loop.py) — by the time this runs, args have
@@ -386,6 +421,9 @@ async def _propose_finding(ctx: Ctx, a: dict) -> str:
         cvss = float(cvss)
         if not (0.0 <= cvss <= 10.0):
             raise ValueError("cvss_score must be between 0.0 and 10.0")
+    for field in ("title", "description", "evidence", "poc_steps", "remediation", "cwe",
+                  "category", "reference_url", "affected_class", "affected_function"):
+        _reject_tool_syntax_leak(a.get(field), field)
     new_id = await db.insert_vulnerability_manual(
         ctx.db_path, ctx.exe,
         title=title, severity=severity, cvss_score=cvss,
@@ -419,6 +457,7 @@ async def _apply_triage(ctx: Ctx, a: dict) -> str:
         cvss = float(cvss)
         if not (0.0 <= cvss <= 10.0):
             raise ValueError("override_cvss_score must be between 0.0 and 10.0")
+    _reject_tool_syntax_leak(a.get("note"), "note")
     ok = await db.update_vulnerability_triage(
         ctx.db_path, vuln_id,
         status=status,

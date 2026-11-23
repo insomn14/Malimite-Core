@@ -569,6 +569,57 @@ class WriteToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(spec["requires_confirmation"])
         self.assertEqual(set(spec["schema"]["required"]), {"title", "severity", "description"})
 
+    async def test_propose_finding_report_fields_carry_ai_fix_style_format_instructions(self):
+        """The model must see per-field formatting rules matching finding_fix.py's AI Fix
+        SYSTEM_PROMPT (1-3 sentence description, <300-char evidence, numbered poc_steps, terse
+        remediation) so /add-finding output reads like a scan-engine/AI Fix finding, not a free-
+        form chat recap. These must reach the provider verbatim — see llm.py's _tools_anthropic/
+        _tools_openai, which pass t["schema"] through unmodified (no **spread/field dropping)."""
+        spec = next(t for t in tools.TOOLS if t["name"] == "propose_finding")
+        props = spec["schema"]["properties"]
+        for field in ("description", "evidence", "poc_steps", "remediation"):
+            self.assertEqual(props[field]["type"], "string")
+            self.assertIn("description", props[field], f"{field} must carry a format-rule description")
+            self.assertTrue(len(props[field]["description"]) > 20, f"{field} description too thin")
+        self.assertIn("300 characters", props["evidence"]["description"])
+        self.assertIn("1. step one", props["poc_steps"]["description"])
+        self.assertIn("1-3 sentences", props["description"]["description"])
+        self.assertIn("1-3 sentences", props["remediation"]["description"])
+
+    async def test_propose_finding_rejects_a_leaked_tool_call_tag_in_description(self):
+        """Observed live (claude-sonnet-5 via claude-oauth): a long description can end with the
+        model's own tool-call syntax bleeding into the string, e.g.
+        "...issue.</description>\\n<parameter name=\"evidence\">new SecretKeySpec(...". The
+        confirmation UI shows this before a human approves, but a confirmed-but-corrupted call
+        must still fail loudly here rather than writing a report field that ends mid-sentence
+        with leaked internal syntax."""
+        leaked = ("The cipher is deterministic and leaks plaintext patterns.</description>\n"
+                  '<parameter name="evidence">new SecretKeySpec(f9468b, m4754i());')
+        ok, out = await tools.run_tool(self.ctx, "propose_finding",
+                                       {"title": "x", "severity": "HIGH", "description": leaked})
+        self.assertFalse(ok)
+        self.assertIn("corrupted", out)
+        rows = await db.get_vulnerabilities(self.path, "app")
+        self.assertEqual(len(rows), 1)   # nothing written beyond the seeded row
+
+    async def test_propose_finding_rejects_a_leaked_invoke_tag_in_any_text_field(self):
+        leaked_evidence = 'before text</invoke>\n<invoke name="something">after'
+        ok, out = await tools.run_tool(self.ctx, "propose_finding",
+                                       {"title": "x", "severity": "LOW", "description": "clean", "evidence": leaked_evidence})
+        self.assertFalse(ok)
+        self.assertIn("evidence", out)
+        self.assertIn("corrupted", out)
+
+    async def test_propose_finding_does_not_false_positive_on_ordinary_text(self):
+        """Regression guard: angle brackets or the word "parameter" alone, without actual
+        tool-call tag syntax, must never block a legitimate finding."""
+        ok, out = await tools.run_tool(self.ctx, "propose_finding", {
+            "title": "x", "severity": "LOW",
+            "description": "Compares values where a < b and c > d; the parameter is unchecked.",
+            "evidence": "android:exported=\"true\" permission=\"android.permission.BIND_SERVICE\"",
+        })
+        self.assertTrue(ok, out)
+
     # ── apply_triage ──
 
     async def test_apply_triage_updates_status_and_note(self):
@@ -581,6 +632,14 @@ class WriteToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row["override_note"], "Discussed with team.")
         # severity/CVSS untouched when not asked to change
         self.assertEqual(row["severity"], "CRITICAL")
+
+    async def test_apply_triage_rejects_a_leaked_tool_call_tag_in_note(self):
+        leaked = 'Reviewed and accepted.</parameter>\n<invoke name="apply_triage">'
+        ok, out = await tools.run_tool(self.ctx, "apply_triage", {"vuln_id": 1, "note": leaked})
+        self.assertFalse(ok)
+        self.assertIn("corrupted", out)
+        rows = await db.get_vulnerabilities(self.path, "app")
+        self.assertEqual(next(r for r in rows if r["id"] == 1)["override_note"], None)
 
     async def test_apply_triage_only_touches_fields_actually_passed(self):
         await tools.run_tool(self.ctx, "apply_triage", {"vuln_id": 1, "note": "just a note"})
