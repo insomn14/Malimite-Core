@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import re
+import tempfile
 import time
 import zipfile
 from collections import deque
@@ -17,6 +18,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, Up
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from . import auto_enhance, db, finding_fix, llm_probe, offensive_phases, scanner
 from .agent import anthropic_oauth, llm_config, loop as agent_loop, ondemand, store as chat_store
@@ -344,6 +346,39 @@ async def get_resources(
     if page is not None:
         return await db.get_resources_page(db_path, type, q, page, size)
     return await db.get_resources(db_path, limit)
+
+
+def _zip_name(part: str) -> str:
+    """One path component: keep it readable, never let a class/selector escape the archive or break a filesystem."""
+    clean = re.sub(r"[^A-Za-z0-9._+()@$-]+", "_", part).strip("._") or "_"
+    return clean[:100]
+
+
+@app.get("/api/v1/scans/{scan_id}/decompiled.zip")
+async def export_decompiled_sources(request: Request, scan_id: str):
+    """Every decompiled function as <class>/<function>.txt, for offline grep / diff / review."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    tmp = tempfile.NamedTemporaryFile(prefix="malimite-src-", suffix=".zip", delete=False)
+    tmp.close()
+    seen: set[str] = set()
+    try:
+        with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
+            async for cls, fn, code in db.iter_function_code(db_path, exe):
+                path = f"{_zip_name(cls)}/{_zip_name(fn)}"
+                n, unique = 1, path
+                while unique in seen:   # selectors collide once sanitised (a:b vs a_b)
+                    n += 1
+                    unique = f"{path}_{n}"
+                seen.add(unique)
+                zf.writestr(f"{unique}.txt", code)
+    except Exception:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
+    return FileResponse(
+        tmp.name, media_type="application/zip",
+        filename=f"malimite-decompiled-{scan_id[:8]}.zip",
+        background=BackgroundTask(lambda: Path(tmp.name).unlink(missing_ok=True)))
 
 
 @app.get("/api/v1/scans/{scan_id}/entrypoints")

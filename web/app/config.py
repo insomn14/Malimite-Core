@@ -6,11 +6,11 @@ _ROOT = _WEB.parent
 
 
 class Settings(BaseSettings):
-    # Ghidra 12.0.4 (apt-managed). NOTE: Ghidra 12.1 has a regression with our
-    # DumpClassData.java post-script (class loader change) — do not bump until
-    # the script is updated to satisfy the new "public class == filename" rule.
-    # Some dyld chained-fixups-with-null-import IPAs fail on BOTH 12.0.4
-    # and 12.1 — that is a separate upstream Mach-O parser bug.
+    # Ghidra 12.0.4 (apt-managed) is the tested default. 12.1.4 ran UnCrackable-Level1 headless with the current
+    # flags and DumpClassData.java (identical findings; it adds empty external-class stubs and "improperly aligned"
+    # pcode warnings) but has not been run on a large app. Older notes about a 12.1 class-loader regression with
+    # DumpClassData.java did not reproduce on 12.1.4 with JDK 22. Some dyld chained-fixups-with-null-import IPAs
+    # fail on both 12.0.4 and 12.1 (an upstream Mach-O parser bug).
     ghidra_home: str = "/usr/share/ghidra"
     cli_jar: str = str(_ROOT / "cli/target/malimite-cli.jar")
     scan_dir: Path = Path("/tmp/malimite-scans")

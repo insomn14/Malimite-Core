@@ -135,7 +135,7 @@ Malimite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 |---|---|
 | **Java JDK** | 17+ |
 | **Maven** | 3.8+ |
-| **Ghidra** | 12.0.x (the web Docker image ships 12.0.4) — must contain `support/analyzeHeadless` (required for `.ipa`). 11.1.2 rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`); 12.1+ is untested (see `web/app/config.py`). Headless also needs the JDK font libraries (`libharfbuzz0b`, `libfontconfig1`, `libfreetype6` on Debian) |
+| **Ghidra** | 12.0.x (the web Docker image ships 12.0.4) — must contain `support/analyzeHeadless` (required for `.ipa`). 11.1.2 rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`); 12.1.4 was tried on UnCrackable-Level1 with the current headless flags: same 5 findings, plus a few empty external-class stubs and `improperly aligned` pcode warnings; not yet run on a large app (see `web/app/config.py`). Headless also needs the JDK font libraries (`libharfbuzz0b`, `libfontconfig1`, `libfreetype6` on Debian) |
 | **JADX** | ≥ 1.5 — CLI `bin/jadx` (required for `.apk` DEX; set `JADX_HOME`) |
 | **Droid ASC** (optional) | `droidasc` on `PATH` (or `ASC_HOME`/`python -m droidasc`) — alternate Android decompiler, `--decompiler asc`. Falls back to JADX automatically when unavailable (see below) |
 | **Ghidra (Android native)** | Same install as iOS — used for APK `lib/arm64-v8a/*.so` when `GHIDRA_HOME` is set |

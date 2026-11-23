@@ -70,6 +70,27 @@ class FunctionsRoutesTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(len(r.json()), 251)  # 250 new + the one from setUp
 
+    def test_decompiled_zip_has_one_sanitised_file_per_function_of_this_executable(self):
+        import io
+        import zipfile
+        c = sqlite3.connect(self.path)
+        c.executemany("INSERT INTO Functions VALUES (?,?,?,?,?)", [
+            ("a:b", "com.a.Crypto", "colon", "app", "NATIVE"),
+            ("a_b", "com.a.Crypto", "underscore", "app", "NATIVE"),
+            ("../../evil", "com.a.Crypto", "dots", "app", "NATIVE"),
+            ("empty", "com.a.Crypto", "", "app", "NATIVE")])
+        c.commit()
+        c.close()
+        r = self.client.get("/api/v1/scans/s1/decompiled.zip")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.headers["content-type"], "application/zip")
+        zf = zipfile.ZipFile(io.BytesIO(r.content))
+        names = zf.namelist()
+        self.assertTrue(all(n.startswith("com.a.Crypto/") and ".." not in n for n in names), names)
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual(len(names), 5)   # <class>, enc, a:b, a_b, ../../evil; "empty" and the other exe are skipped
+        self.assertIn(b"colon", b"".join(zf.read(n) for n in names))
+
     def test_source_whole_class(self):
         r = self.client.get("/api/v1/scans/s1/source", params={"class_name": "com.a.Crypto"})
         self.assertEqual(r.status_code, 200)

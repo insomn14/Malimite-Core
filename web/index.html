@@ -504,6 +504,7 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .fn-drag-handle{flex:0 0 auto;width:6px;cursor:col-resize;background:transparent}
 .fn-drag-handle:hover,.fn-drag-handle.dragging{background:var(--accent)}
 .fn-tree-search{padding:.6rem;border-bottom:1px solid var(--border)}
+.fn-tree-search{display:flex;flex-direction:column;gap:.4rem}
 .fn-tree-search input{width:100%;padding:.4rem .6rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.8rem}
 .fn-tree-list{flex:1;overflow-y:auto;font-size:.8rem;padding:.25rem 0}
 .fn-tree-node{padding:.3rem .5rem;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:.3rem}
@@ -4617,7 +4618,10 @@ function fnRenderShell(el) {
   el.innerHTML = `
     <div class="fn-wrap">
       <div class="fn-tree-pane" id="fn-tree-pane">
-        <div class="fn-tree-search"><input id="fn-filter" type="text" placeholder="Filter classes…" autocomplete="off"/></div>
+        <div class="fn-tree-search">
+          <input id="fn-filter" type="text" placeholder="Filter classes…" autocomplete="off"/>
+          <button type="button" class="btn btn-ghost btn-sm" id="fn-zip" title="Download every decompiled function as a .zip">↓ All sources (.zip)</button>
+        </div>
         <div class="fn-tree-list" id="fn-tree-list"></div>
       </div>
       <div class="fn-drag-handle" id="fn-drag-handle"></div>
@@ -4634,6 +4638,20 @@ function fnRenderShell(el) {
   document.getElementById('fn-filter').addEventListener('input', ev => {
     fnSt.query = ev.target.value.trim().toLowerCase();
     fnRenderTree();
+  });
+  document.getElementById('fn-zip').addEventListener('click', async ev => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/api/v1/scans/${fnSt.id}/decompiled.zip`, {headers: headers()});
+      if (!r.ok) throw new Error(await r.text());
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(await r.blob());
+      a.download = `malimite-decompiled-${fnSt.id.slice(0,8)}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) { alert('Download failed: ' + (e.message || e)); }
+    finally { btn.disabled = false; }
   });
   fnWireDragHandle();
   fnRenderTree();
@@ -5074,13 +5092,14 @@ async function tabResources(el, id, detail) {
   root.innerHTML = `
     <div class="search-bar">
       <input id="res-q" type="text" placeholder="Search resources…" autocomplete="off"/>
+      <select id="res-type" class="ctl" aria-label="Filter by resource type"><option value="">All types</option></select>
       <button id="res-search" class="btn btn-primary btn-sm">Search</button>
     </div>
     <div id="res-table"></div>
     <div id="res-pages" class="pagination strings-pagination"></div>`;
   el.replaceChildren(root);
 
-  const state = {page: 1, size: 50, query: '', highlight: null};
+  const state = {page: 1, size: 50, query: '', type: '', highlight: null};
   if (resPendingHighlight) {
     state.query = resPendingHighlight;
     state.highlight = resPendingHighlight;
@@ -5097,6 +5116,12 @@ async function tabResources(el, id, detail) {
   root.querySelector('#res-q').addEventListener('keydown', event => {
     if (event.key === 'Enter') search();
   });
+  root.querySelector('#res-type').addEventListener('change', event => {
+    state.type = event.target.value;
+    state.highlight = null;
+    state.page = 1;
+    loadResources(root, id, state);
+  });
   await loadResources(root, id, state);
 }
 
@@ -5110,6 +5135,7 @@ async function loadResources(root, id, state) {
   try {
     const params = new URLSearchParams({page: state.page, size: state.size});
     if (state.query) params.set('q', state.query);
+    if (state.type) params.set('type', state.type);
     const data = await api('/scans/'+id+'/resources?'+params);
     if (requestSeq !== resourcesRequestSeq || !root.isConnected
         || root !== document.getElementById('resources-root')) return;
@@ -5120,6 +5146,16 @@ async function loadResources(root, id, state) {
     const size  = Math.max(1, Number(data.size) || state.size);
     const pages = Math.max(0, Number(data.pages) || 0);
     state.page = page;
+
+    const typeSel = root.querySelector('#res-type');
+    const counts = data.type_counts && typeof data.type_counts === 'object' ? data.type_counts : {};
+    const typeNames = Object.keys(counts).sort();
+    if (typeSel && typeSel.options.length !== typeNames.length + 1) {
+      const all = typeNames.reduce((n, t) => n + (Number(counts[t]) || 0), 0);
+      typeSel.innerHTML = `<option value="">All types (${esc(all.toLocaleString())})</option>`
+        + typeNames.map(t => `<option value="${escAttr(t)}">${esc(t || '(none)')} (${esc((Number(counts[t]) || 0).toLocaleString())})</option>`).join('');
+    }
+    if (typeSel) typeSel.value = state.type;
 
     table.innerHTML = items.length
       ? `<div class="tbl-wrap"><table>

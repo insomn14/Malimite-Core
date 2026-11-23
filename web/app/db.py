@@ -947,6 +947,17 @@ async def get_resources_page(db_path: str, type_: Optional[str], query: Optional
                          type_counts=await resource_type_counts(db_path))
 
 
+async def iter_function_code(db_path: str, executable: str):
+    """Yield (class, function, code) for every function that has decompiled code, class by class."""
+    async with _ro(db_path) as db:
+        async with db.execute(
+            """SELECT ParentClass, FunctionName, DecompilationCode FROM Functions
+               WHERE ExecutableName=? AND DecompilationCode IS NOT NULL AND DecompilationCode != ''
+               ORDER BY ParentClass, FunctionName""", (executable,)) as cur:
+            async for cls, fn, code in cur:
+                yield cls, fn, code
+
+
 async def get_entry_points_ro(db_path: str, executable: str) -> list[dict]:
     async with _ro(db_path) as db:
         async with db.execute(
