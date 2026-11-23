@@ -40,7 +40,7 @@ class IosNativeIngestTest {
     static int bl(long pc, long target) { return 0x94000000 | (int) (((target - pc) >> 2) & 0x3ffffff); }
 
     static final int SWTYPES = 0x1400, SW_CLASS = 0x1440, SW_MODULE = 0x1500, SW_STR = 0x1580,
-            SWPROTO = 0x1410, SW_CONF = 0x1600, SW_PROTO = 0x1640, SW_WT = 0x1680, WITNESS_FN = 0x30;
+            CONSTSEC = 0x1380, SWPROTO = 0x1410, SW_CONF = 0x1600, SW_PROTO = 0x1640, SW_WT = 0x1680, WITNESS_FN = 0x30;
 
     static byte[] tinyApp() { return tinyApp(false); }
 
@@ -53,11 +53,12 @@ class IosNativeIngestTest {
                 {"__text", "__TEXT", "" + (BASE + TEXT), "64", "" + TEXT, "0x80000400"},
                 {"__stubs", "__TEXT", "" + (BASE + STUBS), "24", "" + STUBS, "0x80000408"},
                 {"__cstring", "__TEXT", "" + (BASE + CSTR), "64", "" + CSTR, "2"},
-                {"__objc_methname", "__TEXT", "" + (BASE + METH), "64", "" + METH, "2"}};
+                {"__objc_methname", "__TEXT", "" + (BASE + METH), "64", "" + METH, "2"},
+                {"__const", "__TEXT", "" + (BASE + CONSTSEC), "64", "" + CONSTSEC, "0"}};
         if (swift) {
-            textSects = java.util.Arrays.copyOf(textSects, 6);
-            textSects[4] = new String[] {"__swift5_types", "__TEXT", "" + (BASE + SWTYPES), "4", "" + SWTYPES, "0"};
-            textSects[5] = new String[] {"__swift5_proto", "__TEXT", "" + (BASE + SWPROTO), "4", "" + SWPROTO, "0"};
+            textSects = java.util.Arrays.copyOf(textSects, 7);
+            textSects[5] = new String[] {"__swift5_types", "__TEXT", "" + (BASE + SWTYPES), "4", "" + SWTYPES, "0"};
+            textSects[6] = new String[] {"__swift5_proto", "__TEXT", "" + (BASE + SWPROTO), "4", "" + SWPROTO, "0"};
         }
         p = segment(b, p, "__TEXT", BASE, 0x4000, 0, 0x4000, textSects);
         ncmds++;
@@ -81,6 +82,9 @@ class IosNativeIngestTest {
 
         // strings
         str(b, CSTR, "password=%@"); str(b, CSTR + 0x20, "Foo");
+        str(b, CONSTSEC, "Contents/Resources/DWARF");                       // C string left in __const
+        b.put(CONSTSEC + 0x30, (byte) 0x41).put(CONSTSEC + 0x31, (byte) 0x01).put(CONSTSEC + 0x32, (byte) 0x41)
+                .put(CONSTSEC + 0x33, (byte) 0x41).put(CONSTSEC + 0x34, (byte) 0x41).put(CONSTSEC + 0x35, (byte) 0x41); // data, not text
         str(b, METH, "login:"); str(b, METH + 0x10, "setObject:forKey:"); str(b, METH + 0x30, "v24@0:8@16");
 
         // login: -> [self setObject:param_3 forKey:param_4]; NSLog("password=%@")
@@ -180,6 +184,8 @@ class IosNativeIngestTest {
             assertTrue(code.contains("objc_msgSend(self, \"setObject:forKey:\", param_3, param_4);"), code);
 
             assertTrue(store.getMachoStrings("App", 100).stream().anyMatch(m -> "password=%@".equals(m.get("value"))));
+            assertTrue(store.getMachoStrings("App", 100).stream().anyMatch(m -> "Contents/Resources/DWARF".equals(m.get("value"))));
+            assertTrue(store.getMachoStrings("App", 100).stream().noneMatch(m -> String.valueOf(m.get("value")).contains("\u0001")));
             assertTrue(store.getMachoStrings("App", 100).stream().anyMatch(m ->
                     "_NSFileProtectionNone".equals(m.get("value")) && "__LINKEDIT".equals(m.get("segment"))));
             assertEquals(List.of("login:"), store.getClassesAndFunctions("App").get("Foo"));
