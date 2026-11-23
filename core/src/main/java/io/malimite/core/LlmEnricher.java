@@ -1066,7 +1066,7 @@ public class LlmEnricher {
     }
 
     String buildUserMessage(SqliteStore.DecompilationResult fn, String origin) {
-        String decompiler = "JADX".equalsIgnoreCase(origin) ? "JADX" : "GHIDRA";
+        String decompiler = "JADX".equalsIgnoreCase(origin) ? "JADX" : "NATIVE".equalsIgnoreCase(origin) ? "NATIVE (Malimite-lifted pseudocode: registers and gotos may remain)" : "GHIDRA";
         String language = languageHint(origin);
         String cls = fn.className() == null ? "" : fn.className();
         String name = fn.functionName() == null ? "" : fn.functionName();

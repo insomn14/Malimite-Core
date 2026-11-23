@@ -188,7 +188,16 @@ public final class ScanScopeFilter {
         return includeClass(fn.className());
     }
 
+    /** Scope decisions depend only on the class name; the scanner asks once per function per rule (100k+ functions on big apps). */
+    private final java.util.Map<String, Boolean> classDecisions = new java.util.concurrent.ConcurrentHashMap<>();
+
     public boolean includeClass(String className) {
+        if (isAll()) return true;
+        if (className == null) return computeIncludeClass(null);
+        return classDecisions.computeIfAbsent(className, this::computeIncludeClass);
+    }
+
+    private boolean computeIncludeClass(String className) {
         if (isAll()) return true;
         if (className == null || className.isBlank()) return true;
         String n = className.replace('/', '.').replace('\\', '.');

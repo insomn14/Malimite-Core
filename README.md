@@ -577,6 +577,11 @@ malimite [OPTIONS] <ipa|apk|xapk>
       --ios-light          iOS only: skip Ghidra, scan strings/imported symbols/plist only (no pseudocode;
                            pseudocode-based rules report "not evaluated"). For binaries too large for
                            Ghidra auto-analysis (env MALIMITE_IOS_LIGHT)
+      --ios-engine=<e>     iOS engine: ghidra (default) | native | light. native = built-in Ghidra-free
+                           Mach-O/Objective-C engine with lifted pseudocode (imports, selectors and string
+                           literals named); a ~50 MB app scans in seconds with ~1 GB RAM. Rules written for
+                           Ghidra output syntax (36 of the 69 bundled learned iOS rules) do not match its
+                           pseudocode. arm64 only, decrypted binaries only (env MALIMITE_IOS_ENGINE)
       --assessment / --no-assessment
                            Security-controls Assessment (default: on)
       --fail-on=<severity> Exit 1 if findings ≥ HIGH|MEDIUM|LOW
@@ -603,6 +608,7 @@ malimite claude-login [OPTIONS]
 | `OLLAMA_BASE_URL` | Default `http://localhost:11434` |
 | `LLM_MODEL` / `LLM_MAX_TOKENS` | Override provider defaults |
 | `MALIMITE_IOS_LIGHT` | iOS only: same as `--ios-light` — skip Ghidra, scan strings/symbols/plist only |
+| `MALIMITE_IOS_ENGINE` | iOS only: same as `--ios-engine` (`ghidra` / `native` / `light`) |
 | `ASC_HOME` / `MAX_ASC_CLASSES` / `DECOMPILE_THREADS` / `MALIMITE_DECOMPILER` | Android Droid ASC decompiler backend settings — same as `--asc-home` / `--max-asc-classes` / `--decompile-threads` / `--decompiler` |
 | `MAX_ENRICH_FUNCTIONS` | Same as `--max-enrich-functions` |
 | `SCAN_DIR` | Web service scan output directory |
@@ -656,6 +662,7 @@ See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 - ✅ Functions Explorer: JADX-GUI-style file tree + source viewer for everything a scan decompiled
 - ✅ Claude Pro/Max OAuth as an LLM provider — no separately-billed `ANTHROPIC_API_KEY` required
 - ✅ iOS light scan mode (`--ios-light`): strings/symbols/plist only, for binaries too large for Ghidra auto-analysis
+- ✅ iOS native engine (`--ios-engine native`): Ghidra-free Mach-O + ObjC metadata + arm64 lifter that produces named pseudocode, so `DECOMPILED` rules, the LLM stage and the Functions Explorer work on binaries Ghidra cannot analyse
 - ✅ Triage workflow and AI Fix: reviewer overrides and LLM-rewritten finding text, both reversible and both reflected in `report.html`
 - ✅ `report.html` rewritten as a formal, bilingual (ID/EN) Vulnerability Assessment document — cover page, risk rating scale, MASVS mapping, approval sheet, glossary, Android manifest summary, print/PDF-ready
 - ✅ Auto Enhance: bulk AI Fix as a server-side background job with live Activity Log, Cancel Batch, and per-finding Retry

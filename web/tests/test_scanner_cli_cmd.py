@@ -16,6 +16,20 @@ class CliCmdTests(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("--llm-mode") + 1], "find_vulns")
         self.assertNotIn("--llm", cmd)
 
+    def test_ios_native_engine_flag(self):
+        cmd = scanner._cli_cmd(Path("/tmp/upload.ipa"), Path("/tmp/out"),
+                               {"llm_enabled": False, "llm_provider": "none", "ios_engine": "native"})
+        self.assertEqual(cmd[cmd.index("--ios-engine") + 1], "native")
+        self.assertNotIn("--ios-light", cmd)
+
+    def test_ios_light_wins_over_native_and_default_passes_neither(self):
+        both = scanner._cli_cmd(Path("/tmp/upload.ipa"), Path("/tmp/out"),
+                                {"llm_enabled": False, "llm_provider": "none", "ios_light": True, "ios_engine": "native"})
+        self.assertIn("--ios-light", both)
+        self.assertNotIn("--ios-engine", both)
+        plain = scanner._cli_cmd(Path("/tmp/upload.ipa"), Path("/tmp/out"), {"llm_enabled": False, "llm_provider": "none"})
+        self.assertNotIn("--ios-engine", plain)
+
     def test_fast_scan_default_mode(self):
         cmd = scanner._cli_cmd(
             Path("/tmp/upload.apk"),

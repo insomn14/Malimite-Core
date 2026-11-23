@@ -16,6 +16,7 @@ class ScanMeta(BaseModel):
     llm_model: str = ""
     assessment_enabled: bool = True
     ios_light: bool = False
+    ios_engine: str = ""
     decompiler: str = "jadx"   # Android-only: "jadx" (default) or "asc" (Droid ASC)
     # Optional CI/CD provenance — set by pipeline clients (e.g. tools/malimite-ci) so a scan
     # started by automation is distinguishable in the web UI from one uploaded by a reviewer.

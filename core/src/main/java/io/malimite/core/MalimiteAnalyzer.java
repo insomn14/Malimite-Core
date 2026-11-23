@@ -45,7 +45,7 @@ public class MalimiteAnalyzer {
         String scanId = UUID.randomUUID().toString();
         log.info("scan={} platform=IOS package={} out={}", scanId, opts.packagePath(), opts.outputDir());
 
-        if (opts.ghidraHome() == null && !opts.iosLight())
+        if (opts.ghidraHome() == null && !opts.iosLight() && !opts.iosNative())
             throw new IllegalArgumentException("ghidraHome required for iOS (.ipa) analysis");
 
         IpaValidator.validate(opts.packagePath());
@@ -82,6 +82,11 @@ public class MalimiteAnalyzer {
                 log.info("iOS light scan: skipping Ghidra; DECOMPILED rules {} are not evaluated", lightSkippedRuleIds());
                 MachoLightIngest.ingestStrings(Path.of(execPath), store, execName);
                 MachoLightIngest.ingestImports(Path.of(execPath), store, execName);
+            } else if (opts.iosNative()) {
+                CoreConfig config = new CoreConfig(opts.ghidraHome());  // Ghidra not needed; only for library prefixes
+                log.info("iOS native scan: Ghidra-free engine (lifted pseudocode); Ghidra-syntax learned rules will not match");
+                io.malimite.core.ios.IosNativeIngest.ingest(Path.of(execPath), store, execName,
+                        LibraryDefinitions.getActiveLibraries(config));
             } else {
                 CoreConfig config = CoreConfig.fromEnv(opts.ghidraHome());
                 GhidraRunner runner = new GhidraRunner(execName, config, store);
@@ -359,7 +364,7 @@ public class MalimiteAnalyzer {
             meta.put("ipaPath", opts.packagePath().toString());
             meta.put("packagePath", opts.packagePath().toString());
             putScopeMeta(meta, opts);
-            meta.put("scanMode", opts.iosLight() ? "light" : "full");
+            meta.put("scanMode", opts.iosLight() ? "light" : opts.iosNative() ? "native" : "full");
             if (opts.iosLight()) meta.put("rulesNotEvaluated", lightSkippedRuleIds());
             if (provision != null) {
                 meta.put("bundleTeamId", provision.teamId());

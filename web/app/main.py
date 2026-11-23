@@ -121,6 +121,7 @@ async def create_scan(
     ci_pipeline_url: Optional[str] = Form(None),
     ci_commit_sha: Optional[str] = Form(None),
     ci_triggered_by: Optional[str] = Form(None),
+    ios_engine: str = Form(""),
 ):
     _check_auth(request)
     name = file.filename.lower()
@@ -172,7 +173,7 @@ async def create_scan(
         data, file.filename,
         llm_enabled, llm_provider, llm_mode, llm_model, llm_api_key,
         assessment_enabled, ios_light, decompiler,
-        ci_pipeline_url, ci_commit_sha, ci_triggered_by,
+        ci_pipeline_url, ci_commit_sha, ci_triggered_by, ios_engine,
     )
 
 

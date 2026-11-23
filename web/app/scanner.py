@@ -409,6 +409,7 @@ async def create_scan(
     ci_pipeline_url: Optional[str] = None,
     ci_commit_sha: Optional[str] = None,
     ci_triggered_by: Optional[str] = None,
+    ios_engine: str = "",
 ) -> ScanMeta:
     _check_scan_rate_limit()
     migrate_legacy_scan_dirs()
@@ -436,6 +437,8 @@ async def create_scan(
         "llm_model": llm_model,
         "assessment_enabled": assessment_enabled,
         "ios_light": ios_light,
+        # iOS only: "native" = Ghidra-free engine (Mach-O + ObjC metadata + lifted pseudocode); anything else = Ghidra.
+        "ios_engine": "native" if ios_engine == "native" else "",
         # Android-only (.apk/.xapk); ignored by the CLI for .ipa. "jadx" (default) or "asc"
         # (Droid ASC — falls back to jadx server-side if the asc/droidasc binary isn't installed).
         "decompiler": decompiler if decompiler in ("jadx", "asc") else "jadx",
@@ -477,6 +480,8 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
         cmd += ["--no-assessment"]
     if meta.get("ios_light"):
         cmd += ["--ios-light"]
+    elif meta.get("ios_engine") == "native":
+        cmd += ["--ios-engine", "native"]
     # CLI default is jadx; only pass --decompiler when asc was explicitly picked (Android-only —
     # the CLI itself ignores this flag for .ipa). If droidasc isn't installed/configured on this
     # host, MalimiteAnalyzer falls back to jadx server-side and logs why — never a hard failure.

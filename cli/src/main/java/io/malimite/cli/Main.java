@@ -115,6 +115,13 @@ public class Main implements Callable<Integer> {
             defaultValue = "${env:MALIMITE_IOS_LIGHT:-false}")
     private boolean iosLight;
 
+    @Option(names = "--ios-engine",
+            description = "iOS engine: ghidra (default, full auto-analysis), native (Ghidra-free Mach-O/ObjC engine "
+                    + "with lifted pseudocode; seconds, <1GB) or light (strings/imports only, same as --ios-light). "
+                    + "(env: MALIMITE_IOS_ENGINE)",
+            defaultValue = "${env:MALIMITE_IOS_ENGINE:-ghidra}")
+    private String iosEngine;
+
     @Option(names = "--llm-model",
             description = "Override model id per provider  (env: LLM_MODEL)",
             defaultValue = "${env:LLM_MODEL:-}")
@@ -178,7 +185,8 @@ public class Main implements Callable<Integer> {
                 .ascHome(ascHome == null || ascHome.isBlank() ? null : Path.of(ascHome))
                 .maxAscClasses(maxAscClasses)
                 .decompileThreads(decompileThreads)
-                .iosLight(iosLight)
+                .iosLight(iosLight || "light".equalsIgnoreCase(iosEngine))
+                .iosNative("native".equalsIgnoreCase(iosEngine))
                 .build();
 
         AnalysisResult r = new MalimiteAnalyzer().analyze(opts);

@@ -33,6 +33,7 @@ AnalyzeOptions opts = AnalyzeOptions.builder()
     .llmEnabled(false)
     // .llmMode(LlmMode.SUMMARIZE)       // scan scope even without LLM — see README.md "Detection engines"
     // .iosLight(true)                   // iOS only: skip Ghidra for binaries too large to auto-analyze
+    // .iosNative(true)                  // iOS only: Ghidra-free native engine with lifted pseudocode
     // .decompiler("asc")                // Android: "jadx" (default) or "asc" (Droid ASC)
     .build();
 

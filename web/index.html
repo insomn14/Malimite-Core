@@ -1468,6 +1468,7 @@ function updateRunSummary() {
   const assess = document.getElementById('assessment-enabled')?.checked !== false;
   const asc = document.getElementById('decompiler-asc');
   const light = document.getElementById('ios-light');
+  const native = document.getElementById('ios-native');
   const out = [`<span class="chip">${ico(m.icon)} ${esc(m.label)}</span>`];
   out.push(llmOn
     ? `<span class="chip">${ico('sparkles')} ${esc(providerLabel(provider))}${model ? ' · ' + esc(model) : ''}</span>`
@@ -1475,6 +1476,7 @@ function updateRunSummary() {
   out.push(`<span class="chip${assess ? '' : ' off'}">${ico('shield')} Assessment ${assess ? 'on' : 'off'}</span>`);
   if (asc) out.push(`<span class="chip">${ico('cpu')} ${asc.checked ? 'Droid ASC' : 'JADX'}</span>`);
   if (light) out.push(`<span class="chip${light.checked ? '' : ' off'}">${ico('feather')} Light scan ${light.checked ? 'on' : 'off'}</span>`);
+  if (native) out.push(`<span class="chip${native.checked ? '' : ' off'}">${ico('cpu')} Native engine ${native.checked ? 'on' : 'off'}</span>`);
   chips.innerHTML = out.join('');
 }
 
@@ -1909,6 +1911,18 @@ function renderScanOptionsHtml(file, prefs, configData) {
           <label class="switch"><input type="checkbox" id="ios-light" role="switch"
             aria-label="Enable iOS light scan"${prefs.iosLight ? ' checked' : ''}/><span class="switch-track"></span></label>
         </div>
+      </section>
+      <section class="cfg-card">
+        <div class="toggle-row">
+          <div style="flex:1;min-width:0">
+            <div class="cfg-head"><span class="step-num">5</span><span class="cfg-title">${ico('cpu')} iOS Native Engine</span></div>
+            <p class="cfg-desc">Skip Ghidra but still produce pseudocode: a built-in Mach-O / Objective-C engine names imports, selectors
+              and string literals in each function — seconds and under 1&nbsp;GB, even for very large .ipa files. Pseudocode is lifted
+              (registers and gotos remain); rules written for Ghidra syntax will not match. Ignored when Light scan is on.</p>
+          </div>
+          <label class="switch"><input type="checkbox" id="ios-native" role="switch"
+            aria-label="Enable iOS native engine"${prefs.iosNative ? ' checked' : ''}/><span class="switch-track"></span></label>
+        </div>
       </section>` : `
       <section class="cfg-card">
         <div class="cfg-head"><span class="step-num">4</span><span class="cfg-title">${ico('cpu')} Android Decompiler</span></div>
@@ -2119,6 +2133,7 @@ route('home', async function() {
       assessment: $('#assessment-enabled').checked,
       decompiler: $('#decompiler-asc')?.checked ? 'asc' : (loadScanPrefs().decompiler || 'jadx'),
       iosLight: $('#ios-light') ? $('#ios-light').checked : !!loadScanPrefs().iosLight,
+      iosNative: $('#ios-native') ? $('#ios-native').checked : !!loadScanPrefs().iosNative,
     };
   }
 
@@ -2166,6 +2181,7 @@ route('home', async function() {
     fd.append('llm_model', llmOn ? currentLlmModel() : '');
     fd.append('assessment_enabled', $('#assessment-enabled')?.checked !== false);
     fd.append('ios_light', !!$('#ios-light')?.checked);
+    fd.append('ios_engine', $('#ios-native')?.checked && !$('#ios-light')?.checked ? 'native' : '');
     const ascEl = $('#decompiler-asc');
     fd.append('decompiler', (ascEl && ascEl.checked) ? 'asc' : 'jadx');
 
@@ -2238,7 +2254,10 @@ route('home', async function() {
     $('#llm-provider')?.addEventListener('change', () => onProviderChange());
     $('#llm-model-select')?.addEventListener('change', onModelSelectChange);
     $('#llm-model')?.addEventListener('input', updateRunSummary);
-    $$('#scan-form input[name=decompiler], #assessment-enabled, #ios-light').forEach(el => el.addEventListener('change', updateRunSummary));
+    $$('#scan-form input[name=decompiler], #assessment-enabled, #ios-light, #ios-native').forEach(el => el.addEventListener('change', updateRunSummary));
+    // Light and Native are alternatives to Ghidra: turning one on turns the other off.
+    $('#ios-light')?.addEventListener('change', e => { if (e.target.checked && $('#ios-native')) $('#ios-native').checked = false; updateRunSummary(); });
+    $('#ios-native')?.addEventListener('change', e => { if (e.target.checked && $('#ios-light')) $('#ios-light').checked = false; updateRunSummary(); });
     if ($('#llm-provider')) onProviderChange(prefs.provider === $('#llm-provider').value ? (prefs.model || '') : '');
     onLlmToggle(true);
     onLlmModeChange();
@@ -3288,6 +3307,7 @@ route('scan', async function(id, tab='summary') {
       </div>
     </section>
     ${detail.scan_mode==='light'?`<div class="alert alert-warn" style="margin-bottom:.75rem"><strong>Light scan</strong> — Ghidra was skipped, so there is no pseudocode. ${(detail.rules_not_evaluated||[]).length} pseudocode-based rule(s) were <strong>not evaluated</strong> (${(detail.rules_not_evaluated||[]).map(esc).join(', ')}); absence of a finding for them does not mean the app is safe. Decompile single functions on demand from the Functions tab or the AI Assistant.</div>`:''}
+    ${detail.scan_mode==='native'?`<div class="alert alert-info" style="margin-bottom:.75rem"><strong>Native engine</strong> — Ghidra was skipped. Functions are lifted pseudocode (registers and gotos remain) with imports, selectors and string literals named; rules written for Ghidra output syntax may not match.</div>`:''}
     <div class="tabs sd-tabs" role="tablist" aria-label="Scan result sections">${tabsHtml}</div>
     <div id="tab-content"><div class="loading"><div class="spinner"></div></div></div>`);
 
@@ -4424,7 +4444,7 @@ async function tabSummary(d) {
         <div class="kv">
           ${kvRow('Scan ID', `${esc(d.scan_id)}`)}
           ${kvRow('File', esc(d.filename))}
-          ${kvRow('Scan mode', esc(scanModeLabel(d.llm_mode)) + (d.scan_mode === 'light' ? ' (light)' : ''))}
+          ${kvRow('Scan mode', esc(scanModeLabel(d.llm_mode)) + (d.scan_mode === 'light' ? ' (light)' : d.scan_mode === 'native' ? ' (native)' : ''))}
           ${kvRow('LLM', d.llm_enabled ? esc(providerLabel(d.llm_provider)) + (d.llm_model ? ' · ' + esc(d.llm_model) : '') : 'disabled')}
           ${kvRow('Assessment', d.assessment_enabled === false ? 'disabled' : 'enabled')}
           ${kvRow('Started', esc(fmt(d.started_at)))}
