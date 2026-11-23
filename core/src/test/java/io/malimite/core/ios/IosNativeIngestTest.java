@@ -39,7 +39,8 @@ class IosNativeIngestTest {
     static int ldrX(int rt, int rn, int imm) { return 0xf9400000 | ((imm >> 3) << 10) | (rn << 5) | rt; }
     static int bl(long pc, long target) { return 0x94000000 | (int) (((target - pc) >> 2) & 0x3ffffff); }
 
-    static final int SWTYPES = 0x1400, SW_CLASS = 0x1440, SW_MODULE = 0x1500, SW_STR = 0x1580;
+    static final int SWTYPES = 0x1400, SW_CLASS = 0x1440, SW_MODULE = 0x1500, SW_STR = 0x1580,
+            SWPROTO = 0x1410, SW_CONF = 0x1600, SW_PROTO = 0x1640, SW_WT = 0x1680, WITNESS_FN = 0x30;
 
     static byte[] tinyApp() { return tinyApp(false); }
 
@@ -54,8 +55,9 @@ class IosNativeIngestTest {
                 {"__cstring", "__TEXT", "" + (BASE + CSTR), "64", "" + CSTR, "2"},
                 {"__objc_methname", "__TEXT", "" + (BASE + METH), "64", "" + METH, "2"}};
         if (swift) {
-            textSects = java.util.Arrays.copyOf(textSects, 5);
+            textSects = java.util.Arrays.copyOf(textSects, 6);
             textSects[4] = new String[] {"__swift5_types", "__TEXT", "" + (BASE + SWTYPES), "4", "" + SWTYPES, "0"};
+            textSects[5] = new String[] {"__swift5_proto", "__TEXT", "" + (BASE + SWPROTO), "4", "" + SWPROTO, "0"};
         }
         p = segment(b, p, "__TEXT", BASE, 0x4000, 0, 0x4000, textSects);
         ncmds++;
@@ -70,7 +72,7 @@ class IosNativeIngestTest {
         ncmds++;
         b.putInt(p, 0x80000022).putInt(p + 4, 48).putInt(p + 16, LINKEDIT).putInt(p + 20, 48);  // LC_DYLD_INFO_ONLY: bind
         p += 48; ncmds++;
-        b.putInt(p, 0x26).putInt(p + 4, 16).putInt(p + 8, FSTARTS).putInt(p + 12, 4);           // LC_FUNCTION_STARTS
+        b.putInt(p, 0x26).putInt(p + 4, 16).putInt(p + 8, FSTARTS).putInt(p + 12, 8);           // LC_FUNCTION_STARTS
         p += 16; ncmds++;
         b.putInt(p, 0x2).putInt(p + 4, 24).putInt(p + 8, LINKEDIT + 0x80).putInt(p + 12, 1)     // LC_SYMTAB: 1 symbol
                 .putInt(p + 16, LINKEDIT + 0xa0).putInt(p + 20, 32);
@@ -124,6 +126,15 @@ class IosNativeIngestTest {
             b.putInt(vt, 0).putInt(vt + 4, 2);                                    // vtable header: 2 slots
             b.putInt(vt + 8, 0x12).putInt(vt + 12, (TEXT + 0x20) - (vt + 12));    // slot 0: getter -> ret
             b.putInt(vt + 16, 0x10).putInt(vt + 20, 0);                           // slot 1: removed by the linker
+            // conformance Thing: Greeter, one requirement, witness table [descriptor, TEXT+0x30]
+            bytes(b, FSTARTS, 0x80, 0x20, 0x20, 0x10, 0x00);                      // adds a function start at TEXT+0x30
+            b.putInt(TEXT + WITNESS_FN, 0xd65f03c0);
+            b.putInt(SWPROTO, SW_CONF - SWPROTO);
+            str(b, SW_STR + 0x20, "Greeter");
+            b.putInt(SW_PROTO + 8, SW_STR + 0x20 - (SW_PROTO + 8)).putInt(SW_PROTO + 16, 1);
+            b.putInt(SW_CONF, SW_PROTO - SW_CONF).putInt(SW_CONF + 4, SW_CLASS - (SW_CONF + 4))
+                    .putInt(SW_CONF + 8, SW_WT - (SW_CONF + 8)).putInt(SW_CONF + 12, 0);
+            b.putLong(SW_WT + 8, BASE + TEXT + WITNESS_FN);
         }
         return b.array();
     }
@@ -261,7 +272,18 @@ class IosNativeIngestTest {
                     .filter(f -> f.className().equals("Modu.Thing")).findFirst().orElseThrow();
             assertEquals("getter_0", getter.functionName());
             assertTrue(getter.decompiledCode().startsWith("// Class: Modu.Thing\n// Function: getter_0\n"), getter.decompiledCode());
-            assertEquals(List.of("getter_0"), store.getClassesAndFunctions("App").get("Modu.Thing"));
+            assertEquals(List.of("getter_0", "Greeter.witness_0"), store.getClassesAndFunctions("App").get("Modu.Thing"));
+        }
+    }
+
+    @Test
+    void namesProtocolWitnessesOfLocalTypes(@TempDir Path tmp) throws Exception {
+        Path bin = tmp.resolve("App");
+        Files.write(bin, tinyApp(true));
+        try (SqliteStore store = new SqliteStore(tmp.resolve("t.sqlite").toString())) {
+            IosNativeIngest.ingest(bin, store, "App", List.of());
+            assertTrue(store.getClassesAndFunctions("App").get("Modu.Thing").contains("Greeter.witness_0"),
+                    store.getClassesAndFunctions("App").toString());
         }
     }
 
@@ -275,7 +297,8 @@ class IosNativeIngestTest {
         Files.write(bin, app);
         try (SqliteStore store = new SqliteStore(tmp.resolve("t.sqlite").toString())) {
             IosNativeIngest.ingest(bin, store, "App", List.of());
-            assertTrue(store.getAllDecompiledFunctions("App").stream().noneMatch(f -> f.className().equals("Modu.Thing")));
+            assertTrue(store.getAllDecompiledFunctions("App").stream()
+                    .noneMatch(f -> f.className().equals("Modu.Thing") && f.functionName().startsWith("getter")));
         }
     }
 }

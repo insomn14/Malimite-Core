@@ -44,7 +44,60 @@ final class SwiftTypes {
             if ((rel & 1) != 0 || rel == 0) continue;           // indirect: descriptor lives in another image
             readClass(entry + rel, uses);
         }
+        MachOImage.Section protos = img.section("__swift5_proto");
+        if (protos != null)
+            for (long p = 0; p + 4 <= protos.size(); p += 4) {
+                long entry = protos.addr() + p;
+                readConformance(entry + img.u32(entry), uses);
+            }
         byImp.keySet().removeIf(a -> uses.getOrDefault(a, 0) > 1);
+    }
+
+    private static final int CF_TYPE_KIND_MASK = 0x7 << 3, CF_CONDITIONAL = 0xff << 8,
+            CF_RESILIENT = 1 << 16, CF_GENERIC_TABLE = 1 << 17;
+    private static final int MAX_WITNESSES = 64;
+
+    /**
+     * A protocol conformance of a type defined in this image names the entries of its witness table. Entry 0 is the
+     * conformance descriptor, then one pointer per protocol requirement. Only plain tables are read (not generic,
+     * conditional or resilient). Layout: ProtocolConformanceDescriptor in swift/ABI/Metadata.h.
+     */
+    private void readConformance(long desc, Map<Long, Integer> uses) {
+        int flags = img.u32(desc + 12);
+        if ((flags & (CF_RESILIENT | CF_GENERIC_TABLE | CF_CONDITIONAL)) != 0 || (flags & CF_TYPE_KIND_MASK) != 0) return;
+        int typeRel = img.u32(desc + 4), tableRel = img.u32(desc + 8);
+        if (typeRel == 0 || tableRel == 0 || (typeRel & 1) != 0) return;   // not a direct descriptor of a local type
+        String type = qualifiedName(desc + 4 + typeRel, 0);
+        if (type == null) return;
+        long table = desc + 8 + tableRel;
+
+        int protoRel = img.u32(desc);
+        long protoRef = desc + (protoRel & ~1);
+        String proto;
+        int count = MAX_WITNESSES;
+        if ((protoRel & 1) != 0) {                                  // indirect: GOT slot bound to the protocol descriptor symbol
+            String bound = img.bindName(protoRef);
+            if (bound == null) return;
+            proto = bound.replaceFirst("^_?\\$s", "").replaceFirst("Mp$", "");
+        } else {
+            long pd = protoRef;
+            String n = img.cstringAt(pd + 8 + img.u32(pd + 8));
+            if (n == null || n.isEmpty()) return;
+            proto = n;
+            int req = img.u32(pd + 16);
+            if (req > 0 && req < MAX_WITNESSES) count = req;
+        }
+        MachOImage.Section text = img.section("__text");
+        if (text == null) return;
+        for (int i = 0; i < count; i++) {
+            long impl = img.ptr(table + 8L * (i + 1));
+            if (impl < text.addr() || impl >= text.addr() + text.size()) {
+                if (count == MAX_WITNESSES) break;                  // unknown length: stop at the first non-code word
+                continue;
+            }
+            uses.merge(impl, 1, Integer::sum);
+            byImp.putIfAbsent(impl, new Method(type, proto + ".witness", i));
+        }
     }
 
     private void readClass(long desc, Map<Long, Integer> uses) {
