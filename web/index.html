@@ -936,6 +936,9 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 .badge-confirm{background:#ede9fe;color:#6d28d9}
 .badge-muted{background:#f1f5f9;color:var(--muted)}
 .chat-confirm{margin:.3rem 0;padding:.6rem .7rem;border:1px solid #c4b5fd;border-radius:8px;background:#f5f3ff;font-size:.8rem}
+/* Approved/declined — same field preview as the pending state, just a calmer border/background
+   once there's nothing left to decide (no more Approve/Decline buttons to draw attention to). */
+.chat-confirm-resolved{border-color:var(--border);background:var(--bg)}
 .chat-confirm-head{display:flex;align-items:center;gap:.5rem;font-weight:600;margin-bottom:.4rem}
 .chat-confirm-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.3rem .8rem;font-size:.76rem;margin-bottom:.3rem}
 .chat-confirm-fields .k{color:var(--muted);margin-right:.3rem}
@@ -3568,27 +3571,31 @@ const CHAT_CONFIRM_LABEL = {propose_finding: 'Add this finding to Vulnerabilitie
                             apply_triage: 'Apply this triage change?'};
 
 function chatToolHtml(tu, result) {
-  if (!result && CHAT_CONFIRM_TOOLS.has(tu.name)) {
-    return `<div class="chat-confirm" data-tid="${escAttr(tu.id)}" data-tool="${escAttr(tu.name)}">
+  if (CHAT_CONFIRM_TOOLS.has(tu.name)) {
+    // Keep the SAME human-readable field preview (chatConfirmPreviewHtml) both before AND after
+    // Approve/Decline — only the head badge/label and the actions row change. Previously the
+    // resolved state fell through to the generic branch below and re-rendered as raw
+    // tool_name({...}) JSON, which looked like the card had "broken" right after the user acted
+    // on it; a reviewer should be able to glance back at an approved/declined finding later and
+    // still read it, not just the first time it appeared.
+    const label = result ? (result.is_error || result.ok === false ? 'declined' : 'approved') : null;
+    return `<div class="chat-confirm ${label ? 'chat-confirm-resolved' : ''}" data-tid="${escAttr(tu.id)}" data-tool="${escAttr(tu.name)}">
       <div class="chat-confirm-head">
-        <span class="badge badge-confirm">needs confirmation</span>
+        <span class="badge badge-${label === 'approved' ? 'done' : label === 'declined' ? 'muted' : 'confirm'}">${label || 'needs confirmation'}</span>
         <span>${esc(CHAT_CONFIRM_LABEL[tu.name] || 'Confirm this action?')}</span>
       </div>
       ${chatConfirmPreviewHtml(tu)}
-      <div class="chat-confirm-actions">
+      ${label ? '' : `<div class="chat-confirm-actions">
         <button type="button" class="btn btn-primary btn-sm" data-confirm-approve="${escAttr(tu.id)}">${ico('check')} Approve</button>
         <button type="button" class="btn btn-ghost btn-sm" data-confirm-decline="${escAttr(tu.id)}">Decline</button>
-      </div>
+      </div>`}
     </div>`;
   }
   const status = !result ? 'running' : (result.is_error || result.ok === false ? 'error' : 'ok');
   const body = result ? esc(result.preview != null ? result.preview : result.content) : '';
-  const label = (CHAT_CONFIRM_TOOLS.has(tu.name) && result)
-    ? (result.is_error ? 'declined' : 'approved')
-    : null;
   return `<details class="chat-tool" data-tid="${escAttr(tu.id)}">
     <summary>${esc(tu.name)}(${esc(JSON.stringify(tu.args != null ? tu.args : tu.input))})
-      <span class="badge badge-${label === 'approved' ? 'done' : label === 'declined' ? 'muted' : status === 'ok' ? 'done' : status === 'error' ? 'error' : 'running'}">${label || status}</span></summary>
+      <span class="badge badge-${status === 'ok' ? 'done' : status === 'error' ? 'error' : 'running'}">${status}</span></summary>
     <pre class="chat-code">${body}</pre></details>`;
 }
 
