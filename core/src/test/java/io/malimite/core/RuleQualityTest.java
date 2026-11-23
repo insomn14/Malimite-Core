@@ -260,6 +260,17 @@ class RuleQualityTest {
     }
 
     @Test
+    void addressBoundNamesAreRejectedButGenericOnesAreNot() {
+        assertTrue(RuleQuality.hasAddressBoundName("sub_100008f88\\s*\\(\\s*0x726574616c796170"));
+        assertTrue(RuleQuality.hasAddressBoundName("sub_1001d0[0-9a-f]{3,4}\\(0x64726143796d"));
+        assertTrue(RuleQuality.hasAddressBoundName("FUN_1001cf7e8"));
+        assertFalse(RuleQuality.hasAddressBoundName("FUN_[0-9a-f]+\\(.*NSUserDefaults"));
+        assertFalse(RuleQuality.hasAddressBoundName("sub_\\w+\\(.*loadHTMLString"));
+        assertNotNull(RuleQuality.rejection("sub_100008f88\\s*\\(\\s*0x726574616c796170"));
+        assertFalse(RuleQuality.passes("sub_10000a6dc\\s*\\(\\s*0x[0-9a-f]+"));
+    }
+
+    @Test
     void unanchoredLeadingLookaheadIsRejectedAndAnchoredFormIsLinear() {
         String quadratic = "(?![\\s\\S]*PTR_s_setPersistentStoreDescriptions_)(?s).*__C::NSPersistentContainer::__allocating_init"
                 + "[\\s\\S]{0,2000}PTR_s_loadPersistentStoresWithCompleti";

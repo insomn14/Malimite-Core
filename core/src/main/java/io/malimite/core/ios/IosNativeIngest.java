@@ -188,15 +188,24 @@ public final class IosNativeIngest {
         return libs.stream().anyMatch(l -> cls.equals(l) || cls.startsWith(l) || cls.contains("/" + l));
     }
 
+    /**
+     * Ghidra names methods by bare selector, class or instance alike. Only a class and an instance method sharing a
+     * selector collide on the primary key; the later one then gets "+" / "-" so neither is lost.
+     */
+    static String functionName(ObjcMetadata.Method m, boolean lib, String parent, Set<String> seen) {
+        String fn = m.selector() + (m.category() != null ? " (" + m.category() + ")" : "");
+        String key = parent + "\0" + (lib ? m.cls() + "::" + fn : fn);
+        return seen.contains(key) ? (m.classMethod() ? "+" : "-") + fn : fn;
+    }
+
     private static void addMethod(ObjcMetadata.Method m, Lifter.Lifted lifted, String exec, List<String> libs,
                                   Set<String> seen, List<SqliteStore.DecompilationResult> rows,
                                   List<SyntaxParser.FunctionRefResult> refs, Map<String, JSONArray> classToFunctions,
                                   SqliteStore store, int[] withCode) {
-        String base = (m.classMethod() ? "+" : "") + m.selector();
-        String fn = m.category() != null ? base + " (" + m.category() + ")" : base;
         String cls = m.cls();
         boolean lib = isLib(libs, cls);
         String parent = lib ? "Libraries" : cls;
+        String fn = functionName(m, lib, parent, seen);
         String name = lib ? cls + "::" + fn : fn;
         if (!seen.add(parent + "\0" + name)) return;  // PK (name, parent, exec) must stay unique
         String code = "";
@@ -209,6 +218,7 @@ public final class IosNativeIngest {
         }
         rows.add(new SqliteStore.DecompilationResult(name, parent, code, exec, ORIGIN));
         classToFunctions.computeIfAbsent(parent, k -> new JSONArray()).put(name);
-        if (!lib && ENTRY_POINT_NAMES.contains(base)) store.insertEntryPoint(base, cls, exec);
+        String entry = (m.classMethod() ? "+" : "") + m.selector();
+        if (!lib && ENTRY_POINT_NAMES.contains(entry)) store.insertEntryPoint(entry, cls, exec);
     }
 }

@@ -191,6 +191,19 @@ class IosNativeIngestTest {
     }
 
     @Test
+    void methodsAreNamedByBareSelectorAndOnlyCollisionsGetAPrefix() {
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        var cls = new ObjcMetadata.Method("Foo", "shared", true, 0x1000, null);
+        var inst = new ObjcMetadata.Method("Foo", "shared", false, 0x2000, null);
+        assertEquals("shared", IosNativeIngest.functionName(cls, false, "Foo", seen));
+        seen.add("Foo\0shared");
+        assertEquals("-shared", IosNativeIngest.functionName(inst, false, "Foo", seen));
+        assertEquals("+shared", IosNativeIngest.functionName(cls, false, "Foo", seen));
+        assertEquals("shared (Cat)", IosNativeIngest.functionName(
+                new ObjcMetadata.Method("Foo", "shared", false, 0x3000, "Cat"), false, "Foo", seen));
+    }
+
+    @Test
     void decoderRecognisesAddressAndBranchForms() {
         long pc = BASE + TEXT;
         Arm64Decoder.Insn a = Arm64Decoder.decode(adrp(3, pc, BASE + 0x5000), pc);

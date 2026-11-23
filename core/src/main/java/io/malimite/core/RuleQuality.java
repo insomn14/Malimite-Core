@@ -62,12 +62,13 @@ public final class RuleQuality {
 
     /** Static quality gate used when learning and when loading stored rules. */
     public static boolean passes(String regex) {
-        return hasSemanticAnchor(regex) && isBounded(regex);
+        return !hasAddressBoundName(regex) && hasSemanticAnchor(regex) && isBounded(regex);
     }
 
     /** Why {@link #passes} rejects {@code regex}, or null when it passes (for logs). */
     public static String rejection(String regex) {
         if (hasQuadraticPrefix(regex)) return "unanchored leading wildcard/lookahead: quadratic on large functions (anchor it with \\A)";
+        if (hasAddressBoundName(regex)) return "names a function by its address (sub_/FUN_<hex>): only matches this exact build";
         if (!hasSemanticAnchor(regex)) return "no semantic anchor: only decompiler vocabulary, so it matches generic code";
         if (!isBounded(regex)) return "only short unbounded words (e.g. exec/Runtime) that also match longer identifiers";
         return null;
@@ -83,6 +84,14 @@ public final class RuleQuality {
 
     public static boolean hasQuadraticPrefix(String regex) {
         return regex != null && QUADRATIC_PREFIX.matcher(regex).find();
+    }
+
+    /** {@code sub_1001d0b1c}, {@code FUN_1001cf7e8}, or a literal hex prefix such as {@code sub_1001d0[0-9a-f]{3}}. */
+    private static final Pattern ADDRESS_NAME = Pattern.compile("\\b(?:sub|FUN|LAB|DAT)_[0-9a-fA-F]{6,}");
+
+    /** True when the regex hard-codes an auto-generated name, which changes with every build of the binary. */
+    public static boolean hasAddressBoundName(String regex) {
+        return regex != null && ADDRESS_NAME.matcher(regex).find();
     }
 
     /**
