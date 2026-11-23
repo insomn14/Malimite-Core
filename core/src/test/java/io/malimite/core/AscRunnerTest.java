@@ -23,22 +23,16 @@ class AscRunnerTest {
     @TempDir Path tmp;
 
     @Test
-    void isAvailableIsFalseWhenTheBinaryDoesNotExist() throws Exception {
-        // No ASC_HOME directory and no `droidasc` on PATH (assumed true in this dev/CI
-        // environment, same assumption MalimiteAnalyzer's fallback itself depends on) — the
-        // constructor always succeeds (it only resolves *which* command to try), so the
-        // distinguishing check has to be isAvailable() actually attempting to launch it.
-        AscRunner asc = new AscRunner(null);
+    void isAvailableIsFalseWhenTheBinaryDoesNotExist() {
+        // An explicit nonexistent command keeps this independent of any droidasc installed on PATH.
+        AscRunner asc = new AscRunner(java.util.List.of(tmp.resolve("no-such-droidasc").toString()), null);
         assertFalse(asc.isAvailable(), "a nonexistent droidasc binary must report unavailable, not throw");
     }
 
     @Test
-    void isAvailableIsFalseForANonexistentAscHomeDirectory() throws Exception {
-        // ascHomeOrNull only short-circuits to "python -m droidasc" when the directory actually
-        // exists (Files.isDirectory) — a bogus path here still falls through to resolving
-        // `droidasc` on PATH, so this should behave identically to the null case above.
-        AscRunner asc = new AscRunner(tmp.resolve("does-not-exist"));
-        assertFalse(asc.isAvailable());
+    void aNonexistentAscHomeFallsBackToTheDroidascCommandOnPath() throws Exception {
+        // ascHomeOrNull only selects "python -m droidasc" when the directory actually exists (Files.isDirectory).
+        assertEquals(java.util.List.of("droidasc"), new AscRunner(tmp.resolve("does-not-exist")).command());
     }
 
     @Test
