@@ -3568,7 +3568,7 @@ function chatConfirmPreviewHtml(tu) {
   }
   if (tu.name === 'apply_triage') {
     const rows = [
-      ['Finding', a.vuln_id != null ? '#' + a.vuln_id : null],
+      ['Finding', a.vuln_id != null ? '#' + a.vuln_id + ' (and every occurrence of its rule)' : null],
       ['New status', a.status], ['Severity override', a.override_severity],
       ['CVSS override', a.override_cvss_score], ['Note', a.note],
     ].filter(([, v]) => v != null && v !== '');
@@ -5821,7 +5821,7 @@ function renderVulnCard(group, i) {
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title" style="display:flex;justify-content:space-between;align-items:center">
-            <span>Triage <em style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(applies to finding #${v.id})</em></span>
+            <span>Triage <em style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(applies to ${occCount > 1 ? 'all ' + occCount + ' occurrences' : 'finding #' + v.id})</em></span>
             <button class="btn-link" onclick="toggleTriage(${v.id})">Edit</button>
           </div>
           <div id="triage-${v.id}" hidden>${renderTriageForm(v)}</div>

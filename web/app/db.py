@@ -432,8 +432,12 @@ async def update_vulnerability_triage(
     sets.append("UpdatedAt=?")
     args.append(int(__import__("time").time() * 1000))
 
-    sql = f"UPDATE Vulnerabilities SET {', '.join(sets)} WHERE id=?"
-    args.append(vuln_id)
+    # The Vulnerabilities tab (and the reports) show one issue per RuleId, so a triage change applies to
+    # every occurrence of the finding's rule. Updating only the one row left the card's representative
+    # (an untouched "open" sibling) on screen, so the change looked like it never happened.
+    sql = (f"UPDATE Vulnerabilities SET {', '.join(sets)} WHERE id=? OR (COALESCE(RuleId,'')<>'' "
+           "AND RuleId=(SELECT RuleId FROM Vulnerabilities WHERE id=?))")
+    args += [vuln_id, vuln_id]
 
     async with aiosqlite.connect(db_path) as db:
         await _ensure_triage_columns(db)
@@ -480,8 +484,12 @@ async def update_vulnerability_ai_fix(
     sets += ["AiFixStatus=?", "AiFixProvider=?", "AiFixModel=?", "AiFixAt=?", "UpdatedAt=?"]
     args += ["applied", provider, model, now_ms, now_ms]
 
-    sql = f"UPDATE Vulnerabilities SET {', '.join(sets)} WHERE id=?"
-    args.append(vuln_id)
+    # The Vulnerabilities tab (and the reports) show one issue per RuleId, so a triage change applies to
+    # every occurrence of the finding's rule. Updating only the one row left the card's representative
+    # (an untouched "open" sibling) on screen, so the change looked like it never happened.
+    sql = (f"UPDATE Vulnerabilities SET {', '.join(sets)} WHERE id=? OR (COALESCE(RuleId,'')<>'' "
+           "AND RuleId=(SELECT RuleId FROM Vulnerabilities WHERE id=?))")
+    args += [vuln_id, vuln_id]
 
     async with aiosqlite.connect(db_path) as db:
         await _ensure_triage_columns(db)

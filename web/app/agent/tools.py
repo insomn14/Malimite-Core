@@ -130,8 +130,9 @@ TOOLS = [
            "reference_url": _S, "affected_class": _S, "affected_function": _S},
           ["title", "severity", "description"], requires_confirmation=True),
     _spec("apply_triage",
-          "Changes ONE finding's review status, severity/CVSS override, or reviewer note — same effect as a "
-          "human editing it in the Vulnerabilities tab's Triage form. This WRITES to the scan and always pauses "
+          "Changes a finding's review status, severity/CVSS override, or reviewer note — same effect as a "
+          "human editing it in the Vulnerabilities tab's Triage form. The change applies to EVERY occurrence "
+          "of that finding's rule_id (the tab shows one issue per rule), not just the one vuln_id. This WRITES to the scan and always pauses "
           "for the user's explicit confirmation before anything is saved. vuln_id MUST be a real id from "
           "get_vulnerabilities (or from the finding the user opened this chat to discuss, if one was provided) "
           "— if you are not certain which finding the user means, call get_vulnerabilities first and ask, never "
