@@ -3747,7 +3747,7 @@ async function tabAssistant(el, id, detail) {
   if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'The AI Assistant'); return; }
   const st = chatSt(id);
   el.innerHTML = `
-    <div class="card chat-card">
+    <div class="card chat-card" data-chat-scan="${escAttr(id)}">
       <div class="chat-bar">
         <select id="chat-session" title="Chat session"></select>
         <button class="btn btn-ghost btn-sm" id="chat-rename" title="Rename this chat">Rename</button>
@@ -3814,7 +3814,9 @@ async function tabAssistant(el, id, detail) {
 
   /* sid: open that session; null: keep a pending "new chat" if the user asked for one, else resume
      the last-open (or newest) session. Always refreshes the full list from the server. */
-  async function loadSession(sid) {
+  async function loadSession(sid, noAttach) {
+    // A late callback from another scan's chat must not draw into this scan's page.
+    if (document.querySelector('.chat-card')?.dataset.chatScan !== id) return;
     let data = await api('/scans/' + id + '/chat');
     st.sessions = data.sessions;
     if (sid === null && st.fresh) { st.sid = null; renderSessions(); if (!document.querySelector('.chat-msg')) chatShowPrompts(); return; }
@@ -3823,7 +3825,32 @@ async function tabAssistant(el, id, detail) {
     if (want !== data.session_id) data = await api('/scans/' + id + '/chat?session_id=' + encodeURIComponent(want));
     st.sid = want; st.fresh = false; saveSid(want);
     renderSessions();
+    // A generation can outlive the page that started it (refresh, another menu). Show what was saved
+    // before it, then re-join it so the rest streams in instead of the chat looking dead.
+    if (data.active && !noAttach) {
+      if (st.busy) return;   // already streaming (or re-joining) here; re-rendering would wipe it
+      chatRenderHistory(data.messages.slice(0, data.active.base), st);
+      reattach(want);
+      return;
+    }
     chatRenderHistory(data.messages, st);
+  }
+
+  /** Re-joins the server's still-running generation for `sid` (see GET /chat's `active`). The server
+      replays what it has produced so far, then follows it live. */
+  async function reattach(sid) {
+    st.busy = true; setBusy(true); showErr('');
+    st.ctrl = new AbortController();
+    try {
+      await streamChat(fetch('/api/v1/scans/' + id + '/chat/' + encodeURIComponent(sid) + '/attach',
+        {signal: st.ctrl.signal, headers: headers()}));
+    } catch (e) {
+      if (e.name !== 'AbortError' && !/No generation running/.test(e.message)) showErr(e.message);
+    } finally {
+      st.busy = false; st.ctrl = null;
+      if (document.getElementById('chat-in')) { setBusy(false); document.getElementById('chat-in').focus(); }
+      loadSession(st.sid, true).catch(() => {});
+    }
   }
 
   /** Shared by send() (a fresh user message) and confirmPending() (an Approve/Decline decision
@@ -4122,7 +4149,11 @@ async function tabAssistant(el, id, detail) {
   $in.addEventListener('blur', () => setTimeout(closeSlashMenu, 150));   // delay: let the mousedown above land first
 
   document.getElementById('chat-send').onclick = () => send($in.value);
-  document.getElementById('chat-stop').onclick = () => st.ctrl && st.ctrl.abort();
+  // The generation runs server-side now, so closing the stream alone would not stop it.
+  document.getElementById('chat-stop').onclick = async () => {
+    try { if (st.sid) await fetch('/api/v1/scans/' + id + '/chat/' + encodeURIComponent(st.sid) + '/stop', {method: 'POST', headers: headers()}); } catch (_) {}
+    if (st.ctrl) st.ctrl.abort();
+  };
   $in.onkeydown = e => {
     if (slashIdx >= 0) {
       if (e.key === 'ArrowDown') { e.preventDefault(); slashIdx = (slashIdx + 1) % SLASH_COMMANDS.length; paintSlashMenu(); return; }
@@ -4174,6 +4205,12 @@ async function tabAssistant(el, id, detail) {
     await loadSession(res.session_id);
   };
 
+  // A stream left over from before the user switched menus (or scans) would paint into this page, which
+  // has one shared #chat-msgs: drop every such stream. The server-side generation keeps running and
+  // loadSession() re-joins this scan's own.
+  for (const other of Object.values(chatState)) {
+    if (other.ctrl) { other.ctrl.abort(); other.ctrl = null; other.busy = false; }
+  }
   setBusy(st.busy);
   try { await loadSession(st.fresh ? null : st.sid); } catch (e) { showErr(e.message); chatShowPrompts(); }
 }

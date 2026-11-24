@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from . import auto_enhance, db, finding_fix, llm_probe, offensive_phases, scanner
-from .agent import anthropic_oauth, llm_config, loop as agent_loop, ondemand, store as chat_store
+from .agent import anthropic_oauth, llm_config, loop as agent_loop, ondemand, runs as agent_runs, store as chat_store
 from .agent.llm import PROVIDERS as LLM_PROVIDERS, VISION_CAPABLE_PROVIDERS, LlmError, resolve_llm
 from .agent.tools import Ctx, valid_class_name
 from .config import settings
@@ -1259,7 +1259,6 @@ class RenameChatRequest(BaseModel):
     title: str = Field(min_length=1, max_length=60)
 
 
-_ACTIVE_CHATS: set[str] = set()  # one live stream per session
 _CHAT_HITS: deque = deque()      # monotonic timestamps of recent chat requests (global sliding window)
 
 
@@ -1276,6 +1275,19 @@ def _chat_rate_limit() -> None:
 
 def _sse(ev: dict) -> str:
     return f"data: {json.dumps(ev)}\n\n"
+
+
+async def _next_base(chat_db: str, sid: str) -> int:
+    """Both run_chat() and resume_after_confirmation() persist exactly one turn before generating."""
+    return len(await chat_store.history(chat_db, sid)) + 1
+
+
+def _stream_run(run: "agent_runs.Run") -> StreamingResponse:
+    async def gen():
+        async for ev in run.follow():
+            yield _sse(ev)
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/v1/scans/{scan_id}/chat")
@@ -1324,32 +1336,19 @@ async def chat(request: Request, scan_id: str, req: ChatRequest):
             await chat_store.set_llm(chat_db, sid, cfg.provider, cfg.model)
     else:
         sid = await chat_store.create_session(chat_db, cfg.provider, cfg.model)
-    if sid in _ACTIVE_CHATS:
+    if sid in agent_runs.RUNS:
         raise HTTPException(status_code=409, detail="This chat session is already generating")
 
     ctx = Ctx(scan_id=scan_id, db_path=db_path, exe=exe, platform=detail.platform or "",
               scan_dir=scan_dir, meta=scanner._read_scan_json(scan_id) or {})
 
-    async def gen():
-        # claimed here, not in the route: if the client vanishes before the first iteration the flag is never set
-        if sid in _ACTIVE_CHATS:
-            yield _sse({"type": "error", "message": "This chat session is already generating"})
-            return
-        _ACTIVE_CHATS.add(sid)
-        try:
-            yield _sse({"type": "session", "session_id": sid, "provider": cfg.provider, "model": cfg.model})
-            atts = [a.model_dump() for a in req.attachments]
-            async for ev in agent_loop.run_chat(ctx, chat_db, sid, req.message, cfg, attachments=atts):
-                yield _sse(ev)
-        except Exception:
-            import logging
-            logging.getLogger("malimite").exception("chat failed for scan %s", scan_id)
-            yield _sse({"type": "error", "message": "internal error"})
-        finally:
-            _ACTIVE_CHATS.discard(sid)
+    async def body():
+        yield {"type": "session", "session_id": sid, "provider": cfg.provider, "model": cfg.model}
+        atts = [a.model_dump() for a in req.attachments]
+        async for ev in agent_loop.run_chat(ctx, chat_db, sid, req.message, cfg, attachments=atts):
+            yield ev
 
-    return StreamingResponse(gen(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return _stream_run(agent_runs.start(sid, await _next_base(chat_db, sid), body))
 
 
 class ConfirmToolRequest(BaseModel):
@@ -1379,36 +1378,25 @@ async def confirm_chat_tool(request: Request, scan_id: str, session_id: str, req
         cfg = resolve_llm(sess["provider"], sess["model"], None, None)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    if session_id in _ACTIVE_CHATS:
+    if session_id in agent_runs.RUNS:
         raise HTTPException(status_code=409, detail="This chat session is already generating")
 
     ctx = Ctx(scan_id=scan_id, db_path=db_path, exe=exe, platform=detail.platform or "",
               scan_dir=scan_dir, meta=scanner._read_scan_json(scan_id) or {})
 
-    async def gen():
-        if session_id in _ACTIVE_CHATS:
-            yield _sse({"type": "error", "message": "This chat session is already generating"})
-            return
-        _ACTIVE_CHATS.add(session_id)
-        wrote = False
+    async def body():
         try:
             async for ev in agent_loop.resume_after_confirmation(ctx, chat_db, session_id, req.decisions, cfg):
-                if ev["type"] == "tool_result" and ev["ok"] and ev["name"] in ("propose_finding", "apply_triage"):
-                    wrote = True
-                yield _sse(ev)
-        except ValueError as e:
-            yield _sse({"type": "error", "message": str(e)})
-        except Exception:
-            import logging
-            logging.getLogger("malimite").exception("confirm-tool failed for scan %s", scan_id)
-            yield _sse({"type": "error", "message": "internal error"})
-        finally:
-            _ACTIVE_CHATS.discard(session_id)
-            if wrote:
-                await scanner.regenerate_report(scan_id)
+                yield ev
+        except ValueError as e:   # not a pending confirmation / decisions don't match: the user's to see
+            yield {"type": "error", "message": str(e)}
 
-    return StreamingResponse(gen(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    async def after(run):
+        if any(e["type"] == "tool_result" and e["ok"] and e["name"] in ("propose_finding", "apply_triage")
+               for e in run.events):
+            await scanner.regenerate_report(scan_id)
+
+    return _stream_run(agent_runs.start(session_id, await _next_base(chat_db, session_id), body, after))
 
 
 @app.get("/api/v1/scans/{scan_id}/chat")
@@ -1418,8 +1406,29 @@ async def get_chat(request: Request, scan_id: str, session_id: Optional[str] = N
     chat_db = chat_store.path_for(scanner._scan_dir(scan_id))
     sessions = await chat_store.list_sessions(chat_db)
     sid = session_id or (sessions[0]["id"] if sessions else None)
-    return {"sessions": sessions, "session_id": sid,
-            "messages": await chat_store.history(chat_db, sid) if sid else []}
+    msgs = await chat_store.history(chat_db, sid) if sid else []
+    run = agent_runs.RUNS.get(sid) if sid else None
+    # `base`: how many of `messages` precede what /attach replays (the run's own, still-unsaved output)
+    active = {"base": run.base} if run else None
+    return {"sessions": sessions, "session_id": sid, "messages": msgs, "active": active}
+
+
+@app.get("/api/v1/scans/{scan_id}/chat/{session_id}/attach")
+async def attach_chat(request: Request, scan_id: str, session_id: str):
+    """Re-joins a generation still running after the page that started it went away."""
+    _check_auth(request)
+    _require_db(scan_id)
+    run = agent_runs.RUNS.get(session_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="No generation running for this chat session")
+    return _stream_run(run)
+
+
+@app.post("/api/v1/scans/{scan_id}/chat/{session_id}/stop")
+async def stop_chat(request: Request, scan_id: str, session_id: str):
+    _check_auth(request)
+    _require_db(scan_id)
+    return {"stopped": agent_runs.stop(session_id)}
 
 
 @app.delete("/api/v1/scans/{scan_id}/chat/{session_id}", status_code=204)
