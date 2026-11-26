@@ -267,6 +267,35 @@ Semua tool yang **menulis / menyentuh device** memakai `requires_confirmation=Tr
 
 Mitigasi prompt-injection: **konten event/flow (header, body, log aplikasi) adalah data tak tepercaya** — dibungkus `wrap()` seperti output tool lain (`tools.py:wrap`), tidak pernah dijadikan instruksi; tool tulis tidak menerima parameter yang dapat meng-override consent/allowlist.
 
+### 7.1 Mode izin agent (Plan / Accept edits / Bypass)
+
+Mode adalah properti **per sesi dinamis** (bukan per akun), disimpan di `dyn_sessions.agent_mode` dan ditegakkan **di server** (`web/app/dynamic/policy.py`), bukan di UI. Setiap tool call dari agent melewati satu fungsi keputusan `decide(tool, args, session, mode) -> ALLOW | ASK | DENY(reason)`; UI hanya merender hasilnya.
+
+Tier risiko tool (field baru `risk` di `_spec`, selain `requires_confirmation` yang sudah ada):
+
+| Tier | Contoh | Plan | Accept edits | Bypass |
+|---|---|---|---|---|
+| `read` | `dynamic_get_events`, `dynamic_get_verdicts`, `dynamic_plan_session` | ALLOW | ALLOW | ALLOW |
+| `observe` | load/unload probe **pasif** yang sudah approved, screenshot, fsdiff snapshot, buat **draft** probe / PoC steps | DENY (hanya lewat Plan card) | ALLOW | ALLOW |
+| `modify_device` | install/uninstall, clear data, kirim input UI, launch/kill app, probe `active` | DENY | ASK | ALLOW (dalam scope) |
+| `bypass_probe` | probe intrusiveness `bypass` (mis. pinning bypass) | DENY | ASK (+ harus sudah diaktifkan manusia di launcher) | ALLOW **hanya** bila diaktifkan manusia di launcher |
+
+Mode **Plan** menghasilkan *Plan card* (langkah, tool, target, tier) — `POST .../agent/plan/{id}/approve` mengubah rencana menjadi antrean aksi dan (opsional) menaikkan mode ke Accept edits.
+
+**Lantai keamanan (berlaku di SEMUA mode, tidak dapat dimatikan oleh agent maupun konfigurasi sesi):**
+1. Consent/otorisasi sesi hanya bisa diberikan oleh manusia via UI; tidak ada tool agent yang menyentuhnya.
+2. Device harus di allowlist; **scope dikunci ke package scan ini** — aksi ke package/host lain → `DENY(out_of_scope)`.
+3. Kill-switch `Stop agent` & `Stop & detach` memotong antrean aksi dan selalu tersedia.
+4. Probe `bypass`/High tidak dapat diaktifkan oleh agent; hanya manusia (per sesi, di launcher).
+5. Redaksi data sensitif tetap berlaku untuk output tool ke LLM.
+6. Tidak ada shell/JS bebas; hanya probe terdaftar hash-pinned (§9, A7).
+7. Anggaran per sesi (`DYNAMIC_AGENT_MAX_ACTIONS`, `DYNAMIC_AGENT_MAX_MINUTES`); habis → turun ke Plan dan minta manusia.
+8. Audit log append-only tiap aksi: `{ts, tool, args_hash, tier, decision, approver: user|auto_accept|bypass_mode}`.
+
+Mode **Bypass**: hanya untuk device berlabel `lab/emulator` kecuali admin mengaktifkan untuk device fisik (`DYNAMIC_AGENT_BYPASS_PHYSICAL=1`); masuk lewat dialog konfirmasi eksplisit; banner permanen di UI. **Turun otomatis ke Plan** saat device terputus, anggaran habis, atau consent dicabut. Eksperimen ini adalah keputusan produk yang perlu di-review keamanan sebelum D4 dirilis (lihat §14).
+
+API tambahan: `PUT .../sessions/{sid}/agent/mode`, `GET .../agent/actions` (audit log), `POST .../agent/actions/{aid}/approve|deny`, `POST .../agent/stop`.
+
 ---
 
 ## 8. Integrasi Report, SARIF, CI
@@ -392,3 +421,4 @@ Modifikasi: `web/app/main.py` (include router, `ScanDetail` field, delete scan i
 3. **Multi-user**: apakah web dipakai tim (butuh per-user consent/audit, kini hanya satu `API_KEY` global)? Mempengaruhi D7.
 4. **Lisensi/distribusi**: boleh mem-bundle frida/mitmproxy di image Docker, atau hanya instruksi instalasi?
 5. **Corellium / device farm** di roadmap atau di luar scope?
+6. **Mode Bypass untuk agent (§7.1)**: apakah boleh ada sama sekali pada rilis pertama? Rekomendasi: D4 dirilis hanya dengan Plan + Accept edits; Bypass menyusul setelah review keamanan, terbatas pada emulator/lab.
