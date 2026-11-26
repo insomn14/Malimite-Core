@@ -1878,8 +1878,9 @@ function renderScanOptionsHtml(file, prefs, configData) {
     : (allProviders().find(p => configuredSet.has(p.value))?.value || prefs.provider || '');
   const modeOpts = Object.entries(SCAN_MODES)
     .map(([v, m]) => `<option value="${v}"${v === mode ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
-  const providerOpts = allProviders()
-    .map(p => `<option value="${p.value}"${p.value === provider ? ' selected' : ''}${configuredSet.has(p.value) ? '' : ' disabled'}>${esc(p.label)}${configuredSet.has(p.value) ? '' : ' — not connected'}</option>`).join('');
+  // Same list as the Config tab's cards: connected providers only (add more there).
+  const providerOpts = allProviders().filter(p => configuredSet.has(p.value))
+    .map(p => `<option value="${escAttr(p.value)}"${p.value === provider ? ' selected' : ''}>${esc(p.label)}</option>`).join('');
   const useAsc = prefs.decompiler === 'asc';
   return `
   <fieldset class="plain" id="scan-form">
