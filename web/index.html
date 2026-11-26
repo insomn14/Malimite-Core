@@ -3284,10 +3284,10 @@ function renderCustomModal() {
           <button type="button" class="cm-tab${m.tab === 'custom' ? ' on' : ''}" onclick="cmTab('custom')">${ico('code')} Custom Model API</button>
         </div>`}
         ${presets}
-        <label>Provider ID<input class="ctl" id="cm-id" value="${escAttr(m.id)}" ${m.editing ? 'readonly' : ''} placeholder="opencode" autocomplete="off" spellcheck="false"/>
+        <label>Provider ID<input class="ctl" id="cm-id" value="${escAttr(m.id)}" ${m.editing ? 'readonly' : ''} placeholder="my-provider" autocomplete="off" spellcheck="false"/>
           <span class="cm-hint">a-z, 0-9, “-” or “_”. Used as the provider name in scans, the AI Assistant and AI Fix.</span></label>
-        <label>Display name<input class="ctl" id="cm-name" value="${escAttr(m.name)}" placeholder="OpenCode" autocomplete="off"/></label>
-        <label>Base URL<input class="ctl" id="cm-url" value="${escAttr(m.base_url)}" placeholder="https://opencode.ai/zen/v1" autocomplete="off" spellcheck="false"/>
+        <label>Display name<input class="ctl" id="cm-name" value="${escAttr(m.name)}" placeholder="My Provider" autocomplete="off"/></label>
+        <label>Base URL<input class="ctl" id="cm-url" value="${escAttr(m.base_url)}" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false"/>
           <span class="cm-hint">Include the version path. <code>/chat/completions</code> (OpenAI) or <code>/messages</code> (Anthropic) is appended.</span></label>
         <label>API protocol<select class="ctl" id="cm-proto">
           <option value="openai"${m.protocol === 'openai' ? ' selected' : ''}>OpenAI Chat Completions</option>
@@ -3304,7 +3304,7 @@ function renderCustomModal() {
             <button type="button" class="btn btn-outline btn-sm" onclick="cmRemoveModel(${i})" aria-label="Remove model">${ico('trash')}</button></div>`).join('')}</div>
           <div class="cm-hint" style="margin:.35rem 0">You can also add model IDs manually if discovery is unavailable.</div>
           <button type="button" class="btn btn-outline btn-sm" onclick="cmAddModel()">${ico('plus')} Add model</button></div>
-        <label>Extra headers (optional)<textarea class="ctl" id="cm-headers" rows="2" style="height:auto;padding:.5rem .75rem;font-family:monospace;font-size:.78rem" placeholder="x-opencode-session: {session}" spellcheck="false">${esc(m.headers)}</textarea>
+        <label>Extra headers (optional)<textarea class="ctl" id="cm-headers" rows="2" style="height:auto;padding:.5rem .75rem;font-family:monospace;font-size:.78rem" placeholder="x-custom-header: value" spellcheck="false">${esc(m.headers)}</textarea>
           <span class="cm-hint">One <code>Name: value</code> per line. <code>{session}</code> becomes a stable per-conversation id. Put secrets in the API key field, not here.</span></label>
         <div class="cfgp-note ${m.msg ? (m.ok ? 'ok' : 'err') : ''}" id="cm-msg" role="status">${esc(m.msg)}</div>
       </div>
