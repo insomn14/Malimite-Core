@@ -60,7 +60,7 @@ public class Main implements Callable<Integer> {
     private boolean llm;
 
     @Option(names = "--llm-provider",
-            description = "LLM provider: openai|claude|claude-oauth|deepseek|ollama|bedrock|glm  (env: LLM_PROVIDER)",
+            description = "LLM provider: openai|claude|claude-oauth|deepseek|ollama|bedrock|glm|custom  (env: LLM_PROVIDER)",
             defaultValue = "${env:LLM_PROVIDER:-none}")
     private String llmProvider;
 
@@ -298,6 +298,9 @@ public class Main implements Callable<Integer> {
         cfg.put("BEDROCK_MODEL_ID",      envOr("BEDROCK_MODEL_ID", ""));
         cfg.put("GLM_API_KEY",           envOr("GLM_API_KEY", ""));
         cfg.put("GLM_BASE_URL",          envOr("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"));
+        cfg.put("CUSTOM_PROTOCOL",       envOr("CUSTOM_PROTOCOL", "openai"));
+        cfg.put("CUSTOM_BASE_URL",       envOr("CUSTOM_BASE_URL", ""));
+        cfg.put("CUSTOM_API_KEY",        envOr("CUSTOM_API_KEY", ""));
         return cfg;
     }
 

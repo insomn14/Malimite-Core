@@ -91,6 +91,46 @@ async def _probe_bedrock(api_key: str, model: str, extra: Optional[dict],
     return _result(True, "bedrock", msg, model_found=found, used_server_key=used_server_key)
 
 
+async def probe_custom(protocol: str, base_url: str, api_key: str, model: str = "",
+                       client: Optional[httpx.AsyncClient] = None) -> dict:
+    """Test / "Fetch models" for a user-defined endpoint: GET {base_url}/models with the wire
+    format's own auth header. Returns the usual result dict plus `models` (the ids found)."""
+    base = (base_url or "").strip().rstrip("/")
+    if not base.startswith(("http://", "https://")):
+        return {**_result(False, "custom", "Base URL must start with http:// or https://."), "models": []}
+    if protocol == "anthropic":
+        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"} if api_key else {}
+    else:
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    own = client is None
+    client = client or httpx.AsyncClient(timeout=_TIMEOUT)
+    try:
+        resp = await client.get(f"{base}/models", headers=headers)
+    except httpx.HTTPError as e:
+        return {**_result(False, "custom", f"Could not reach the endpoint: {type(e).__name__}."), "models": []}
+    finally:
+        if own:
+            await client.aclose()
+    if resp.status_code in (401, 403):
+        return {**_result(False, "custom", "The endpoint rejected this API key."), "models": []}
+    if resp.status_code != 200:
+        return {**_result(False, "custom", f"The endpoint returned HTTP {resp.status_code} for GET /models "
+                                           "(you can still add model IDs manually)."), "models": []}
+    try:
+        payload = resp.json()
+    except ValueError:
+        payload = {}
+    items = (payload.get("data") or payload.get("models") or []) if isinstance(payload, dict) else []
+    ids = [str(m.get("id") or str(m.get("name", "")).removeprefix("models/"))
+           for m in items if isinstance(m, dict)]
+    ids = [i for i in ids if i]
+    found = _model_listed(model, ids)
+    msg = f"Connected. {len(ids)} model(s) found."
+    if found is False:
+        msg += f" Model '{model.strip()}' was not in the list."
+    return {**_result(True, "custom", msg, model_found=found), "models": ids}
+
+
 async def probe(provider: str, api_key: str = "", model: str = "",
                 client: Optional[httpx.AsyncClient] = None, extra: Optional[dict] = None) -> dict:
     p = (provider or "").strip().lower()

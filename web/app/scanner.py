@@ -478,9 +478,12 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
         "--llm-mode", mode,
     ]
     if meta.get("llm_enabled") and meta.get("llm_provider") not in ("none", "", None):
-        cmd += ["--llm", "--llm-provider", meta["llm_provider"]]
-        if meta.get("llm_model"):
-            cmd += ["--llm-model", meta["llm_model"]]
+        custom = _custom_provider(meta["llm_provider"])
+        # the CLI knows custom endpoints as one provider ("custom"); llm_env() hands it the details
+        cmd += ["--llm", "--llm-provider", "custom" if custom else meta["llm_provider"]]
+        model = meta.get("llm_model") or (custom.get("models") or [""])[0] if custom else meta.get("llm_model")
+        if model:
+            cmd += ["--llm-model", model]
         if meta.get("llm_concurrency"):
             cmd += ["--llm-concurrency", str(meta["llm_concurrency"])]
         if meta.get("max_enrich_functions"):
@@ -497,6 +500,11 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
     if meta.get("decompiler") == "asc":
         cmd += ["--decompiler", "asc"]
     return cmd
+
+
+def _custom_provider(provider: str) -> Optional[dict]:
+    from .agent import llm_config  # local import: same cycle as llm_env()
+    return llm_config.get_custom(provider)
 
 
 def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
@@ -545,6 +553,11 @@ def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
         base = fields.get("base_url") or settings.glm_base_url
         if base:
             env["GLM_BASE_URL"] = base
+    elif (custom := _custom_provider(provider)):
+        env["CUSTOM_PROTOCOL"] = custom.get("protocol", "openai")
+        env["CUSTOM_BASE_URL"] = custom["base_url"]
+        if per_req_key or custom.get("api_key"):
+            env["CUSTOM_API_KEY"] = per_req_key or custom["api_key"]
     return env
 
 

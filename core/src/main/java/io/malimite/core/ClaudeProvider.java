@@ -23,12 +23,19 @@ public class ClaudeProvider implements LlmProvider {
     private static final String API_VERSION     = "2023-06-01";
     private static final String CACHE_BETA      = "prompt-caching-2024-07-31";
 
+    private final String     apiUrl;
     private final String     apiKey;
     private final String     model;
     private final int        maxTokens;
     private final HttpClient http;
 
     public ClaudeProvider(String apiKey, String model, int maxTokens) {
+        this(apiKey, model, maxTokens, API_URL);
+    }
+
+    /** {@code apiUrl} is the full Messages URL (custom Anthropic-compatible endpoints). */
+    public ClaudeProvider(String apiKey, String model, int maxTokens, String apiUrl) {
+        this.apiUrl    = apiUrl;
         this.apiKey    = apiKey;
         this.model     = model.isBlank() ? "claude-sonnet-5" : model;
         this.maxTokens = maxTokens;
@@ -70,7 +77,7 @@ public class ClaudeProvider implements LlmProvider {
             body.put("thinking", new JSONObject().put("type", "disabled"));
         }
         try {
-            HttpRequest req = HttpRequest.newBuilder(URI.create(API_URL))
+            HttpRequest req = HttpRequest.newBuilder(URI.create(apiUrl))
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", API_VERSION)
                     .header("anthropic-beta", CACHE_BETA)

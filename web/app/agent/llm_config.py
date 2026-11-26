@@ -30,6 +30,7 @@ see mask()/provider_status() for the client-safe projection. Raw values are only
 effective_env(), which feeds them straight into an outbound provider request header.
 """
 import json
+import re
 import time
 from pathlib import Path
 from typing import Optional
@@ -65,13 +66,20 @@ _ENV_FALLBACK = {
 
 KNOWN_PROVIDERS = tuple(_SECRET_FIELDS.keys())
 
+# User-defined endpoints (Config tab "Custom Model API"), stored under data["custom"][id]:
+#   {"name", "protocol": "openai"|"anthropic", "base_url", "api_key", "models": [...], "updated_at"}
+# The id doubles as the provider name everywhere a built-in one is accepted (scan, chat, AI Fix).
+CUSTOM_PROTOCOLS = ("openai", "anthropic")
+_RESERVED_IDS = frozenset(KNOWN_PROVIDERS) | {"claude-oauth", "none", "custom"}
+_CUSTOM_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+
 
 def _path() -> Path:
     return Path(settings.llm_config_path)
 
 
 def _empty() -> dict:
-    return {"default_provider": "", "default_model": "", "providers": {}}
+    return {"default_provider": "", "default_model": "", "providers": {}, "custom": {}}
 
 
 def load() -> dict:
@@ -88,6 +96,8 @@ def load() -> dict:
     data.setdefault("default_model", "")
     if not isinstance(data.get("providers"), dict):
         data["providers"] = {}
+    if not isinstance(data.get("custom"), dict):
+        data["custom"] = {}
     return data
 
 
@@ -126,6 +136,63 @@ def set_provider(provider: str, **fields) -> dict:
     data["providers"][provider] = current
     _save(data)
     return current
+
+
+def valid_custom_id(pid: str) -> bool:
+    return bool(_CUSTOM_ID_RE.match(pid or "")) and pid not in _RESERVED_IDS
+
+
+def get_custom(pid: str) -> Optional[dict]:
+    return load()["custom"].get(pid)
+
+
+def set_custom(pid: str, *, name: str = "", protocol: str = "openai", base_url: str = "",
+               api_key: str = "", models: Optional[list] = None) -> dict:
+    """Creates or updates a custom provider. A blank api_key keeps the stored one (same
+    never-clobber rule as set_provider); models replaces the list when given."""
+    if not valid_custom_id(pid):
+        raise ValueError("Provider ID must be 1-32 chars of a-z, 0-9, '-' or '_' and not a built-in name")
+    if protocol not in CUSTOM_PROTOCOLS:
+        raise ValueError(f"protocol must be one of {', '.join(CUSTOM_PROTOCOLS)}")
+    base_url = (base_url or "").strip().rstrip("/")
+    if not re.match(r"^https?://[^\s/]+", base_url):
+        raise ValueError("Base URL must start with http:// or https://")
+    data = load()
+    cur = dict(data["custom"].get(pid) or {})
+    cur.update(name=(name or "").strip() or cur.get("name") or pid, protocol=protocol, base_url=base_url)
+    if (api_key or "").strip():
+        cur["api_key"] = api_key.strip()
+    if models is not None:
+        cur["models"] = list(dict.fromkeys(m.strip() for m in models if isinstance(m, str) and m.strip()))
+    cur.setdefault("models", [])
+    cur["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    data["custom"][pid] = cur
+    _save(data)
+    return cur
+
+
+def delete_custom(pid: str) -> bool:
+    data = load()
+    if pid not in data["custom"]:
+        return False
+    del data["custom"][pid]
+    if data["default_provider"] == pid:
+        data["default_provider"] = data["default_model"] = ""
+    _save(data)
+    return True
+
+
+def custom_status(pid: str) -> dict:
+    """Client-safe projection of one custom provider (key masked), shaped like provider_status()
+    plus the custom-only fields the Config UI needs to edit it."""
+    c = load()["custom"].get(pid) or {}
+    return {
+        "provider": pid, "custom": True, "name": c.get("name") or pid,
+        "protocol": c.get("protocol", "openai"), "models": c.get("models", []),
+        "configured": bool(c), "source": "ui" if c else "none",
+        "masked": {"api_key": _mask(c["api_key"])} if c.get("api_key") else {},
+        "fields": {"base_url": c.get("base_url", "")}, "updated_at": c.get("updated_at"),
+    }
 
 
 def delete_provider(provider: str) -> bool:

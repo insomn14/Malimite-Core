@@ -1050,6 +1050,7 @@ async def list_config_providers(request: Request):
     in one list instead of special-casing OAuth separately."""
     _check_auth(request)
     providers = [llm_config.provider_status(p) for p in llm_config.KNOWN_PROVIDERS]
+    providers += [llm_config.custom_status(pid) for pid in llm_config.load()["custom"]]
     oauth_configured = anthropic_oauth.is_configured()
     providers.insert(1, {  # same visual slot as the old upload-form dropdown (right after "claude")
         "provider": "claude-oauth",
@@ -1065,6 +1066,43 @@ async def list_config_providers(request: Request):
         "default_provider": data["default_provider"],
         "default_model": data["default_model"],
     }
+
+
+class CustomProviderRequest(BaseModel):
+    name: str = Field("", max_length=64)
+    protocol: str = Field("openai", max_length=16)
+    base_url: str = Field(max_length=500)
+    api_key: str = Field("", max_length=4096)   # blank on update keeps the stored key
+    models: list[str] = Field(default_factory=list, max_length=500)
+
+
+@app.put("/api/v1/config/custom-providers/{provider_id}")
+async def put_custom_provider(request: Request, provider_id: str, req: CustomProviderRequest):
+    """Creates/updates a user-defined LLM endpoint (OpenAI- or Anthropic-compatible). Its id then
+    works as a provider name in the upload form, AI Assistant and AI Fix like a built-in one."""
+    _check_auth(request)
+    try:
+        llm_config.set_custom(provider_id, name=req.name, protocol=req.protocol, base_url=req.base_url,
+                              api_key=req.api_key, models=[m[:200] for m in req.models])
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"ok": True, "status": llm_config.custom_status(provider_id)}
+
+
+class CustomProbeRequest(BaseModel):
+    protocol: str = Field("openai", max_length=16)
+    base_url: str = Field(max_length=500)
+    api_key: str = Field("", max_length=4096)
+    provider_id: str = Field("", max_length=64)   # editing: reuse that provider's stored key when api_key is blank
+    model: str = Field("", max_length=200)
+
+
+@app.post("/api/v1/config/custom-providers/probe")
+async def probe_custom_provider(request: Request, req: CustomProbeRequest):
+    """"Fetch models" / "Test connection" for the custom-provider dialog (before anything is saved)."""
+    _check_auth(request)
+    key = req.api_key.strip() or (llm_config.get_custom(req.provider_id) or {}).get("api_key", "")
+    return await llm_probe.probe_custom(req.protocol, req.base_url, key, req.model)
 
 
 @app.post("/api/v1/config/providers/{provider}")
@@ -1087,6 +1125,9 @@ async def set_config_provider(request: Request, provider: str, req: LlmProviderC
 @app.delete("/api/v1/config/providers/{provider}", status_code=204)
 async def delete_config_provider(request: Request, provider: str):
     _check_auth(request)
+    if llm_config.get_custom(provider):
+        llm_config.delete_custom(provider)
+        return
     p = _require_known_provider(provider)
     llm_config.delete_provider(p)
 
@@ -1096,7 +1137,8 @@ async def set_config_default(request: Request, req: LlmDefaultRequest):
     """Sets the provider/model the upload form pre-selects. An empty provider clears the
     default (form falls back to the first configured provider)."""
     _check_auth(request)
-    if req.provider and req.provider not in (*llm_config.KNOWN_PROVIDERS, "claude-oauth"):
+    if req.provider and req.provider not in (*llm_config.KNOWN_PROVIDERS, "claude-oauth") \
+            and not llm_config.get_custom(req.provider):
         raise HTTPException(status_code=422, detail=f"Unknown provider '{req.provider}'.")
     data = llm_config.set_default(req.provider, req.model)
     return {"ok": True, "default_provider": data["default_provider"], "default_model": data["default_model"]}
@@ -1326,7 +1368,7 @@ async def chat(request: Request, scan_id: str, req: ChatRequest):
                           req.provider, req.model)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    if any(a.kind == "image" for a in req.attachments) and cfg.provider not in VISION_CAPABLE_PROVIDERS:
+    if any(a.kind == "image" for a in req.attachments) and cfg.provider not in VISION_CAPABLE_PROVIDERS and not cfg.protocol:
         raise HTTPException(status_code=422, detail=(
             f"The '{cfg.provider}' provider does not accept image attachments. "
             f"Switch provider to one of: {', '.join(sorted(VISION_CAPABLE_PROVIDERS))}."))

@@ -9,7 +9,7 @@ import java.util.Map;
  * Creates an {@link LlmProvider} from a config map (env vars).
  *
  * <pre>
- * LLM_PROVIDER          = openai | claude | claude-oauth | deepseek | ollama | bedrock | glm | none (default: none)
+ * LLM_PROVIDER          = openai | claude | claude-oauth | deepseek | ollama | bedrock | glm | custom | none (default: none)
  * OPENAI_API_KEY        = sk-...
  * ANTHROPIC_API_KEY     = sk-ant-...            (required for provider=claude)
  * DEEPSEEK_API_KEY      = sk-...
@@ -21,6 +21,9 @@ import java.util.Map;
  * BEDROCK_MODEL_ID      = anthropic.claude-...   (optional override; falls back to LLM_MODEL)
  * GLM_API_KEY           = ...                    (required for provider=glm)
  * GLM_BASE_URL          = https://open.bigmodel.cn/api/paas/v4  (optional override)
+ * CUSTOM_PROTOCOL      = openai | anthropic     (provider=custom: user-defined endpoint, Config tab)
+ * CUSTOM_BASE_URL       = https://host/v1        (provider=custom; /chat/completions or /messages is appended)
+ * CUSTOM_API_KEY        = ...                    (provider=custom; optional for keyless local gateways)
  * LLM_MODEL             = override default model id
  * LLM_MAX_TOKENS        = 4096   (default; raise if FIND_VULNS responses truncate)
  * </pre>
@@ -97,6 +100,15 @@ public final class LlmProviderFactory {
                 String base = cfg.getOrDefault("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4");
                 log.info("LLM provider: GLM model={} base={}", model.isBlank() ? "glm-4.6" : model, base);
                 yield new GlmProvider(key, model, maxTokens, base);
+            }
+            case "custom" -> {
+                String base = cfg.getOrDefault("CUSTOM_BASE_URL", "").replaceAll("/+$", "");
+                if (base.isBlank()) throw new IllegalStateException("CUSTOM_BASE_URL missing");
+                String key = cfg.getOrDefault("CUSTOM_API_KEY", "");
+                boolean anthropic = "anthropic".equalsIgnoreCase(cfg.getOrDefault("CUSTOM_PROTOCOL", "openai"));
+                log.info("LLM provider: custom ({}) model={} base={}", anthropic ? "anthropic" : "openai", model, base);
+                yield anthropic ? new ClaudeProvider(key, model, maxTokens, base + "/messages")
+                                : new OpenAiProvider(key, model, maxTokens, base + "/chat/completions");
             }
             default -> null; // "none" or unknown
         };

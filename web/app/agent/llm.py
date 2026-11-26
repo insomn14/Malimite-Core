@@ -20,7 +20,7 @@ import httpx
 
 from .. import scanner
 from ..config import settings
-from . import anthropic_oauth, aws_eventstream, aws_sigv4
+from . import anthropic_oauth, aws_eventstream, aws_sigv4, llm_config
 
 _log = logging.getLogger("malimite")
 
@@ -100,14 +100,29 @@ class LlmCfg:
     aws_access_key_id: str = ""
     aws_secret_access_key: str = ""
     aws_region: str = ""
+    # Custom (Config tab "Custom Model API") providers only: "openai" or "anthropic" wire format.
+    # base_url is then the full prefix the user entered (version path included).
+    protocol: str = ""
+
+
+def _resolve_custom(pid: str, model: str) -> LlmCfg:
+    c = llm_config.get_custom(pid)
+    if not c:
+        raise LlmError(f"Custom provider '{pid}' is not configured on the server.")
+    m = model or (c.get("models") or [""])[0]
+    if not m:
+        raise LlmError(f"Custom provider '{pid}' has no model; add one in the Config tab or pick it in the Assistant.")
+    return LlmCfg(pid, m, c.get("api_key", ""), c["base_url"].rstrip("/"), protocol=c.get("protocol", "openai"))
 
 
 def resolve_llm(scan_provider: str, scan_model: str,
                 provider: Optional[str] = None, model: Optional[str] = None) -> LlmCfg:
     """Scan's provider/model unless overridden; key only from server settings (never meta.json)."""
-    p = (provider or "").strip().lower() or (scan_provider if scan_provider in PROVIDERS else "") \
-        or (settings.llm_provider if settings.llm_provider in PROVIDERS else "")
-    if p not in PROVIDERS:
+    def known(x: str) -> bool:
+        return x in PROVIDERS or llm_config.get_custom(x) is not None
+    p = (provider or "").strip().lower() or (scan_provider if known(scan_provider) else "") \
+        or (settings.llm_provider if known(settings.llm_provider) else "")
+    if not known(p):
         raise LlmError("No LLM provider configured for this scan; choose one in the Assistant tab.")
     # a model saved for another provider is meaningless: inherit only when the provider matches
     m = (model or "").strip()
@@ -115,6 +130,8 @@ def resolve_llm(scan_provider: str, scan_model: str,
         m = scan_model
     if not m and p == settings.llm_provider:
         m = settings.llm_model
+    if p not in PROVIDERS:
+        return _resolve_custom(p, m)
     m = m or _DEFAULT_MODEL[p]
     env = scanner.llm_env(p)
     # claude-oauth's "key" is a short-lived access token resolved per-request in
@@ -380,8 +397,8 @@ async def chat_step(cfg: LlmCfg, system: str, messages: list[dict], tools: list[
                 await client.aclose()
         return
 
-    if cfg.provider in ("claude", "claude-oauth"):
-        url = f"{cfg.base_url}/v1/messages"
+    if cfg.provider in ("claude", "claude-oauth") or cfg.protocol == "anthropic":
+        url = f"{cfg.base_url}/messages" if cfg.protocol else f"{cfg.base_url}/v1/messages"
         if cfg.provider == "claude-oauth":
             # Resolved per-call (not in resolve_llm, which is sync): the access token can
             # expire mid-session and refreshing it needs an await. The Messages API only
@@ -423,7 +440,7 @@ async def chat_step(cfg: LlmCfg, system: str, messages: list[dict], tools: list[
             body["tool_choice"] = {"type": "none"}
         parse = parse_anthropic
     else:
-        url = f"{cfg.base_url}/v1/chat/completions"
+        url = f"{cfg.base_url}/chat/completions" if cfg.protocol else f"{cfg.base_url}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {cfg.api_key}"} if cfg.api_key else {}
         body = {"model": cfg.model, "stream": True, "max_tokens": settings.chat_max_output_tokens,
                 "messages": to_openai(system, messages), "tools": _tools_openai(tools)}
