@@ -15,7 +15,7 @@ Token visual sama dengan `web/index.html` (`--accent #4f46e5`, radius 8/14px, sy
 | 5 | Finding detail + Dynamic Evidence | Tab Vulnerabilities | Badge verdict, bukti (event/flow), Re-test, Override verdict, riwayat verdict |
 | 6 | Probe Library | Nav baru **Probes** | Filter, detail, intrusiveness, draft AI "needs review" |
 | 7 | Traffic inspector | Sub-view session | Filter/search, nilai sensitif ter-mask, Mark as evidence, replay read-only |
-| 8-10 | Compare, AI Assistant (kartu konfirmasi `start_session` / `propose_probe`), bagian HTML report | | Pelengkap |
+| 8-10 | Compare, AI Assistant (kartu konfirmasi `start_session` / `propose_probe`), HTML report dengan seksi Dynamic Verification | | Pelengkap |
 | 11 | Vulnerabilities + eskalasi | Tab Vulnerabilities | Kolom verdict dinamis, filter verdict, "Verify dynamically" per baris dan batch, drawer 3 langkah (Review, Test plan, Authorize) |
 | 12-13 | PoC console + PoC results | Mode fokus, lalu tab Dynamic | Checklist langkah PoC, pin evidence, draft PocSteps dengan diff, saran triage |
 | 14 | AI agent (mode izin) | Tab AI Assistant, sub-view "Dynamic agent", dan panel di Live console | Plan / Ask / Accept edits / Bypass, tool-call card, safety floor, budget, action log |
@@ -38,6 +38,16 @@ Token visual sama dengan `web/index.html` (`--accent #4f46e5`, radius 8/14px, sy
 - **Safety floor (selalu aktif, 8 butir):** (a) consent tetap manusia, (b) scope dikunci ke package scan dan allowlist, (c) Stop agent dan Stop & detach selalu hidup, (d) probe High hanya jika manusia mengaktifkan di launcher, (e) redaksi tetap berlaku, (f) tanpa shell atau JS bebas, probe hash-pinned, (g) budget 40 aksi dan 15 menit, (h) audit log berisi siapa yang menyetujui.
 - **Bypass:** butuh dialog konfirmasi + centang, hanya untuk device berlabel lab/emulator, banner merah permanen + chip di nav, turun ke Ask satu klik. Otomatis kembali ke Plan saat device terputus, budget habis, atau consent dicabut.
 - **Rule ID di mockup** diambil dari `AndroidVulnerabilityCatalog` (`MASTG-TEST-xxxx`), `VulnerabilityCatalog` (iOS `MSTG-*`), dan `AssessmentScanner` (`ASSESS-*`). Judul, severity, CVSS, dan CWE sama dengan katalog.
+
+## Report: Dynamic Verification dan PoC oleh AI agent (layar 10)
+
+- **Opsi report** (panel di layar 10 dan di Downloads): sertakan seksi dinamis, detail PoC AI, action log, kutipan traffic/event (disamarkan), bahasa ID/EN/Bilingual, dan transkrip chat sebagai opsi terpisah dengan peringatan data sensitif.
+- **Draf AI yang belum di-accept manusia tidak pernah tampil sebagai final.** Pengguna memilih eksplisit: dikecualikan (default) atau disertakan dengan label "Unreviewed AI draft" dan watermark di halaman.
+- **Label atribusi AI selalu ikut** ("Executed with AI agent assistance", mode izin, reviewer + waktu) dan tidak bisa dimatikan; opsi hanya mengatur kedalaman detail.
+- **Lampiran A (AI Agent Activity):** jumlah aksi per tier, aksi yang diblok safety floor (aturan a-h), anggaran, pernyataan transparansi, lalu daftar aksi dengan approver. Sesi Bypass punya kotak merah di cover, seksi dinamis, dan lampiran. Sesi manual hanya menampilkan "Manual session".
+- **Consent** tampil di cover dan lembar persetujuan (siapa, waktu, versi pernyataan, catatan scope, baris tanda tangan reviewer).
+- **Kompatibilitas:** untuk scan tanpa sesi dinamis, output report harus identik dengan versi sekarang (tanpa seksi, lampiran, atau baris consent baru). Mockup menampilkan ini sebagai skenario "No dynamic analysis".
+- **Navigasi:** layar 13 dan 14 punya "Add to report" dan "Preview in report" yang membuka layar 10 pada anchor finding. Cetak/PDF memakai `@page` A4 dan satu halaman per `.rpage`; diverifikasi lewat `page.pdf()` (jumlah halaman PDF sama dengan jumlah halaman report).
 
 ## Temuan penting tentang token existing
 

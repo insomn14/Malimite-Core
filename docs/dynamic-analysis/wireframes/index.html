@@ -452,6 +452,64 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
 .scn .btn{background:#fff;color:#1a1d23;border-color:#b45309;padding:.15rem .5rem;font-size:.7rem}
 .live-grid.ai-open{grid-template-columns:280px minmax(0,1fr) 400px}
 @media(max-width:1279px){.live-right #ag-side-wrap{grid-column:1/-1}.live-grid.ai-open{grid-template-columns:260px minmax(0,1fr)}}
+
+/* ===== NEW: report (screen 10) ===== */
+.rpt-layout{display:grid;grid-template-columns:350px minmax(0,1fr);gap:1rem;align-items:start}
+@media(max-width:1180px){.rpt-layout{grid-template-columns:1fr}}
+.rpt-opts{position:sticky;top:68px}
+@media(max-width:1180px){.rpt-opts{position:static}}
+.opt-sec{border:0;margin:0 0 .9rem;min-width:0}
+.opt-sec legend{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#4b5563;margin-bottom:.35rem}
+.opt-row{display:flex;gap:.5rem;align-items:flex-start;padding:.3rem 0}
+.opt-row .switch{align-items:flex-start}
+.opt-row .switch .track{margin-top:.1rem}
+.opt-row .d{display:block;font-size:.72rem;color:var(--muted);font-weight:400}
+.opt-row.dis{opacity:.55}
+.rpt-status{font-size:.76rem;margin-top:.5rem;display:flex;gap:.4rem;align-items:center}
+.rpages{display:flex;flex-direction:column;gap:18px;transition:opacity .15s}
+.rpages.stale{opacity:.5}
+.rpages[data-lang=id] .l-en,.rpages[data-lang=id] .l-sep{display:none}
+.rpages[data-lang=en] .l-id,.rpages[data-lang=en] .l-sep{display:none}
+.rpages[data-lang=both] .l-en{color:#4b5563}
+.rpage{background:#fff;color:#111;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:26px 32px 18px;width:100%;max-width:794px;margin:0 auto;display:flex;flex-direction:column;min-height:1040px;font-family:Georgia,'Times New Roman',serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.rpage .rh,.rpage .rf{display:flex;justify-content:space-between;gap:1rem;font-family:system-ui,sans-serif;font-size:.66rem;color:#4b5563}
+.rpage .rh{border-bottom:1px solid #cbd5e1;padding-bottom:.4rem;margin-bottom:.9rem}
+.rpage .rf{border-top:1px solid #cbd5e1;padding-top:.4rem;margin-top:auto}
+.rpage .rb{padding-bottom:.8rem;flex:0 0 auto}
+.rpage h1.rt{font-family:system-ui,sans-serif;font-size:1.7rem;line-height:1.2;margin:.3rem 0}
+.rpage h2{font-family:system-ui,sans-serif;font-size:1.05rem;border-bottom:2px solid #111;padding-bottom:.25rem;margin-bottom:.6rem}
+.rpage h3{font-family:system-ui,sans-serif;font-size:.8rem;margin:.8rem 0 .3rem}
+.rpage p,.rpage li{font-size:.78rem;line-height:1.5}
+.rpage ol{margin-left:1.2rem}
+.rpage .ey{font-family:system-ui,sans-serif;font-size:.7rem;letter-spacing:.08em;color:#4b5563;font-weight:700}
+.rpage .rs{font-family:system-ui,sans-serif;font-size:.85rem;color:#374151}
+.rpage table{width:100%;border-collapse:collapse;font-family:system-ui,sans-serif;font-size:.7rem;margin:.3rem 0}
+.rpage th,.rpage td{border:1px solid #cbd5e1;padding:.25rem .4rem;text-align:left;vertical-align:top}
+.rpage th{background:#f1f5f9}
+.rpage .box{border:1px solid #94a3b8;border-left:4px solid #0284c7;background:#f0f9ff;padding:.4rem .6rem;font-family:system-ui,sans-serif;font-size:.74rem;margin:.5rem 0}
+.rpage .box.warn{border-left-color:#b45309;background:#fffbeb}
+.rpage .box.bypass{border:2px solid #991b1b;border-left-width:6px;background:#fef2f2;color:#7f1d1d;font-weight:600}
+.rpage .box.draft{border:2px dashed #b45309;background:#fffbeb;color:#78350f;font-weight:600}
+.rpage .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem;margin:.4rem 0}
+.rpage .kpi{border:1px solid #cbd5e1;border-radius:6px;padding:.35rem .5rem;font-family:system-ui,sans-serif}
+.rpage .kpi b{font-size:1.1rem;display:block}
+.rpage .sig td{height:2.2rem}
+.rpage .chipm{display:inline-block;border:1px solid #64748b;border-radius:999px;padding:0 .4rem;font-family:system-ui,sans-serif;font-size:.64rem;font-weight:700}
+.rpage .mono{font-family:ui-monospace,monospace}
+.rpage.flash{outline:3px solid var(--accent);outline-offset:2px}
+.rpage tr.flash td{background:#eef0ff}
+.rpage .m{display:inline-flex;gap:.2rem;align-items:center}
+@media print{
+  @page{size:A4;margin:16mm 14mm}
+  html,body{background:#fff!important}
+  nav.app-nav,.wf-bar,#scanctx,.rpt-chrome,.skip,.toast,.overlay,.esc-ov,.screen:not(#s-report){display:none!important}
+  main{padding:0!important;max-width:none!important}
+  .rpt-layout{display:block}
+  .rpages{display:block}
+  .rpages.stale{opacity:1}
+  .rpage{border:0;border-radius:0;box-shadow:none;padding:0;margin:0;width:auto;max-width:none;height:262mm;min-height:262mm;overflow:hidden;break-after:page}
+  .rpage:last-child{break-after:auto}
+}
 </style>
 </head>
 <body>
@@ -855,27 +913,40 @@ fs.snapshot                v0.9.1  medium</pre></details>
 </section>
 
 <!-- ===================== 10. REPORT ===================== -->
-<section class="screen" id="s-report" data-title="HTML report section" hidden>
-  <div class="page-head"><h1>HTML report — Dynamic Analysis section</h1><p class="sub">Static mock of the section appended to the existing report (same file as SARIF-equivalent content, self-contained, no scripts).</p></div>
-  <article class="report">
-    <h2>6. Dynamic Analysis</h2>
-    <h3>6.1 Authorization &amp; provenance</h3>
-    <table><tr><th>Session</th><td>#3 (2025-06-12 14:02–14:14 UTC, 12 min)</td><th>Authorized by</th><td>jane.doe · ref ENG-2291 · confirmed 14:02</td></tr>
-      <tr><th>Device</th><td>Pixel_7_API_34 (emulator, Android 14, frida-server 16.5.2)</td><th>Mode</th><td>Guided · 17 probes · max intrusiveness Medium</td></tr>
-      <tr><th>Build</th><td>com.example.bank 4.2.0 (sha256 3c1e…a9)</td><th>Triggered by</th><td>Manual (UI)</td></tr></table>
-    <h3>6.2 Verdict summary</h3>
-    <table><tr><th>Verdict</th><th>Count</th><th>Meaning</th></tr>
-      <tr><td>■ CONFIRMED</td><td>5</td><td>Behaviour observed at runtime; evidence referenced below.</td></tr>
-      <tr><td>⊘ NOT_REPRODUCED</td><td>3</td><td>Probe was active and the flow was exercised, nothing observed. This is not proof the issue is absent.</td></tr>
-      <tr><td>? INCONCLUSIVE</td><td>2</td><td>Probe fired but evidence is ambiguous.</td></tr>
-      <tr><td>○ NOT_TESTED</td><td>13</td><td>No matching probe, or the code path was not exercised.</td></tr></table>
-    <h3>6.3 Confirmed findings</h3>
-    <table><tr><th>Rule</th><th>Finding</th><th>Evidence</th></tr>
-      <tr><td>MASTG-TEST-0287<br>MEDIUM · CWE-312</td><td>Runtime Storage of Unencrypted Data via SharedPreferences API</td><td>E-0412 SharedPreferences$Editor.putString file=auth_prefs.xml key=auth_token value=[redacted sha256:9f2c…] at 00:03:41</td></tr>
-      <tr><td>MASTG-TEST-0235<br>HIGH · CWE-319</td><td>Android App Configurations Allowing Cleartext Traffic</td><td>F-0133 POST http://telemetry.bank.example/collect → 204 (cleartext, 1 flow)</td></tr></table>
-    <div class="note"><b>Redaction.</b> Tokens, cookies, card numbers and e-mail addresses are masked in this report. Raw values are available in the session bundle to users with the “reveal” permission.</div>
-    <div class="note"><b>Limitations.</b> Dynamic results depend on which screens were exercised. 13 findings were not tested; absence of a CONFIRMED verdict does not mean the application is safe.</div>
-  </article>
+<section class="screen" id="s-report" data-title="HTML report with dynamic verification" hidden>
+  <div class="page-head rpt-chrome"><h1>HTML report</h1>
+    <div class="head-actions"><label class="wf-state">Preview scenario <select id="rpt-sc"><option value="ai-ask">AI agent · Accept edits (1 PoC unreviewed)</option><option value="ai-blocked">AI agent · Ask (2 actions blocked)</option><option value="ai-bypass">AI agent · Bypass on lab emulator</option><option value="manual">Manual session (no AI)</option><option value="none">No dynamic analysis</option></select></label>
+      <button class="btn btn-outline" type="button" id="rpt-print">Print / save as PDF</button></div>
+    <p class="sub">Same bilingual A4 report as today (cover, executive summary, findings, approval sheet) with an optional Dynamic Verification section and an AI Agent Activity appendix. The same options live in Downloads → HTML Report → Options.</p></div>
+  <div class="rpt-layout">
+    <aside class="card rpt-opts rpt-chrome" aria-labelledby="rpt-oh">
+      <div class="card-title" id="rpt-oh">Report options</div>
+      <div id="rpt-session" class="muted" style="font-size:.76rem;margin:-.3rem 0 .8rem"></div>
+      <fieldset class="opt-sec"><legend>Dynamic content</legend>
+        <div class="opt-row" data-r="dyn"><label class="switch"><input type="checkbox" data-o="dyn" checked><span class="track"></span><span><b>Include dynamic verification section</b><span class="d">Methodology, verdict summary, per-finding PoC blocks.</span></span></label></div>
+        <div class="opt-row" data-r="aiPoc"><label class="switch"><input type="checkbox" data-o="aiPoc" checked><span class="track"></span><span><b>Include AI agent PoC details</b><span class="d">Plan, tools used, approvals per finding.</span></span></label></div>
+        <div class="opt-row" data-r="log"><label class="switch"><input type="checkbox" data-o="log" checked><span class="track"></span><span><b>Include agent action log</b><span class="d">Every action with its approver (Appendix A).</span></span></label></div>
+        <div class="opt-row" data-r="exc"><label class="switch"><input type="checkbox" data-o="exc" checked><span class="track"></span><span><b>Include traffic / event excerpts</b><span class="d">Redacted by default. Raw values need the “reveal” permission and are not offered here.</span></span></label></div>
+        <p class="muted" style="font-size:.72rem;margin-top:.2rem">The AI attribution label on each PoC is always included when an agent was used. It cannot be turned off.</p>
+      </fieldset>
+      <fieldset class="opt-sec"><legend>AI PoC drafts not reviewed by a human</legend>
+        <div id="rpt-unrev"></div>
+      </fieldset>
+      <fieldset class="opt-sec"><legend>Chat transcript</legend>
+        <div class="opt-row" data-r="tr"><label class="switch"><input type="checkbox" data-o="tr"><span class="track"></span><span><b>Include chat transcript</b><span class="d">Off by default. Separate from the action log.</span></span></label></div>
+        <div id="rpt-tr-warn"></div>
+      </fieldset>
+      <fieldset class="opt-sec"><legend>Language</legend>
+        <label class="fl">Default language of the file<select data-o="lang" id="rpt-lang"><option value="both">Bilingual (ID + EN)</option><option value="id">Bahasa Indonesia</option><option value="en">English</option></select></label>
+      </fieldset>
+      <button class="btn btn-primary" type="button" id="rpt-gen" style="width:100%;justify-content:center"><svg class="ico"><use href="#i-refresh"/></svg> <span id="rpt-gen-t">Regenerate report</span></button>
+      <div class="rpt-status" id="rpt-status" role="status" aria-live="polite"></div>
+    </aside>
+    <div style="min-width:0">
+      <div class="alert alert-warn rpt-chrome" id="rpt-stale" hidden><svg class="ico"><use href="#i-alert"/></svg><div><b>Options changed.</b> The preview shows the previous output. Regenerate to apply.</div></div>
+      <div class="rpages" id="rpt-pages" data-lang="both" aria-label="Report preview"></div>
+    </div>
+  </div>
 </section>
 
 <!-- ===================== 11. VULNERABILITIES + ESCALATION ===================== -->
@@ -976,7 +1047,7 @@ function announce(m){$('#live-announce').textContent=m}
 
 /* ---------- router ---------- */
 const ORDER=['devices','launcher','live','results','finding','probes','traffic','compare','assistant','report','vulns','poc','pocresult','agent'];
-function show(id){
+function show(id,param){
   if(!ORDER.includes(id)) id='devices';
   const sec=id==='poc'?'live':id;
   $$('.screen').forEach(s=>s.hidden=s.id!=='s-'+sec);
@@ -995,12 +1066,13 @@ function show(id){
   if(id==='vulns')renderVulns();
   if(id==='pocresult')renderPocResult();
   if(id==='agent')renderAgent();
+  if(id==='report')renderReport(param);
   if(id==='results')renderResults();
   if(id==='finding')renderFinding();
   if(id==='probes')renderProbes();
   if(id==='traffic')renderTraffic();
 }
-function route(){show((location.hash||'#devices').slice(1))}
+function route(){const[h,par]=(location.hash||'#devices').slice(1).split(':');show(h,par)}
 window.addEventListener('hashchange',()=>{route();$('#main').focus({preventScroll:true})});
 $$('a[data-inert]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();toast('Not part of this wireframe')}));
 document.addEventListener('click',e=>{const b=e.target.closest('[data-toast]');if(b)toast(b.dataset.toast)});
@@ -1789,7 +1861,7 @@ function pocCard(id){
      ${d.accepted?`<div class="alert alert-ok" style="margin:.6rem 0 0">${ico('check')}<div><b>Override active.</b> The report and Vulnerabilities now show the drafted steps. The original stays stored.</div><div class="acts"><button class="btn btn-ghost btn-sm" type="button" data-pr="revert" data-id="${id}">Revert to original</button></div></div>`
       :`<div style="display:flex;gap:.5rem;margin-top:.6rem;flex-wrap:wrap"><button class="btn btn-primary" type="button" data-pr="accept" data-id="${id}">${ico('check')} Accept draft (saves as override)</button><button class="btn btn-ghost" type="button" data-pr="discard" data-id="${id}">Discard</button></div><p class="muted" style="font-size:.72rem;margin-top:.3rem">Reversible, like AI Fix: the original PocSteps are never edited.</p>`}`;
   }
-  return `<div class="card"><div class="card-title">${sevB(f)}<span class="mono" style="font-size:.8rem">${f.id}</span><span>${esc(f.t)}</span><span class="sp">${verdict(v)}</span></div>
+  return `<div class="card"><div class="card-title">${sevB(f)}<span class="mono" style="font-size:.8rem">${f.id}</span><span>${esc(f.t)}</span><span class="sp">${verdict(v)} <a class="btn-link" href="#report:${id}">Preview in report</a></span></div>
    <p style="font-size:.82rem;margin-bottom:.6rem">${esc(MEAN[v])}${v==='notrepro'?' <b>Not reproduced does not mean safe.</b>':''}</p>
    <div class="vuln-section-title">Evidence</div>${ev}<div class="vuln-section-title" style="margin-top:1rem">PoC steps</div>${poc}</div>`;
 }
@@ -1807,7 +1879,7 @@ function renderPocResult(){
   $('#pr-body').innerHTML=`<div class="alert alert-info">${ico('shield')}<div><b>Nothing has changed in triage.</b> Verdicts are evidence for you to review. Accepting PoC steps or applying a triage suggestion is a separate step you confirm.</div></div>
    <div class="card" style="margin-bottom:1rem"><div class="card-title">Session #4 · PoC <span class="sp">Pixel_7_API_34 · Guided · authorized by you (ENG-2291) · ${POC.pins.length} pinned events</span></div>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap">${POC.ids.map(id=>`<span>${verdict(POC.verdicts[id]||F(id).v)} <span class="mono" style="font-size:.74rem">${id}</span></span>`).join('')}</div>
-    <p class="muted" style="font-size:.76rem;margin-top:.5rem">Vulnerabilities was updated with these verdicts. <a href="#vulns">See the list</a>.</p></div>`
+    <p class="muted" style="font-size:.76rem;margin-top:.5rem">Vulnerabilities was updated with these verdicts. <a href="#vulns">See the list</a>.</p><div style="margin-top:.6rem">${rptCard()}</div></div>`
    +POC.ids.map(pocCard).join('')
    +`<div class="card"><div class="card-title">Apply verdict to triage <span class="sp">suggestions only</span></div><div class="tbl-wrap"><table class="t"><caption class="sr">Triage suggestions</caption><thead><tr><th>Finding</th><th>Verdict</th><th>Suggested change</th><th>Action</th></tr></thead><tbody>${POC.ids.map(triageSug).join('')}</tbody></table></div></div>`;
 }
@@ -1932,6 +2004,7 @@ function toolHtml(c){
   return `<div class="tcard ${c.status}"><div class="top"><span class="tier tier-${c.tier}">${ico(TIER[c.tier][0])}${TIER[c.tier][1]}</span><span class="tool">${esc(c.tool)}(${esc(c.target)})</span>${c.intr?intr(c.intr):''}<span class="st st-${s[0]}">${ico(s[1],c.status==='running'?'spin':'')}${s[2]}</span>${auto&&c.status!=='planned'?'<span class="st st-auto">Auto-approved</span>':''}</div>
    <div class="muted" style="font-size:.72rem;margin-top:.2rem">Expected: ${esc(c.exp)}</div>
    ${c.status==='done'?`<div class="by">Result: ${esc(c.res)}</div>`:''}
+   ${c.status==='done'&&c.tool==='draft_poc_steps'?`<div class="by"><a href="#report:MASTG-TEST-0232">Preview in report</a></div>`:''}
    ${c.by?`<div class="by">${BY[c.by]}</div>`:''}
    ${c.floor?`<div class="by" style="color:#7f1d1d"><b>Blocked by safety floor (rule ${c.floor.rule}).</b> ${esc(c.floor.txt)}</div><div class="acts">${c.floor.canAsk?(c.asked?`<span class="chip">${ico('check')}Request sent to you</span>`:`<button class="btn btn-outline btn-sm" type="button" data-ag="req" data-id="${c.id}">Ask a human to enable</button>`):''}</div>`:''}
    ${c.status==='pending'?`<div class="acts"><button class="btn btn-primary btn-sm" type="button" data-ag="approve" data-id="${c.id}">${ico('check')} Approve</button><button class="btn btn-ghost btn-sm" type="button" data-ag="deny" data-id="${c.id}">Deny</button></div>`:''}</div>`;
@@ -1984,8 +2057,8 @@ function agHtml(v){
   const floor=`<details class="panel" data-d="floor" ${isOpen('floor',v)?'open':''}><summary class="panel-h" style="cursor:pointer">${ico('lock')} Always enforced (8)<span class="sp">in every mode</span></summary><div class="panel-b">${floorHtml()}</div></details>`;
   const logp=`<details class="panel" data-d="log" ${isOpen('log',v)?'open':''}><summary class="panel-h" style="cursor:pointer">${ico('file')} Action log<span class="sp">who approved</span></summary><div class="panel-b">${logHtml()}</div></details>`;
   const bud=`<section class="panel"><div class="panel-h">${ico('pulse')} Budget</div><div class="panel-b" data-budget>${budHtml()}</div></section>`;
-  if(side)return `<div class="ag side">${head}${ban}${feed}${composerHtml(v)}${bud}${floor}${logp}<details class="panel" data-d="mx" ${isOpen('mx',v)?'open':''}><summary class="panel-h" style="cursor:pointer">What each mode allows</summary><div class="panel-b">${matrixHtml()}</div></details><details class="panel" data-d="scn" ${isOpen('scn',v)?'open':''}><summary class="panel-h" style="cursor:pointer">Wireframe controls</summary><div class="panel-b">${scnHtml(v)}</div></details></div>`;
-  return `<div class="ag full">${head}${ban}<div class="ag-grid"><div style="display:flex;flex-direction:column;gap:.7rem;min-width:0">${feed}${composerHtml(v)}</div><aside style="display:flex;flex-direction:column;gap:.6rem">${bud}<section class="panel"><div class="panel-h">What each mode allows</div><div class="panel-b">${matrixHtml()}</div></section>${floor}${logp}${scnHtml(v)}</aside></div></div>`;
+  if(side)return `<div class="ag side">${head}${ban}${feed}${composerHtml(v)}${bud}<div>${rptCard()}</div>${floor}${logp}<details class="panel" data-d="mx" ${isOpen('mx',v)?'open':''}><summary class="panel-h" style="cursor:pointer">What each mode allows</summary><div class="panel-b">${matrixHtml()}</div></details><details class="panel" data-d="scn" ${isOpen('scn',v)?'open':''}><summary class="panel-h" style="cursor:pointer">Wireframe controls</summary><div class="panel-b">${scnHtml(v)}</div></details></div>`;
+  return `<div class="ag full">${head}${ban}<div class="ag-grid"><div style="display:flex;flex-direction:column;gap:.7rem;min-width:0">${feed}${composerHtml(v)}</div><aside style="display:flex;flex-direction:column;gap:.6rem">${bud}<section class="panel"><div class="panel-b">${rptCard()}</div></section><section class="panel"><div class="panel-h">What each mode allows</div><div class="panel-b">${matrixHtml()}</div></section>${floor}${logp}${scnHtml(v)}</aside></div></div>`;
 }
 function renderAgent(){
   const ae=document.activeElement,fk=ae&&ae.dataset&&ae.dataset.fk;
@@ -2044,6 +2117,236 @@ agBind($('#ag-full'));agBind($('#ag-side-body'));
 document.addEventListener('click',e=>{const b=e.target.closest('#live-ag-banner [data-ag]');if(b)agAct(b)});
 $('#btn-ai').onclick=()=>{AG.sideOpen=!AG.sideOpen;applySide();if(AG.sideOpen)renderAgent()};
 agentReset();
+
+/* ====================== NEW: report with dynamic verification ====================== */
+const RPT={sc:'ai-ask',stale:false,added:false,busy:false,gen:'14:40',opts:{dyn:true,aiPoc:true,log:true,exc:true,tr:false,lang:'both',unrev:'exclude'}};
+const T=(id,en)=>`<span class="l-id">${id}</span><span class="l-sep"> / </span><span class="l-en">${en}</span>`;
+const BL={
+ d:{t:'00:09:12',tool:'load_probe',target:'net.pinning.bypass',rule:'d',why:'High-intrusiveness probe not enabled by a person at launch'},
+ b:{t:'00:09:40',tool:'device_launch',target:'com.other.app',rule:'b',why:'Out of scope: not the app under test (com.example.bank)'}};
+const SC={
+ 'ai-ask':{ai:true,perm:'Accept edits',blocked:[],bypass:false,planBy:'approved by jane.doe, 14:06 UTC'},
+ 'ai-blocked':{ai:true,perm:'Ask',blocked:[BL.d,BL.b],bypass:false,planBy:'approved by jane.doe, 14:06 UTC'},
+ 'ai-bypass':{ai:true,perm:'Bypass permissions',blocked:[BL.b],bypass:true,planBy:'approved by jane.doe, 14:06 UTC (then switched to Bypass)'},
+ 'manual':{ai:false,perm:null,blocked:[],bypass:false},
+ 'none':{dyn:false,ai:false}};
+const POCS={
+ 'MASTG-TEST-0232':{conf:'High',why:'2 independent events (Cipher.getInstance and Cipher.doFinal)',def:true,when:'2025-06-12 14:31 UTC',
+  steps:['Install com.example.bank 4.2.0 on a rooted emulator and load probe crypto.cipher v1.4.0.','Launch the app and sign in with the test account.','Observe Cipher.getInstance("AES/ECB/PKCS5Padding") called from com.example.bank.data.CardVault.encrypt (E-0031, 00:00:14).','Observe Cipher.doFinal ENCRYPT with the same transformation, key length 16 B (E-0032, 00:00:14).','Result: ECB mode is used at runtime. Remediation: use AES/GCM/NoPadding.'],
+  ev:[['E-0031','00:00:14.220','FRIDA','javax.crypto.Cipher.getInstance · AES/ECB/PKCS5Padding · caller CardVault.encrypt'],['E-0032','00:00:14.310','FRIDA','Cipher.doFinal · ENCRYPT · key 16 B (value not stored)']],
+  plan:'9 steps, 0 Active probes. Tools: get_finding, list_probes, load_probe(crypto.cipher), ask_user, screenshot, session_events, pin_evidence, draft_poc_steps.'},
+ 'MASTG-TEST-0287':{conf:'High',why:'3 evidence types (SharedPreferences write, new file in sandbox, login response)',def:false,when:null,
+  steps:['Install com.example.bank 4.2.0 on a rooted emulator and load probes storage.sharedprefs.write v1.2.0 and fs.snapshot v0.9.1.','Launch the app and sign in with the test account.','Observe SharedPreferences$Editor.putString with key auth_token in auth_prefs.xml (E-0412, 00:03:41).','Observe the new file shared_prefs/auth_prefs.xml, mode 0660 (E-0413, 00:03:41).','Result: the auth token is stored in plaintext SharedPreferences. Remediation: use EncryptedSharedPreferences or Keystore-backed storage.'],
+  ev:[['E-0412','00:03:41.220','FRIDA','SharedPreferences$Editor.putString · file=auth_prefs.xml key=auth_token value=[sha256:9f2c…a41e]'],['E-0413','00:03:41.231','FS','+ shared_prefs/auth_prefs.xml (new, 1.1 KB, mode 0660)'],['F-0131','00:03:40.870','HTTP','POST api.bank.example/v2/auth/login → 200 · Authorization: Bearer [masked]']],
+  plan:'Draft produced by the agent from pinned events E-0412 and E-0413.'},
+ 'MASTG-TEST-0235':{conf:'Medium',why:'1 flow (cleartext request)',def:true,manual:true,
+  steps:['Start a guided session with probe net.okhttp.trace v1.3.0.','Sign in and open Statements.','Observe POST http://telemetry.bank.example/collect → 204 (F-0133, 00:04:51).','Result: the app sends cleartext HTTP. Remediation: set usesCleartextTraffic=false.'],
+  ev:[['F-0133','00:04:51.402','HTTP','POST telemetry.bank.example/collect → 204 · cleartext · body [masked]']],plan:''}};
+const RT_AI=[['MASTG-TEST-0232','confirmed'],['MASTG-TEST-0287','confirmed'],['MASTG-TEST-0242','inconcl'],['MASTG-TEST-0364','notrepro'],['MASTG-TEST-0217','nottested'],['MASTG-TEST-0326','nottested'],['MASTG-TEST-0212b','nottested']];
+const RT_MAN=[['MASTG-TEST-0287','confirmed'],['MASTG-TEST-0235','confirmed'],['MASTG-TEST-0334','confirmed'],['MASTG-TEST-0202','confirmed'],['MASTG-TEST-0231','confirmed'],['MASTG-TEST-0242','inconcl'],['MASTG-TEST-0232','inconcl'],['MASTG-TEST-0217','notrepro'],['MASTG-TEST-0233','notrepro'],['MASTG-TEST-0227','notrepro'],['MASTG-TEST-0364','nottested'],['MASTG-TEST-0326','nottested'],['MASTG-TEST-0212b','nottested']];
+const sc=()=>SC[RPT.sc];
+function pocReviewed(id){const d=POC.drafts[id];if(sc().ai&&d&&d.shown)return !!d.accepted;return POCS[id].def}
+function pocList(){return sc().ai?['MASTG-TEST-0232','MASTG-TEST-0287']:sc().dyn===false?[]:['MASTG-TEST-0287','MASTG-TEST-0235']}
+function unrevList(){return sc().ai?pocList().filter(id=>!pocReviewed(id)):[]}
+function agentActions(perm){
+  return [0,1,2,3,4,5,6,7,9].map((si,i)=>{
+    const st=STEPS[si];let dec,by;
+    if(st.tier==='read'){dec='Allowed';by='Read-only tier'}
+    else if(perm==='Bypass permissions'){dec='Auto-approved';by='Bypass mode'}
+    else if(perm==='Accept edits'&&st.tier==='observe'){dec='Auto-approved';by='Auto-accept mode'}
+    else{dec='Approved';by='jane.doe (user)'}
+    return {t:`00:0${Math.floor(i/3)+1}:${pad(8+i*17%50)}`,tool:st.tool,target:st.target,tier:st.tier,dec,by};
+  });
+}
+const effOpts=()=>{const o=RPT.opts,dyn=o.dyn&&sc().dyn!==false;return {dyn,ai:dyn&&sc().ai,aiPoc:dyn&&sc().ai&&o.aiPoc,log:dyn&&sc().ai&&o.log,exc:dyn&&o.exc,tr:dyn&&sc().ai&&o.tr}};
+
+/* --- page builders --- */
+const PHdr=()=>`<header class="rh"><span>Malimite · ${T('Laporan Penilaian Kerentanan','Vulnerability Assessment Report')}</span><span>com.example.bank 4.2.0 · ${T('Rahasia','Confidential')}</span></header>`;
+const PFtr=()=>`<footer class="rf"><span>${T('Dibuat','Generated')} 2025-06-12 ${RPT.gen} UTC · template va-report-android</span><span>${T('Halaman','Page')} {PG} / {TOT}</span></footer>`;
+const rpage=(inner,id)=>`<section class="rpage"${id?` id="${id}"`:''} aria-label="Report page {PG}">${PHdr()}<div class="rb">${inner}</div>${PFtr()}</section>`;
+const bypassBox=()=>`<div class="box bypass" role="note">${ico('alert')} ${T('Agen AI berjalan dalam mode Bypass pada emulator lab. Tidak ada persetujuan per aksi; safety floor tetap berlaku.','Agent ran in Bypass mode on lab emulator. No per-action approval was required; the safety floor stayed in force.')}</div>`;
+function consentRows(){
+  const e=effOpts();
+  return `<table><tr><th>${T('Consent diberikan oleh','Consent granted by')}</th><td>jane.doe · 2025-06-12 14:02 UTC</td><th>${T('Versi pernyataan','Statement version')}</th><td>DA-consent v1.3</td></tr>
+   <tr><th>${T('Referensi','Reference')}</th><td>ENG-2291</td><th>${T('Berlaku','Valid for')}</th><td>8 h</td></tr>
+   <tr><th>${T('Catatan cakupan','Scope note')}</th><td colspan="3">com.example.bank 4.2.0 (sha256 b7d4…02) on Pixel_7_API_34, lab emulator. HTTPS interception on; only app flows were stored.${e.ai?' <b>'+T('Agen AI tidak dan tidak dapat memberi, memperpanjang, atau mengubah consent.','The AI agent did not and cannot grant, renew or change consent.')+'</b>':''}</td></tr></table>`;
+}
+function pCover(){
+  const e=effOpts(),S=sc();
+  let dyn='';
+  if(e.dyn){
+    dyn=`<div class="box"><b>${T('Verifikasi dinamis','Dynamic verification')}:</b> ${S.ai?`${T('sesi','session')} #4 (PoC) · Pixel_7_API_34 (lab emulator) · <b>${T('Dijalankan dengan bantuan agen AI','Executed with AI agent assistance')}</b> (${T('mode izin','permission mode')}: ${S.perm})`:`<span class="chipm">${T('Sesi manual','Manual session')}</span> #3 (guided) · Pixel_7_API_34 · ${T('tanpa agen AI','no AI agent used')}`}</div>
+     ${S.bypass?bypassBox():''}
+     <div class="box warn"><b>${T('Consent','Consent')}:</b> jane.doe · 2025-06-12 14:02 UTC · DA-consent v1.3 · ENG-2291 (${T('lihat lembar persetujuan','see approval sheet')})</div>`;
+  }
+  return rpage(`<div style="margin-top:.6rem"><div class="ey">MALIMITE · ANDROID</div><h1 class="rt">${T('Laporan Penilaian Kerentanan','Vulnerability Assessment Report')}</h1><div class="rs">com.example.bank 4.2.0 · bank-v4.2.0.apk</div></div>
+   <table style="margin-top:1rem"><tr><th>Scan ID</th><td class="mono">a3f9c1d2</td><th>SHA-256</th><td class="mono">b7d4…02</td></tr><tr><th>${T('Platform','Platform')}</th><td>Android</td><th>${T('Tanggal pemindaian','Scan date')}</th><td>2025-06-12</td></tr></table>
+   <div class="kpis"><div class="kpi"><b>1</b>Critical</div><div class="kpi"><b>7</b>High</div><div class="kpi"><b>12</b>Medium</div><div class="kpi"><b>3</b>Low / Info</div></div>${dyn}`);
+}
+function pExec(){
+  const e=effOpts();
+  return rpage(`<h2>${T('Ringkasan Eksekutif','Executive Summary')}</h2>
+   <p>${T('Pemindaian statis menemukan 23 temuan pada com.example.bank 4.2.0.','Static analysis found 23 findings in com.example.bank 4.2.0.')} ${T('Bagian ini tidak berubah dari laporan sebelumnya.','This section is unchanged from the previous report.')}</p>
+   <h3>${T('Skala penilaian risiko','Risk rating scale')}</h3><table><tr><th>Severity</th><th>CVSS</th><th>${T('Jumlah','Count')}</th></tr><tr><td>Critical</td><td>9.0–10.0</td><td>1</td></tr><tr><td>High</td><td>7.0–8.9</td><td>7</td></tr><tr><td>Medium</td><td>4.0–6.9</td><td>12</td></tr><tr><td>Low / Info</td><td>0.1–3.9</td><td>3</td></tr></table>
+   ${e.dyn?`<h3>${T('Verifikasi dinamis','Dynamic verification')}</h3><p>${sc().ai?T('Sesi PoC #4 menguji 4 dari 23 temuan; 2 TERKONFIRMASI. Temuan lain berstatus NOT_TESTED.','PoC session #4 exercised 4 of 23 findings; 2 CONFIRMED. All others are NOT_TESTED.'):T('Sesi manual #3 menguji 10 dari 23 temuan; 5 TERKONFIRMASI.','Manual session #3 exercised 10 of 23 findings; 5 CONFIRMED.')}</p>`:''}`);
+}
+function pStatic(){
+  const ids=['MASTG-TEST-0212b','MASTG-TEST-0232','MASTG-TEST-0235','MASTG-TEST-0334','MASTG-TEST-0364','MASTG-TEST-0287','MASTG-TEST-0242'];
+  return rpage(`<h2>${T('Temuan statis','Static findings')}</h2><table><tr><th>ID</th><th>${T('Judul','Title')}</th><th>Severity</th><th>CVSS</th><th>CWE</th></tr>${ids.map(id=>{const f=F(id);return `<tr><td class="mono">${id}</td><td>${esc(f.t)}</td><td>${f.sev.toUpperCase()}</td><td>${f.cvss}</td><td>${f.cwe}</td></tr>`}).join('')}</table>
+   <p class="muted" style="margin-top:.4rem">${T('Tabel lengkap, pemetaan MASVS, dan lampiran permukaan kode mengikuti format laporan yang ada.','The full table, MASVS mapping and code-surface appendix follow the existing report format.')}</p>`);
+}
+function verdictCounts(rows){const c={confirmed:0,notrepro:0,inconcl:0,nottested:0};rows.forEach(r=>c[r[1]]++);return c}
+function pMethod(){
+  const S=sc(),e=effOpts(),rows=S.ai?RT_AI:RT_MAN,c=S.ai?{confirmed:2,notrepro:1,inconcl:1,nottested:19}:{confirmed:5,notrepro:3,inconcl:2,nottested:13};
+  const probes=S.ai?[['crypto.cipher','1.4.0','sha256:3c1e…a9','Low'],['storage.sharedprefs.write','1.2.0','sha256:77b0…e1','Low'],['fs.snapshot','0.9.1','sha256:c2f9…5d','Medium'],['ipc.activity.launch','0.8.0','sha256:41de…0b','Medium']]:[['net.okhttp.trace','1.3.0','sha256:0a4e…9c','Low'],['storage.sharedprefs.write','1.2.0','sha256:77b0…e1','Low'],['webview.config','1.1.0','sha256:e19a…73','Low'],['capture.logcat','1.0.0','sha256:5b3c…f8','Low']];
+  return rpage(`<h2 id="rd-method">${T('Verifikasi Dinamis','Dynamic Verification')}</h2>
+   ${S.bypass?bypassBox():''}${S.ai?`<div class="box"><b>${T('Dijalankan dengan bantuan agen AI','Executed with AI agent assistance')}</b> · ${T('mode izin','permission mode')}: <b>${S.perm}</b></div>`:`<div class="box"><span class="chipm">${T('Sesi manual','Manual session')}</span> ${T('Tidak ada agen AI yang digunakan.','No AI agent was used.')}</div>`}
+   <h3>${T('Metodologi','Methodology')}</h3>
+   <table><tr><th>${T('Perangkat','Device')}</th><td>Pixel_7_API_34 · emulator · Android 14 · frida-server 16.5.2</td></tr>
+   <tr><th>${T('Build','Build')}</th><td>com.example.bank 4.2.0 · sha256 b7d4…02</td></tr>
+   <tr><th>${T('Mode eksekusi','Execution mode')}</th><td>${S.ai?'AI-assisted':'Guided'} · ${T('sesi','session')} ${S.ai?'#4 (PoC)':'#3'}</td></tr>
+   <tr><th>${T('Waktu','Time')}</th><td>2025-06-12 ${S.ai?'14:02–14:14':'13:48–14:00'} UTC</td></tr>
+   <tr><th>${T('Cakupan','Coverage')}</th><td>${S.ai?T('4 dari 23 temuan dipilih untuk sesi ini.','4 of 23 findings selected for this session.'):T('10 dari 23 temuan memiliki probe yang cocok dan dijalankan.','10 of 23 findings had a matching probe and were exercised.')}</td></tr></table>
+   <h3>${T('Probe (terdaftar, hash-pinned)','Probes (registered, hash-pinned)')}</h3><table><tr><th>Probe</th><th>${T('Versi','Version')}</th><th>Hash</th><th>${T('Intrusif','Intrusiveness')}</th></tr>${probes.map(p=>`<tr><td class="mono">${p[0]}</td><td>${p[1]}</td><td class="mono">${p[2]}</td><td>${p[3]}</td></tr>`).join('')}</table>
+   <h3>${T('Ringkasan verdict','Verdict summary')}</h3>
+   <div class="kpis">${['confirmed','notrepro','inconcl','nottested'].map(k=>`<div class="kpi"><b>${c[k]}</b>${verdict(k)}</div>`).join('')}</div>
+   <div class="box warn"><b>${T('Tidak tereproduksi ≠ tidak rentan.','Not reproduced ≠ not vulnerable.')}</b> ${T('NOT_REPRODUCED berarti probe aktif dan alur diuji, tetapi tidak ada yang cocok. Jalur kode mungkin tidak tercapai.','NOT_REPRODUCED means the probe was active and the flow exercised, but nothing matched. The code path may not have been reached.')}</div>
+   <p class="muted" style="font-size:.7rem">${T('Confidence: High = 2+ bukti independen; Medium = 1 bukti langsung; Low = bukti tidak langsung.','Confidence: High = 2+ independent evidence types; Medium = 1 direct evidence; Low = indirect evidence.')}</p>`,'rd-method-page');
+}
+function pcell(id){
+  const S=sc(),e=effOpts();
+  if(!POCS[id]||!pocList().includes(id))return '<span class="muted">—</span>';
+  if(!S.ai)return T('Langkah oleh penguji','Steps by tester');
+  if(pocReviewed(id))return T('Ditinjau manusia','Reviewed by human');
+  return RPT.opts.unrev==='include'?T('Draf AI belum ditinjau (disertakan)','Unreviewed AI draft (included)'):T('Draf AI belum ditinjau (dikecualikan)','Unreviewed AI draft (excluded)');
+}
+function pTable(){
+  const S=sc(),rows=S.ai?RT_AI:RT_MAN;
+  return rpage(`<h2>${T('Verdict per temuan','Verdict per finding')}</h2><table><tr><th>${T('Aturan','Rule')}</th><th>${T('Temuan','Finding')}</th><th>Severity</th><th>Verdict</th><th>PoC</th></tr>${rows.map(([id,v])=>{const f=F(id);return `<tr id="rt-${id}"><td class="mono">${id}</td><td>${esc(f.t)}</td><td>${f.sev.toUpperCase()}</td><td>${verdict(v)}${v==='nottested'?`<div class="muted" style="font-size:.64rem">${f.pr.length?T('Tidak dalam cakupan sesi','Not in session scope'):T('Tidak ada probe yang menutup aturan ini','No probe covers this rule')}</div>`:''}</td><td>${pcell(id)}</td></tr>`}).join('')}</table>
+   <p class="muted" style="font-size:.7rem">${T('Temuan yang belum diuji secara dinamis tetap NOT_TESTED. Verdict dinamis tidak mengubah status triase secara otomatis.','Findings not exercised dynamically stay NOT_TESTED. A dynamic verdict never changes triage status automatically.')}</p>`);
+}
+function pPoc(id,i){
+  const S=sc(),e=effOpts(),P=POCS[id],f=F(id),rev=pocReviewed(id),draft=S.ai&&!rev;
+  const attr=S.ai?`<div class="box${draft?' draft':''}"><span class="m">${ico('spark')}<b>${T('Dijalankan dengan bantuan agen AI','Executed with AI agent assistance')}</b></span> · ${T('Mode izin','Permission mode')}: <b>${S.perm}</b>${S.bypass?' · <b>'+T('lab emulator','lab emulator')+'</b>':''}<br>${rev?`${T('Langkah PoC ditinjau dan diterima oleh','PoC steps reviewed and accepted by')} <b>jane.doe</b>, ${P.when} · <span class="chipm">${T('Ditinjau manusia','Reviewed by human')}</span>`:`<span class="chipm">${T('Draf AI belum ditinjau','Unreviewed AI draft')}</span> ${T('Langkah ini belum diterima manusia dan bukan hasil akhir.','These steps were not accepted by a human and are not final.')}`}</div>`
+   :`<div class="box"><span class="chipm">${T('Sesi manual','Manual session')}</span> ${T('Langkah ditulis oleh penguji','Steps written by the tester')} jane.doe.</div>`;
+  const ev=e.exc?`<h3>${T('Kutipan bukti (disamarkan)','Evidence excerpts (redacted)')}</h3><table><tr><th>ID</th><th>${T('Waktu','Time')}</th><th>${T('Sumber','Source')}</th><th>${T('Ringkasan','Summary')}</th></tr>${P.ev.map(x=>`<tr><td class="mono">${x[0]}</td><td class="mono">${x[1]}</td><td>${x[2]}</td><td>${esc(x[3])}</td></tr>`).join('')}</table>`:`<h3>${T('Referensi bukti','Evidence references')}</h3><p>${P.ev.map(x=>x[0]+' ('+x[1].slice(0,8)+')').join(', ')} · ${T('kutipan dihilangkan oleh opsi laporan','excerpts omitted by report options')}</p>`;
+  const v=POC_V(id);
+  return rpage(`<h2 id="rf-${id}">${T('PoC','PoC')} ${i}. <span class="mono" style="font-size:.85rem">${id}</span> ${esc(f.t)}</h2>
+   <table><tr><th>Severity</th><td>${f.sev.toUpperCase()}</td><th>CVSS</th><td>${f.cvss}</td><th>CWE</th><td>${f.cwe}</td></tr><tr><th>Verdict</th><td>${verdict(v)}</td><th>Confidence</th><td colspan="3"><b>${P.conf}</b> · ${esc(P.why)}</td></tr></table>
+   ${attr}${draft?`<div class="box draft">${T('DRAF AI BELUM DITINJAU — bukan hasil akhir','UNREVIEWED AI DRAFT — not final')}</div>`:''}
+   <h3>${T(draft?'Langkah PoC (draf)':'Langkah PoC','PoC steps'+(draft?' (draft)':''))}</h3><ol>${P.steps.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>
+   ${ev}
+   ${e.aiPoc&&S.ai&&P.plan?`<h3>${T('Detail agen AI','AI agent details')}</h3><p>${esc(P.plan)} ${T('Rencana','Plan')} ${S.planBy}.</p>`:''}`,'rpoc-'+id);
+}
+const POC_V=id=>({'MASTG-TEST-0232':'confirmed','MASTG-TEST-0287':'confirmed','MASTG-TEST-0235':'confirmed'})[id];
+function pAiSummary(){
+  const S=sc(),acts=agentActions(S.perm),bl=S.blocked;
+  const tiers=['read','observe','modify','active'],cnt=t=>acts.filter(a=>a.tier===t).length;
+  const exec=acts.length,used=exec+8;
+  return rpage(`<h2 id="rd-ai">${T('Lampiran A. Aktivitas Agen AI','Appendix A. AI Agent Activity')}</h2>
+   ${S.bypass?bypassBox():''}
+   <p>${T('Mode izin','Permission mode')}: <b>${S.perm}</b> · ${T('Rencana','Plan')} ${S.planBy}.</p>
+   <h3>${T('Aksi per tier risiko','Actions per risk tier')}</h3><table><tr><th>Tier</th><th>${T('Aksi','Actions')}</th><th>${T('Otomatis','Automatic')}</th><th>${T('Disetujui pengguna','Approved by user')}</th></tr>
+   ${tiers.map(t=>{const a=acts.filter(x=>x.tier===t);return `<tr><td>${TIER[t][1]}</td><td>${a.length}</td><td>${a.filter(x=>x.dec!=='Approved').length}</td><td>${a.filter(x=>x.dec==='Approved').length}</td></tr>`}).join('')}</table>
+   <h3>${T('Diblok oleh safety floor','Blocked by the safety floor')} (${bl.length})</h3>
+   ${bl.length?`<table><tr><th>${T('Waktu','Time')}</th><th>Tool</th><th>${T('Target','Target')}</th><th>${T('Aturan','Rule')}</th><th>${T('Alasan','Reason')}</th></tr>${bl.map(b=>`<tr><td class="mono">${b.t}</td><td class="mono">${b.tool}</td><td class="mono">${b.target}</td><td><b>${b.rule})</b> ${esc(FLOOR[b.rule.charCodeAt(0)-97][0])}</td><td>${esc(b.why)}</td></tr>`).join('')}</table>`:`<p>${T('Tidak ada aksi yang diblok.','No actions were blocked by the safety floor.')}</p>`}
+   <h3>${T('Anggaran terpakai','Budget used')}</h3><p>${used} / 40 ${T('aksi','actions')} · 08:12 / 15:00</p>
+   <h3>${T('Pernyataan transparansi','Transparency statement')}</h3>
+   <div class="box">${T('Agen hanya memakai probe terdaftar yang di-pin dengan hash, hanya dalam scope paket com.example.bank dan perangkat Pixel_7_API_34 yang disetujui consent. Agen tidak dapat memberi consent, menjalankan shell atau JS bebas, atau mengaktifkan probe intrusif tinggi.','The agent used only registered, hash-pinned probes, only within the consented package (com.example.bank) and device (Pixel_7_API_34). It could not grant consent, run a free-form shell or JS, or enable High-intrusiveness probes.')}</div>
+   ${effOpts().log?'':`<p class="muted">${T('Daftar aksi lengkap dikecualikan oleh opsi laporan.','The full action list is excluded by report options.')}</p>`}
+   <p class="muted">${effOpts().tr?'':T('Transkrip obrolan tidak disertakan.','Chat transcript not included.')}</p>`);
+}
+function pAiActions(){
+  const S=sc(),acts=agentActions(S.perm);
+  return rpage(`<h2>${T('Lampiran A (lanjutan). Daftar aksi','Appendix A (cont.). Action list')}</h2><table><tr><th>${T('Waktu','Time')}</th><th>Tool</th><th>${T('Target','Target')}</th><th>Tier</th><th>${T('Keputusan','Decision')}</th><th>${T('Penyetuju','Approver')}</th></tr>
+   ${acts.map(a=>`<tr><td class="mono">${a.t}</td><td class="mono">${a.tool}</td><td class="mono" style="max-width:150px;overflow-wrap:anywhere">${esc(a.target)}</td><td>${TIER[a.tier][1]}</td><td>${a.dec}</td><td>${a.by}</td></tr>`).join('')}
+   ${S.blocked.map(b=>`<tr><td class="mono">${b.t}</td><td class="mono">${b.tool}</td><td class="mono">${b.target}</td><td>${b.rule==='d'?'Active probe':'Modify device'}</td><td><b>${T('DIBLOK','BLOCKED')}</b> (${b.rule})</td><td>${T('Safety floor','Safety floor')}</td></tr>`).join('')}</table>
+   <p class="muted" style="font-size:.7rem">${T('Setiap aksi dicatat dengan siapa atau apa yang menyetujuinya: pengguna, mode auto-accept, atau mode Bypass.','Every action is logged with who or what approved it: the user, auto-accept mode or Bypass mode.')}</p>`);
+}
+function pTranscript(){
+  return rpage(`<h2>${T('Lampiran B. Transkrip obrolan (disamarkan)','Appendix B. Chat transcript (redacted)')}</h2>
+   <div class="box warn"><b>${T('Peringatan:','Warning:')}</b> ${T('Transkrip dapat memuat nama kelas, path, dan potongan data. Token, cookie, dan PII tetap disamarkan, tetapi tinjau sebelum dibagikan.','The transcript can contain class names, paths and data fragments. Tokens, cookies and PII stay masked, but review it before sharing.')}</div>
+   <table><tr><th>${T('Waktu','Time')}</th><th>${T('Peran','Role')}</th><th>${T('Pesan','Message')}</th></tr>
+   <tr><td class="mono">14:03</td><td>jane.doe</td><td>Verify the AES/ECB finding (MASTG-TEST-0232) dynamically.</td></tr>
+   <tr><td class="mono">14:03</td><td>agent</td><td>I can verify it with the passive crypto.cipher probe. Here is a plan…</td></tr>
+   <tr><td class="mono">14:06</td><td>jane.doe</td><td>Approved the plan (Ask mode).</td></tr>
+   <tr><td class="mono">14:09</td><td>agent</td><td>I need a real sign-in. I will not type credentials for you.</td></tr>
+   <tr><td class="mono">14:12</td><td>agent</td><td>Pinned event E-0031 (value [masked]); draft PoC steps saved for your review.</td></tr></table>`);
+}
+function pApproval(){
+  const e=effOpts();
+  return rpage(`<h2>${T('Lembar Persetujuan','Approval Sheet')}</h2>
+   ${e.dyn?`<h3>${T('Consent dan otorisasi pengujian dinamis','Dynamic testing consent and authorization')}</h3>${consentRows()}${sc().bypass?bypassBox():''}`:''}
+   <h3 style="margin-top:1rem">${T('Tanda tangan','Signatures')}</h3>
+   <table class="sig"><tr><th>${T('Peran','Role')}</th><th>${T('Nama','Name')}</th><th>${T('Tanggal','Date')}</th><th>${T('Tanda tangan','Signature')}</th></tr>
+   <tr><td>${T('Penyusun','Prepared by')}</td><td>jane.doe</td><td></td><td></td></tr>
+   <tr><td>${T('Peninjau keamanan','Security reviewer')}</td><td></td><td></td><td></td></tr>
+   ${e.dyn?`<tr><td>${T('Peninjau verifikasi dinamis','Dynamic verification reviewer')}</td><td></td><td></td><td></td></tr>`:''}
+   <tr><td>${T('Penyetuju','Approved by')}</td><td></td><td></td><td></td></tr></table>`);
+}
+function reportPages(){
+  const e=effOpts(),P=[pCover(),pExec(),pStatic()];
+  if(e.dyn){
+    P.push(pMethod(),pTable());
+    let n=0;pocList().forEach(id=>{const unrev=sc().ai&&!pocReviewed(id);if(unrev&&RPT.opts.unrev==='exclude')return;P.push(pPoc(id,++n))});
+    if(e.ai){P.push(pAiSummary());if(e.log)P.push(pAiActions());if(e.tr)P.push(pTranscript())}
+  }
+  P.push(pApproval());
+  return P;
+}
+function buildReport(){
+  const P=reportPages(),n=P.length;
+  $('#rpt-pages').innerHTML=P.map((h,i)=>h.replace(/\{PG\}/g,i+1).replace(/\{TOT\}/g,n)).join('');
+  $('#rpt-pages').dataset.lang=RPT.opts.lang;
+  return n;
+}
+function syncOpts(){
+  const S=sc(),o=RPT.opts,noDyn=S.dyn===false;
+  $$('[data-o]').forEach(c=>{const k=c.dataset.o;if(c.type==='checkbox')c.checked=!!o[k];else c.value=o[k]});
+  const dis={dyn:noDyn,aiPoc:noDyn||!o.dyn||!S.ai,log:noDyn||!o.dyn||!S.ai,exc:noDyn||!o.dyn,tr:noDyn||!o.dyn||!S.ai};
+  $$('.opt-row[data-r]').forEach(r=>{const k=r.dataset.r,d=!!dis[k];r.classList.toggle('dis',d);const i=$('input',r);if(i)i.disabled=d});
+  $('#rpt-session').innerHTML=noDyn?'No dynamic session exists for this scan. The report is identical to the previous output.':S.ai?`Sessions: <b>#4 PoC, AI-assisted</b> (${S.perm})${RPT.added?' · <span class="chip">added from PoC results</span>':''}`:'Sessions: <b>#3 manual</b>, no AI agent';
+  // unreviewed drafts
+  const un=unrevList(),ua=$('#rpt-unrev');
+  if(!S.ai||noDyn||!o.dyn)ua.innerHTML=`<p class="muted" style="font-size:.76rem">${noDyn?'Not applicable.':S.ai?'Not applicable.':'No AI-drafted PoC steps in this session.'}</p>`;
+  else ua.innerHTML=(un.length?`<div class="alert alert-warn" style="margin:0 0 .5rem" role="alert">${ico('alert')}<div><b>${un.length} PoC draft${un.length>1?'s are':' is'} not reviewed by a human:</b> <span class="mono">${un.join(', ')}</span>. <a href="#pocresult">Review in PoC results</a></div></div>`:`<div class="alert alert-ok" style="margin:0 0 .5rem">${ico('check')}<div>All PoC steps were reviewed by a human.</div></div>`)
+    +`<div role="radiogroup" aria-label="Handling of unreviewed AI drafts"><label class="opt-row"><input type="radio" name="unrev" value="exclude" data-o="unrev" ${o.unrev==='exclude'?'checked':''}><span><b>Exclude from the report</b><span class="d">The finding keeps its verdict; the PoC block is left out and the table says “excluded”.</span></span></label><label class="opt-row"><input type="radio" name="unrev" value="include" data-o="unrev" ${o.unrev==='include'?'checked':''}><span><b>Include as “Unreviewed AI draft”</b><span class="d">Marked as a draft on the page, never as a final PoC.</span></span></label></div>`;
+  $('#rpt-tr-warn').innerHTML=o.tr&&!dis.tr?`<div class="alert alert-warn" style="margin:.3rem 0 0" role="alert">${ico('alert')}<div><b>Sensitive data.</b> The transcript can contain class names, paths and data fragments. Review before sharing the report.</div></div>`:'';
+  $('#rpt-lang').value=o.lang;
+}
+function setStale(v){RPT.stale=v;$('#rpt-stale').hidden=!v;$('#rpt-pages').classList.toggle('stale',v);$('#rpt-gen-t').textContent=v?'Regenerate to apply':'Regenerate report';$('#rpt-status').innerHTML=v?`${ico('alert')} <span>Options changed. Preview is out of date.</span>`:`${ico('check')} <span>Preview is current · generated ${RPT.gen} UTC</span>`}
+function renderReport(param){
+  if(param){RPT.sc=(AG.mode==='bypass'&&!AG.stopped)?'ai-bypass':(['manual','none'].includes(RPT.sc)?'ai-ask':RPT.sc)}
+  $('#rpt-sc').value=RPT.sc;syncOpts();buildReport();setStale(false);
+  if(param){
+    const el=document.getElementById('rf-'+param)||document.getElementById('rt-'+param);
+    if(el){const t=el.closest('.rpage')||el;t.scrollIntoView({block:'start'});el.closest('tr')?el.closest('tr').classList.add('flash'):t.classList.add('flash');setTimeout(()=>{$$('.flash').forEach(x=>x.classList.remove('flash'))},2500);if(!document.getElementById('rf-'+param))toast('PoC block for '+param+' is not in the report (excluded or no PoC). Showing its verdict row.')}
+  }
+}
+$('#rpt-sc').onchange=e=>{RPT.sc=e.target.value;syncOpts();buildReport();setStale(false)};
+$('.rpt-opts').addEventListener('change',e=>{
+  const t=e.target.closest('[data-o]');if(!t)return;const k=t.dataset.o;
+  RPT.opts[k]=t.type==='checkbox'?t.checked:t.value;
+  syncOpts();
+  if(k==='lang'){$('#rpt-pages').dataset.lang=t.value;return}
+  setStale(true);
+});
+$('#rpt-gen').onclick=()=>{
+  if(RPT.busy)return;RPT.busy=true;const b=$('#rpt-gen');b.disabled=true;$('#rpt-status').innerHTML=`${ico('refresh','spin')} <span>Generating…</span>`;
+  setTimeout(()=>{RPT.gen='14:4'+(1+Math.floor(Math.random()*8));const n=buildReport();RPT.busy=false;b.disabled=false;setStale(false);$('#rpt-status').innerHTML+=` <span class="muted">· ${n} pages</span>`;announce('Report regenerated, '+n+' pages');},700);
+};
+$('#rpt-print').onclick=()=>window.print();
+/* links from PoC results and agent */
+function rptCard(){
+  return `<div class="alert alert-info" style="margin:0;flex-wrap:wrap">${ico('file')}<div><b>Report</b> · MASTG-TEST-0232 PoC ${RPT.added?'is added to the report.':'is not in the report yet.'}</div><div class="acts"><button class="btn btn-outline btn-sm" type="button" data-rpt="add" aria-pressed="${RPT.added}" >${RPT.added?ico('check')+' Added to report':'Add to report'}</button><a class="btn btn-ghost btn-sm" href="#report:MASTG-TEST-0232">Preview in report</a></div></div>`;
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-rpt=add]');if(!b)return;
+  RPT.added=!RPT.added;RPT.stale=true;
+  toast(RPT.added?'PoC session #4 added to the report. Regenerate to apply.':'Removed from the report');
+  if($('#s-pocresult')&&!$('#s-pocresult').hidden)renderPocResult();
+  renderAgent();
+});
 
 /* ---------- init ---------- */
 route();
