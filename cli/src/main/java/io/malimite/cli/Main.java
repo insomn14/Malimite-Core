@@ -301,6 +301,8 @@ public class Main implements Callable<Integer> {
         cfg.put("CUSTOM_PROTOCOL",       envOr("CUSTOM_PROTOCOL", "openai"));
         cfg.put("CUSTOM_BASE_URL",       envOr("CUSTOM_BASE_URL", ""));
         cfg.put("CUSTOM_API_KEY",        envOr("CUSTOM_API_KEY", ""));
+        cfg.put("CUSTOM_HEADERS",        envOr("CUSTOM_HEADERS", ""));
+        cfg.put("CUSTOM_SESSION",        envOr("CUSTOM_SESSION", ""));
         return cfg;
     }
 

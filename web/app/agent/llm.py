@@ -103,20 +103,23 @@ class LlmCfg:
     # Custom (Config tab "Custom Model API") providers only: "openai" or "anthropic" wire format.
     # base_url is then the full prefix the user entered (version path included).
     protocol: str = ""
+    headers: Optional[dict] = None   # custom providers: extra request headers, {session} already expanded
 
 
-def _resolve_custom(pid: str, model: str) -> LlmCfg:
+def _resolve_custom(pid: str, model: str, session: str) -> LlmCfg:
     c = llm_config.get_custom(pid)
     if not c:
         raise LlmError(f"Custom provider '{pid}' is not configured on the server.")
     m = model or (c.get("models") or [""])[0]
     if not m:
         raise LlmError(f"Custom provider '{pid}' has no model; add one in the Config tab or pick it in the Assistant.")
-    return LlmCfg(pid, m, c.get("api_key", ""), c["base_url"].rstrip("/"), protocol=c.get("protocol", "openai"))
+    headers = {k: v.replace("{session}", session or "malimite") for k, v in llm_config.custom_headers(c).items()}
+    return LlmCfg(pid, m, c.get("api_key", ""), c["base_url"].rstrip("/"),
+                  protocol=c.get("protocol", "openai"), headers=headers)
 
 
 def resolve_llm(scan_provider: str, scan_model: str,
-                provider: Optional[str] = None, model: Optional[str] = None) -> LlmCfg:
+                provider: Optional[str] = None, model: Optional[str] = None, session: str = "") -> LlmCfg:
     """Scan's provider/model unless overridden; key only from server settings (never meta.json)."""
     def known(x: str) -> bool:
         return x in PROVIDERS or llm_config.get_custom(x) is not None
@@ -131,7 +134,7 @@ def resolve_llm(scan_provider: str, scan_model: str,
     if not m and p == settings.llm_provider:
         m = settings.llm_model
     if p not in PROVIDERS:
-        return _resolve_custom(p, m)
+        return _resolve_custom(p, m, session)
     m = m or _DEFAULT_MODEL[p]
     env = scanner.llm_env(p)
     # claude-oauth's "key" is a short-lived access token resolved per-request in
@@ -434,6 +437,7 @@ async def chat_step(cfg: LlmCfg, system: str, messages: list[dict], tools: list[
         else:
             headers = {"x-api-key": cfg.api_key, "anthropic-version": "2023-06-01"}
             effective_system = system
+        headers.update(cfg.headers or {})
         body = {"model": cfg.model, "max_tokens": settings.chat_max_output_tokens, "stream": True,
                 "system": effective_system, "messages": messages, "tools": _tools_anthropic(tools)}
         if not allow_tools:
@@ -442,6 +446,7 @@ async def chat_step(cfg: LlmCfg, system: str, messages: list[dict], tools: list[
     else:
         url = f"{cfg.base_url}/chat/completions" if cfg.protocol else f"{cfg.base_url}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {cfg.api_key}"} if cfg.api_key else {}
+        headers.update(cfg.headers or {})
         body = {"model": cfg.model, "stream": True, "max_tokens": settings.chat_max_output_tokens,
                 "messages": to_openai(system, messages), "tools": _tools_openai(tools)}
         if not allow_tools:

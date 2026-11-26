@@ -18,6 +18,7 @@ public class OpenAiProvider implements LlmProvider {
     private static final Logger log = LoggerFactory.getLogger(OpenAiProvider.class);
     private static final String API_URL = "https://api.openai.com/v1/chat/completions";
     private final String     apiUrl;
+    private final java.util.Map<String, String> extraHeaders;
 
     private final String     apiKey;
     private final String     model;
@@ -30,6 +31,12 @@ public class OpenAiProvider implements LlmProvider {
 
     /** {@code apiUrl} is the full chat-completions URL (custom OpenAI-compatible endpoints). */
     public OpenAiProvider(String apiKey, String model, int maxTokens, String apiUrl) {
+        this(apiKey, model, maxTokens, apiUrl, java.util.Map.of());
+    }
+
+    /** {@code extraHeaders}: custom-provider headers (e.g. OpenCode's x-opencode-session). */
+    public OpenAiProvider(String apiKey, String model, int maxTokens, String apiUrl, java.util.Map<String, String> extraHeaders) {
+        this.extraHeaders = extraHeaders;
         this.apiUrl    = apiUrl;
         this.apiKey    = apiKey;
         this.model     = model.isBlank() ? "gpt-4o-mini" : model;
@@ -46,11 +53,12 @@ public class OpenAiProvider implements LlmProvider {
                         .put(new JSONObject().put("role", "system").put("content", systemPrompt))
                         .put(new JSONObject().put("role", "user").put("content", userMessage)));
         try {
-            HttpRequest req = HttpRequest.newBuilder(URI.create(apiUrl))
+            HttpRequest.Builder rb = HttpRequest.newBuilder(URI.create(apiUrl))
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8))
-                    .build();
+                    .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8));
+            extraHeaders.forEach(rb::header);
+            HttpRequest req = rb.build();
             String raw = http.send(req, HttpResponse.BodyHandlers.ofString()).body();
             JSONObject resp = new JSONObject(raw);
             if (resp.has("error"))

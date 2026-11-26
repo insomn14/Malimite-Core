@@ -24,6 +24,8 @@ import java.util.Map;
  * CUSTOM_PROTOCOL      = openai | anthropic     (provider=custom: user-defined endpoint, Config tab)
  * CUSTOM_BASE_URL       = https://host/v1        (provider=custom; /chat/completions or /messages is appended)
  * CUSTOM_API_KEY        = ...                    (provider=custom; optional for keyless local gateways)
+ * CUSTOM_HEADERS       = {"Name":"value"}       (provider=custom; optional JSON object, "{session}" = CUSTOM_SESSION)
+ * CUSTOM_SESSION        = scan id                (provider=custom)
  * LLM_MODEL             = override default model id
  * LLM_MAX_TOKENS        = 4096   (default; raise if FIND_VULNS responses truncate)
  * </pre>
@@ -39,6 +41,17 @@ public final class LlmProviderFactory {
     private static final Logger log = LoggerFactory.getLogger(LlmProviderFactory.class);
 
     private LlmProviderFactory() {}
+
+    /** CUSTOM_HEADERS is a JSON object; "{session}" in a value becomes CUSTOM_SESSION (the scan id). */
+    private static Map<String, String> customHeaders(Map<String, String> cfg) {
+        String raw = cfg.getOrDefault("CUSTOM_HEADERS", "");
+        if (raw.isBlank()) return Map.of();
+        String session = cfg.getOrDefault("CUSTOM_SESSION", "").isBlank() ? "malimite" : cfg.get("CUSTOM_SESSION");
+        java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+        org.json.JSONObject o = new org.json.JSONObject(raw);
+        for (String k : o.keySet()) out.put(k, o.getString(k).replace("{session}", session));
+        return out;
+    }
 
     /**
      * Reads {@code LLM_PROVIDER} from {@code cfg} and constructs the matching provider.
@@ -107,8 +120,9 @@ public final class LlmProviderFactory {
                 String key = cfg.getOrDefault("CUSTOM_API_KEY", "");
                 boolean anthropic = "anthropic".equalsIgnoreCase(cfg.getOrDefault("CUSTOM_PROTOCOL", "openai"));
                 log.info("LLM provider: custom ({}) model={} base={}", anthropic ? "anthropic" : "openai", model, base);
-                yield anthropic ? new ClaudeProvider(key, model, maxTokens, base + "/messages")
-                                : new OpenAiProvider(key, model, maxTokens, base + "/chat/completions");
+                java.util.Map<String, String> headers = customHeaders(cfg);
+                yield anthropic ? new ClaudeProvider(key, model, maxTokens, base + "/messages", headers)
+                                : new OpenAiProvider(key, model, maxTokens, base + "/chat/completions", headers);
             }
             default -> null; // "none" or unknown
         };

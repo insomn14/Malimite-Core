@@ -558,6 +558,9 @@ def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
         env["CUSTOM_BASE_URL"] = custom["base_url"]
         if per_req_key or custom.get("api_key"):
             env["CUSTOM_API_KEY"] = per_req_key or custom["api_key"]
+        hdrs = llm_config.custom_headers(custom)
+        if hdrs:
+            env["CUSTOM_HEADERS"] = json.dumps(hdrs)
     return env
 
 
@@ -591,6 +594,7 @@ async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
         env = dict(os.environ)
         # Per-request key takes priority over the .env/settings key
         env.update(llm_env(meta.get("llm_provider", "none"), meta.get("_llm_api_key", "")))
+        env["CUSTOM_SESSION"] = scan_id  # custom providers' {session} header placeholder
 
         log_path = out_dir / "analysis.log"
         try:

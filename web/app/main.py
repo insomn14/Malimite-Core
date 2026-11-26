@@ -642,7 +642,7 @@ async def ai_fix_vulnerability(
 
     detail = scanner.get_scan_detail(scan_id)
     try:
-        cfg = resolve_llm(detail.llm_provider, detail.llm_model, req.provider, req.model)
+        cfg = resolve_llm(detail.llm_provider, detail.llm_model, req.provider, req.model, session=scan_id)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -708,7 +708,7 @@ async def start_auto_enhance(request: Request, scan_id: str, req: AutoEnhanceReq
 
     detail = scanner.get_scan_detail(scan_id)
     try:
-        cfg = resolve_llm(detail.llm_provider, detail.llm_model, req.provider, req.model)
+        cfg = resolve_llm(detail.llm_provider, detail.llm_model, req.provider, req.model, session=scan_id)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -802,7 +802,7 @@ async def retry_auto_enhance_item(request: Request, scan_id: str, job_id: str, v
         raise HTTPException(status_code=404, detail="Vulnerability not found")
     detail = scanner.get_scan_detail(scan_id)
     try:
-        cfg = resolve_llm(detail.llm_provider, detail.llm_model, job.get("provider"), job.get("model"))
+        cfg = resolve_llm(detail.llm_provider, detail.llm_model, job.get("provider"), job.get("model"), session=scan_id)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
     _chat_rate_limit()
@@ -1074,6 +1074,7 @@ class CustomProviderRequest(BaseModel):
     base_url: str = Field(max_length=500)
     api_key: str = Field("", max_length=4096)   # blank on update keeps the stored key
     models: list[str] = Field(default_factory=list, max_length=500)
+    headers: dict[str, str] = Field(default_factory=dict, max_length=20)   # extra request headers; {session} = conversation id
 
 
 @app.put("/api/v1/config/custom-providers/{provider_id}")
@@ -1083,7 +1084,8 @@ async def put_custom_provider(request: Request, provider_id: str, req: CustomPro
     _check_auth(request)
     try:
         llm_config.set_custom(provider_id, name=req.name, protocol=req.protocol, base_url=req.base_url,
-                              api_key=req.api_key, models=[m[:200] for m in req.models])
+                              api_key=req.api_key, models=[m[:200] for m in req.models],
+                              headers={k: v[:500] for k, v in req.headers.items()})
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     return {"ok": True, "status": llm_config.custom_status(provider_id)}
@@ -1093,6 +1095,7 @@ class CustomProbeRequest(BaseModel):
     protocol: str = Field("openai", max_length=16)
     base_url: str = Field(max_length=500)
     api_key: str = Field("", max_length=4096)
+    headers: dict[str, str] = Field(default_factory=dict, max_length=20)
     provider_id: str = Field("", max_length=64)   # editing: reuse that provider's stored key when api_key is blank
     model: str = Field("", max_length=200)
 
@@ -1102,7 +1105,7 @@ async def probe_custom_provider(request: Request, req: CustomProbeRequest):
     """"Fetch models" / "Test connection" for the custom-provider dialog (before anything is saved)."""
     _check_auth(request)
     key = req.api_key.strip() or (llm_config.get_custom(req.provider_id) or {}).get("api_key", "")
-    return await llm_probe.probe_custom(req.protocol, req.base_url, key, req.model)
+    return await llm_probe.probe_custom(req.protocol, req.base_url, key, req.model, req.headers)
 
 
 @app.post("/api/v1/config/providers/{provider}")
@@ -1365,7 +1368,7 @@ async def chat(request: Request, scan_id: str, req: ChatRequest):
     try:
         cfg = resolve_llm(sess["provider"] if sess else detail.llm_provider,
                           sess["model"] if sess else detail.llm_model,
-                          req.provider, req.model)
+                          req.provider, req.model, session=scan_id)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if any(a.kind == "image" for a in req.attachments) and cfg.provider not in VISION_CAPABLE_PROVIDERS and not cfg.protocol:
@@ -1417,7 +1420,7 @@ async def confirm_chat_tool(request: Request, scan_id: str, session_id: str, req
     if not sess:
         raise HTTPException(status_code=404, detail="Chat session not found")
     try:
-        cfg = resolve_llm(sess["provider"], sess["model"], None, None)
+        cfg = resolve_llm(sess["provider"], sess["model"], None, None, session=scan_id)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if session_id in agent_runs.RUNS:

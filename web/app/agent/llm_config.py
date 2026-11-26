@@ -146,8 +146,22 @@ def get_custom(pid: str) -> Optional[dict]:
     return load()["custom"].get(pid)
 
 
+_HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9-]{1,64}$")
+
+
+def custom_headers(c: dict) -> dict:
+    """Extra request headers for a custom provider ({session} is filled in per request).
+    OpenCode needs a stable x-opencode-session per conversation (400 otherwise), so that one
+    is added by default for opencode.ai hosts when the user has not set it."""
+    h = dict(c.get("headers") or {})
+    if re.match(r"^https?://([^/]+\.)?opencode\.ai(/|$)", c.get("base_url", "")) \
+            and "x-opencode-session" not in {k.lower() for k in h}:
+        h["x-opencode-session"] = "{session}"
+    return h
+
+
 def set_custom(pid: str, *, name: str = "", protocol: str = "openai", base_url: str = "",
-               api_key: str = "", models: Optional[list] = None) -> dict:
+               api_key: str = "", models: Optional[list] = None, headers: Optional[dict] = None) -> dict:
     """Creates or updates a custom provider. A blank api_key keeps the stored one (same
     never-clobber rule as set_provider); models replaces the list when given."""
     if not valid_custom_id(pid):
@@ -162,6 +176,11 @@ def set_custom(pid: str, *, name: str = "", protocol: str = "openai", base_url: 
     cur.update(name=(name or "").strip() or cur.get("name") or pid, protocol=protocol, base_url=base_url)
     if (api_key or "").strip():
         cur["api_key"] = api_key.strip()
+    if headers is not None:
+        for k, v in headers.items():
+            if not _HEADER_NAME_RE.match(k) or "\n" in v or "\r" in v:
+                raise ValueError(f"Invalid header '{k[:40]}'")
+        cur["headers"] = {k: v.strip() for k, v in headers.items()}
     if models is not None:
         cur["models"] = list(dict.fromkeys(m.strip() for m in models if isinstance(m, str) and m.strip()))
     cur.setdefault("models", [])
@@ -191,7 +210,7 @@ def custom_status(pid: str) -> dict:
         "protocol": c.get("protocol", "openai"), "models": c.get("models", []),
         "configured": bool(c), "source": "ui" if c else "none",
         "masked": {"api_key": _mask(c["api_key"])} if c.get("api_key") else {},
-        "fields": {"base_url": c.get("base_url", "")}, "updated_at": c.get("updated_at"),
+        "fields": {"base_url": c.get("base_url", "")}, "headers": c.get("headers", {}), "updated_at": c.get("updated_at"),
     }
 
 

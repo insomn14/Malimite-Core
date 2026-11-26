@@ -83,6 +83,37 @@ class ResolveAndWireTests(_Base):
         self.assertEqual(a["h"]["x-api-key"], "KEY")
 
 
+class HeaderTests(_Base):
+    def test_opencode_gets_session_header_by_default_and_user_headers_win(self):
+        llm_config.set_custom("oc", base_url="https://opencode.ai/inference/go/v1", api_key="K", models=["m"])
+        cfg = llm.resolve_llm("none", "", "oc", None, session="scan-1")
+        self.assertEqual(cfg.headers, {"x-opencode-session": "scan-1"})
+        self.assertEqual(json.loads(scanner.llm_env("oc")["CUSTOM_HEADERS"]), {"x-opencode-session": "{session}"})
+        llm_config.set_custom("gw", base_url="https://gw.io/v1", models=["m"], headers={"X-Team": "a-{session}"})
+        self.assertEqual(llm.resolve_llm("none", "", "gw", None, session="s").headers, {"X-Team": "a-s"})
+
+    def test_headers_are_sent_on_chat_step(self):
+        seen = {}
+
+        def handler(req):
+            seen.update(req.headers)
+            return httpx.Response(200, text="data: [DONE]\n\n")
+
+        async def run():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+                cfg = llm.LlmCfg("gw", "m", "K", "https://gw.io/v1", protocol="openai", headers={"x-opencode-session": "abc"})
+                async for _ in llm.chat_step(cfg, "S", [{"role": "user", "content": [{"type": "text", "text": "hi"}]}], [], client=c):
+                    pass
+        asyncio.run(run())
+        self.assertEqual(seen["x-opencode-session"], "abc")
+
+    def test_invalid_header_rejected(self):
+        with self.assertRaises(ValueError):
+            llm_config.set_custom("gw", base_url="https://gw.io/v1", headers={"bad name": "v"})
+        with self.assertRaises(ValueError):
+            llm_config.set_custom("gw", base_url="https://gw.io/v1", headers={"X": "a\nb"})
+
+
 class ProbeAndEnvTests(_Base):
     def test_probe_custom_lists_models(self):
         def handler(req):

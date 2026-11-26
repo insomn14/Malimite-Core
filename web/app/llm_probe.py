@@ -92,6 +92,7 @@ async def _probe_bedrock(api_key: str, model: str, extra: Optional[dict],
 
 
 async def probe_custom(protocol: str, base_url: str, api_key: str, model: str = "",
+                       headers: Optional[dict] = None,
                        client: Optional[httpx.AsyncClient] = None) -> dict:
     """Test / "Fetch models" for a user-defined endpoint: GET {base_url}/models with the wire
     format's own auth header. Returns the usual result dict plus `models` (the ids found)."""
@@ -99,13 +100,14 @@ async def probe_custom(protocol: str, base_url: str, api_key: str, model: str = 
     if not base.startswith(("http://", "https://")):
         return {**_result(False, "custom", "Base URL must start with http:// or https://."), "models": []}
     if protocol == "anthropic":
-        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"} if api_key else {}
+        hdr = {"x-api-key": api_key, "anthropic-version": "2023-06-01"} if api_key else {}
     else:
-        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        hdr = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    hdr.update({k: v.replace("{session}", "malimite-probe") for k, v in (headers or {}).items()})
     own = client is None
     client = client or httpx.AsyncClient(timeout=_TIMEOUT)
     try:
-        resp = await client.get(f"{base}/models", headers=headers)
+        resp = await client.get(f"{base}/models", headers=hdr)
     except httpx.HTTPError as e:
         return {**_result(False, "custom", f"Could not reach the endpoint: {type(e).__name__}."), "models": []}
     finally:

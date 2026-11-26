@@ -3201,6 +3201,7 @@ window.setConfigDefault = async function(provider) {
    User-defined OpenAI- or Anthropic-compatible endpoints (stored server-side, see
    llm_config.set_custom). The id becomes a provider name everywhere a built-in one works. */
 const CM_PRESETS = [
+  {id:'opencode', name:'OpenCode Go', url:'https://opencode.ai/inference/go/v1', headers:'x-opencode-session: {session}'},
   {id:'openrouter', name:'OpenRouter', url:'https://openrouter.ai/api/v1'},
   {id:'groq', name:'Groq', url:'https://api.groq.com/openai/v1'},
   {id:'together', name:'Together AI', url:'https://api.together.xyz/v1'},
@@ -3243,9 +3244,10 @@ window.openCustomProvider = function(editId) {
   const st = editId ? (_configCache?.providers || []).find(p => p.provider === editId) : null;
   _cm = st
     ? {tab: 'custom', editing: true, id: st.provider, name: st.name, protocol: st.protocol, base_url: st.fields.base_url || '',
-       api_key: '', hasKey: !!st.masked.api_key, models: [...st.models], msg: '', ok: false, busy: false, force: false, showKey: false}
+       api_key: '', hasKey: !!st.masked.api_key, models: [...st.models],
+       headers: Object.entries(st.headers || {}).map(([k, v]) => `${k}: ${v}`).join('\n'), msg: '', ok: false, busy: false, force: false, showKey: false}
     : {tab: 'custom', editing: false, id: '', name: '', protocol: 'openai', base_url: '', api_key: '', hasKey: false,
-       models: [''], msg: '', ok: false, busy: false, force: false, showKey: false};
+       models: [''], headers: '', msg: '', ok: false, busy: false, force: false, showKey: false};
   renderCustomModal();
 };
 
@@ -3255,6 +3257,7 @@ function cmCapture() {
   _cm.id = v('cm-id').trim().toLowerCase(); _cm.name = v('cm-name').trim();
   _cm.base_url = v('cm-url').trim(); _cm.protocol = v('cm-proto'); _cm.api_key = v('cm-key').trim();
   _cm.models = [...document.querySelectorAll('.cm-model-in')].map(i => i.value.trim());
+  _cm.headers = v('cm-headers');
 }
 
 function renderCustomModal() {
@@ -3301,6 +3304,8 @@ function renderCustomModal() {
             <button type="button" class="btn btn-outline btn-sm" onclick="cmRemoveModel(${i})" aria-label="Remove model">${ico('trash')}</button></div>`).join('')}</div>
           <div class="cm-hint" style="margin:.35rem 0">You can also add model IDs manually if discovery is unavailable.</div>
           <button type="button" class="btn btn-outline btn-sm" onclick="cmAddModel()">${ico('plus')} Add model</button></div>
+        <label>Extra headers (optional)<textarea class="ctl" id="cm-headers" rows="2" style="height:auto;padding:.5rem .75rem;font-family:monospace;font-size:.78rem" placeholder="x-opencode-session: {session}" spellcheck="false">${esc(m.headers)}</textarea>
+          <span class="cm-hint">One <code>Name: value</code> per line. <code>{session}</code> becomes a stable per-conversation id. Put secrets in the API key field, not here.</span></label>
         <div class="cfgp-note ${m.msg ? (m.ok ? 'ok' : 'err') : ''}" id="cm-msg" role="status">${esc(m.msg)}</div>
       </div>
       <div class="cm-foot">
@@ -3316,16 +3321,25 @@ window.cmTab = function(t) { cmCapture(); _cm.tab = t; renderCustomModal(); };
 window.cmPreset = function(pid) {
   cmCapture();
   const p = CM_PRESETS.find(x => x.id === pid);
-  Object.assign(_cm, {id: p.id, name: p.name, base_url: p.url, protocol: 'openai'});
+  Object.assign(_cm, {id: p.id, name: p.name, base_url: p.url, protocol: 'openai', headers: p.headers || ''});
   renderCustomModal();
 };
 window.cmToggleKey = function() { cmCapture(); _cm.showKey = !_cm.showKey; renderCustomModal(); };
 window.cmAddModel = function() { cmCapture(); _cm.models.push(''); renderCustomModal(); document.querySelector('.cm-model-in:last-of-type')?.focus(); };
 window.cmRemoveModel = function(i) { cmCapture(); _cm.models.splice(i, 1); renderCustomModal(); };
 
+function cmHeaders() {
+  const h = {};
+  for (const line of (_cm.headers || '').split('\n')) {
+    const i = line.indexOf(':');
+    if (i > 0 && line.slice(0, i).trim()) h[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  return h;
+}
+
 async function cmProbe() {
   return api('/config/custom-providers/probe', {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({protocol: _cm.protocol, base_url: _cm.base_url, api_key: _cm.api_key, provider_id: _cm.editing ? _cm.id : ''})});
+    body: JSON.stringify({protocol: _cm.protocol, base_url: _cm.base_url, api_key: _cm.api_key, headers: cmHeaders(), provider_id: _cm.editing ? _cm.id : ''})});
 }
 
 window.cmFetchModels = async function() {
@@ -3356,7 +3370,7 @@ window.cmSave = async function(force) {
     }
     await api(`/config/custom-providers/${encodeURIComponent(_cm.id)}`, {method: 'PUT', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({name: _cm.name, protocol: _cm.protocol, base_url: _cm.base_url, api_key: _cm.api_key,
-                            models: _cm.models.filter(Boolean)})});
+                            models: _cm.models.filter(Boolean), headers: cmHeaders()})});
     _cm = null; renderCustomModal();
     await fetchConfigProviders();
     render(renderConfigPage(_configCache));

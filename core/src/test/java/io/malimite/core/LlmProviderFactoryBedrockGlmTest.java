@@ -91,4 +91,10 @@ class LlmProviderFactoryBedrockGlmTest {
     @Test void factoryCustomWithoutBaseUrlThrows() {
         assertThrows(IllegalStateException.class, () -> LlmProviderFactory.create(Map.of("LLM_PROVIDER", "custom")));
     }
+
+    @Test void factoryCustomAcceptsHeadersJson() {
+        assertInstanceOf(OpenAiProvider.class, LlmProviderFactory.create(Map.of(
+                "LLM_PROVIDER", "custom", "CUSTOM_BASE_URL", "https://gw.io/v1", "LLM_MODEL", "m",
+                "CUSTOM_HEADERS", "{\"x-opencode-session\":\"{session}\"}", "CUSTOM_SESSION", "scan-1")));
+    }
 }
