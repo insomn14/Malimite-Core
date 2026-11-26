@@ -926,6 +926,22 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 .chat-chips{display:flex;flex-wrap:wrap;gap:.4rem}
 .chat-input{display:flex;gap:.5rem;margin-top:.75rem;align-items:flex-end;position:relative}
 .chat-input textarea{flex:1;min-width:0;padding:.5rem;border:1px solid var(--border);border-radius:var(--radius);font:inherit;resize:vertical}
+
+/* AI Assistant composer: input card with provider/model pills and a round send button */
+.chat-input{display:block;margin-top:.75rem;padding:.65rem .8rem .55rem;border:1px solid var(--border);border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.04);transition:border-color .12s,box-shadow .12s}
+.chat-input:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+.chat-input textarea{display:block;width:100%;padding:.15rem 0;border:0;border-radius:0;background:transparent;resize:none;min-height:2.6rem}
+.chat-input textarea:focus{outline:none;border:0;box-shadow:none}
+.chat-comp-bar{display:flex;align-items:center;gap:.4rem;margin-top:.35rem;flex-wrap:wrap}
+.chat-comp-bar select,.chat-comp-bar input{height:30px;max-width:190px;border:0;border-radius:8px;background-color:#f3f4f6;font:inherit;font-size:.78rem;color:var(--text);padding:0 .65rem}
+.chat-comp-bar select{appearance:none;-webkit-appearance:none;padding-right:1.7rem;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .5rem center;background-size:13px}
+.chat-comp-bar select:focus,.chat-comp-bar input:focus{outline:none;box-shadow:0 0 0 2px rgba(79,70,229,.25)}
+.chat-icon-btn{width:30px;height:30px;border:0;border-radius:8px;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.chat-icon-btn:hover{background:#f3f4f6;color:var(--text)}
+.chat-send-btn{width:34px;height:34px;border:0;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;transition:opacity .12s}
+.chat-send-btn:hover{filter:brightness(1.08)}
+.chat-send-btn.stop{background:var(--red)}
+.chat-input:has(textarea:placeholder-shown) #chat-send{opacity:.45}
 .chat-note{margin-top:.5rem;font-size:.7rem;color:var(--muted)}
 .chat-attachments{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
 .chat-attach-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .55rem;border:1px solid var(--border);border-radius:999px;font-size:.75rem;background:var(--surface)}
@@ -1754,6 +1770,9 @@ const ICONS = {
   history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  stop: '<rect width="12" height="12" x="6" y="6" rx="2"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   circleCheck: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
@@ -1825,7 +1844,7 @@ function renderDropZoneHtml() {
     (so the form explains WHERE to go, not just that the option vanished) but are disabled. */
 function configuredProviderValues(configData) {
   const set = new Set();
-  for (const p of (configData?.providers || [])) if (p.configured) set.add(p.provider);
+  for (const p of (configData?.providers || [])) if (cfgpAdded(configData, p.provider)) set.add(p.provider);
   return set;
 }
 
@@ -4052,26 +4071,24 @@ async function tabAssistant(el, id, detail) {
         <button class="btn btn-ghost btn-sm" id="chat-new">New chat</button>
         <button class="btn btn-ghost btn-sm" id="chat-export" title="Download this conversation as Markdown">Export</button>
         <button class="btn btn-ghost btn-sm" id="chat-del">Delete</button>
-        <span class="nav-spacer"></span>
-        <select id="chat-provider" title="LLM provider" onchange="onChatProviderChange()">
-          <option value="">Scan default${detail.llm_provider && detail.llm_provider !== 'none' ? ' (' + esc(detail.llm_provider) + ')' : ''}</option>
-          <option value="claude">claude</option><option value="claude-oauth">claude (OAuth)</option><option value="openai">openai</option>
-          <option value="deepseek">deepseek</option><option value="ollama">ollama</option>
-          <option value="bedrock">bedrock</option><option value="glm">glm</option>
-          ${customProviders().map(p => `<option value="${escAttr(p.provider)}">${esc(p.name)}</option>`).join('')}
-        </select>
-        <select id="chat-model-select" hidden title="Model override" onchange="onChatModelSelectChange()"></select>
-        <input id="chat-model" placeholder="${escAttr(detail.llm_model || 'model (default)')}" title="Model override"/>
       </div>
       <div id="chat-msgs" class="chat-msgs"></div>
       <div id="chat-err"></div>
       <div id="chat-attachment" class="chat-attachments" hidden></div>
       <div class="chat-input">
         <input type="file" id="chat-file" hidden multiple accept=".txt,.md,.markdown,.log,.csv,.json,.yaml,.yml,.xml,.toml,.ini,.cfg,.properties,.gradle,.py,.js,.jsx,.ts,.tsx,.java,.kt,.swift,.m,.mm,.c,.cpp,.h,.hpp,.go,.rs,.rb,.php,.sh,.sql,.png,.jpg,.jpeg,.webp,.gif"/>
-        <button class="btn btn-ghost" id="chat-attach" type="button" title="Attach up to 5 text/code files or images">📎</button>
-        <textarea id="chat-in" rows="2" placeholder="Ask about a class, function or behavior… (Enter to send, Shift+Enter for newline)"></textarea>
-        <button class="btn btn-primary" id="chat-send">Send</button>
-        <button class="btn btn-danger" id="chat-stop" style="display:none">Stop</button>
+        <textarea id="chat-in" rows="2" placeholder="Ask about this scan… (Enter to send, Shift+Enter for newline)"></textarea>
+        <div class="chat-comp-bar">
+          <button class="chat-icon-btn" id="chat-attach" type="button" title="Attach up to 5 text/code files or images" aria-label="Attach files">${ico('paperclip')}</button>
+          <select id="chat-provider" title="LLM provider" onchange="onChatProviderChange()">
+            ${providerDropdownOptionsHtml(_configCache, '', detail.llm_provider && detail.llm_provider !== 'none' ? 'Scan default (' + providerLabel(detail.llm_provider) + ')' : 'Scan default')}
+          </select>
+          <select id="chat-model-select" hidden title="Model override" onchange="onChatModelSelectChange()"></select>
+          <input id="chat-model" placeholder="${escAttr(detail.llm_model || 'model (default)')}" title="Model override"/>
+          <span class="nav-spacer"></span>
+          <button class="chat-send-btn" id="chat-send" type="button" title="Send" aria-label="Send">${ico('send')}</button>
+          <button class="chat-send-btn stop" id="chat-stop" type="button" title="Stop" aria-label="Stop" style="display:none">${ico('stop')}</button>
+        </div>
       </div>
       <div class="chat-note">AI output may be wrong. Decompiled code is untrusted input. Use only on software you are authorized to analyze.</div>
     </div>`;
