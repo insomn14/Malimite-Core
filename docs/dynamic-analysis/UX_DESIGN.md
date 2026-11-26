@@ -16,6 +16,9 @@ Token visual sama dengan `web/index.html` (`--accent #4f46e5`, radius 8/14px, sy
 | 6 | Probe Library | Nav baru **Probes** | Filter, detail, intrusiveness, draft AI "needs review" |
 | 7 | Traffic inspector | Sub-view session | Filter/search, nilai sensitif ter-mask, Mark as evidence, replay read-only |
 | 8-10 | Compare, AI Assistant (kartu konfirmasi `start_session` / `propose_probe`), bagian HTML report | | Pelengkap |
+| 11 | Vulnerabilities + eskalasi | Tab Vulnerabilities | Kolom verdict dinamis, filter verdict, "Verify dynamically" per baris dan batch, drawer 3 langkah (Review, Test plan, Authorize) |
+| 12-13 | PoC console + PoC results | Mode fokus, lalu tab Dynamic | Checklist langkah PoC, pin evidence, draft PocSteps dengan diff, saran triage |
+| 14 | AI agent (mode izin) | Tab AI Assistant, sub-view "Dynamic agent", dan panel di Live console | Plan / Ask / Accept edits / Bypass, tool-call card, safety floor, budget, action log |
 
 ## 5 keputusan desain utama
 
@@ -24,6 +27,17 @@ Token visual sama dengan `web/index.html` (`--accent #4f46e5`, radius 8/14px, sy
 3. **Keselamatan terlihat di mana-mana.** Chip `REC` global di nav selama session aktif, strip `INTERCEPTING HTTPS` berwarna solid, tombol Stop selalu terlihat tanpa dialog konfirmasi (data sudah tersimpan, jadi aman). Consent modal merekam siapa, kapan, device, dan referensi engagement. Probe intrusiveness High butuh centang tambahan.
 4. **Persetujuan AI bukan otorisasi.** Kartu konfirmasi `start_session` memakai pola `chat-confirm` yang sudah ada, tetapi setelah Approve, consent modal tetap muncul. Probe usulan AI hanya jadi *draft*, tidak bisa jalan sebelum direview orang kedua.
 5. **Verdict live hanya "provisional"; verdict final dihitung saat session berhenti.** Penguji melihat sinyal secara realtime tanpa mengira itu hasil akhir. Nilai sensitif (token, cookie, PII) ter-mask dan reveal-nya dicatat. Daftar event dibatasi 400 baris di DOM dengan pill "N new, jump to live" saat auto-scroll dijeda.
+
+## Eskalasi PoC, mode izin agent, dan safety floor
+
+- **Eskalasi:** dari baris atau detail finding, "Verify dynamically" membuka drawer 3 langkah. (1) Review: bukti statis dan hipotesis. (2) Test plan: probe terpetakan (nama, intrusiveness, yang diamati), arti tiap verdict, device + preflight, mode Manual/Guided/AI-assisted. (3) Authorize: consent yang tidak bisa dilewati siapa pun. Batch menampilkan antrean finding ke probe, probe bersama hanya dimuat sekali, dan estimasi durasi.
+- **Tanpa probe:** tombol disabled dengan alasan ("No probe covers this rule yet") dan tautan "Propose probe with AI". Probe draft AI juga memblokir sampai direview.
+- **Hasil:** verdict kembali ke baris Vulnerabilities. "Draft PoC steps" hanya untuk CONFIRMED dan butuh minimal satu event yang di-pin. Hasilnya ditampilkan sebagai diff terhadap PocSteps lama, harus di-accept manusia, dan reversible seperti AI Fix (`OverridePocSteps`). Saran triage tidak pernah otomatis; NOT_REPRODUCED tidak disarankan menjadi false positive.
+- **Mode izin agent:** **Plan** (read-only, menghasilkan Plan card), **Ask** (default, tiap aksi non-read minta persetujuan), **Accept edits** (baca + observasi pasif otomatis; ubah device dan probe Medium/High tetap tanya), **Bypass** (semua aksi dalam scope jalan otomatis). Ask ditambahkan sebagai baseline karena Plan card menyebut "run in Ask mode".
+- **Tier tool:** Read, Observe, Modify device, Active probe. Status kartu: pending approval, auto-approved, running, done, blocked by safety floor, denied, cancelled, planned.
+- **Safety floor (selalu aktif, 8 butir):** (a) consent tetap manusia, (b) scope dikunci ke package scan dan allowlist, (c) Stop agent dan Stop & detach selalu hidup, (d) probe High hanya jika manusia mengaktifkan di launcher, (e) redaksi tetap berlaku, (f) tanpa shell atau JS bebas, probe hash-pinned, (g) budget 40 aksi dan 15 menit, (h) audit log berisi siapa yang menyetujui.
+- **Bypass:** butuh dialog konfirmasi + centang, hanya untuk device berlabel lab/emulator, banner merah permanen + chip di nav, turun ke Ask satu klik. Otomatis kembali ke Plan saat device terputus, budget habis, atau consent dicabut.
+- **Rule ID di mockup** diambil dari `AndroidVulnerabilityCatalog` (`MASTG-TEST-xxxx`), `VulnerabilityCatalog` (iOS `MSTG-*`), dan `AssessmentScanner` (`ASSESS-*`). Judul, severity, CVSS, dan CWE sama dengan katalog.
 
 ## Temuan penting tentang token existing
 
@@ -38,6 +52,10 @@ Beberapa badge existing tidak lolos WCAG AA untuk teks kecil: `badge-running` 2.
 5. **Perangkat terputus:** proxy di device bisa tertinggal. Perlu kebijakan pembersihan (reset otomatis, atau peringatan eksplisit seperti di mockup).
 6. **Provenance CI belum punya badge di web UI** (PHASES.md 5h.3 menyebut hanya data layer). Layar 4 mengasumsikan badge ini dibuat bersamaan.
 7. **Model izin:** dibutuhkan peran terpisah `dynamic:run`, `reveal`, dan `author` (publish probe). Apakah web server punya konsep peran sekarang?
+8. **Bypass mode tetap berisiko walau ada floor.** Agent bisa menjalankan serangkaian aksi in-scope yang masing-masing aman tetapi gabungannya merusak (mis. clear data lalu install ulang berulang). Budget membatasi, tetapi apakah perlu rate limit per tier dan daftar aksi destruktif yang selalu minta konfirmasi walau di Bypass?
+9. **Hash-pinned probe belum ada di arsitektur.** Floor (f) mengasumsikan runner memverifikasi hash skrip sebelum memuat. Siapa yang menandatangani hash saat probe dipublikasikan?
+10. **Floor (b) butuh runner yang menegakkan scope**, bukan hanya UI. Jika hanya UI yang memblok, agent yang memanggil API runner langsung bisa melewatinya.
+11. **Shift+Tab untuk memutar mode** membajak navigasi mundur keyboard di composer. Mockup menambah `Alt+M` sebagai alternatif; perlu keputusan apakah Shift+Tab dipertahankan (risiko aksesibilitas).
 
 ## Batasan mockup
 

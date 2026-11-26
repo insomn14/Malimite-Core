@@ -217,7 +217,7 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
 .steps{list-style:none;display:flex;flex-direction:column;gap:.45rem;margin:.6rem 0}
 .steps li{display:flex;gap:.5rem;align-items:center;color:var(--muted)}
 .steps li.done{color:var(--text)}.steps li.done .ico{color:#166534}
-.toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#1a1d23;color:#fff;border-radius:10px;padding:.55rem 1rem;font-size:.82rem;z-index:400;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:90vw}
+.toast{position:fixed;bottom:1rem;right:1rem;background:#1a1d23;color:#fff;border-radius:10px;padding:.55rem 1rem;font-size:.82rem;z-index:400;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:min(380px,90vw);pointer-events:none}
 .toast[hidden]{display:none}
 
 /* ===== LIVE console ===== */
@@ -332,6 +332,126 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
 .sess .t{font-weight:700;font-size:.82rem;display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
 .sess .s{display:block;font-size:.72rem;color:var(--muted)}
 .drawer{position:sticky;top:68px}
+
+.badge-critical{background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4}
+/* ===== NEW: tool tiers, statuses ===== */
+.tier{display:inline-flex;align-items:center;gap:.25rem;font-size:.64rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:.08rem .42rem;border-radius:6px;border:1px solid;white-space:nowrap}
+.tier-read{color:#374151;background:#f3f4f6;border-color:#6b7280}
+.tier-observe{color:#1e40af;background:#dbeafe;border-color:#2563eb}
+.tier-modify{color:#92400e;background:#fef3c7;border-color:#b45309}
+.tier-active{color:#991b1b;background:#fee2e2;border-color:#b91c1c}
+.st{display:inline-flex;align-items:center;gap:.3rem;font-size:.66rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:.1rem .5rem;border-radius:999px;border:1px solid;white-space:nowrap}
+.st-pending{color:#6d28d9;background:#ede9fe;border-color:#7c3aed}
+.st-auto,.st-done{color:#166534;background:#dcfce7;border-color:#15803d}
+.st-running{color:#1e40af;background:#dbeafe;border-color:#2563eb}
+.st-blocked{color:#fff;background:#991b1b;border-color:#7f1d1d}
+.st-denied,.st-cancelled{color:#374151;background:#f1f5f9;border-color:#6b7280}
+.st-planned{color:#374151;background:#fff;border-color:#6b7280;border-style:dashed}
+/* escalation drawer */
+.esc-ov{position:fixed;inset:0;background:rgba(17,24,39,.45);z-index:250;display:flex;justify-content:flex-end}
+.esc-ov[hidden]{display:none}
+.esc-drawer{width:min(780px,100%);background:var(--surface);height:100%;display:flex;flex-direction:column;box-shadow:-12px 0 40px rgba(0,0,0,.25)}
+.esc-head{display:flex;gap:.8rem;align-items:flex-start;padding:1rem 1.3rem .4rem}
+.esc-head h2{font-size:1.15rem}
+.esc-head .btn{margin-left:auto}
+.stepper{list-style:none;display:flex;gap:.4rem;padding:.4rem 1.3rem .8rem;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.stepper li{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--muted);font-weight:600}
+.stepper li .step-n{background:#fff;color:#374151;border:2px solid var(--border-strong)}
+.stepper li[aria-current=step]{color:var(--accent)}
+.stepper li[aria-current=step] .step-n{background:var(--accent);color:#fff;border-color:var(--accent)}
+.stepper li.done .step-n{background:#166534;border-color:#166534;color:#fff}
+.stepper li+li::before{content:"";width:28px;height:2px;background:var(--border-strong);margin-right:.2rem}
+.esc-body{flex:1;overflow:auto;padding:1rem 1.3rem;font-size:.84rem}
+.esc-foot{display:flex;gap:.6rem;align-items:center;padding:.8rem 1.3rem;border-top:1px solid var(--border)}
+.esc-foot .info{margin-right:auto;color:var(--muted);font-size:.76rem}
+.esc-body h3{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:#4b5563;margin:1rem 0 .35rem}
+.esc-body h3:first-child{margin-top:0}
+.verd-grid{display:grid;grid-template-columns:auto 1fr;gap:.45rem .7rem;align-items:start;font-size:.78rem}
+.q-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:.6rem;padding:.45rem .6rem;border-top:1px solid var(--border);align-items:center;font-size:.8rem}
+.q-row:first-child{border-top:0}
+.bulkbar{position:sticky;top:60px;z-index:60;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;background:#eef0ff;border:1px solid var(--accent);border-radius:10px;padding:.5rem .8rem;margin-bottom:.7rem;box-shadow:0 4px 14px rgba(16,24,40,.1)}
+.bulkbar[hidden]{display:none}
+.vl-hdr{display:grid;grid-template-columns:28px minmax(0,1fr) 150px 190px;gap:.6rem;padding:.35rem 1rem;font-size:.72rem;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.04em}
+.vl-row{display:grid;grid-template-columns:28px minmax(0,1fr) 150px 190px;gap:.6rem;align-items:center;padding:.6rem 1rem}
+.vl-row .ttl{min-width:0}.vl-row .ttl a{font-weight:600;font-size:.88rem;color:var(--text)}
+.vl-row .meta{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:.15rem;font-size:.72rem;color:var(--muted)}
+.vl-why{grid-column:2/-1;font-size:.76rem;color:#92400e;display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+.vl-card.sel{box-shadow:inset 3px 0 0 var(--accent)}
+@media(max-width:1100px){.vl-hdr,.vl-row{grid-template-columns:28px minmax(0,1fr) 130px 160px}}
+/* PoC */
+.pocg{border:1px solid var(--border);border-radius:10px;margin-bottom:.6rem;overflow:hidden}
+.pocg-h{padding:.45rem .6rem;background:var(--bg);font-size:.76rem;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
+.pstep{display:grid;grid-template-columns:18px minmax(0,1fr);gap:.45rem;padding:.45rem .6rem;border-top:1px solid #f1f2f4;font-size:.76rem}
+.pstep .ico{margin-top:.15rem;font-size:.95rem}
+.pstep .s{display:block;font-size:.68rem;font-weight:700;margin-top:.1rem}
+.pstep.done .s{color:#166534}.pstep.active .s{color:#1e40af}.pstep.todo .s{color:#4b5563}.pstep.partial .s{color:#92400e}
+.pin{display:flex;gap:.4rem;align-items:flex-start;padding:.4rem 0;border-bottom:1px solid #f1f2f4;font-size:.74rem}
+.pin .btn-link{margin-left:auto}
+.diff{font-family:ui-monospace,monospace;font-size:.74rem;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.diff div{padding:.12rem .6rem;white-space:pre-wrap;word-break:break-word}
+.diff .add{background:#dcfce7;color:#14532d}.diff .del{background:#fee2e2;color:#7f1d1d;text-decoration:line-through;text-decoration-color:rgba(127,29,29,.5)}.diff .same{color:#374151}
+.diff .hd{background:#f3f4f6;font-family:system-ui;font-weight:700;font-size:.7rem;color:#374151;text-decoration:none}
+/* AI agent */
+.ag{display:flex;flex-direction:column;gap:.7rem;min-width:0}
+.ag-head{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.ag-head h3{font-size:.95rem}
+.modechip{display:inline-flex;align-items:center;gap:.3rem;font-size:.72rem;font-weight:700;border-radius:6px;padding:.15rem .55rem;border:1px solid;white-space:nowrap}
+.m-plan{color:#1e40af;background:#dbeafe;border-color:#2563eb}
+.m-ask{color:#374151;background:#f3f4f6;border-color:#6b7280}
+.m-accept{color:#92400e;background:#fef3c7;border-color:#b45309}
+.m-bypass{color:#fff;background:#991b1b;border-color:#7f1d1d}
+.m-stopped{color:#374151;background:#fff;border-color:#6b7280;border-style:dashed}
+.bypass-banner{background:#991b1b;color:#fff;border-radius:8px;padding:.55rem .8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;font-size:.82rem;font-weight:600}
+.bypass-banner .btn{background:#fff;color:#7f1d1d;border-color:#fff}
+.agent-chip{background:#991b1b;color:#fff;border-color:#7f1d1d}.agent-chip:hover{background:#7f1d1d}
+.ag-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:.8rem;align-items:start}
+@media(max-width:1180px){.ag-grid{grid-template-columns:1fr}}
+.feed{display:flex;flex-direction:column;gap:.5rem;max-height:560px;overflow:auto;padding:.2rem;position:relative}
+.ag.side .feed{max-height:300px}
+.bub{padding:.5rem .7rem;border-radius:10px;font-size:.8rem;max-width:94%}
+.bub.u{align-self:flex-end;background:var(--accent);color:#fff}
+.bub.a{align-self:flex-start;background:#fff;border:1px solid var(--border)}
+.bub.sys{align-self:stretch;max-width:100%;background:#f1f5f9;border:1px dashed #6b7280;color:#374151;font-size:.76rem}
+.tcard{border:1px solid var(--border-strong);border-radius:8px;background:#fff;padding:.5rem .65rem;font-size:.78rem}
+.tcard.blocked{border-color:#991b1b;background:#fef2f2}
+.tcard.pending{border-color:#7c3aed;background:#f5f3ff}
+.tcard .top{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+.tcard .tool{font-family:ui-monospace,monospace;font-weight:700;font-size:.76rem}
+.tcard .by{font-size:.7rem;color:#4b5563;margin-top:.25rem}
+.tcard .acts{display:flex;gap:.4rem;margin-top:.4rem;flex-wrap:wrap}
+.plancard{border:2px solid #2563eb;border-radius:10px;background:#f8faff;padding:.6rem .75rem;font-size:.78rem}
+.plancard ol{list-style:none;margin:.4rem 0;display:flex;flex-direction:column;gap:.35rem}
+.plancard li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:.4rem;align-items:start;padding:.3rem 0;border-top:1px solid #dbeafe}
+.plancard li:first-child{border-top:0}
+.plancard li.off{opacity:.55;text-decoration:line-through}
+.composer{border:1px solid var(--border-strong);border-radius:10px;background:#fff;padding:.5rem}
+.composer textarea{border:0;outline:0;min-height:44px;font-size:.82rem;padding:.2rem}
+.composer textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.composer .row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-top:.3rem}
+.seg.mode label{padding:.3rem .6rem;font-size:.74rem}
+.seg.mode label:has(input[value=bypass]:checked){background:#991b1b}
+.seg.mode label:has(input:disabled){opacity:.5;cursor:not-allowed}
+.slash{list-style:none;border:1px solid var(--border-strong);border-radius:8px;background:#fff;margin-bottom:.3rem;font-size:.76rem}
+.slash li{padding:.3rem .6rem;display:flex;gap:.5rem;align-items:center;border-top:1px solid #f1f2f4}.slash li:first-child{border-top:0}
+.slash button{font:inherit;background:none;border:0;cursor:pointer;font-family:ui-monospace,monospace;font-weight:700;color:var(--accent)}
+.meter{height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden}
+.meter>i{display:block;height:100%;background:var(--accent)}
+.meter.hot>i{background:#b91c1c}
+.floor{list-style:none;display:flex;flex-direction:column;gap:.4rem;font-size:.74rem}
+.floor li{display:grid;grid-template-columns:16px minmax(0,1fr);gap:.4rem}
+.floor .ico{color:#166534;margin-top:.1rem}
+.log{list-style:none;display:flex;flex-direction:column;font-size:.72rem;max-height:240px;overflow:auto}
+.log li{display:grid;grid-template-columns:54px minmax(0,1fr);gap:.4rem;padding:.3rem 0;border-top:1px solid #f1f2f4}
+.log li:first-child{border-top:0}
+.log .w{font-weight:700;display:block}
+.mx{width:100%;border-collapse:collapse;font-size:.7rem}
+.mx th,.mx td{border:1px solid var(--border);padding:.2rem .35rem;text-align:left}
+.mx th{background:#f3f4f6}
+.scn{border:1px dashed #b45309;background:#fffbe6;border-radius:8px;padding:.5rem;font-size:.72rem;color:#78350f}
+.scn .row{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.3rem}
+.scn .btn{background:#fff;color:#1a1d23;border-color:#b45309;padding:.15rem .5rem;font-size:.7rem}
+.live-grid.ai-open{grid-template-columns:280px minmax(0,1fr) 400px}
+@media(max-width:1279px){.live-right #ag-side-wrap{grid-column:1/-1}.live-grid.ai-open{grid-template-columns:260px minmax(0,1fr)}}
 </style>
 </head>
 <body>
@@ -376,13 +496,14 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
   <a class="nav-link" href="#devices" data-nav="devices">Devices<span class="new-tag">NEW</span></a>
   <a class="nav-link" href="#" data-inert>Config</a>
   <span class="nav-spacer"></span>
+  <a id="nav-agent" class="rec-chip agent-chip" href="#agent" hidden aria-label="AI agent is in Bypass permissions mode. Open agent panel."><svg class="ico" aria-hidden="true"><use href="#i-alert"/></svg>AGENT · BYPASS</a>
   <a id="nav-rec" class="rec-chip" href="#live" hidden aria-label="Session recording. Open live console."><span class="dot pulse" aria-hidden="true"></span><span>REC<span class="full"> · com.example.bank</span> · <span id="nav-rec-t">00:00:00</span></span></a>
 </nav>
 
 <div class="wf-bar" role="navigation" aria-label="Wireframe screens (not part of the product UI)">
   <b>Wireframe screens:</b>
-  <a href="#devices">1 Devices</a><a href="#launcher">2 Launcher + consent</a><a href="#live">3 Live session</a><a href="#results">4 Session review</a><a href="#finding">5 Finding detail</a><a href="#probes">6 Probe Library</a><a href="#traffic">7 Traffic inspector</a><a href="#compare">8 Compare</a><a href="#assistant">9 AI Assistant</a><a href="#report">10 HTML report</a>
-  <span class="wf-hint">Press <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> to jump · dummy data only</span>
+  <a href="#devices">1 Devices</a><a href="#launcher">2 Launcher + consent</a><a href="#live">3 Live session</a><a href="#results">4 Session review</a><a href="#finding">5 Finding detail</a><a href="#probes">6 Probe Library</a><a href="#traffic">7 Traffic inspector</a><a href="#compare">8 Compare</a><a href="#assistant">9 AI Assistant</a><a href="#report">10 HTML report</a><a href="#vulns">11 Vulnerabilities + escalate</a><a href="#poc">12 PoC console</a><a href="#pocresult">13 PoC results</a><a href="#agent">14 AI agent (permission modes)</a>
+  <span class="wf-hint">Press <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> to jump (11–14 via links) · dummy data only</span>
 </div>
 
 <main id="main" tabindex="-1">
@@ -398,7 +519,7 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
   </div>
   <div class="tabs" role="tablist" aria-label="Scan result sections" id="scantabs">
     <span class="tab" role="tab" aria-selected="false" aria-disabled="true">Summary</span>
-    <a class="tab" id="tab-vuln" role="tab" href="#finding" aria-selected="false">Vulnerabilities <span class="tab-n">23</span></a>
+    <a class="tab" id="tab-vuln" role="tab" href="#vulns" aria-selected="false">Vulnerabilities <span class="tab-n">23</span></a>
     <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Assessment</span>
     <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Functions</span>
     <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Strings</span>
@@ -491,24 +612,29 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
 
 <!-- ===================== 3. LIVE ===================== -->
 <section class="screen" id="s-live" data-title="Live session" data-ctx="none" data-tab="dyn" hidden>
-  <div class="crumbs" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">Focus mode · <a href="#results">com.example.bank › Dynamic</a> › Session #3 (live) <span class="chip">Scan tabs hidden while recording so the console gets the full height</span></div>
+  <div class="crumbs" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">Focus mode · <a href="#results">com.example.bank › Dynamic</a> › <span id="live-crumb">Session #3 (live)</span> <span class="chip">Scan tabs hidden while recording so the console gets the full height</span></div>
   <div class="live-bar" id="live-bar">
     <div class="grp">
       <span class="rec-pill" id="rec-pill"><span class="dot pulse" aria-hidden="true"></span><span id="rec-text">RECORDING</span> <span class="mono" id="live-t">00:04:12</span></span>
       <span class="icpt" id="icpt"><svg class="ico"><use href="#i-globe"/></svg><span id="icpt-text">INTERCEPTING HTTPS · mitmproxy 10.0.2.2:8080</span></span>
     </div>
-    <div class="grp"><span class="chip"><svg class="ico"><use href="#i-device"/></svg> Pixel_7_API_34</span><span class="chip mono">com.example.bank 4.2.0</span><span class="chip">Manual</span><span class="chip">Consent: you · 14:02 · ENG-2291</span></div>
+    <div class="grp"><span class="chip"><svg class="ico"><use href="#i-device"/></svg> Pixel_7_API_34</span><span class="chip mono">com.example.bank 4.2.0</span><span class="chip" id="chip-mode">Manual</span><span class="chip" id="chip-poc" hidden>PoC</span><span class="chip" id="chip-consent">Consent: you · 14:02 · ENG-2291</span></div>
     <div class="grp ctl">
       <label class="wf-state">Preview state
         <select id="live-state"><option value="running">Running</option><option value="paused">Capture paused</option><option value="lost">Device disconnected</option><option value="runner">Runner link lost</option><option value="denied">Probe load denied</option><option value="stopped">Stopped</option></select></label>
+      <button class="btn btn-outline" id="btn-ai" type="button" aria-pressed="false" aria-controls="ag-side-wrap"><svg class="ico"><use href="#i-spark"/></svg> AI agent <span class="modechip m-ask" id="ag-chip">Ask</span></button>
+      <button class="btn btn-primary" id="btn-finish" type="button" hidden>Finish &amp; review PoC</button>
       <button class="btn btn-outline" id="btn-pause" type="button" aria-pressed="false"><svg class="ico"><use href="#i-pause"/></svg><span>Pause capture</span></button>
       <button class="btn btn-stop" id="btn-stop" type="button" title="Stop &amp; detach (Alt+Shift+X)"><svg class="ico"><use href="#i-stop"/></svg> Stop &amp; detach <kbd style="color:#111">Alt+Shift+X</kbd></button>
     </div>
   </div>
   <div id="live-banner"></div>
+  <div id="live-ag-banner"></div>
   <div class="live-grid">
+    <!-- PoC checklist (PoC mode only) -->
+    <section class="panel" id="poc-panel" hidden aria-labelledby="pc-h"><div class="panel-h" id="pc-h"><svg class="ico"><use href="#i-target"/></svg> PoC checklist <span class="sp" id="pc-sub"></span></div><div class="panel-b" id="pc-body"></div></section>
     <!-- probes -->
-    <section class="panel" aria-labelledby="pp-h">
+    <section class="panel" id="probe-panel" aria-labelledby="pp-h">
       <div class="panel-h" id="pp-h"><svg class="ico"><use href="#i-plug"/></svg> Probes <span class="sp" id="probe-count">9 of 11 on</span></div>
       <div class="panel-b" id="probe-list"></div>
     </section>
@@ -533,8 +659,10 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
     </section>
     <!-- right -->
     <div class="live-right">
-      <section class="panel" aria-labelledby="cov-h">
-        <div class="panel-h" id="cov-h"><svg class="ico"><use href="#i-shield"/></svg> Findings being verified <span class="sp">provisional</span></div>
+      <section class="panel" id="ag-side-wrap" hidden aria-label="AI agent panel"><div class="panel-b" id="ag-side-body"></div></section>
+      <section class="panel" id="pins-panel" hidden aria-labelledby="pins-h"><div class="panel-h" id="pins-h"><svg class="ico"><use href="#i-link"/></svg> Pinned evidence <span class="sp" id="pins-n">0</span></div><div class="panel-b" id="pins-body"></div></section>
+      <section class="panel" id="cov-panel" aria-labelledby="cov-h">
+        <div class="panel-h" id="cov-h"><svg class="ico"><use href="#i-shield"/></svg> Findings &amp; controls being verified <span class="sp">provisional</span></div>
         <div class="panel-b"><ul class="cov" id="cov"></ul>
           <p class="muted" style="font-size:.7rem;margin-top:.5rem">Final verdicts are computed when the session stops.</p></div>
       </section>
@@ -566,7 +694,7 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
         <div class="card-title">Session #3 <span class="muted" style="font-weight:400;font-size:.8rem" id="res-sub">Pixel_7_API_34 · Guided · 17 probes · 12 min 04 s · authorized by you (ENG-2291)</span>
           <span class="sp"><button class="btn btn-ghost btn-sm" type="button" data-toast="Downloads session bundle: events.jsonl, flows.har (redacted), screenshots">Export evidence</button></span></div>
         <div class="stat-row">
-          <div class="stat"><div class="v">5</div><div class="l"><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></div><div class="s">3 High · 2 Medium</div></div>
+          <div class="stat"><div class="v">5</div><div class="l"><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></div><div class="s">2 High · 3 Medium</div></div>
           <div class="stat"><div class="v">3</div><div class="l"><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></div><div class="s">not proof of safety</div></div>
           <div class="stat"><div class="v">2</div><div class="l"><span class="verdict v-inconcl"><svg class="ico"><use href="#i-help"/></svg>INCONCLUSIVE</span></div><div class="s">probe fired, evidence ambiguous</div></div>
           <div class="stat"><div class="v">13</div><div class="l"><span class="verdict v-nottested"><svg class="ico"><use href="#i-dashed"/></svg>NOT_TESTED</span></div><div class="s">no matching probe or flow not exercised</div></div>
@@ -594,7 +722,7 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
   <div class="page-head"><h1>Vulnerabilities</h1>
     <div class="head-actions"><label class="wf-state">Preview verdict <select id="fd-state"><option value="confirmed">CONFIRMED</option><option value="notrepro">NOT_REPRODUCED</option><option value="inconcl">INCONCLUSIVE</option><option value="nottested">NOT_TESTED</option><option value="dynamic">New dynamic finding</option></select></label></div></div>
   <div class="vuln-card" id="fd-card">
-    <div class="vuln-head"><span class="badge badge-high">High</span><span class="vuln-id">#7 · MASTG-STORAGE-1</span><span class="vuln-title">Sensitive data stored in SharedPreferences without encryption</span><span id="fd-verdict"></span><span class="chip">Status: Open</span></div>
+    <div class="vuln-head"><span class="badge badge-medium">Medium</span><span class="vuln-id">#7 · MASTG-TEST-0287</span><span class="vuln-title">Runtime Storage of Unencrypted Data via SharedPreferences API</span><span id="fd-verdict"></span><span class="chip">Status: Open</span></div>
     <div class="vuln-body" id="fd-body"></div>
   </div>
 </section>
@@ -658,12 +786,12 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
       <div class="stat"><div class="v">19</div><div class="l">Unchanged</div><div class="s">hidden by filter</div></div>
     </div>
     <div class="tbl-wrap"><table class="t" id="cmp-tbl"><caption class="sr">Verdict changes between sessions</caption><thead><tr><th>Change</th><th>Rule</th><th>Finding</th><th>Baseline #2</th><th>Target #3</th></tr></thead><tbody>
-      <tr data-c="chg"><td><span class="chip bad">▲ Regressed</span></td><td class="mono">MASTG-CRYPTO-1</td><td>Static IV used with AES/CBC</td><td><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td></tr>
-      <tr data-c="chg"><td><span class="chip ok">▼ Improved</span></td><td class="mono">MASTG-NETWORK-1</td><td>Cleartext HTTP to analytics host</td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td><td><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></td></tr>
-      <tr data-c="chg"><td><span class="chip ok">▼ Improved</span></td><td class="mono">MASTG-STORAGE-3</td><td>Debug log contains session ID</td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td><td><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></td></tr>
+      <tr data-c="chg"><td><span class="chip bad">▲ Regressed</span></td><td class="mono">MASTG-TEST-0334</td><td>Native Code Exposed Through WebViews</td><td><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td></tr>
+      <tr data-c="chg"><td><span class="chip ok">▼ Improved</span></td><td class="mono">MASTG-TEST-0233</td><td>Hardcoded HTTP URLs</td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td><td><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></td></tr>
+      <tr data-c="chg"><td><span class="chip ok">▼ Improved</span></td><td class="mono">MASTG-TEST-0217</td><td>Insecure TLS Protocols Explicitly Allowed in Code</td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td><td><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></td></tr>
       <tr data-c="chg"><td><span class="chip">＋ New</span></td><td class="mono">dynamic</td><td>Auth token sent in URL query string <span class="src-dyn">dynamic</span></td><td><span class="verdict v-nottested"><svg class="ico"><use href="#i-dashed"/></svg>NOT_TESTED</span></td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td></tr>
-      <tr data-c="same"><td class="muted">= Unchanged</td><td class="mono">MASTG-STORAGE-1</td><td>Sensitive data stored in SharedPreferences</td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td></tr>
-      <tr data-c="same"><td class="muted">= Unchanged</td><td class="mono">MASTG-RESILIENCE-1</td><td>Root detection can be bypassed</td><td><span class="verdict v-nottested"><svg class="ico"><use href="#i-dashed"/></svg>NOT_TESTED</span></td><td><span class="verdict v-nottested"><svg class="ico"><use href="#i-dashed"/></svg>NOT_TESTED</span></td></tr>
+      <tr data-c="same"><td class="muted">= Unchanged</td><td class="mono">MASTG-TEST-0287</td><td>Runtime Storage of Unencrypted Data via SharedPreferences API</td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td></tr>
+      <tr data-c="same"><td class="muted">= Unchanged</td><td class="mono">MASTG-TEST-0212b</td><td>Hardcoded API Keys in Strings</td><td><span class="verdict v-nottested"><svg class="ico"><use href="#i-dashed"/></svg>NOT_TESTED</span></td><td><span class="verdict v-nottested"><svg class="ico"><use href="#i-dashed"/></svg>NOT_TESTED</span></td></tr>
     </tbody></table></div>
     <h3 style="margin:1rem 0 .4rem;font-size:.9rem">Network surface</h3>
     <div class="grid-main" style="grid-template-columns:1fr 1fr">
@@ -675,11 +803,12 @@ label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-wei
 
 <!-- ===================== 9. AI ASSISTANT ===================== -->
 <section class="screen" id="s-assistant" data-title="AI Assistant with dynamic tools" data-ctx="scan" data-tab="ai" hidden>
+  <div class="subnav" aria-label="AI Assistant views"><a href="#assistant" aria-current="page">Chat</a><a href="#agent">Dynamic agent <span class="new-tag">NEW</span></a></div>
   <div class="card chat-wrap"><div class="chat" id="chat">
     <div class="msg u">Is the auth token really written to disk at login? Verify it dynamically on the Pixel.</div>
     <div class="msg a">
-      <p>Static analysis flags <span class="mono">MASTG-STORAGE-1</span> in <span class="mono">AuthStore.save()</span>. No session has exercised this path yet, so I can't tell whether it is reachable. I can run a short, low-intrusiveness session to check.</p>
-      <details class="chat-tool"><summary><span class="mono">list_probes(rule_id="MASTG-STORAGE-1")</span> <span class="badge badge-done">ok</span></summary><pre class="code">storage.sharedprefs.write  v1.2.0  low
+      <p>Static analysis flags <span class="mono">MASTG-TEST-0287</span> (Runtime Storage of Unencrypted Data via SharedPreferences API) in <span class="mono">AuthStore.save()</span>. No session has exercised this path yet, so I can't tell whether it is reachable. I can run a short, low-intrusiveness session to check.</p>
+      <details class="chat-tool"><summary><span class="mono">list_probes(rule_id="MASTG-TEST-0287")</span> <span class="badge badge-done">ok</span></summary><pre class="code">storage.sharedprefs.write  v1.2.0  low
 fs.snapshot                v0.9.1  medium</pre></details>
       <div class="chat-confirm" id="cf-start">
         <div class="chat-confirm-head"><span class="badge badge-confirm" id="cf-start-b">needs confirmation</span><span>Start a dynamic session?</span></div>
@@ -706,7 +835,7 @@ fs.snapshot                v0.9.1  medium</pre></details>
           <div><span class="k">Hooks</span><span class="v mono">BiometricPrompt$AuthenticationCallback.*</span></div>
           <div><span class="k">Intrusiveness</span><span class="v"><span class="intr l"><i><b></b><b></b><b></b></i>Low</span> observe only</span></div>
           <div><span class="k">Side effects</span><span class="v">None (no return values changed)</span></div>
-          <div><span class="k">Rule</span><span class="v mono">MASTG-AUTH-2</span></div>
+          <div><span class="k">Rule</span><span class="v mono">MASTG-TEST-0326</span></div>
         </div>
         <details class="chat-tool"><summary>Script (generated, 24 lines) — review before approving</summary><pre class="code">// script body omitted in this wireframe
 // production shows the full source with syntax highlighting,
@@ -742,11 +871,46 @@ fs.snapshot                v0.9.1  medium</pre></details>
       <tr><td>○ NOT_TESTED</td><td>13</td><td>No matching probe, or the code path was not exercised.</td></tr></table>
     <h3>6.3 Confirmed findings</h3>
     <table><tr><th>Rule</th><th>Finding</th><th>Evidence</th></tr>
-      <tr><td>MASTG-STORAGE-1</td><td>Sensitive data stored in SharedPreferences without encryption</td><td>E-0412 SharedPreferences$Editor.putString file=auth_prefs.xml key=auth_token value=[redacted sha256:9f2c…] at 00:03:41</td></tr>
-      <tr><td>MASTG-CRYPTO-1</td><td>Static IV used with AES/CBC</td><td>E-0388, E-0391 Cipher.doFinal AES/CBC/PKCS5Padding iv=identical across 2 calls</td></tr></table>
+      <tr><td>MASTG-TEST-0287<br>MEDIUM · CWE-312</td><td>Runtime Storage of Unencrypted Data via SharedPreferences API</td><td>E-0412 SharedPreferences$Editor.putString file=auth_prefs.xml key=auth_token value=[redacted sha256:9f2c…] at 00:03:41</td></tr>
+      <tr><td>MASTG-TEST-0235<br>HIGH · CWE-319</td><td>Android App Configurations Allowing Cleartext Traffic</td><td>F-0133 POST http://telemetry.bank.example/collect → 204 (cleartext, 1 flow)</td></tr></table>
     <div class="note"><b>Redaction.</b> Tokens, cookies, card numbers and e-mail addresses are masked in this report. Raw values are available in the session bundle to users with the “reveal” permission.</div>
     <div class="note"><b>Limitations.</b> Dynamic results depend on which screens were exercised. 13 findings were not tested; absence of a CONFIRMED verdict does not mean the application is safe.</div>
   </article>
+</section>
+
+<!-- ===================== 11. VULNERABILITIES + ESCALATION ===================== -->
+<section class="screen" id="s-vulns" data-title="Vulnerabilities with dynamic verification" data-ctx="scan" data-tab="vuln" hidden>
+  <div class="page-head"><h1>Vulnerabilities <span class="tab-n">23</span></h1>
+    <div class="head-actions"><label class="wf-state">Preview state <select id="vl-state"><option value="ok">Runner ready</option><option value="offline">Runner offline</option><option value="denied">Viewer role (cannot run)</option></select></label></div>
+    <p class="sub">Static findings with their latest dynamic verdict. Verify any finding on a device to turn "might be" into evidence. The wireframe lists 13 of 23.</p></div>
+  <div class="card" style="padding:.7rem 1rem;margin-bottom:.8rem">
+    <div class="chipbar" style="padding:0;border:0" role="group" aria-label="Filter by dynamic verdict">
+      <input type="search" id="vl-q" placeholder="Search rule, title or CWE…" aria-label="Search findings" style="width:230px">
+      <span class="muted" style="font-size:.74rem">Dynamic verdict:</span>
+      <button class="fchip" data-vv="all" aria-pressed="true">All</button><button class="fchip" data-vv="confirmed" aria-pressed="false">Confirmed</button><button class="fchip" data-vv="notrepro" aria-pressed="false">Not reproduced</button><button class="fchip" data-vv="inconcl" aria-pressed="false">Inconclusive</button><button class="fchip" data-vv="nottested" aria-pressed="false">Not tested</button>
+      <label class="fchip" style="display:inline-flex;gap:.3rem;align-items:center;cursor:pointer;margin-left:auto"><input type="checkbox" id="vl-all"> Select all verifiable</label>
+    </div>
+  </div>
+  <div id="vl-alert"></div>
+  <div class="bulkbar" id="vl-bulk" hidden role="region" aria-label="Bulk actions">
+    <b id="vl-bulk-n">0 selected</b><span class="muted" id="vl-bulk-x" style="font-size:.76rem"></span>
+    <span style="margin-left:auto;display:flex;gap:.5rem"><button class="btn btn-ghost btn-sm" type="button" id="vl-clear">Clear</button><button class="btn btn-primary" type="button" id="vl-bulk-go" data-escalate-bulk><svg class="ico"><use href="#i-target"/></svg> <span id="vl-bulk-lbl">Verify 0 selected dynamically</span></button></span>
+  </div>
+  <div class="vl-hdr" aria-hidden="true"><span></span><span>Finding</span><span>Dynamic</span><span>Action</span></div>
+  <div id="vl-rows"></div>
+</section>
+
+<!-- ===================== 13. PoC RESULTS ===================== -->
+<section class="screen" id="s-pocresult" data-title="PoC results" data-ctx="scan" data-tab="dyn" hidden>
+  <div class="crumbs"><a href="#vulns">Vulnerabilities</a> › PoC session #4 › Results</div>
+  <div class="page-head"><h1>PoC results</h1><div class="head-actions"><a class="btn btn-primary" href="#vulns">Back to Vulnerabilities</a></div></div>
+  <div id="pr-body"></div>
+</section>
+
+<!-- ===================== 14. AI AGENT ===================== -->
+<section class="screen" id="s-agent" data-title="AI Assistant — dynamic agent" data-ctx="scan" data-tab="ai" hidden>
+  <div class="subnav" aria-label="AI Assistant views"><a href="#assistant">Chat</a><a href="#agent" aria-current="page">Dynamic agent <span class="new-tag">NEW</span></a></div>
+  <div class="card"><div id="ag-full"></div></div>
 </section>
 </main>
 
@@ -780,8 +944,17 @@ fs.snapshot                v0.9.1  medium</pre></details>
   <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="gen-h" aria-describedby="gen-d" style="width:min(520px,100%)">
     <div class="modal-h"><span class="icon-circle" aria-hidden="true"><svg class="ico"><use href="#i-alert"/></svg></span><div><h2 id="gen-h"></h2></div></div>
     <div class="modal-b" id="gen-d"></div>
+    <div class="modal-b" id="gen-ck" hidden style="padding-top:0"><label class="ck danger"><input type="checkbox" id="gen-ckbox"><span id="gen-cktxt"></span></label></div>
     <div class="modal-f"><button class="btn btn-ghost" type="button" id="gen-cancel">Cancel</button><button class="btn btn-primary" type="button" id="gen-ok">Confirm</button></div>
   </div>
+</div>
+<div class="esc-ov" id="esc" hidden>
+  <aside class="esc-drawer" role="dialog" aria-modal="true" aria-labelledby="esc-h">
+    <header class="esc-head"><div><h2 id="esc-h">Verify dynamically</h2><p class="muted" id="esc-sub" style="font-size:.78rem"></p></div><button class="btn btn-ghost btn-sm" type="button" id="esc-x" aria-label="Close drawer">✕</button></header>
+    <ol class="stepper" id="esc-steps" aria-label="Steps"></ol>
+    <div class="esc-body" id="esc-body" tabindex="-1" aria-live="polite"></div>
+    <footer class="esc-foot"><span class="info" id="esc-info"></span><button class="btn btn-ghost" type="button" id="esc-back">Back</button><button class="btn btn-primary" type="button" id="esc-next">Next</button></footer>
+  </aside>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <div class="sr" id="live-announce" role="status" aria-live="polite"></div>
@@ -802,11 +975,13 @@ function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeou
 function announce(m){$('#live-announce').textContent=m}
 
 /* ---------- router ---------- */
-const ORDER=['devices','launcher','live','results','finding','probes','traffic','compare','assistant','report'];
+const ORDER=['devices','launcher','live','results','finding','probes','traffic','compare','assistant','report','vulns','poc','pocresult','agent'];
 function show(id){
   if(!ORDER.includes(id)) id='devices';
-  $$('.screen').forEach(s=>s.hidden=s.id!=='s-'+id);
-  const s=$('#s-'+id);
+  const sec=id==='poc'?'live':id;
+  $$('.screen').forEach(s=>s.hidden=s.id!=='s-'+sec);
+  const s=$('#s-'+sec);
+  $('#toast').hidden=true;
   $$('.wf-bar a').forEach((a,i)=>{ if(ORDER[i]===id) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current')});
   $$('nav.app-nav a[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===s.dataset.nav));
   const ctx=$('#scanctx'); ctx.hidden=s.dataset.ctx!=='scan';
@@ -815,7 +990,11 @@ function show(id){
   window.scrollTo(0,0);
   if(id==='devices')renderDevices();
   if(id==='launcher')renderPlan();
-  if(id==='live')liveShown();
+  if(id==='live')liveShown('session');
+  if(id==='poc')liveShown('poc');
+  if(id==='vulns')renderVulns();
+  if(id==='pocresult')renderPocResult();
+  if(id==='agent')renderAgent();
   if(id==='results')renderResults();
   if(id==='finding')renderFinding();
   if(id==='probes')renderProbes();
@@ -833,7 +1012,7 @@ document.addEventListener('keydown',e=>{
 
 /* ---------- modals ---------- */
 let lastFocus=null;
-function openModal(el,opener){lastFocus=opener||document.activeElement;el.hidden=false;const f=$('input:not([disabled]),button:not([disabled])',el);(f||el).focus()}
+function openModal(el,opener){lastFocus=opener||document.activeElement;el.hidden=false;const f=$$('input:not([disabled]),button:not([disabled])',el).find(x=>x.offsetParent!==null);(f||el).focus()}
 function closeModal(el){el.hidden=true;if(lastFocus&&lastFocus.isConnected)lastFocus.focus()}
 function trap(el){el.addEventListener('keydown',e=>{
   if(e.key==='Escape'){e.preventDefault();closeModal(el);return}
@@ -844,8 +1023,11 @@ function trap(el){el.addEventListener('keydown',e=>{
   else if(!e.shiftKey&&document.activeElement===z){e.preventDefault();a.focus()}
 })}
 trap($('#consent'));trap($('#gen'));
-function confirmDlg({title,body,ok='Confirm',cls='btn-primary',onOk}){
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;const o=[$('#gen'),$('#consent'),$('#esc')].find(x=>x&&!x.hidden);if(o&&!o.contains(document.activeElement)){e.preventDefault();closeModal(o)}});
+function confirmDlg({title,body,ok='Confirm',cls='btn-primary',onOk,check}){
   $('#gen-h').textContent=title;$('#gen-d').innerHTML=body;const b=$('#gen-ok');b.textContent=ok;b.className='btn '+cls;
+  const ck=$('#gen-ckbox');$('#gen-ck').hidden=!check;ck.checked=false;
+  if(check){$('#gen-cktxt').innerHTML=check;b.disabled=true;ck.onchange=()=>b.disabled=!ck.checked}else b.disabled=false;
   b.onclick=()=>{closeModal($('#gen'));onOk&&onOk()};openModal($('#gen'));
 }
 $('#gen-cancel').onclick=()=>closeModal($('#gen'));
@@ -942,25 +1124,26 @@ $('#consent-ok').onclick=()=>{
 const PROBES=[
  ['ENVIRONMENT',[['env.root.observe','Root checks (observe)','l',1],['env.frida.observe','Anti-Frida checks (observe)','l',1],['env.root.bypass','Root detection bypass','h',0]]],
  ['TRANSPORT',[['net.okhttp.trace','OkHttp request trace','l',1],['net.pinning.bypass','SSL pinning bypass','h',1]]],
- ['SECRETS',[['storage.sharedprefs','SharedPreferences writes','l',1],['crypto.cipher','Cipher / Mac usage','l',1],['keystore.use','Keystore access','l',1],['fs.snapshot','Filesystem snapshot','m',1]]],
+ ['SECRETS',[['storage.sharedprefs.write','SharedPreferences writes','l',1],['crypto.cipher','Cipher / Mac usage','l',1],['keystore.use','Keystore access','l',1],['fs.snapshot','Filesystem snapshot','m',1]]],
  ['SESSION',[['webview.config','WebView config & bridge','l',1],['ipc.intent','Intent & URL scheme','l',1]]]];
 const probeOn={};PROBES.forEach(g=>g[1].forEach(p=>probeOn[p[0]]=!!p[3]));
+const DEF_ON=Object.assign({},probeOn);
 const probeCt={};
 const SCRIPT=[
  {s:'log',lv:'I',m:'ActivityManager: Start proc com.example.bank for activity MainActivity'},
  {s:'frida',p:'env.root.observe',t:'File.exists("/system/xbin/su")',d:'returned false',a:{path:'/system/xbin/su',return:'false'}},
  {s:'http',m:'GET',h:'api.bank.example',u:'/v2/config',st:200,sz:'1.2 KB'},
  {s:'frida',p:'net.okhttp.trace',t:'okhttp3.RealCall.execute',d:'GET https://api.bank.example/v2/config',a:{url:'https://api.bank.example/v2/config',method:'GET'}},
- {s:'http',m:'POST',h:'api.bank.example',u:'/v2/auth/login',st:200,sz:'0.9 KB',secret:1},
- {s:'frida',p:'crypto.cipher',t:'javax.crypto.Cipher.doFinal',d:'AES/CBC/PKCS5Padding · ENCRYPT · key 16 B · iv static',rule:'MASTG-CRYPTO-1',a:{transformation:'AES/CBC/PKCS5Padding',opmode:'ENCRYPT',key:'[16 bytes]',iv:'00000000000000000000000000000000',input_len:'171'}},
- {s:'frida',p:'storage.sharedprefs',t:'SharedPreferences$Editor.putString',d:'file=auth_prefs.xml key=auth_token value=••••',rule:'MASTG-STORAGE-1',secret:'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.x9k2',a:{file:'auth_prefs.xml',key:'auth_token',value:'@secret'}},
- {s:'fs',m:'+ /data/data/com.example.bank/shared_prefs/auth_prefs.xml (new, 1.1 KB, mode 0660)',rule:'MASTG-STORAGE-1'},
+ {s:'http',m:'POST',h:'api.bank.example',u:'/v2/auth/login',st:200,sz:'0.9 KB',secret:1,login:1},
+ {s:'frida',p:'crypto.cipher',t:'javax.crypto.Cipher.getInstance',d:'transformation "AES" (no explicit mode)',rule:'MASTG-TEST-0232',v:'inconcl',a:{transformation:'AES',explicit_mode:'false',caller:'com.example.bank.data.TokenCache.wrap'}},
+ {s:'frida',p:'storage.sharedprefs.write',t:'SharedPreferences$Editor.putString',d:'file=auth_prefs.xml key=auth_token value=••••',rule:'MASTG-TEST-0287',v:'confirmed',secret:'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.x9k2',a:{file:'auth_prefs.xml',key:'auth_token',value:'@secret'}},
+ {s:'fs',m:'+ /data/data/com.example.bank/shared_prefs/auth_prefs.xml (new, 1.1 KB, mode 0660)',rule:'MASTG-TEST-0287',v:'confirmed'},
  {s:'log',lv:'D',m:'AuthStore: session persisted'},
  {s:'frida',p:'keystore.use',t:'KeyStore.getEntry',d:'alias=bank_master_key provider=AndroidKeyStore',a:{alias:'bank_master_key',provider:'AndroidKeyStore'}},
  {s:'http',m:'GET',h:'api.bank.example',u:'/v2/accounts',st:200,sz:'4.8 KB',secret:1},
  {s:'log',lv:'W',m:'OkHttp: Cleartext HTTP traffic to telemetry.bank.example'},
- {s:'http',m:'POST',h:'telemetry.bank.example',u:'/collect',st:204,sz:'0 B',clear:1,rule:'MASTG-NETWORK-1'},
- {s:'frida',p:'webview.config',t:'WebView.addJavascriptInterface',d:'name=NativeBridge on https://help.bank.example',rule:'MASTG-PLATFORM-7',a:{name:'NativeBridge',url:'https://help.bank.example/faq'}},
+ {s:'http',m:'POST',h:'telemetry.bank.example',u:'/collect',st:204,sz:'0 B',clear:1,rule:'MASTG-TEST-0235',v:'confirmed'},
+ {s:'frida',p:'webview.config',t:'WebView.addJavascriptInterface',d:'name=NativeBridge on https://help.bank.example',rule:'MASTG-TEST-0334',v:'confirmed',a:{name:'NativeBridge',url:'https://help.bank.example/faq'}},
  {s:'frida',p:'ipc.intent',t:'Activity.startActivity',d:'bankapp://transfer?to=…&amount=…',a:{intent:'bankapp://transfer?to=NL91ABNA0417164300&amount=50'}},
  {s:'log',lv:'E',m:'chromium: [ERROR:ssl_client_socket_impl.cc] handshake failed; net_error -202'},
  {s:'http',m:'GET',h:'cdn.bank.example',u:'/img/promo-banner.webp',st:200,sz:'88 KB'},
@@ -968,28 +1151,32 @@ const SCRIPT=[
  {s:'http',m:'GET',h:'api.bank.example',u:'/v2/statements?token=…',st:200,sz:'12 KB',secret:1,rule:'dyn'},
  {s:'log',lv:'I',m:'MainActivity: onResume'},
  {s:'http',m:'GET',h:'api.bank.example',u:'/v2/profile',st:401,sz:'86 B'},
- {s:'frida',p:'crypto.cipher',t:'javax.crypto.Cipher.doFinal',d:'AES/CBC/PKCS5Padding · DECRYPT · iv static',rule:'MASTG-CRYPTO-1',a:{transformation:'AES/CBC/PKCS5Padding',opmode:'DECRYPT',iv:'00000000000000000000000000000000'}},
+ {s:'log',lv:'D',m:'CardVault: encrypting card token'},
+ {s:'frida',p:'crypto.cipher',t:'javax.crypto.Cipher.getInstance',d:'AES/ECB/PKCS5Padding (explicit ECB)',rule:'MASTG-TEST-0232',v:'confirmed',ecb:1,a:{transformation:'AES/ECB/PKCS5Padding',caller:'com.example.bank.data.CardVault.encrypt'}},
+ {s:'frida',p:'crypto.cipher',t:'javax.crypto.Cipher.doFinal',d:'AES/ECB/PKCS5Padding · ENCRYPT · key 16 B',rule:'MASTG-TEST-0232',v:'confirmed',ecb:1,a:{transformation:'AES/ECB/PKCS5Padding',opmode:'ENCRYPT',key:'[16 bytes]',input_len:'16'}},
 ];
 const COV=[
- {r:'MASTG-STORAGE-1',t:'Token stored in SharedPreferences',need:'storage.sharedprefs',hit:'MASTG-STORAGE-1'},
- {r:'MASTG-CRYPTO-1',t:'Static IV with AES/CBC',need:'crypto.cipher',hit:'MASTG-CRYPTO-1'},
- {r:'MASTG-NETWORK-1',t:'Cleartext HTTP to telemetry host',need:'net.okhttp.trace',hit:'MASTG-NETWORK-1'},
- {r:'MASTG-NETWORK-2',t:'No certificate pinning',need:'net.pinning.bypass',hit:null},
- {r:'MASTG-PLATFORM-7',t:'JS bridge exposed in WebView',need:'webview.config',hit:'MASTG-PLATFORM-7'},
- {r:'MASTG-RESILIENCE-1',t:'Root detection bypassable',need:'env.root.bypass',hit:null}];
+ {r:'MASTG-TEST-0287',t:'Runtime Storage of Unencrypted Data via SharedPreferences API',need:'storage.sharedprefs.write',hit:'MASTG-TEST-0287'},
+ {r:'MASTG-TEST-0232',t:'Broken Symmetric Encryption Modes',need:'crypto.cipher',hit:'MASTG-TEST-0232'},
+ {r:'MASTG-TEST-0235',t:'Android App Configurations Allowing Cleartext Traffic',need:'net.okhttp.trace',hit:'MASTG-TEST-0235'},
+ {r:'MASTG-TEST-0242',t:'Missing Certificate Pinning in Network Security Configuration',need:'net.pinning.bypass',hit:null},
+ {r:'MASTG-TEST-0334',t:'Native Code Exposed Through WebViews',need:'webview.config',hit:'MASTG-TEST-0334'},
+ {r:'ASSESS-ROOT-DETECTION',t:'Root detection (control)',need:'env.root.bypass',hit:null}];
 const L={tms:0,ev:[],flows:[],logs:[],n:{all:0,http:0,log:0},t:252,idx:0,state:'running',filter:'all',hits:false,sel:null,view:'timeline',following:true,unseen:0,cov:{},started:false,id:0,rendered:0,tv:'timeline'};
 const CAP=400;
 let tickT=null,clockT=null;
-function startLive(){
+function startLive(mode){
+  L.mode=mode||'session';
   Object.assign(L,{tms:0,ev:[],flows:[],logs:[],n:{all:0,http:0,log:0},t:0,idx:0,state:'running',sel:null,unseen:0,cov:{},started:true,id:0});
   Object.keys(probeCt).forEach(k=>delete probeCt[k]);
   COV.forEach(c=>L.cov[c.r]='waiting');
+  initMode();
   $('#follow').checked=true;L.following=true;
   setLiveState('running');
   // preload ~4 minutes of history so the screen is not empty on arrival
-  for(let i=0;i<22;i++){emit(true,true)};L.t=Math.floor(L.tms/1000)+4;L.tms=L.t*1000;
+  const pre=L.mode==='poc'?3:22;for(let i=0;i<pre;i++){emit(true,true)};L.t=Math.floor(L.tms/1000)+(L.mode==='poc'?1:4);L.tms=L.t*1000;
   clearInterval(tickT);clearInterval(clockT);
-  tickT=setInterval(tick,950);clockT=setInterval(()=>{if(L.state==='running'||L.state==='paused'){L.t++;paintClock()}},1000);
+  tickT=setInterval(tick,950);clockT=setInterval(()=>{if(L.state==='running'||L.state==='paused'){L.t++;paintClock();AG.budget.t++;updBudget()}},1000);
   renderAll();
 }
 function paintClock(){const t=hms(L.t);$('#live-t').textContent=t;$('#nav-rec-t').textContent=t}
@@ -1003,7 +1190,7 @@ function emit(silent,pre){
   if(it.s==='http'){L.flows.push(e);L.n.http++}
   if(it.s==='log'){L.logs.push(e);L.n.log++}
   L.ev.push(e);L.n.all++;
-  if(it.rule&&it.rule!=='dyn'){const c=COV.find(c=>c.hit===it.rule);if(c&&L.cov[c.r]!=='confirmed'){L.cov[c.r]='confirmed';if(!silent)announce(`Provisional signal: ${c.r} — ${c.t}`)}}
+  if(it.rule&&it.rule!=='dyn'){const c=COV.find(c=>c.hit===it.rule);if(c&&L.cov[c.r]!=='confirmed'){const nv=it.v==='confirmed'?'confirmed':'inconcl';if(L.cov[c.r]!==nv){L.cov[c.r]=nv;if(!silent)announce(`Provisional signal: ${c.r} ${nv==='confirmed'?'confirmed':'inconclusive'}`)}}}
   COV.forEach(c=>{if(L.cov[c.r]==='waiting'){L.cov[c.r]=probeOn[c.need]?'waiting':'notrun'}else if(L.cov[c.r]==='notrun'&&probeOn[c.need])L.cov[c.r]='waiting'});
   if(!silent){ if(!L.following)L.unseen++; }
   return e;
@@ -1039,7 +1226,7 @@ function renderAll(){
   $('#vl-http').innerHTML=L.flows.slice(-CAP).map(rowHtml).join('');
   $('#logbox').innerHTML=L.logs.slice(-CAP).map(e=>`<span class="lv-${e.lv}">${e.ts.slice(0,8)} ${e.lv}/ ${esc(e.m)}</span>`).join('\n');
   if(L.following){const lb=$('#logbox');lb.scrollTop=lb.scrollHeight;const vh=$('#vl-http');vh.scrollTop=vh.scrollHeight}
-  renderProbes2();renderCov();renderFilm();paintClock();
+  renderProbes2();renderCov();renderFilm();paintClock();if(L.mode==='poc')renderPoc();
 }
 function renderProbes2(){
   const on=Object.values(probeOn).filter(Boolean).length,tot=Object.keys(probeOn).length;
@@ -1048,9 +1235,10 @@ function renderProbes2(){
   $('#probe-list').innerHTML=PROBES.map(g=>`<div class="probe-grp">${g[0]}</div>`+g[1].map(p=>`<div class="probe"><label class="switch" style="flex:1;min-width:0"><input type="checkbox" data-probe="${p[0]}" ${probeOn[p[0]]?'checked':''} ${lock?'disabled':''}><span class="track"></span><span class="nm">${p[1]}</span></label>${intr(p[2])}<span class="ct" title="events">${probeCt[p[0]]||0}</span></div>`).join('')).join('');
 }
 function renderCov(){
+  if(L.mode==='poc')return;
   const stopped=L.state==='stopped';
   $('#cov').innerHTML=COV.map(c=>{const s=L.cov[c.r]||'waiting';
-   let v=s==='confirmed'?verdict('confirmed',!stopped):s==='notrun'?verdict('nottested'):stopped?verdict(c.hit?'inconcl':'notrepro'):`<span class="chip off">${ico('refresh')}Observing…</span>`;
+   let v=s==='confirmed'?verdict('confirmed',!stopped):s==='inconcl'?verdict('inconcl',!stopped):s==='notrun'?verdict('nottested'):stopped?verdict(c.hit?'inconcl':'notrepro'):`<span class="chip off">${ico('refresh')}Observing…</span>`;
    return `<li><span class="r">${c.r}</span><span>${c.t}</span><span>${v}</span></li>`}).join('');
 }
 function renderFilm(){
@@ -1066,11 +1254,11 @@ function detailHtml(e){
    <div class="code">at com.example.bank.data.AuthStore.save(AuthStore.kt:48)\nat com.example.bank.ui.login.LoginViewModel.onSuccess(LoginViewModel.kt:112)\nat kotlinx.coroutines.DispatchedTask.run(…)</div>
    <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap;align-items:center">
     ${e.rule?`<a class="btn btn-outline btn-sm" href="#finding">${ico('link')} Finding ${e.rule}</a>`:''}
-    <button class="btn btn-ghost btn-sm" type="button" data-toast="Marked as evidence for ${e.rule||'a finding'} (wireframe)">${ico('check')} Mark as evidence</button>
+    ${L.mode==='poc'?pinBtn(e):`<button class="btn btn-ghost btn-sm" type="button" data-toast="Marked as evidence for ${e.rule||'a finding'} (wireframe)">${ico('check')} Mark as evidence</button>`}
     <button class="btn btn-ghost btn-sm" type="button" data-toast="Copied (masked)">${ico('copy')} Copy</button>
     <span class="muted" style="font-size:.7rem;margin-left:auto">Reveals are logged in the audit trail</span></div>`}
-  if(e.s==='http')return `<h3><span class="srcb s-http">HTTP</span><span class="mono">${e.m} ${esc(e.h)}${esc(e.u)}</span> <span class="badge ${e.st>=400?'badge-high':'badge-done'}">${e.st}</span></h3><p class="muted">${e.sz} · ${e.clear?'cleartext, ':''}${e.secret?'contains secret · ':''}pinning bypassed</p><a class="btn btn-outline btn-sm" href="#traffic" style="margin-top:.5rem">Open in Traffic inspector</a>`;
-  if(e.s==='fs')return `<h3><span class="srcb s-fs">FS</span> File created</h3><p class="mono" style="font-size:.76rem">${esc(e.m)}</p>${e.rule?`<a class="btn btn-outline btn-sm" href="#finding" style="margin-top:.5rem">${ico('link')} Finding ${e.rule}</a>`:''}`;
+  if(e.s==='http')return `<h3><span class="srcb s-http">HTTP</span><span class="mono">${e.m} ${esc(e.h)}${esc(e.u)}</span> <span class="badge ${e.st>=400?'badge-high':'badge-done'}">${e.st}</span></h3><p class="muted">${e.sz} · ${e.clear?'cleartext, ':''}${e.secret?'contains secret · ':''}pinning bypassed</p><div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap;align-items:center"><a class="btn btn-outline btn-sm" href="#traffic">Open in Traffic inspector</a>${L.mode==='poc'?pinBtn(e):''}</div>`;
+  if(e.s==='fs')return `<h3><span class="srcb s-fs">FS</span> File created</h3><p class="mono" style="font-size:.76rem">${esc(e.m)}</p><div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap;align-items:center">${e.rule?`<a class="btn btn-outline btn-sm" href="#finding">${ico('link')} Finding ${e.rule}</a>`:''}${L.mode==='poc'?pinBtn(e):''}</div>`;
   return `<h3><span class="srcb s-log">LOG</span> ${e.lv}/ log line</h3><p class="mono" style="font-size:.76rem">${esc(e.m)}</p>`;
 }
 function select(id){
@@ -1133,35 +1321,44 @@ function setLiveState(s){
   if(s==='lost')h=`<div class="alert alert-error" role="alert">${ico('x')}<div><strong>Device disconnected at ${hms(L.t)}.</strong> ${L.n.all.toLocaleString()} events up to this point are saved. Reconnecting… attempt 2 of 5. Proxy settings on the device could not be reverted — they reset when the emulator restarts.</div><div class="acts"><button class="btn btn-outline btn-sm" type="button" data-toast="Retrying connection…">Retry now</button><button class="btn btn-danger btn-sm" type="button" onclick="document.getElementById('btn-stop').click()">End session</button></div></div>`;
   if(s==='runner')h=`<div class="alert alert-warn" role="alert">${ico('alert')}<div><strong>Lost contact with the runner.</strong> The session keeps running on the runner and events are buffered there (up to 10 min). The display resumes when the link returns. Reconnecting…</div><div class="acts"><button class="btn btn-danger btn-sm" type="button" onclick="document.getElementById('btn-stop').click()">Stop &amp; detach</button></div></div>`;
   if(s==='denied')h=`<div class="alert alert-error" role="alert">${ico('lock')}<div><strong>2 probes could not load.</strong> <span class="mono">keystore.use</span>, <span class="mono">env.frida.observe</span>: the app denied attach (anti-Frida check). The other 9 probes are running. Findings that depend on these probes will show NOT_TESTED.</div><div class="acts"><button class="btn btn-outline btn-sm" type="button" data-toast="Reload with anti-Frida evasion needs high-intrusiveness confirmation">Retry with evasion…</button></div></div>`;
-  if(s==='stopped')h=`<div class="alert alert-ok" role="status">${ico('check')}<div><strong>Session stopped.</strong> Proxy reverted and device detached. Computing verdicts for 23 findings…</div><div class="acts"><a class="btn btn-primary btn-sm" href="#results">Review results</a></div></div>`;
+  if(s==='stopped')h=`<div class="alert alert-ok" role="status">${ico('check')}<div><strong>Session stopped.</strong> Proxy reverted and device detached. Computing verdicts for 23 findings…</div><div class="acts"><a class="btn btn-primary btn-sm" href="${L.mode==='poc'?'#pocresult':'#results'}">Review results</a></div></div>`;
   ban.innerHTML=h;
   renderProbes2();renderCov();
-  if(s==='stopped'){clearInterval(tickT)}
+  if(s==='stopped'){clearInterval(tickT);if(L.mode==='poc')applyPocResults()}
+  if((s==='lost'||s==='runner')&&AG.mode!=='plan'&&!AG.stopped)agDrop(s==='lost'?'The device disconnected.':'Runner link lost.');
   announce({paused:'Capture paused',lost:'Device disconnected. Recording stopped.',stopped:'Session stopped',running:'Recording',runner:'Runner connection lost',denied:'Some probes could not load'}[s]);
 }
-function liveShown(){
-  if(!L.started)startLive();
-  else{renderAll();setLiveState(L.state)}
+function liveShown(mode){
+  if(!L.started||L.mode!==mode)startLive(mode);
+  else{applyMode();renderAll();setLiveState(L.state)}
 }
-document.addEventListener('keydown',e=>{if(e.altKey&&e.shiftKey&&(e.key==='X'||e.key==='x')&&L.started&&L.state!=='stopped'){e.preventDefault();setLiveState('stopped');if($('#s-live').hidden)toast('Session stopped, proxy reverted')}});
+document.addEventListener('keydown',e=>{if(e.altKey&&e.shiftKey&&(e.key==='X'||e.key==='x')&&L.started&&L.state!=='stopped'){e.preventDefault();agStop(true);setLiveState('stopped');if($('#s-live').hidden)toast('Session stopped, proxy reverted')}});
 bindLive();
 
 /* ---------- 4. results ---------- */
 const FIND=[
- ['MASTG-STORAGE-1','Sensitive data in SharedPreferences','high','confirmed',3],['MASTG-CRYPTO-1','Static IV used with AES/CBC','high','confirmed',2],['MASTG-NETWORK-1','Cleartext HTTP to telemetry host','medium','confirmed',2],
- ['MASTG-PLATFORM-7','JS bridge exposed in WebView','high','confirmed',1],['MASTG-STORAGE-5','World-readable export file','medium','confirmed',1],
- ['MASTG-NETWORK-2','Certificate pinning missing','medium','inconcl',4],['MASTG-AUTH-2','Biometric fallback skips check','high','inconcl',2],
- ['MASTG-STORAGE-3','Debug log contains session ID','low','notrepro',0],['MASTG-NETWORK-3','TLS 1.0 accepted','medium','notrepro',0],['MASTG-PLATFORM-2','Exported activity without permission','medium','notrepro',0],
- ['MASTG-RESILIENCE-1','Root detection can be bypassed','medium','nottested',0],['MASTG-RESILIENCE-3','Anti-debug missing','low','nottested',0],['MASTG-CRYPTO-4','Hardcoded API key in resources','high','nottested',0]];
+ {id:'MASTG-TEST-0287',t:'Runtime Storage of Unencrypted Data via SharedPreferences API',sev:'medium',cvss:5.9,cwe:'CWE-312',cat:'STORAGE',v:'confirmed',ev:3,pr:['storage.sharedprefs.write','fs.snapshot']},
+ {id:'MASTG-TEST-0235',t:'Android App Configurations Allowing Cleartext Traffic',sev:'high',cvss:7.4,cwe:'CWE-319',cat:'NETWORK',v:'confirmed',ev:2,pr:['net.okhttp.trace']},
+ {id:'MASTG-TEST-0334',t:'Native Code Exposed Through WebViews',sev:'high',cvss:7.5,cwe:'CWE-749',cat:'PLATFORM',v:'confirmed',ev:1,pr:['webview.config']},
+ {id:'MASTG-TEST-0202',t:'References to APIs and Permissions for Accessing External Storage',sev:'medium',cvss:5.3,cwe:'CWE-922',cat:'STORAGE',v:'confirmed',ev:1,pr:['fs.snapshot']},
+ {id:'MASTG-TEST-0231',t:'References to Logging APIs',sev:'medium',cvss:5.3,cwe:'CWE-532',cat:'STORAGE',v:'confirmed',ev:2,pr:['capture.logcat']},
+ {id:'MASTG-TEST-0242',t:'Missing Certificate Pinning in Network Security Configuration',sev:'medium',cvss:5.9,cwe:'CWE-295',cat:'NETWORK',v:'inconcl',ev:4,pr:['net.pinning.bypass']},
+ {id:'MASTG-TEST-0232',t:'Broken Symmetric Encryption Modes',sev:'high',cvss:7.5,cwe:'CWE-327',cat:'CRYPTO',v:'inconcl',ev:2,pr:['crypto.cipher']},
+ {id:'MASTG-TEST-0217',t:'Insecure TLS Protocols Explicitly Allowed in Code',sev:'high',cvss:7.4,cwe:'CWE-326',cat:'NETWORK',v:'notrepro',ev:0,pr:['net.tls.observe']},
+ {id:'MASTG-TEST-0233',t:'Hardcoded HTTP URLs',sev:'medium',cvss:5.9,cwe:'CWE-319',cat:'NETWORK',v:'notrepro',ev:0,pr:['net.okhttp.trace']},
+ {id:'MASTG-TEST-0227',t:'Debugging Enabled for WebViews',sev:'high',cvss:7.1,cwe:'CWE-489',cat:'RESILIENCE',v:'notrepro',ev:0,pr:['webview.config']},
+ {id:'MASTG-TEST-0364',t:'Exported And Unprotected Activities',sev:'high',cvss:7.5,cwe:'CWE-926',cat:'PLATFORM',v:'nottested',ev:0,pr:['ipc.activity.launch']},
+ {id:'MASTG-TEST-0326',t:'References to APIs Allowing Fallback to Non-Biometric Authentication',sev:'medium',cvss:5.3,cwe:'CWE-287',cat:'AUTH',v:'nottested',ev:0,pr:['auth.biometric.callback'],draft:1},
+ {id:'MASTG-TEST-0212b',t:'Hardcoded API Keys in Strings',sev:'critical',cvss:9.1,cwe:'CWE-798',cat:'STORAGE',v:'nottested',ev:0,pr:[]}];
 let vf='all';
 function renderResults(){
   const ci=$('#res-src').value==='ci';$('#res-prov').hidden=!ci;
   $('#res-sub').textContent=ci?'CI emulator · Automated · 17 probes · 6 min 12 s · authorized by CI service account (policy: ci-default)':'Pixel_7_API_34 · Guided · 17 probes · 12 min 04 s · authorized by you (ENG-2291)';
   $$('[data-vf]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.vf===vf));
-  const rows=FIND.filter(f=>vf==='all'||f[3]===vf);
+  const rows=FIND.filter(f=>vf==='all'||f.v===vf);
   $('#res-count').textContent=`Showing ${rows.length} of 23 (wireframe lists 13)`;
-  $('#res-tbl tbody').innerHTML=rows.map(f=>`<tr><td class="mono">${f[0]}</td><td>${f[1]}</td><td><span class="badge badge-${f[2]}">${f[2]}</span></td><td>${verdict(f[3])}</td><td class="num">${f[4]?`<a href="#finding">${f[4]} event${f[4]>1?'s':''}</a>`:'<span class="muted">—</span>'}</td>
-   <td>${f[3]==='nottested'?`<a class="btn btn-ghost btn-sm" href="#launcher">Test this</a>`:f[3]==='confirmed'||f[3]==='inconcl'?`<a class="btn btn-ghost btn-sm" href="#finding">Review</a>`:`<a class="btn btn-ghost btn-sm" href="#finding">Details</a>`}</td></tr>`).join('')||`<tr><td colspan="6" class="empty-note">No findings with this verdict in this session.</td></tr>`;
+  $('#res-tbl tbody').innerHTML=rows.map(f=>`<tr><td class="mono">${f.id}</td><td>${esc(f.t)}</td><td><span class="badge badge-${f.sev}">${f.sev}</span></td><td>${verdict(f.v)}</td><td class="num">${f.ev?`<a href="#finding">${f.ev} event${f.ev>1?'s':''}</a>`:'<span class="muted">—</span>'}</td>
+   <td>${f.v==='nottested'||f.v==='inconcl'?(coverable(f)?`<button class="btn btn-ghost btn-sm" type="button" data-escalate="${f.id}">${f.v==='nottested'?'Test this':'Verify again'}</button>`:`<button class="btn btn-ghost btn-sm" type="button" disabled title="No probe covers this rule yet">No probe</button>`):`<a class="btn btn-ghost btn-sm" href="#finding">${f.v==='confirmed'?'Review':'Details'}</a>`}</td></tr>`).join('')||`<tr><td colspan="6" class="empty-note">No findings with this verdict in this session.</td></tr>`;
 }
 $('#res-src').onchange=renderResults;
 document.addEventListener('click',e=>{const b=e.target.closest('[data-vf]');if(b){vf=b.dataset.vf;renderResults()}
@@ -1172,8 +1369,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-vf]');if(b
 function renderFinding(){
   const k=$('#fd-state').value,card=$('#fd-card');
   const dyn=k==='dynamic';card.classList.toggle('is-dynamic',dyn||k==='confirmed');
-  $('.vuln-title',card).textContent=dyn?'Auth token sent in URL query string':'Sensitive data stored in SharedPreferences without encryption';
-  $('.vuln-id',card).textContent=dyn?'#24 · dynamic':'#7 · MASTG-STORAGE-1';
+  $('.vuln-title',card).textContent=dyn?'Auth token sent in URL query string':'Runtime Storage of Unencrypted Data via SharedPreferences API';
+  $('.vuln-id',card).textContent=dyn?'#24 · dynamic':'#7 · MASTG-TEST-0287';
   $('#fd-verdict').innerHTML=dyn?`<span class="src-dyn">${ico('pulse')}dynamic</span> ${verdict('confirmed')}`:verdict(k);
   const evid={
    confirmed:`<div class="evid"><div class="evid-row"><span class="mono muted">00:03:41.220</span><div><b class="mono">SharedPreferences$Editor.putString</b><div class="mono muted">file=auth_prefs.xml key=auth_token value=<span class="mask"><span class="mv">sha256:9f2c…a41e</span></span> (len 171)</div><div class="mono muted" style="font-size:.7rem">at AuthStore.save(AuthStore.kt:48)</div></div><a class="btn btn-ghost btn-sm" href="#live">View in timeline</a></div>
@@ -1181,22 +1378,24 @@ function renderFinding(){
      <div class="evid-row"><span class="mono muted">00:03:40.870</span><div><b>POST /v2/auth/login → 200</b><div class="muted">Response body contains the token written next</div></div><a class="btn btn-ghost btn-sm" href="#traffic">Open flow</a></div></div>`,
    inconcl:`<div class="evid"><div class="evid-row"><span class="mono muted">00:03:41.220</span><div><b class="mono">SharedPreferences$Editor.putString</b><div class="mono muted">file=settings.xml key=last_user value=<span class="mask"><span class="mv">sha256:11ab…</span></span></div><div class="muted">Write seen, but the key does not look like a credential. Needs a human call.</div></div><a class="btn btn-ghost btn-sm" href="#live">View in timeline</a></div></div>`,
    notrepro:`<div class="alert alert-info" style="margin:0">${ico('shield')}<div><b>What this means.</b> Probe <span class="mono">storage.sharedprefs.write</span> was active for the whole session and the login and settings screens were exercised. No write containing credential-like data was seen. The code path may exist but was not reached.</div></div>`,
-   nottested:`<div class="alert alert-warn" style="margin:0">${ico('alert')}<div><b>No evidence either way.</b> The probe was off in this session. <a href="#launcher">Start a session with this probe</a> or use Re-test below.</div></div>`,
+   nottested:`<div class="alert alert-warn" style="margin:0">${ico('alert')}<div><b>No evidence either way.</b> The probe was off in this session. Use <b>Verify dynamically…</b> below to run a PoC session for this finding.</div></div>`,
    dynamic:`<div class="evid"><div class="evid-row"><span class="mono muted">00:09:02.114</span><div><b>GET api.bank.example/v2/statements?token=<span class="mask"><span class="mv">••••</span></span></b><div class="muted">200 · 12 KB · seen twice</div></div><a class="btn btn-ghost btn-sm" href="#traffic">Open flow</a></div></div>`}[k];
   const hist={confirmed:['#1 NOT_TESTED','#2 INCONCLUSIVE','#3 CONFIRMED'],inconcl:['#2 NOT_TESTED','#3 INCONCLUSIVE'],notrepro:['#2 CONFIRMED','#3 NOT_REPRODUCED'],nottested:['#3 NOT_TESTED'],dynamic:['#3 CONFIRMED (new)']}[k];
   const strip=k==='nottested'?'':`<div class="vuln-status-strip dyn"><span class="label">Dynamic</span>Session #3 · today 14:02 · Pixel_7_API_34 · ${dyn?'found by observation, not by a rule':'probe storage.sharedprefs.write v1.2.0'}${k==='confirmed'?' · verdict set automatically':''}</div>`;
   $('#fd-body').innerHTML=`
-   <div class="vuln-status-strip"><span class="label">Triage</span>Status Open · Severity High (static) · reviewer: —</div>
-   <div class="vuln-section"><div class="vuln-section-title">Static analysis</div><p style="font-size:.85rem">AuthStore.save() writes the bearer token to <span class="mono">auth_prefs.xml</span> via <span class="mono">SharedPreferences.putString</span> without wrapping it in EncryptedSharedPreferences. Location: <a href="#" data-inert class="mono">com.example.bank.data.AuthStore.save</a></p></div>
+   <div class="vuln-status-strip"><span class="label">Triage</span>Status Open · Severity Medium (static) · CVSS 5.9 · CWE-312 · Category STORAGE · reviewer: —</div>
+   <div class="vuln-section"><div class="vuln-section-title">Static analysis</div><p style="font-size:.85rem">SharedPreferences used with sensitive keys without EncryptedSharedPreferences: <span class="mono">AuthStore.save()</span> writes <span class="mono">auth_token</span> via <span class="mono">putString</span>. Location: <a href="#" data-inert class="mono">com.example.bank.data.AuthStore.save</a></p></div>
    <div class="vuln-section"><div class="vuln-section-title">Dynamic evidence ${dyn?'':verdict(k)}</div>${strip}
      ${k==='confirmed'||k==='inconcl'||dyn?`<div style="margin-top:.6rem">${evid}</div>`:`<div style="margin-top:.6rem">${evid}</div>`}
      <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-top:.7rem">
+       ${k==='nottested'?`<button class="btn btn-primary" type="button" data-escalate="MASTG-TEST-0287">${ico('target')} Verify dynamically…</button>`:''}
        <button class="btn btn-outline" type="button" id="btn-retest">${ico('refresh')} Re-test on Pixel_7_API_34</button>
+       ${k!=='nottested'&&!dyn?`<button class="btn btn-ghost" type="button" data-escalate="MASTG-TEST-0287">Verify in a new PoC session…</button>`:''}
        <button class="btn btn-ghost" type="button" id="btn-override">Override verdict…</button>
        <span class="muted" style="font-size:.74rem" id="retest-note">Runs only probe storage.sharedprefs.write · Low intrusiveness · ~2 min · uses your 14:02 authorization</span></div>
      <div style="margin-top:.8rem"><div class="vuln-section-title">Verdict history</div><ul class="hist" aria-label="Verdict history">${hist.map(h=>`<li>${esc(h)}</li>`).join('')}</ul></div>
    </div>
-   <div class="vuln-section"><div class="vuln-section-title">Remediation</div><p style="font-size:.85rem">Store the token with EncryptedSharedPreferences or the Android Keystore, and keep it out of backups.</p></div>`;
+   <div class="vuln-section"><div class="vuln-section-title">Remediation</div><p style="font-size:.85rem">Use EncryptedSharedPreferences or Keystore-backed storage.</p></div>`;
   $('#btn-retest').onclick=()=>{
     const b=$('#btn-retest');b.disabled=true;b.innerHTML=`${ico('refresh','spin')} Re-testing… 0:04`;let t=4;
     const iv=setInterval(()=>{t++;b.innerHTML=`${ico('refresh','spin')} Re-testing… 0:0${Math.min(t,9)}`},900);
@@ -1207,19 +1406,22 @@ $('#fd-state').onchange=renderFinding;
 
 /* ---------- 6. probes ---------- */
 const PLIB=[
- {id:'storage.sharedprefs.write',n:'SharedPreferences writes',ph:'SECRETS',pl:'Android',i:'l',r:['MASTG-STORAGE-1'],src:'Built-in',v:'1.2.0',h:['SharedPreferencesImpl$EditorImpl.putString','…putStringSet','…commit / apply'],fx:'Observe only. Values are hashed at source unless “capture raw values” is on.',par:[['capture_raw_values','false'],['max_events_per_sec','50']]},
- {id:'crypto.cipher',n:'Cipher / Mac usage',ph:'SECRETS',pl:'Android',i:'l',r:['MASTG-CRYPTO-1','MASTG-CRYPTO-2'],src:'Built-in',v:'1.4.0',h:['javax.crypto.Cipher.init / doFinal','javax.crypto.Mac.doFinal'],fx:'Observe only. Key bytes are never sent to the server; only length and algorithm.',par:[['log_iv','true']]},
- {id:'crypto.commoncrypto',n:'CommonCrypto (CCCrypt)',ph:'SECRETS',pl:'iOS',i:'l',r:['MASTG-CRYPTO-1'],src:'Built-in',v:'1.1.0',h:['CCCrypt','CCCryptorCreate'],fx:'Observe only.',par:[]},
- {id:'keystore.use',n:'Keystore access',ph:'SECRETS',pl:'Android',i:'l',r:['MASTG-STORAGE-2'],src:'Built-in',v:'1.0.3',h:['KeyStore.getEntry / getKey'],fx:'Observe only.',par:[]},
- {id:'net.okhttp.trace',n:'OkHttp request trace',ph:'TRANSPORT',pl:'Android',i:'l',r:['MASTG-NETWORK-1'],src:'Built-in',v:'1.3.0',h:['okhttp3.RealCall.execute / enqueue'],fx:'Observe only.',par:[]},
- {id:'net.pinning.bypass',n:'SSL pinning bypass',ph:'TRANSPORT',pl:'Android',i:'h',r:['MASTG-NETWORK-2'],src:'Built-in',v:'2.0.1',h:['CertificatePinner.check','TrustManagerImpl.verifyChain'],fx:'Changes behaviour: certificate checks return success. Required for interception. May trigger backend alerts.',par:[['only_hosts','api.bank.example']]},
- {id:'env.root.observe',n:'Root checks (observe)',ph:'ENVIRONMENT',pl:'Android',i:'l',r:['MASTG-RESILIENCE-1'],src:'Built-in',v:'1.0.2',h:['File.exists','Runtime.exec("su")'],fx:'Observe only.',par:[]},
- {id:'env.root.bypass',n:'Root detection bypass',ph:'ENVIRONMENT',pl:'Android',i:'h',r:['MASTG-RESILIENCE-1'],src:'Built-in',v:'1.5.0',h:['File.exists','Build.TAGS'],fx:'Changes behaviour: return values of detection calls are altered.',par:[]},
- {id:'fs.snapshot',n:'Filesystem snapshot & diff',ph:'SECRETS',pl:'Android',i:'m',r:['MASTG-STORAGE-1','MASTG-STORAGE-5'],src:'Built-in',v:'0.9.1',h:['(runner-side, adb)'],fx:'Reads the app sandbox before and after. No writes.',par:[['include_cache','false']]},
- {id:'webview.config',n:'WebView config & JS bridge',ph:'SESSION',pl:'Android',i:'l',r:['MASTG-PLATFORM-7'],src:'Built-in',v:'1.1.0',h:['WebView.addJavascriptInterface','WebSettings.setJavaScriptEnabled'],fx:'Observe only.',par:[]},
- {id:'ios.keychain.access',n:'Keychain access (SecItem*)',ph:'SECRETS',pl:'iOS',i:'l',r:['MASTG-STORAGE-2'],src:'Built-in',v:'1.0.0',h:['SecItemAdd','SecItemCopyMatching'],fx:'Observe only.',par:[]},
- {id:'auth.biometric.callback',n:'BiometricPrompt callback trace',ph:'SESSION',pl:'Android',i:'l',r:['MASTG-AUTH-2'],src:'AI draft',v:'0.1.0',h:['BiometricPrompt$AuthenticationCallback.*'],fx:'Observe only (static lint passed).',par:[],draft:1},
- {id:'acme.custom.deeplink',n:'Deep-link logger (team)',ph:'SESSION',pl:'Android',i:'l',r:[],src:'Custom',v:'0.3.0',h:['Activity.onNewIntent'],fx:'Observe only.',par:[]}];
+ {id:'storage.sharedprefs.write',n:'SharedPreferences writes',ph:'SECRETS',pl:'Android',i:'l',r:['MASTG-TEST-0287'],src:'Built-in',v:'1.2.0',h:['SharedPreferencesImpl$EditorImpl.putString','…putStringSet','…commit / apply'],fx:'Observe only. Values are hashed at source unless “capture raw values” is on.',par:[['capture_raw_values','false'],['max_events_per_sec','50']]},
+ {id:'crypto.cipher',n:'Cipher / Mac usage',ph:'SECRETS',pl:'Android',i:'l',r:['MASTG-TEST-0232','MASTG-TEST-0221','MASTG-TEST-0212'],src:'Built-in',v:'1.4.0',h:['javax.crypto.Cipher.getInstance / init / doFinal','javax.crypto.Mac.doFinal'],fx:'Observe only. Key bytes are never sent to the server; only length and algorithm.',par:[['log_transformation','true']]},
+ {id:'crypto.commoncrypto',n:'CommonCrypto (CCCrypt)',ph:'SECRETS',pl:'iOS',i:'l',r:['MSTG-CRYPTO-3','MSTG-CRYPTO-2'],src:'Built-in',v:'1.1.0',h:['CCCrypt','CCCryptorCreate','CC_MD5'],fx:'Observe only.',par:[]},
+ {id:'keystore.use',n:'Keystore access',ph:'SECRETS',pl:'Android',i:'l',r:['ASSESS-KEYSTORE'],src:'Built-in',v:'1.0.3',h:['KeyStore.getEntry / getKey'],fx:'Observe only.',par:[]},
+ {id:'net.okhttp.trace',n:'OkHttp request trace',ph:'TRANSPORT',pl:'Android',i:'l',r:['MASTG-TEST-0235','MASTG-TEST-0233'],src:'Built-in',v:'1.3.0',h:['okhttp3.RealCall.execute / enqueue'],fx:'Observe only.',par:[]},
+ {id:'net.tls.observe',n:'TLS handshake observer',ph:'TRANSPORT',pl:'Android',i:'l',r:['MASTG-TEST-0217'],src:'Built-in',v:'1.0.0',h:['SSLSocket.startHandshake','SSLSession.getProtocol'],fx:'Observe only.',par:[]},
+ {id:'net.pinning.bypass',n:'SSL pinning bypass',ph:'TRANSPORT',pl:'Android',i:'h',r:['MASTG-TEST-0242','ASSESS-SSL-PINNING'],src:'Built-in',v:'2.0.1',h:['CertificatePinner.check','TrustManagerImpl.verifyChain'],fx:'Changes behaviour: certificate checks return success. Required for interception. May trigger backend alerts.',par:[['only_hosts','api.bank.example']]},
+ {id:'env.root.observe',n:'Root checks (observe)',ph:'ENVIRONMENT',pl:'Android',i:'l',r:['ASSESS-ROOT-DETECTION','MASTG-TEST-0324'],src:'Built-in',v:'1.0.2',h:['File.exists','Runtime.exec("su")'],fx:'Observe only.',par:[]},
+ {id:'env.frida.observe',n:'Anti-Frida checks (observe)',ph:'ENVIRONMENT',pl:'Android',i:'l',r:['ASSESS-FRIDA-DETECTION'],src:'Built-in',v:'1.0.1',h:['/proc/self/maps reads','port 27042 probes'],fx:'Observe only.',par:[]},
+ {id:'env.root.bypass',n:'Root detection bypass',ph:'ENVIRONMENT',pl:'Android',i:'h',r:['ASSESS-ROOT-DETECTION'],src:'Built-in',v:'1.5.0',h:['File.exists','Build.TAGS'],fx:'Changes behaviour: return values of detection calls are altered.',par:[]},
+ {id:'fs.snapshot',n:'Filesystem snapshot & diff',ph:'SECRETS',pl:'Android',i:'m',r:['MASTG-TEST-0287','MASTG-TEST-0202'],src:'Built-in',v:'0.9.1',h:['(runner-side, adb)'],fx:'Reads the app sandbox before and after. No writes.',par:[['include_cache','false']]},
+ {id:'webview.config',n:'WebView config & JS bridge',ph:'SESSION',pl:'Android',i:'l',r:['MASTG-TEST-0334','MASTG-TEST-0227'],src:'Built-in',v:'1.1.0',h:['WebView.addJavascriptInterface','WebView.setWebContentsDebuggingEnabled'],fx:'Observe only.',par:[]},
+ {id:'ipc.activity.launch',n:'Launch exported components',ph:'SESSION',pl:'Android',i:'m',r:['MASTG-TEST-0364','MASTG-TEST-0365'],src:'Built-in',v:'0.8.0',h:['(runner-side) adb shell am start / startservice'],fx:'Starts exported activities and services with empty intents. Can change app state; no data is modified by the probe itself.',par:[['max_components','10']]},
+ {id:'ios.keychain.access',n:'Keychain access (SecItem*)',ph:'SECRETS',pl:'iOS',i:'l',r:['MSTG-STORAGE-7','ASSESS-KEYCHAIN'],src:'Built-in',v:'1.0.0',h:['SecItemAdd','SecItemCopyMatching'],fx:'Observe only.',par:[]},
+ {id:'auth.biometric.callback',n:'BiometricPrompt callback trace',ph:'SESSION',pl:'Android',i:'l',r:['MASTG-TEST-0326','ASSESS-BIOMETRIC'],src:'AI draft',v:'0.1.0',h:['BiometricPrompt$AuthenticationCallback.*'],fx:'Observe only (static lint passed).',par:[],draft:1},
+ {id:'acme.custom.deeplink',n:'Deep-link logger (team)',ph:'SESSION',pl:'Android',i:'l',r:['MASTG-TEST-0394'],src:'Custom',v:'0.3.0',h:['Activity.onNewIntent'],fx:'Observe only.',par:[]}];
 let selProbe='storage.sharedprefs.write';
 function renderProbes(){
   const q=$('#pf-q').value.toLowerCase(),pl=$('#pf-plat').value,ph=$('#pf-phase').value,it=$('#pf-int').value;
@@ -1265,7 +1467,7 @@ function renderTraffic(){
     <button class="btn btn-ghost btn-sm" type="button" data-toast="Copied cURL with secrets masked">${ico('copy')} Copy as cURL (masked)</button>
     <button class="btn btn-ghost btn-sm" type="button" id="btn-replay" ${mutating?'disabled aria-describedby="rp-why"':''}>${ico('refresh')} Replay (read-only)</button></div>
    <p class="muted" style="font-size:.72rem;margin-top:.4rem" id="rp-why">${mutating?'Replay is off for POST/PUT/DELETE: it could change real data. Copy as cURL to run it yourself.':'Sends one GET from the runner host to an allow-listed host. Response is shown here, not stored as a new flow.'}</p>
-   <div id="ev-pop" hidden class="alert alert-info" style="margin-top:.6rem;flex-direction:column;gap:.4rem"><label class="fl" style="width:100%">Attach to<select id="ev-sel"><option>MASTG-NETWORK-1 · Cleartext HTTP to telemetry host</option><option>MASTG-STORAGE-1 · Sensitive data in SharedPreferences</option><option>Create new dynamic finding…</option></select></label><div style="display:flex;gap:.4rem"><button class="btn btn-primary btn-sm" type="button" id="ev-ok">Attach</button><button class="btn btn-ghost btn-sm" type="button" id="ev-no">Cancel</button></div></div>`;
+   <div id="ev-pop" hidden class="alert alert-info" style="margin-top:.6rem;flex-direction:column;gap:.4rem"><label class="fl" style="width:100%">Attach to<select id="ev-sel"><option>MASTG-TEST-0235 · Android App Configurations Allowing Cleartext Traffic</option><option>MASTG-TEST-0287 · Runtime Storage of Unencrypted Data via SharedPreferences API</option><option>Create new dynamic finding…</option></select></label><div style="display:flex;gap:.4rem"><button class="btn btn-primary btn-sm" type="button" id="ev-ok">Attach</button><button class="btn btn-ghost btn-sm" type="button" id="ev-no">Cancel</button></div></div>`;
   $('#btn-ev').onclick=()=>{$('#ev-pop').hidden=false;$('#ev-sel').focus()};
   $('#ev-no').onclick=()=>{$('#ev-pop').hidden=true;$('#btn-ev').focus()};
   $('#ev-ok').onclick=()=>{toast('Flow #'+f.n+' attached as evidence (wireframe)');$('#ev-pop').hidden=true;$('#btn-ev').focus()};
@@ -1289,6 +1491,559 @@ $('#cf-start-ok').onclick=()=>{resolve('start',true);selDev='pixel';const r=$('i
 $('#cf-start-no').onclick=()=>resolve('start',false);
 $('#cf-probe-ok').onclick=()=>{resolve('probe',true);toast('Draft saved in Probe Library')};
 $('#cf-probe-no').onclick=()=>resolve('probe',false);
+
+/* ====================== NEW: escalation, PoC console, AI agent ====================== */
+const PKG='com.example.bank';
+const F=id=>FIND.find(f=>f.id===id);
+const probeOf=id=>PLIB.find(p=>p.id===id);
+const pname=id=>(probeOf(id)||{n:id}).n;
+const cap=t=>t.charAt(0).toUpperCase()+t.slice(1);
+const mmss=t=>`${pad(Math.floor(t/60))}:${pad(t%60)}`;
+PLIB.push({id:'capture.logcat',n:'Logcat capture',ph:'SESSION',pl:'Android',i:'l',r:['MASTG-TEST-0231'],src:'Built-in',v:'1.0.0',h:['(runner-side) logcat stream'],fx:'Observe only. Token-like strings are redacted at source.',par:[]});
+PROBES[3][1].push(['ipc.activity.launch','Launch exported components','m',0]);
+probeOn['ipc.activity.launch']=false;DEF_ON['ipc.activity.launch']=false;
+
+function whyNot(f){
+  if(!f.pr.length)return 'none';
+  return f.pr.some(id=>{const p=probeOf(id);return p&&!p.draft})?null:'draft';
+}
+function coverable(f){return !whyNot(f)}
+const HYP={
+ 'MASTG-TEST-0232':{loc:'CardVault.encrypt, TokenCache.wrap',st:'Insecure modes such as AES/ECB or AES/CBC without integrity were found. Static: 2 Cipher.getInstance call sites.',h:'The app creates a Cipher with an ECB transformation, either explicit ("AES/ECB/…") or the provider default for bare "AES", so identical plaintext blocks give identical ciphertext.',o:'Cipher.getInstance and doFinal transformation strings, plus the calling class.',obs:'Cipher created with an ECB transformation',c:'An ECB transformation is created at runtime by app code.',n:'Only non-ECB transformations were seen on the paths you exercised. The ECB path may exist but was not reached.',i:'A Cipher was created with bare "AES" but the effective mode was not visible.',rem:'Prefer AES/GCM/NoPadding; avoid ECB.'},
+ 'MASTG-TEST-0287':{loc:'AuthStore.save',st:'SharedPreferences used with sensitive keys without EncryptedSharedPreferences.',h:'After sign-in the app writes the auth token to a plaintext shared_prefs XML file.',o:'putString/apply calls with credential-like keys and the file created in the sandbox.',obs:'Credential-like value written to SharedPreferences',c:'A credential-like value is written to plaintext SharedPreferences.',n:'Sign-in and settings were exercised and no credential-like write was seen.',i:'A write was seen but the key does not look like a credential.',rem:'Use EncryptedSharedPreferences or Keystore-backed storage.'},
+ 'MASTG-TEST-0235':{loc:'AndroidManifest.xml, network_security_config.xml',st:'Manifest or NSC allows cleartext traffic.',h:'The app sends at least one request over plain HTTP.',o:'HTTP flows with scheme http:// from the app.',obs:'Cleartext HTTP request from the app',c:'A cleartext HTTP request leaves the app.',n:'All traffic you exercised used HTTPS.',i:'Cleartext was allowed by config but no request used it.',rem:'Set usesCleartextTraffic=false and cleartextTrafficPermitted=false.'},
+ 'MASTG-TEST-0334':{loc:'HelpActivity.onCreate',st:'addJavascriptInterface exposes Java/Kotlin objects to a WebView.',h:'A WebView with an exposed JS bridge loads remote content.',o:'WebView.addJavascriptInterface calls and the URL loaded.',obs:'JS bridge registered on a WebView',c:'A JavaScript interface is registered on a WebView at runtime.',n:'No WebView with a JS bridge was created on the paths you exercised.',i:'A bridge was registered but only for bundled local content.',rem:'Avoid JS bridges; validate origins if required.'},
+ 'MASTG-TEST-0242':{loc:'network_security_config.xml',st:'No pin-set found in the Network Security Configuration.',h:'The app accepts a certificate from a user-installed proxy CA.',o:'TLS handshakes to api.bank.example via the intercepting proxy, with the pinning probe off.',obs:'TLS handshake succeeds through the proxy without a pinning bypass',c:'The app completes TLS through the proxy without bypass, so pinning is absent.',n:'The app rejected the proxy certificate, so pinning is enforced.',i:'The app failed for another reason (timeout or CA not trusted).',rem:'Add a pin-set for production hosts.'},
+ 'MASTG-TEST-0364':{loc:'AndroidManifest.xml (DebugActivity, StatementActivity)',st:'Activities are exported without a permission.',h:'Another app can start an exported activity and reach protected screens.',o:'Result of launching each exported activity with an empty intent from outside the app.',obs:'Exported activity opens without a permission check',c:'An exported activity opens for an external caller.',n:'Every exported activity refused the launch or required authentication.',i:'An activity opened but only showed a login screen.',rem:'Set android:exported=false or require a signature permission.'}
+};
+function hyp(f){return HYP[f.id]||{loc:'see decompiled sources',st:f.t+' (static match).',h:'The behaviour described by '+f.id+' occurs at runtime.',o:'Events from '+f.pr.map(pname).join(', ')+'.',obs:'Matching event from '+f.pr.map(pname).join(', '),c:'The behaviour is observed at runtime.',n:'The probes were active and the flow was exercised; nothing matched.',i:'A related event fired but the evidence is ambiguous.',rem:'See Remediation.'}}
+function planFor(ids){
+  const map={};let solo=0;
+  ids.forEach(id=>F(id).pr.forEach(pid=>{const p=probeOf(pid);if(!p||p.draft)return;solo++;(map[pid]=map[pid]||{p,used:[]}).used.push(id)}));
+  const probes=Object.values(map);
+  return {probes,high:probes.filter(x=>x.p.i==='h'),shared:probes.filter(x=>x.used.length>1),solo,eta:2+Math.round(probes.length*1.5),etaSolo:ids.length*2+Math.round(solo*1.5),traffic:probes.some(x=>x.p.id.startsWith('net.'))};
+}
+const sevB=f=>`<span class="badge badge-${f.sev}">${f.sev}</span>`;
+
+/* ---------- 11. vulnerabilities list ---------- */
+const VSEL=new Set();let vvf='all';
+function renderVulns(){
+  const st=$('#vl-state').value,q=$('#vl-q').value.toLowerCase();
+  const rows=FIND.filter(f=>(vvf==='all'||f.v===vvf)&&(!q||(f.id+f.t+f.cwe).toLowerCase().includes(q)));
+  $('#vl-alert').innerHTML=st==='offline'?`<div class="alert alert-error" role="alert">${ico('x')}<div><strong>Runner offline.</strong> “Verify dynamically” is unavailable until the runner is back.</div><div class="acts"><a class="btn btn-outline btn-sm" href="#devices">Open Devices</a></div></div>`:st==='denied'?`<div class="alert alert-info">${ico('lock')}<div><strong>View only.</strong> Your role can see dynamic verdicts but not start sessions (needs “dynamic:run”).</div></div>`:'';
+  $$('[data-vv]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.vv===vvf));
+  if(st!=='ok')VSEL.clear();
+  $('#vl-rows').innerHTML=rows.map(f=>vrow(f,st)).join('')||'<div class="empty-note">No findings match these filters.</div>';
+  updBulk();
+}
+function vrow(f,st){
+  const why=whyNot(f),blocked=st!=='ok',can=!why&&!blocked,sel=VSEL.has(f.id);
+  let action,reason='';
+  if(can)action=`<button class="btn ${f.v==='nottested'?'btn-outline':'btn-ghost'} btn-sm" type="button" data-escalate="${f.id}">${ico('target')} ${f.v==='nottested'?'Verify dynamically':'Re-verify'}</button>`;
+  else{
+    action=`<button class="btn btn-outline btn-sm" type="button" disabled aria-describedby="why-${f.id}">${ico('target')} Verify dynamically</button>`;
+    reason=blocked?(st==='offline'?'Runner offline. Start the runner to verify.':'Your role cannot start sessions.')
+      :why==='none'?`No probe covers this rule yet. <button class="btn-link" type="button" data-propose="${f.id}">${ico('spark')} Propose probe with AI</button>`
+      :`The only matching probe (auth.biometric.callback) is an AI draft awaiting review. <a href="#probes">Open in Probe Library</a>`;
+  }
+  return `<div class="vuln-card vl-card${sel?' sel':''}"><div class="vl-row">
+   <input type="checkbox" data-vsel="${f.id}" ${sel?'checked':''} ${can?'':'disabled'} aria-label="Select ${f.id} for dynamic verification${can?'':' (not available)'}">
+   <div class="ttl"><div class="meta">${sevB(f)}<span class="mono">${f.id}</span><span>CVSS ${f.cvss}</span><span>${f.cwe}</span><span class="vuln-cat" style="background:var(--bg);border-radius:4px;padding:0 .4rem;font-weight:600">${f.cat}</span></div><a href="#finding">${esc(f.t)}</a></div>
+   <div>${verdict(f.v)}<div class="muted" style="font-size:.68rem;margin-top:.15rem">${f.v==='nottested'?'never verified':(f.last||'Session #3')+(f.ev?' · '+f.ev+' evidence':'')}</div></div>
+   <div>${action}</div>
+   ${reason?`<div class="vl-why" id="why-${f.id}">${ico('alert')}<span>${reason}</span></div>`:''}</div></div>`;
+}
+function updBulk(){
+  const n=VSEL.size;$('#vl-bulk').hidden=n===0;$('#vl-bulk-n').textContent=`${n} selected`;$('#vl-bulk-lbl').textContent=`Verify ${n} selected dynamically`;
+  if(n){const pl=planFor([...VSEL]);$('#vl-bulk-x').textContent=`${pl.probes.length} probes after de-duplication · ~${pl.eta} min${pl.high.length?' · includes a High-intrusiveness probe':''}`}
+}
+$('#vl-rows').addEventListener('change',e=>{const c=e.target.closest('[data-vsel]');if(!c)return;c.checked?VSEL.add(c.dataset.vsel):VSEL.delete(c.dataset.vsel);c.closest('.vl-card').classList.toggle('sel',c.checked);updBulk()});
+$('#vl-all').onchange=e=>{const st=$('#vl-state').value;if(st!=='ok'){e.target.checked=false;return}FIND.filter(f=>coverable(f)&&(vvf==='all'||f.v===vvf)).forEach(f=>e.target.checked?VSEL.add(f.id):VSEL.delete(f.id));renderVulns()};
+$('#vl-clear').onclick=()=>{VSEL.clear();$('#vl-all').checked=false;renderVulns();$('#vl-q').focus()};
+$('#vl-q').oninput=renderVulns;$('#vl-state').onchange=renderVulns;
+$$('[data-vv]').forEach(b=>b.onclick=()=>{vvf=b.dataset.vv;renderVulns()});
+function proposeDlg(id){
+  confirmDlg({title:'Propose a probe with AI',body:`<p>No registered probe covers <b class="mono">${esc(id)}</b>${F(id)?' ('+esc(F(id).t)+')':''}.</p><label class="fl" style="margin-top:.6rem">What should it observe?<textarea rows="3">Observe where the hardcoded key is used at runtime (which request header or body carries it).</textarea></label><p class="muted" style="font-size:.76rem;margin-top:.5rem">The AI agent drafts the probe and asks for your approval. A draft cannot run until a second person publishes it.</p>`,ok:'Draft in AI agent',onOk:()=>{location.hash='#agent'}});
+}
+
+/* ---------- escalation drawer ---------- */
+const POC={ids:[],pins:[],manual:{},verdicts:{},done:false,mode:'guided',high:false,drafts:{},triage:{}};
+const ESC={ids:[],step:1,dev:'pixel',mode:'guided',high:false,ck1:false,ck2:false,ref:'',running:false,prog:0};
+function openEsc(ids,opener){
+  const ok=ids.filter(id=>F(id)&&coverable(F(id)));
+  if(!ok.length){toast('Nothing to verify: no probe covers this selection');return}
+  if(ok.length<ids.length)toast(`${ids.length-ok.length} finding(s) skipped: no probe covers them`);
+  Object.assign(ESC,{ids:ok,step:1,high:false,ck1:false,ck2:false,ref:'',running:false,mode:'guided',prog:0});
+  escRender();openModal($('#esc'),opener);
+}
+function escNeedHigh(){return ESC.high&&planFor(ESC.ids).high.length>0}
+function escRender(){
+  const ids=ESC.ids,single=ids.length===1,f=F(ids[0]);
+  const fk=document.activeElement&&document.activeElement.dataset&&document.activeElement.dataset.fk;
+  $('#esc-h').textContent=single?'Verify dynamically':`Verify ${ids.length} findings dynamically`;
+  $('#esc-sub').textContent=single?`${f.id} · ${f.t}`:'Findings share probes where possible, so each probe is loaded once.';
+  $('#esc-steps').innerHTML=['Review','Test plan','Authorize'].map((l,i)=>`<li ${ESC.step===i+1?'aria-current="step"':''} class="${ESC.step>i+1?'done':''}"><span class="step-n">${ESC.step>i+1?'✓':i+1}</span>${l}</li>`).join('');
+  $('#esc-body').innerHTML=ESC.running?escRun():ESC.step===1?escStep1():ESC.step===2?escStep2():escStep3();
+  escFoot();
+  if(fk){const el=$(`#esc-body [data-fk="${fk}"]`);if(el)el.focus()}
+}
+function escFoot(){
+  const back=$('#esc-back'),next=$('#esc-next');
+  back.hidden=ESC.step===1||ESC.running;back.disabled=ESC.running;
+  next.textContent=ESC.step===1?'Next: Test plan':ESC.step===2?'Next: Authorize':'Start PoC session';
+  next.disabled=ESC.running||(ESC.step===3&&!(ESC.ck1&&(!escNeedHigh()||ESC.ck2)));
+  $('#esc-info').textContent=ESC.running?'Starting…':ESC.step===3?(next.disabled?'Start stays disabled until you confirm.':'Ready. Nothing runs before you press Start.'):`Step ${ESC.step} of 3`;
+}
+function escStep1(){
+  const ids=ESC.ids;
+  if(ids.length===1){
+    const f=F(ids[0]),h=hyp(f);
+    return `<h3>Finding</h3><div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">${sevB(f)}<span class="mono">${f.id}</span><span class="chip">CVSS ${f.cvss}</span><span class="chip">${f.cwe}</span><span class="chip">${f.cat}</span>${verdict(f.v)}</div>
+     <h3>Static evidence</h3><p>${esc(h.st)}</p><p class="muted" style="margin-top:.2rem">Location: <span class="mono">${esc(h.loc)}</span></p>
+     <h3>Hypothesis to test</h3><p>${esc(h.h)}</p>
+     <h3>What we will observe</h3><p>${esc(h.o)}</p>`;
+  }
+  const pl=planFor(ids);
+  return `<h3>Queue: finding → probes</h3><div class="tbl-wrap"><table class="t"><caption class="sr">Findings and the probes that verify them</caption><thead><tr><th>#</th><th>Finding</th><th>Probes</th></tr></thead><tbody>${ids.map((id,i)=>{const f=F(id);return `<tr><td class="dim">${i+1}</td><td>${sevB(f)} <span class="mono" style="font-size:.74rem">${f.id}</span><div>${esc(f.t)}</div></td><td>${f.pr.filter(p=>probeOf(p)&&!probeOf(p).draft).map(p=>`<div class="mono" style="font-size:.72rem">${p}${pl.shared.some(x=>x.p.id===p)?' <span class="chip">shared</span>':''}</div>`).join('')}</td></tr>`}).join('')}</tbody></table></div>
+   <div class="alert alert-info" style="margin-top:.8rem">${ico('check')}<div><b>${pl.solo} probe uses → ${pl.probes.length} probes loaded.</b> ${pl.shared.length?pl.shared.map(x=>`<span class="mono">${x.p.id}</span> serves ${x.used.length} findings`).join('; ')+'. ':''}Estimated ~${pl.eta} min in one session, versus ~${pl.etaSolo} min one by one.</div></div>`;
+}
+function escStep2(){
+  const ids=ESC.ids,pl=planFor(ids),single=ids.length===1,h=single?hyp(F(ids[0])):null;
+  const tier=p=>p.i==='l'?'<span class="tier tier-observe">'+ico('pulse')+'Observe</span>':p.i==='m'?'<span class="tier tier-modify">'+ico('device')+'Active · Medium</span>':'<span class="tier tier-active">'+ico('alert')+'Active · High</span>';
+  const probes=`<h3>Probes (${pl.probes.length})</h3><div class="tbl-wrap"><table class="t"><caption class="sr">Probes in this plan</caption><thead><tr><th>Probe</th><th>Intrusiveness</th><th>What it observes</th>${single?'':'<th>Used by</th>'}</tr></thead><tbody>${pl.probes.map(x=>{const off=x.p.i==='h'&&!ESC.high;return `<tr${off?' style="opacity:.6"':''}><td><b>${esc(x.p.n)}</b><div class="mono muted" style="font-size:.68rem">${x.p.id}</div></td><td>${intr(x.p.i)}<div style="margin-top:.2rem">${tier(x.p)}</div></td><td style="font-size:.76rem">${esc(x.p.fx)}${off?'<div class="bad"><b>Excluded until High probes are enabled below.</b></div>':''}</td>${single?'':`<td>${x.used.length}</td>`}</tr>`}).join('')}</tbody></table></div>`;
+  const high=pl.high.length?`<div class="alert alert-warn" style="margin-top:.8rem">${ico('alert')}<div><b>${pl.high.map(x=>x.p.id).join(', ')}</b> changes app behaviour and can trigger fraud or RASP alerts. Only you can enable it, and only for this session. The AI agent cannot.
+    <label class="ck danger" style="margin-top:.5rem"><input type="checkbox" data-e="high" data-fk="e-high" ${ESC.high?'checked':''}><span><b>Enable High-intrusiveness probes for this session</b></span></label>${ESC.high?'':'<div style="margin-top:.4rem">Without this, the findings that need it will end as <b>NOT_TESTED</b>.</div>'}</div></div>`:'';
+  const meaning=`<h3>What each verdict will mean</h3><div class="verd-grid">
+    <span>${verdict('confirmed')}</span><span>${esc(single?h.c:'The behaviour was observed at runtime; evidence is attached.')}</span>
+    <span>${verdict('notrepro')}</span><span>${esc(single?h.n:'The probes were active and nothing matched.')} <b>Not reproduced does not mean safe.</b></span>
+    <span>${verdict('inconcl')}</span><span>${esc(single?h.i:'Something related fired but the evidence is ambiguous.')}</span>
+    <span>${verdict('nottested')}</span><span>A required probe was off, or the flow was never exercised.</span></div>`;
+  const dev=`<h3>Device</h3><div class="opt-grid" style="grid-template-columns:1fr"><label class="opt"><input type="radio" name="e-dev" checked><span class="t1">Pixel_7_API_34 <span class="badge badge-android">Emulator</span> <span class="chip">lab</span></span><span class="t2">frida-server 16.5.2 · allow-listed · ready</span></label></div>
+    <ul class="checks" style="margin-top:.5rem"><li>${ico('check')}<span class="ok"><b>adb and frida-server OK</b></span></li><li>${ico('check')}<span class="ok"><b>Proxy CA installed</b>${pl.traffic?'':' (not needed: no traffic probe)'}</span></li><li>${ico('alert')}<span class="warn"><b>ABI mismatch</b> <span class="muted">Native probes will not work on this emulator.</span></span></li></ul>`;
+  const mode=`<h3>Execution mode</h3><div class="seg" role="radiogroup" aria-label="Execution mode">${[['manual','Manual'],['guided','Guided'],['ai','AI-assisted']].map(([v,l])=>`<label><input type="radio" name="e-mode" value="${v}" data-e="mode" data-fk="e-mode-${v}" ${ESC.mode===v?'checked':''}>${l}</label>`).join('')}</div>
+    <p class="muted" style="margin-top:.4rem;font-size:.78rem">${{manual:'You drive the app. Malimite records and fills the checklist.',guided:'A checklist of steps (sign in, open the screen) is pinned beside the console and ticks off as probes see them.',ai:'The AI agent helps inside the permission mode you pick in its panel. It starts in Plan mode and cannot grant authorization.'}[ESC.mode]}</p>`;
+  const est=`<div class="alert alert-info" style="margin-top:1rem">${ico('refresh')}<div><b>Estimated ~${pl.eta} min</b> · ${pl.probes.length} probes · traffic interception: <b>${pl.traffic?'on (proxy)':'off'}</b>${ids.length>1&&pl.shared.length?` · saves ~${pl.etaSolo-pl.eta} min by sharing probes`:''}</div></div>`;
+  return probes+high+meaning+dev+mode+est;
+}
+function escStep3(){
+  const pl=planFor(ESC.ids),needH=escNeedHigh();
+  return `<div class="alert alert-warn" style="margin-bottom:.8rem">${ico('shield')}<div><b>This step cannot be skipped by anyone, including the AI Assistant.</b> Dynamic analysis runs code on a device${pl.traffic?' and intercepts its network traffic':''}.</div></div>
+   <p style="font-weight:600">If you continue, Malimite will:</p>
+   <ul class="will"><li>${ico('check')}<span>Install and launch <b>${PKG} 4.2.0</b> on <b>Pixel_7_API_34</b> (fresh install)</span></li>
+   <li>${ico('check')}<span>Load <b>${pl.probes.filter(x=>x.p.i!=='h'||ESC.high).length} probes</b>${needH?' including <b>High intrusiveness</b>':''}, hash-checked</span></li>
+   <li>${ico('check')}<span>${pl.traffic?'Route device HTTP(S) through the proxy; only '+PKG+' flows are stored':'Not intercept network traffic'}</span></li>
+   <li>${ico('check')}<span>Revert everything on <b>Stop &amp; detach</b> or after 30 min of inactivity</span></li></ul>
+   <label class="ck"><input type="checkbox" data-e="ck1" data-fk="e-ck1" ${ESC.ck1?'checked':''}><span><b>I'm authorized to test ${PKG}</b> on this device${pl.traffic?', and to intercept its traffic':''}.</span></label>
+   ${needH?`<label class="ck danger"><input type="checkbox" data-e="ck2" data-fk="e-ck2" ${ESC.ck2?'checked':''}><span><b>I understand ${pl.high.map(x=>x.p.id).join(', ')} changes app behaviour</b> and may trigger backend alerts.</span></label>`:''}
+   <label class="fl" style="margin-top:.7rem;max-width:340px">Engagement or ticket reference <input type="text" data-e="ref" id="esc-ref" value="${esc(ESC.ref)}" placeholder="e.g. ENG-2291" autocomplete="off"></label>
+   <p class="muted" style="font-size:.74rem;margin-top:.6rem">Recorded with your name, time, device and scan, and shown in the report. Valid for this app on this device for 8 hours.</p>`;
+}
+function escRun(){
+  const S=['Reserving Pixel_7_API_34','Installing '+PKG+' 4.2.0','Loading probes (hash-checked)','Opening the PoC console'];
+  return `<p style="font-weight:600;margin:.4rem 0">Starting PoC session…</p><ol class="steps" role="status" aria-live="polite">${S.map((t,i)=>i<ESC.prog?`<li class="done">${ico('check')}<span>${t}</span></li>`:`<li>${ico('refresh','spin')}<span>${t}</span></li>`).join('')}</ol>`;
+}
+$('#esc-body').addEventListener('change',e=>{
+  const t=e.target.closest('[data-e]');if(!t)return;const k=t.dataset.e;
+  if(k==='high'){ESC.high=t.checked;if(!t.checked)ESC.ck2=false;escRender()}
+  else if(k==='mode'){ESC.mode=t.value;escRender()}
+  else if(k==='ck1'){ESC.ck1=t.checked;escFoot()}
+  else if(k==='ck2'){ESC.ck2=t.checked;escFoot()}
+});
+$('#esc-body').addEventListener('input',e=>{const t=e.target.closest('[data-e=ref]');if(t)ESC.ref=t.value});
+$('#esc-x').onclick=()=>closeModal($('#esc'));
+$('#esc-back').onclick=()=>{ESC.step--;escRender();$('#esc-body').focus()};
+$('#esc-next').onclick=()=>{
+  if(ESC.step<3){ESC.step++;escRender();$('#esc-body').scrollTop=0;$('#esc-body').focus();return}
+  ESC.running=true;ESC.prog=0;escRender();
+  [0,1,2,3].forEach(i=>setTimeout(()=>{ESC.prog=i+1;escRender();if(i===3)setTimeout(()=>{
+    closeModal($('#esc'));Object.assign(POC,{ids:ESC.ids.slice(),high:ESC.high,mode:ESC.mode,done:false});L.started=false;location.hash='#poc';
+  },350)},450*(i+1)));
+};
+trap($('#esc'));
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-escalate]');if(b){openEsc([b.dataset.escalate],b);return}
+  const bb=e.target.closest('[data-escalate-bulk]');if(bb){openEsc([...VSEL],bb);return}
+  const pr=e.target.closest('[data-propose]');if(pr){proposeDlg(pr.dataset.propose);return}
+  const pn=e.target.closest('[data-pin]');if(pn){doPin(+pn.dataset.pin)}
+});
+
+/* ---------- 12. PoC console ---------- */
+function initMode(){
+  if(L.mode==='poc'){
+    if(!POC.ids.length)POC.ids=['MASTG-TEST-0232','MASTG-TEST-0364'];
+    POC.pins=[];POC.manual={};POC.verdicts={};POC.done=false;POC.sig={};
+    Object.keys(probeOn).forEach(k=>probeOn[k]=false);
+    planFor(POC.ids).probes.forEach(x=>{if(Object.prototype.hasOwnProperty.call(probeOn,x.p.id)&&(x.p.i!=='h'||POC.high))probeOn[x.p.id]=true});
+  }else Object.assign(probeOn,DEF_ON);
+  applyMode();
+}
+function applyMode(){
+  const poc=L.mode==='poc';
+  $('#probe-panel').hidden=poc;$('#cov-panel').hidden=poc;$('#poc-panel').hidden=!poc;$('#pins-panel').hidden=!poc;
+  $('#chip-poc').hidden=!poc;if(poc)$('#chip-poc').textContent=`PoC · Session #4 · ${POC.ids.length} finding${POC.ids.length>1?'s':''}`;
+  $('#chip-mode').textContent=poc?(POC.mode==='ai'?'AI-assisted':cap(POC.mode)):'Manual';
+  $('#chip-consent').textContent=poc?'Consent: you · just now · ENG-2291':'Consent: you · 14:02 · ENG-2291';
+  $('#btn-finish').hidden=!poc;
+  $('#live-crumb').textContent=poc?'PoC session #4 (live)':'Session #3 (live)';
+  applySide();
+}
+function applySide(){
+  $('#ag-side-wrap').hidden=!AG.sideOpen;$('.live-grid').classList.toggle('ai-open',AG.sideOpen);$('#btn-ai').setAttribute('aria-pressed',AG.sideOpen);
+}
+function pocState(){
+  const login=L.flows.some(e=>e.login)||!!POC.manual.s1;
+  const groups=POC.ids.map(id=>{
+    const evs=L.ev.filter(e=>e.rule===id),conf=evs.some(e=>e.v==='confirmed'),inc=evs.length>0&&!conf,pinned=POC.pins.some(p=>p.rule===id);
+    return {id,f:F(id),conf,inc,pinned,v:!login?null:conf?'confirmed':inc?'inconcl':null};
+  });
+  return {login,groups};
+}
+function pstep(state,text,who,extra){
+  const ic={done:'check',partial:'help',active:'refresh',todo:'dashed'}[state];
+  const lb={done:'Done',partial:'Partial: inconclusive evidence so far',active:who==='You'?'Waiting for you…':'Waiting for an event…',todo:'To do'}[state];
+  return `<div class="pstep ${state}">${ico(ic,state==='active'?'spin':'')}<div><span>${text}</span> <span class="chip">${who}</span><span class="s">${lb}</span>${extra||''}</div></div>`;
+}
+function renderPoc(){
+  const st=pocState();const sig=JSON.stringify([st.login,st.groups.map(g=>[g.conf,g.inc,g.pinned]),POC.pins.length]);
+  if(POC.sig&&POC.sig.k===sig)return;POC.sig={k:sig};
+  $('#pc-sub').textContent=`Session #4 · ${POC.mode==='ai'?'AI-assisted':cap(POC.mode)}`;
+  let h=`<div class="pocg"><div class="pocg-h"><b>Shared</b></div>${pstep(st.login?'done':'active','Sign in with the test account on the device','You',st.login?'':'<button class="btn-link" type="button" data-poc-manual="s1">Mark as done</button>')}</div>`;
+  st.groups.forEach(g=>{
+    const s1=g.conf?'done':g.inc?'partial':'active';
+    h+=`<div class="pocg"><div class="pocg-h">${sevB(g.f)}<span class="mono">${g.id}</span><span style="flex-basis:100%">${esc(g.f.t)}</span>${g.v?verdict(g.v,true):'<span class="chip off">Observing…</span>'}</div>
+      ${pstep(s1,'Observe: '+esc(hyp(g.f).obs),'Probe')}
+      ${pstep(g.pinned?'done':(g.conf||g.inc?'active':'todo'),'Pin the best event as evidence','You')}</div>`;
+  });
+  h+=`<details class="pocg"><summary class="pocg-h" style="cursor:pointer">Probes loaded (${Object.values(probeOn).filter(Boolean).length})</summary><div style="padding:.4rem .6rem;font-size:.74rem">${planFor(POC.ids).probes.map(x=>`<div class="mono">${x.p.id} ${intr(x.p.i)}${x.p.i==='h'&&!POC.high?' <b class="bad">not enabled</b>':''}</div>`).join('')}</div></details>`;
+  $('#pc-body').innerHTML=h;
+  $('#pins-n').textContent=POC.pins.length;
+  $('#pins-body').innerHTML=st.groups.map(g=>{
+    const ps=POC.pins.map((p,i)=>[p,i]).filter(x=>x[0].rule===g.id);
+    return `<div style="margin-bottom:.7rem"><div class="mono muted" style="font-size:.7rem">${g.id}</div><div style="margin:.15rem 0">${g.v?verdict(g.v,true):'<span class="chip off">Observing…</span>'}</div>${ps.map(([p,i])=>`<div class="pin"><span class="srcb s-${p.ev.s}">${p.ev.s.toUpperCase()}</span><span>${p.ev.ts.slice(3,12)} ${esc(evLabel(p.ev))}</span><button class="btn-link" type="button" data-unpin="${i}">Unpin</button></div>`).join('')||'<p class="muted" style="font-size:.74rem">Nothing pinned yet. Select an event, then “Pin as evidence”.</p>'}</div>`;
+  }).join('')+'<p class="muted" style="font-size:.7rem">Verdicts are provisional until you finish the session.</p>';
+}
+function evLabel(e){return e.s==='http'?`${e.m} ${e.h}${e.u}`:e.s==='fs'?e.m:`${e.t}${e.d?' · '+e.d:''}`}
+function pinBtn(e){
+  const sel=POC.ids.length>1?`<label class="sr" for="pin-sel">Pin to finding</label><select id="pin-sel" style="font-size:.74rem;padding:.15rem .3rem">${POC.ids.map(id=>`<option>${id}</option>`).join('')}</select>`:'';
+  return `${sel}<button class="btn btn-primary btn-sm" type="button" data-pin="${e.id}">${ico('link')} Pin as evidence</button>`;
+}
+function doPin(id){
+  const e=L.ev.find(x=>x.id===id);if(!e)return;const rule=($('#pin-sel')||{}).value||POC.ids[0];
+  if(POC.pins.some(p=>p.rule===rule&&p.ev.id===id)){toast('Already pinned to '+rule);return}
+  POC.pins.push({rule,ev:Object.assign({},e)});POC.sig={};toast('Pinned to '+rule);announce('Evidence pinned to '+rule);renderPoc();
+}
+$('#pc-body').addEventListener('click',e=>{if(e.target.closest('[data-poc-manual]')){POC.manual.s1=true;POC.sig={};renderPoc()}});
+$('#pins-body').addEventListener('click',e=>{const b=e.target.closest('[data-unpin]');if(b){POC.pins.splice(+b.dataset.unpin,1);POC.sig={};renderPoc()}});
+function pocTodo(){const st=pocState();let n=st.login?0:1;st.groups.forEach(g=>{if(!g.conf)n++;if(!g.pinned)n++});return n}
+function finishPoc(){setLiveState('stopped');location.hash='#pocresult'}
+$('#btn-finish').onclick=()=>{
+  const n=pocTodo();
+  if(n)confirmDlg({title:'Finish with open steps?',body:`<p><b>${n} checklist step${n>1?'s are':' is'} not done.</b> Findings without evidence end as <b>NOT_REPRODUCED</b> (probe was active) or <b>NOT_TESTED</b>. This does not mean they are safe.</p>`,ok:'Finish & review',onOk:finishPoc});
+  else finishPoc();
+};
+function applyPocResults(){
+  const st=pocState();POC.verdicts={};
+  st.groups.forEach(g=>{
+    let v;if(g.conf)v='confirmed';else if(g.inc)v='inconcl';else if(!st.login)v='nottested';else v=planFor([g.id]).probes.some(x=>probeOn[x.p.id])?'notrepro':'nottested';
+    POC.verdicts[g.id]=v;g.f.v=v;g.f.ev=POC.pins.filter(p=>p.rule===g.id).length||g.f.ev;g.f.last='Session #4 (PoC)';
+  });
+  POC.done=true;
+}
+
+/* ---------- 13. PoC results ---------- */
+function seedPoc(){
+  Object.assign(POC,{ids:['MASTG-TEST-0232','MASTG-TEST-0364'],mode:'guided',high:false,done:true,drafts:{},triage:{}});
+  POC.pins=[
+   {rule:'MASTG-TEST-0232',ev:{id:31,ts:'00:00:14.220',s:'frida',p:'crypto.cipher',t:'javax.crypto.Cipher.getInstance',d:'AES/ECB/PKCS5Padding (explicit ECB)'}},
+   {rule:'MASTG-TEST-0232',ev:{id:32,ts:'00:00:14.310',s:'frida',p:'crypto.cipher',t:'javax.crypto.Cipher.doFinal',d:'AES/ECB/PKCS5Padding · ENCRYPT · key 16 B'}}];
+  POC.verdicts={'MASTG-TEST-0232':'confirmed','MASTG-TEST-0364':'notrepro'};
+  F('MASTG-TEST-0232').v='confirmed';F('MASTG-TEST-0232').ev=2;F('MASTG-TEST-0232').last='Session #4 (PoC)';
+  F('MASTG-TEST-0364').v='notrepro';F('MASTG-TEST-0364').last='Session #4 (PoC)';
+}
+const PSOLD={'MASTG-TEST-0232':['1. Review cipher transformation strings.','2. Migrate to authenticated encryption.']};
+function draftSteps(id){
+  const f=F(id),h=hyp(f),ps=POC.pins.filter(p=>p.rule===id),pn=planFor([id]).probes.map(x=>x.p.id).join(', ');
+  const out=[`Install ${PKG} 4.2.0 on a rooted emulator and load probe(s): ${pn}.`,'Launch the app and sign in with the test account.'];
+  ps.forEach(p=>out.push(`Observe ${p.ev.t||p.ev.m}${p.ev.d?' — '+p.ev.d:''} (event #${p.ev.id}, ${p.ev.ts.slice(0,8)}).`));
+  out.push(`Result: ${h.c} Remediation: ${h.rem}`);
+  return out.map((x,i)=>`${i+1}. ${x}`);
+}
+function lineDiff(a,b){
+  const n=a.length,m=b.length,dp=Array.from({length:n+1},()=>Array(m+1).fill(0));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=a[i]===b[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+  const out=[];let i=0,j=0;
+  while(i<n&&j<m){if(a[i]===b[j]){out.push(['same',a[i]]);i++;j++}else if(dp[i+1][j]>=dp[i][j+1]){out.push(['del',a[i++]])}else out.push(['add',b[j++]])}
+  while(i<n)out.push(['del',a[i++]]);while(j<m)out.push(['add',b[j++]]);return out;
+}
+const MEAN={confirmed:'Behaviour observed at runtime. Evidence is attached.',notrepro:'Probes were active and the flow was exercised, but nothing matched. This is not proof the issue is absent.',inconcl:'Something related fired, but the evidence is ambiguous.',nottested:'A required probe was off, or the flow was not exercised.'};
+function pocCard(id){
+  const f=F(id),v=POC.verdicts[id]||f.v,ps=POC.pins.filter(p=>p.rule===id),h=hyp(f),d=POC.drafts[id]||{};
+  const ev=ps.length?`<div class="evid">${ps.map(p=>`<div class="evid-row"><span class="mono muted">${p.ev.ts.slice(0,8)}</span><div><b class="mono">${esc(p.ev.t||p.ev.m||'')}</b><div class="muted">${esc(p.ev.d||'')}</div></div><span class="mono muted">#${p.ev.id}</span></div>`).join('')}</div>`:`<p class="muted">No evidence pinned.</p>`;
+  let poc='';
+  if(v!=='confirmed'||!ps.length)poc=`<div class="muted" style="font-size:.78rem">${ico('lock')} ${v!=='confirmed'?'PoC steps are drafted only from a <b>CONFIRMED</b> verdict.':'Pin at least one event as evidence first: PoC steps are drafted from pinned events.'}</div><button class="btn btn-outline btn-sm" type="button" disabled style="margin-top:.4rem">Draft PoC steps</button>`;
+  else if(!d.shown)poc=`<button class="btn btn-outline" type="button" data-pr="draft" data-id="${id}">${ico('spark')} Draft PoC steps</button><span class="muted" style="font-size:.74rem;margin-left:.5rem">AI writes steps from the order of your pinned events. Nothing is saved until you accept.</span>`;
+  else{
+    const old=PSOLD[id]||['1. (static steps from the rule catalog)'],nw=draftSteps(id),df=lineDiff(old,nw);
+    poc=`<div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem"><span class="badge badge-ai">AI draft · needs your review</span><span class="muted" style="font-size:.74rem">from ${ps.length} pinned events · no script content included</span></div>
+     <div class="diff" role="group" aria-label="Difference between original and drafted PoC steps"><div class="hd">− Original PocSteps (rule catalog)   + Draft</div>${df.map(([t,x])=>`<div class="${t}">${t==='add'?'+ ':t==='del'?'− ':'  '}${esc(x)}</div>`).join('')}</div>
+     ${d.accepted?`<div class="alert alert-ok" style="margin:.6rem 0 0">${ico('check')}<div><b>Override active.</b> The report and Vulnerabilities now show the drafted steps. The original stays stored.</div><div class="acts"><button class="btn btn-ghost btn-sm" type="button" data-pr="revert" data-id="${id}">Revert to original</button></div></div>`
+      :`<div style="display:flex;gap:.5rem;margin-top:.6rem;flex-wrap:wrap"><button class="btn btn-primary" type="button" data-pr="accept" data-id="${id}">${ico('check')} Accept draft (saves as override)</button><button class="btn btn-ghost" type="button" data-pr="discard" data-id="${id}">Discard</button></div><p class="muted" style="font-size:.72rem;margin-top:.3rem">Reversible, like AI Fix: the original PocSteps are never edited.</p>`}`;
+  }
+  return `<div class="card"><div class="card-title">${sevB(f)}<span class="mono" style="font-size:.8rem">${f.id}</span><span>${esc(f.t)}</span><span class="sp">${verdict(v)}</span></div>
+   <p style="font-size:.82rem;margin-bottom:.6rem">${esc(MEAN[v])}${v==='notrepro'?' <b>Not reproduced does not mean safe.</b>':''}</p>
+   <div class="vuln-section-title">Evidence</div>${ev}<div class="vuln-section-title" style="margin-top:1rem">PoC steps</div>${poc}</div>`;
+}
+function triageSug(id){
+  const v=POC.verdicts[id]||F(id).v,t=POC.triage[id];
+  const map={confirmed:['Keep status Open and add a note: confirmed dynamically in session #4.','Severity is unchanged. Raise it only if your policy says runtime confirmation raises impact.','Add note'],
+   notrepro:['Keep status Open and add a note: not reproduced in session #4 (probes and flow listed).','Not suggested: marking as False Positive. Static evidence still stands and the code path may not have been reached.','Add note'],
+   inconcl:['Keep status Open. Re-test in Guided mode on the screens that use this code.','No triage change suggested.','Add note'],
+   nottested:['No change.','The finding was not exercised.','Add note']}[v];
+  return `<tr><td><span class="mono" style="font-size:.74rem">${id}</span><div>${esc(F(id).t)}</div></td><td>${verdict(v)}</td><td>${esc(map[0])}<div class="muted" style="font-size:.74rem">${esc(map[1])}</div></td><td>${t?`<span class="chip ok">${ico('check')}Applied</span>`:`<button class="btn btn-outline btn-sm" type="button" data-pr="triage" data-id="${id}">Review &amp; apply</button>`}</td></tr>`;
+}
+function renderPocResult(){
+  if(!POC.done)seedPoc();
+  const n=Object.values(POC.verdicts);
+  $('#pr-body').innerHTML=`<div class="alert alert-info">${ico('shield')}<div><b>Nothing has changed in triage.</b> Verdicts are evidence for you to review. Accepting PoC steps or applying a triage suggestion is a separate step you confirm.</div></div>
+   <div class="card" style="margin-bottom:1rem"><div class="card-title">Session #4 · PoC <span class="sp">Pixel_7_API_34 · Guided · authorized by you (ENG-2291) · ${POC.pins.length} pinned events</span></div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">${POC.ids.map(id=>`<span>${verdict(POC.verdicts[id]||F(id).v)} <span class="mono" style="font-size:.74rem">${id}</span></span>`).join('')}</div>
+    <p class="muted" style="font-size:.76rem;margin-top:.5rem">Vulnerabilities was updated with these verdicts. <a href="#vulns">See the list</a>.</p></div>`
+   +POC.ids.map(pocCard).join('')
+   +`<div class="card"><div class="card-title">Apply verdict to triage <span class="sp">suggestions only</span></div><div class="tbl-wrap"><table class="t"><caption class="sr">Triage suggestions</caption><thead><tr><th>Finding</th><th>Verdict</th><th>Suggested change</th><th>Action</th></tr></thead><tbody>${POC.ids.map(triageSug).join('')}</tbody></table></div></div>`;
+}
+$('#pr-body').addEventListener('click',e=>{
+  const b=e.target.closest('[data-pr]');if(!b)return;const id=b.dataset.id,a=b.dataset.pr;POC.drafts[id]=POC.drafts[id]||{};
+  if(a==='draft'){POC.drafts[id].shown=true;renderPocResult();announce('PoC steps drafted. Review the difference.');$(`[data-pr=accept][data-id="${id}"]`)?.focus()}
+  else if(a==='accept'){POC.drafts[id].accepted=true;renderPocResult();toast('Override saved (reversible)')}
+  else if(a==='discard'){POC.drafts[id]={};renderPocResult()}
+  else if(a==='revert'){POC.drafts[id].accepted=false;renderPocResult();toast('Reverted to original PocSteps')}
+  else if(a==='triage')confirmDlg({title:'Apply this triage change?',body:`<p class="mono" style="font-size:.78rem">${id}</p><dl class="kv" style="margin-top:.5rem"><dt>Status</dt><dd>Open → Open</dd><dt>Note</dt><dd style="font-weight:400">${esc((POC.verdicts[id]==='confirmed'?'Confirmed dynamically in session #4':'Not reproduced in session #4 (probes: '+planFor([id]).probes.map(x=>x.p.id).join(', ')+')'))}</dd><dt>Severity</dt><dd>unchanged</dd></dl><p class="muted" style="font-size:.76rem;margin-top:.5rem">Same triage fields as the Vulnerabilities tab; reversible.</p>`,ok:'Apply',onOk:()=>{POC.triage[id]=1;renderPocResult();toast('Triage note added')}});
+});
+
+/* ---------- 14. AI agent ---------- */
+const MODEINFO={plan:['Plan','Read-only. Proposes steps; nothing touches the device.'],ask:['Ask','Reads run alone; every other action asks you first.'],accept:['Accept edits','Reads and passive observation run alone; device changes and Medium/High probes still ask.'],bypass:['Bypass permissions','Every in-scope action runs without asking. The safety floor still applies.']};
+const TIER={read:['eye','Read'],observe:['pulse','Observe'],modify:['device','Modify device'],active:['alert','Active probe']};
+const STEPS=[
+ {tier:'read',tool:'get_finding',target:'MASTG-TEST-0232',exp:'Static evidence and call sites',res:'HIGH · CWE-327 · 2 Cipher.getInstance sites (CardVault.encrypt, TokenCache.wrap)'},
+ {tier:'read',tool:'list_probes',target:'rule=MASTG-TEST-0232',exp:'Registered probes that can verify it',res:'crypto.cipher v1.4.0 · Low · sha256:3c1e…a9'},
+ {tier:'observe',tool:'load_probe',target:'crypto.cipher',intr:'l',exp:'Passive hook on Cipher.getInstance / doFinal; changes nothing',res:'Loaded, hash-pinned sha256:3c1e…a9',say:'The matching probe is passive and already approved. Loading it.'},
+ {tier:'read',tool:'ask_user',target:'"Sign in with the test account, then open Cards"',exp:'You do the UI steps on the device (Guided mode)',res:'Waiting for you on the device',say:'I need a real sign-in. I will not type credentials for you.'},
+ {tier:'observe',tool:'screenshot',target:'Pixel_7_API_34',exp:'Confirm the Cards screen is open (stored blurred)',res:'Screenshot saved (blurred)'},
+ {tier:'read',tool:'session_events',target:'source=frida query="Cipher.getInstance"',exp:'Find ECB transformations',res:'2 matches: "AES" (no mode); "AES/ECB/PKCS5Padding" at 00:00:14'},
+ {tier:'observe',tool:'pin_evidence',target:'event #31 → MASTG-TEST-0232',exp:'Link the ECB event to the finding (reversible)',res:'Pinned; appears in PoC results'},
+ {tier:'observe',tool:'draft_poc_steps',target:'MASTG-TEST-0232',exp:'Draft PoC steps from pinned events',res:'Draft saved; you must accept it in PoC results'},
+ {tier:'active',tool:'load_probe',target:'net.pinning.bypass',intr:'h',exp:'Bypass certificate pinning to read TLS traffic',res:'—',say:'To see the TLS traffic I would also like the pinning bypass.'},
+ {tier:'modify',tool:'device_clear_data',target:PKG,exp:'Reset the app to a clean state before a re-run',res:'App data cleared'},
+ {tier:'modify',tool:'device_launch',target:'com.other.app',scope:'com.other.app',exp:'Open a different app',res:'—',say:'I will check the other app too.'}];
+const SEQ=[0,1,2,3,4,5,6,7,9];
+const AG={open:{},mode:'ask',stopped:false,sideOpen:false,device:'lab',highEnabled:false,plan:null,step:0,feed:[],log:[],budget:{a:6,aMax:40,t:372,tMax:900},notice:null,draft:'',uid:0};
+const BY={you:'Approved by you',read:'Auto · read-only tier',auto:'Auto-approved by Accept edits mode',bypass:'Auto-approved by Bypass mode (no per-action approval)',blocked:'Blocked by safety floor',denied:'Denied by you',cancelled:'Cancelled when the agent stopped'};
+const BYLOG={you:'You approved',read:'Read-only tier',auto:'Auto-accept mode',bypass:'Bypass mode'};
+const FLOOR=[
+ ['Authorization stays human.','Session consent is collected from a person. The agent can never grant, renew or skip it.'],
+ ['Scope lock.','Actions are limited to '+PKG+', the allow-listed device and allow-listed hosts. Anything else is blocked.'],
+ ['Kill-switches.','“Stop agent” and “Stop & detach” are always live and cut the action queue.'],
+ ['High intrusiveness is human-only.','High/bypass probes run only if a person enabled them for this session in the launcher.'],
+ ['Redaction applies.','Tokens, cookies and PII stay masked. The agent sees hashes, not raw values.'],
+ ['No free-form code.','No shell and no ad-hoc JS. Only registered probes, pinned by hash.'],
+ ['Budget.','40 actions and 15 min per session. At the limit the agent stops and asks a person.'],
+ ['Audit.','Every action is logged with who or what approved it: you, auto-accept or bypass mode.']];
+function agentReset(){
+  Object.assign(AG,{mode:'ask',stopped:false,device:'lab',highEnabled:false,plan:null,step:0,notice:null,draft:''});
+  AG.budget={a:6,aMax:40,t:372,tMax:900};
+  AG.feed=[{k:'msg',who:'u',html:'Verify the AES/ECB finding (MASTG-TEST-0232) dynamically.'},{k:'msg',who:'a',html:'I can verify it with the passive <span class="mono">crypto.cipher</span> probe. Pick a permission mode below. In <b>Plan</b> I only propose steps; in <b>Ask</b> I ask before every device action.'}];
+  AG.log=[{t:'00:06:08',who:'Read-only tier',txt:'list_findings()'},{t:'00:05:57',who:'Read-only tier',txt:'get_session(#4)'},{t:'00:05:12',who:'You',txt:'Started the agent in Ask mode'}];
+}
+function logAdd(who,txt){AG.log.unshift({t:hms(AG.budget.t),who,txt})}
+function policy(m,t){if(t==='read')return 'auto';if(m==='plan')return 'plan';if(m==='ask')return 'ask';if(m==='accept')return t==='observe'?'auto':'ask';return 'auto'}
+function floorCheck(st){
+  if(st.scope&&st.scope!==PKG)return {rule:'b',txt:`Out of scope: ${st.scope} is not the app under test (${PKG}). Agent actions are locked to this scan's package and allow-listed hosts.`};
+  if(st.tier==='active'&&st.intr==='h'&&!AG.highEnabled)return {rule:'d',txt:`${st.target} is a High-intrusiveness probe. Only a person can enable it, per session, in the launcher.`,canAsk:true};
+  return null;
+}
+function agRun(st){
+  const card={k:'tool',id:++AG.uid,tier:st.tier,tool:st.tool,target:st.target,intr:st.intr,exp:st.exp,res:st.res,status:'pending',by:null,floor:null};
+  if(st.say)AG.feed.push({k:'msg',who:'a',html:esc(st.say)});
+  AG.feed.push(card);
+  const fl=floorCheck(st);
+  if(fl){card.status='blocked';card.by='blocked';card.floor=fl;logAdd('Safety floor',`Blocked ${st.tool}(${st.target}), rule ${fl.rule}`);announce('Blocked by the safety floor: '+fl.txt);renderAgent();return card}
+  const pol=policy(AG.mode,st.tier);
+  if(pol==='plan'){card.status='planned';renderAgent();return card}
+  if(pol==='ask'){card.status='pending';logAdd('Agent',`Asked approval: ${st.tool}(${st.target})`);announce('The agent needs your approval');renderAgent();return card}
+  agExec(card,st.tier==='read'?'read':AG.mode==='bypass'?'bypass':'auto');return card;
+}
+function agExec(card,by){
+  if(AG.budget.a>=AG.budget.aMax){agDrop(`Budget reached (${AG.budget.aMax}/${AG.budget.aMax} actions). A person must raise the limit.`);return}
+  card.status='running';card.by=by;AG.budget.a++;logAdd(BYLOG[by],`${card.tool}(${card.target})`);renderAgent();
+  setTimeout(()=>{if(card.status==='running'){card.status='done';renderAgent()}},700);
+}
+function agDrop(reason){
+  AG.mode='plan';AG.notice=reason;
+  AG.feed.forEach(c=>{if(c.k==='tool'&&c.status==='pending'){c.status='cancelled';c.by='cancelled'}});
+  logAdd('System','Mode → Plan: '+reason);renderAgent();announce('The agent switched to Plan mode. '+reason);
+}
+function agStop(fromKill){
+  if(AG.stopped)return;AG.stopped=true;
+  AG.feed.forEach(c=>{if(c.k==='tool'&&(c.status==='pending'||c.status==='running')){c.status='cancelled';c.by='cancelled'}});
+  logAdd('You',fromKill?'Stop & detach: agent queue cut':'Stopped the agent');AG.feed.push({k:'sys',html:'Agent stopped. The action queue was cleared.'});renderAgent();
+}
+function commitMode(m){const from=AG.mode;AG.mode=m;AG.notice=null;logAdd('You',`Mode ${MODEINFO[from][0]} → ${MODEINFO[m][0]}`);renderAgent();announce('Agent mode: '+MODEINFO[m][0])}
+function setAgMode(m){
+  if(m===AG.mode)return;
+  if(m==='bypass'){
+    if(AG.device==='physical'){toast('Bypass is available for lab/emulator devices only');renderAgent();return}
+    confirmDlg({title:'Switch to Bypass permissions?',cls:'btn-stop',ok:'Enable Bypass mode',check:'<b>I understand</b> the agent will act without per-action approval in this session.',
+      body:`<p><b>What changes</b></p><ul class="will"><li>${ico('alert')}<span>The agent runs every in-scope tool call without asking you first, including device changes (install, input, clear data).</span></li><li>${ico('alert')}<span>A red banner and a nav chip stay visible until you leave this mode.</span></li></ul><p style="margin-top:.5rem"><b>What does not change</b></p><ul class="will"><li>${ico('lock')}<span>Authorization stays with you. Scope stays locked to ${PKG}. High-intrusiveness probes stay off unless you enabled them at launch.</span></li><li>${ico('lock')}<span>Budget (40 actions, 15 min), redaction, hash-pinned probes and the audit log. Stop agent always works.</span></li></ul><p class="muted" style="font-size:.76rem;margin-top:.4rem">Available because this device is labelled lab/emulator. Drops back to Plan if the device disconnects, the budget runs out or consent is revoked.</p>`,
+      onOk:()=>commitMode('bypass')});
+    renderAgent();return;
+  }
+  commitMode(m);
+}
+function cycleMode(){const o=['plan','ask','accept'];setAgMode(AG.mode==='bypass'?'ask':o[(o.indexOf(AG.mode)+1)%o.length])}
+function agPlan(){
+  if(AG.plan&&AG.plan.status==='proposed'){AG.feed.push({k:'msg',who:'a',html:'The plan above is waiting for your decision.'});renderAgent();return}
+  AG.plan={k:'plan',id:++AG.uid,status:'proposed',editing:false,off:{}};
+  AG.feed.push({k:'msg',who:'a',html:'Here is a plan. Nothing runs on the device until you approve it.'});AG.feed.push(AG.plan);renderAgent();
+}
+function agApprovePlan(m){AG.plan.status='approved';AG.plan.mode=m;AG.plan.editing=false;logAdd('You','Approved the plan → '+MODEINFO[m][0]);AG.feed.push({k:'msg',who:'a',html:`Plan approved. Running in <b>${MODEINFO[m][0]}</b> mode.`});commitMode(m)}
+function agNext(){
+  if(AG.stopped){toast('The agent is stopped. Resume it first');return}
+  if(AG.feed.some(c=>c.k==='tool'&&c.status==='pending')){toast('The agent is waiting for your approval');return}
+  if(AG.mode==='plan'&&!AG.plan){agPlan();return}
+  if(AG.step>=SEQ.length){AG.feed.push({k:'sys',html:'Scenario complete: every step of the plan was attempted.'});renderAgent();return}
+  agRun(STEPS[SEQ[AG.step++]]);
+}
+function agSend(){
+  const t=AG.draft.trim();if(!t)return;AG.draft='';AG.feed.push({k:'msg',who:'u',html:esc(t)});
+  if(AG.stopped)AG.feed.push({k:'sys',html:'The agent is stopped. Press Resume agent to continue.'});
+  else if(t.startsWith('/plan')||(AG.mode==='plan'&&!(AG.plan&&AG.plan.status==='approved')))agPlan();
+  else agNext();
+  renderAgent();
+}
+function budHtml(){
+  const b=AG.budget,pa=b.a/b.aMax,pt=Math.min(1,b.t/b.tMax);
+  return `<div style="display:flex;justify-content:space-between;font-size:.72rem"><span>Actions</span><b>${b.a} / ${b.aMax}${pa>.8?' · near limit':''}</b></div><div class="meter${pa>.8?' hot':''}" role="progressbar" aria-label="Agent actions used" aria-valuemin="0" aria-valuemax="${b.aMax}" aria-valuenow="${b.a}"><i style="width:${pa*100}%"></i></div>
+   <div style="display:flex;justify-content:space-between;font-size:.72rem;margin-top:.4rem"><span>Time</span><b>${mmss(b.t)} / ${mmss(b.tMax)}${pt>.8?' · near limit':''}</b></div><div class="meter${pt>.8?' hot':''}" role="progressbar" aria-label="Agent time used" aria-valuemin="0" aria-valuemax="${b.tMax}" aria-valuenow="${b.t}"><i style="width:${pt*100}%"></i></div>`;
+}
+function updBudget(){$$('[data-budget]').forEach(e=>e.innerHTML=budHtml())}
+const ST_LABEL={pending:['pending','alert','Needs approval'],running:['running','refresh','Running'],done:['done','check','Done'],blocked:['blocked','lock','Blocked by safety floor'],denied:['denied','x','Denied'],cancelled:['cancelled','x','Cancelled'],planned:['planned','dashed','Planned · not run (Plan mode)']};
+function toolHtml(c){
+  const s=ST_LABEL[c.status],auto=c.by==='auto'||c.by==='bypass'||c.by==='read';
+  return `<div class="tcard ${c.status}"><div class="top"><span class="tier tier-${c.tier}">${ico(TIER[c.tier][0])}${TIER[c.tier][1]}</span><span class="tool">${esc(c.tool)}(${esc(c.target)})</span>${c.intr?intr(c.intr):''}<span class="st st-${s[0]}">${ico(s[1],c.status==='running'?'spin':'')}${s[2]}</span>${auto&&c.status!=='planned'?'<span class="st st-auto">Auto-approved</span>':''}</div>
+   <div class="muted" style="font-size:.72rem;margin-top:.2rem">Expected: ${esc(c.exp)}</div>
+   ${c.status==='done'?`<div class="by">Result: ${esc(c.res)}</div>`:''}
+   ${c.by?`<div class="by">${BY[c.by]}</div>`:''}
+   ${c.floor?`<div class="by" style="color:#7f1d1d"><b>Blocked by safety floor (rule ${c.floor.rule}).</b> ${esc(c.floor.txt)}</div><div class="acts">${c.floor.canAsk?(c.asked?`<span class="chip">${ico('check')}Request sent to you</span>`:`<button class="btn btn-outline btn-sm" type="button" data-ag="req" data-id="${c.id}">Ask a human to enable</button>`):''}</div>`:''}
+   ${c.status==='pending'?`<div class="acts"><button class="btn btn-primary btn-sm" type="button" data-ag="approve" data-id="${c.id}">${ico('check')} Approve</button><button class="btn btn-ghost btn-sm" type="button" data-ag="deny" data-id="${c.id}">Deny</button></div>`:''}</div>`;
+}
+function planHtml(p){
+  const stl=p.status==='proposed'?['pending','Awaiting your approval']:p.status==='approved'?['done','Approved · '+MODEINFO[p.mode][0]]:['denied','Rejected'];
+  const dev=SEQ.filter((si,i)=>!p.off[i]&&STEPS[si].tier!=='read').length;
+  return `<div class="plancard"><div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap"><b>Plan: verify MASTG-TEST-0232 (Broken Symmetric Encryption Modes)</b><span class="st st-${stl[0]}">${stl[1]}</span></div>
+   <ol>${SEQ.map((si,i)=>{const s=STEPS[si];return `<li class="${p.off[i]?'off':''}"><span>${p.editing?`<input type="checkbox" data-ag="planstep" data-i="${i}" ${p.off[i]?'':'checked'} aria-label="Include step ${i+1}">`:`<b>${i+1}.</b>`}</span><span><span class="tier tier-${s.tier}">${ico(TIER[s.tier][0])}${TIER[s.tier][1]}</span> <span class="mono" style="font-size:.72rem">${esc(s.tool)}(${esc(s.target)})</span> ${s.intr?intr(s.intr):''}<br><span class="muted">Expect: ${esc(s.exp)}</span></span></li>`}).join('')}</ol>
+   <div class="muted" style="font-size:.72rem">${dev} step${dev===1?'':'s'} touch the device or load a probe. 0 Active probes. About 4 min. Plan mode ran nothing on the device.</div>
+   ${p.status==='proposed'?`<div class="acts" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem"><button class="btn btn-primary btn-sm" type="button" data-ag="plan-ask" data-fk="pa-ask">Approve plan &amp; run in Ask mode</button><button class="btn btn-outline btn-sm" type="button" data-ag="plan-accept">Approve &amp; switch to Accept edits</button><button class="btn btn-ghost btn-sm" type="button" data-ag="plan-edit">${p.editing?'Done editing':'Edit plan'}</button><button class="btn btn-ghost btn-sm" type="button" data-ag="plan-reject">Reject</button></div>`:''}</div>`;
+}
+function feedHtml(c){
+  if(c.k==='msg')return `<div class="bub ${c.who}">${c.html}</div>`;
+  if(c.k==='sys')return `<div class="bub sys">${c.html}</div>`;
+  if(c.k==='plan')return planHtml(c);
+  return toolHtml(c);
+}
+function floorHtml(){return `<ul class="floor">${FLOOR.map((f,i)=>`<li>${ico('lock')}<span><b>${'abcdefgh'[i]}) ${f[0]}</b> ${f[1]}</span></li>`).join('')}</ul>`}
+function matrixHtml(){
+  const c=(t,m)=>({plan:{read:'Auto',observe:'Plan only',modify:'Plan only',active:'Plan only'},ask:{read:'Auto',observe:'Asks',modify:'Asks',active:'Asks'},accept:{read:'Auto',observe:'Auto',modify:'Asks',active:'Asks'},bypass:{read:'Auto',observe:'Auto',modify:'Auto',active:'Auto*'}}[m][t]);
+  return `<table class="mx"><caption class="sr">What runs without asking, by mode and tool tier</caption><thead><tr><th>Tier</th><th>Plan</th><th>Ask</th><th>Accept</th><th>Bypass</th></tr></thead><tbody>${['read','observe','modify','active'].map(t=>`<tr><th scope="row"><span class="tier tier-${t}">${ico(TIER[t][0])}${TIER[t][1]}</span></th>${['plan','ask','accept','bypass'].map(m=>`<td>${c(t,m)}</td>`).join('')}</tr>`).join('')}</tbody></table><p class="muted" style="font-size:.68rem;margin-top:.3rem">* Never for High-intrusiveness probes unless a person enabled them at launch. Out-of-scope actions are blocked in every mode.</p>`;
+}
+const SLASH=[['/add-finding','existing'],['/triage','existing'],['/verify','proposed · plan a dynamic check for a rule'],['/plan','proposed · ask for a plan without running anything']];
+function slashHtml(){
+  if(!AG.draft.startsWith('/'))return '';
+  const w=AG.draft.split(/\s/)[0],items=SLASH.filter(s=>s[0].startsWith(w));
+  return items.length?`<ul class="slash" aria-label="Slash commands">${items.map(s=>`<li><button type="button" data-ag="slash" data-cmd="${s[0]}">${s[0]}</button><span class="muted">${s[1]}</span></li>`).join('')}</ul>`:'';
+}
+function updSlash(){$$('[data-slash]').forEach(e=>e.innerHTML=slashHtml())}
+function composerHtml(v){
+  const phys=AG.device==='physical';
+  return `<div class="composer"><div data-slash>${slashHtml()}</div><label class="sr" for="ag-in-${v}">Message to the agent</label><textarea id="ag-in-${v}" data-ag="draft" data-fk="draft-${v}" rows="2" placeholder="Ask the agent… (/verify, /plan, /add-finding, /triage)">${esc(AG.draft)}</textarea>
+   <div class="row"><div class="seg mode" role="radiogroup" aria-label="Agent permission mode">${['plan','ask','accept','bypass'].map(m=>`<label${m==='bypass'&&phys?' title="Bypass is available for lab/emulator devices only"':''}><input type="radio" name="agm-${v}" value="${m}" data-ag="mode" data-fk="mode-${v}-${m}" ${AG.mode===m?'checked':''} ${m==='bypass'&&phys?'disabled':''}>${m==='accept'?'Accept edits':cap(m)}</label>`).join('')}</div>
+   <span class="muted" style="font-size:.68rem"><kbd>Shift</kbd>+<kbd>Tab</kbd> or <kbd>Alt</kbd>+<kbd>M</kbd> cycles Plan, Ask, Accept (skips Bypass)</span><button class="btn btn-primary btn-sm" type="button" data-ag="send" data-fk="send-${v}" style="margin-left:auto">Send</button></div></div>`;
+}
+function scnHtml(v){
+  const d=(a,l)=>`<button class="btn btn-sm" type="button" data-ag="${a}" data-fk="${a}-${v}">${l}</button>`;
+  return `<div class="scn"><b>Wireframe controls.</b> Simulate the agent and the environment.<div class="row">${d('next','Agent: next action')}${d('scn-high','Agent: try High probe')}${d('scn-pkg','Agent: try other package')}</div><div class="row">${d('scn-lost','Device lost')}${d('scn-budget','Budget exhausted')}${d('scn-consent','Consent revoked')}${d('scn-reset','Reset')}</div>
+   <div class="row" style="align-items:center"><label>Device label <select data-ag="dev" data-fk="dev-${v}" style="font-size:.7rem"><option value="lab" ${AG.device==='lab'?'selected':''}>Lab emulator</option><option value="physical" ${AG.device==='physical'?'selected':''}>Physical device</option></select></label><label><input type="checkbox" data-ag="highen" ${AG.highEnabled?'checked':''}> A person enabled High probes at launch</label></div></div>`;
+}
+function logHtml(){return `<ul class="log" aria-label="Agent action log, newest first">${AG.log.slice(0,30).map(l=>`<li><span class="mono muted">${l.t}</span><span><span class="w">${esc(l.who)}</span>${esc(l.txt)}</span></li>`).join('')}</ul>`}
+const isOpen=(k,v)=>AG.open[v+k]!==undefined?AG.open[v+k]:(v==='full'&&(k==='floor'||k==='log'));
+function agHtml(v){
+  const side=v==='side',m=AG.mode,mi=MODEINFO[m];
+  const head=`<div class="ag-head"><h3>${ico('spark')} AI agent</h3><span class="modechip m-${AG.stopped?'stopped':m}">${AG.stopped?'Agent stopped':'Mode: '+mi[0]}</span>${side?'':`<span class="muted" style="font-size:.74rem">${esc(mi[1])}</span>`}<span style="margin-left:auto">${AG.stopped?`<button class="btn btn-outline btn-sm" type="button" data-ag="resume" data-fk="resume-${v}">Resume agent</button>`:`<button class="btn btn-stop btn-sm" type="button" data-ag="stop" data-fk="stop-${v}">${ico('stop')} Stop agent</button>`}</span></div>`;
+  const ban=(m==='bypass'&&!AG.stopped?`<div class="bypass-banner" role="alert">${ico('alert')}<span>Bypass mode: agent acting without per-action approval</span><button class="btn btn-sm" type="button" data-ag="stepdown" data-fk="stepdown-${v}" style="margin-left:auto">Switch to Ask</button></div>`:'')
+    +(AG.notice?`<div class="alert alert-warn" role="alert" style="margin:0">${ico('alert')}<div><b>Switched to Plan mode.</b> ${esc(AG.notice)} Pending actions were cancelled.</div><div class="acts"><button class="btn btn-ghost btn-sm" type="button" data-ag="dismiss">Dismiss</button></div></div>`:'');
+  const feed=`<div class="feed" role="log" aria-label="Agent conversation and actions" tabindex="0" data-feed>${AG.feed.map(feedHtml).join('')}</div>`;
+  const floor=`<details class="panel" data-d="floor" ${isOpen('floor',v)?'open':''}><summary class="panel-h" style="cursor:pointer">${ico('lock')} Always enforced (8)<span class="sp">in every mode</span></summary><div class="panel-b">${floorHtml()}</div></details>`;
+  const logp=`<details class="panel" data-d="log" ${isOpen('log',v)?'open':''}><summary class="panel-h" style="cursor:pointer">${ico('file')} Action log<span class="sp">who approved</span></summary><div class="panel-b">${logHtml()}</div></details>`;
+  const bud=`<section class="panel"><div class="panel-h">${ico('pulse')} Budget</div><div class="panel-b" data-budget>${budHtml()}</div></section>`;
+  if(side)return `<div class="ag side">${head}${ban}${feed}${composerHtml(v)}${bud}${floor}${logp}<details class="panel" data-d="mx" ${isOpen('mx',v)?'open':''}><summary class="panel-h" style="cursor:pointer">What each mode allows</summary><div class="panel-b">${matrixHtml()}</div></details><details class="panel" data-d="scn" ${isOpen('scn',v)?'open':''}><summary class="panel-h" style="cursor:pointer">Wireframe controls</summary><div class="panel-b">${scnHtml(v)}</div></details></div>`;
+  return `<div class="ag full">${head}${ban}<div class="ag-grid"><div style="display:flex;flex-direction:column;gap:.7rem;min-width:0">${feed}${composerHtml(v)}</div><aside style="display:flex;flex-direction:column;gap:.6rem">${bud}<section class="panel"><div class="panel-h">What each mode allows</div><div class="panel-b">${matrixHtml()}</div></section>${floor}${logp}${scnHtml(v)}</aside></div></div>`;
+}
+function renderAgent(){
+  const ae=document.activeElement,fk=ae&&ae.dataset&&ae.dataset.fk;
+  [['#ag-full','full'],['#ag-side-body','side']].forEach(([sel,v])=>{const el=$(sel);if(el){el.innerHTML=agHtml(v);const f=$('[data-feed]',el);if(f){const last=f.lastElementChild;f.scrollTop=last&&last.offsetHeight>f.clientHeight*.55?Math.max(0,last.offsetTop-8):f.scrollHeight}}});
+  if(fk){const el=document.querySelector(`[data-fk="${fk}"]`);if(el&&el.offsetParent!==null)el.focus()}
+  const chip=$('#ag-chip');chip.className='modechip m-'+(AG.stopped?'stopped':AG.mode);chip.textContent=AG.stopped?'Stopped':MODEINFO[AG.mode][0];
+  $('#nav-agent').hidden=!(AG.mode==='bypass'&&!AG.stopped);
+  $('#live-ag-banner').innerHTML=AG.mode==='bypass'&&!AG.stopped?`<div class="bypass-banner" role="alert" style="margin-bottom:.75rem">${ico('alert')}<span>Bypass mode: agent acting without per-action approval</span><button class="btn btn-sm" type="button" data-ag="stepdown" style="margin-left:auto">Switch to Ask</button></div>`:'';
+}
+function agAct(b){
+  const a=b.dataset.ag,id=+b.dataset.id,card=AG.feed.find(c=>c.id===id&&c.k==='tool');
+  if(['mode','dev','highen','planstep','draft'].includes(a))return;
+  switch(a){
+    case 'approve':if(card&&card.status==='pending')agExec(card,'you');break;
+    case 'deny':if(card){card.status='denied';card.by='denied';logAdd('You',`Denied ${card.tool}(${card.target})`);renderAgent()}break;
+    case 'plan-ask':agApprovePlan('ask');break;
+    case 'plan-accept':agApprovePlan('accept');break;
+    case 'plan-edit':AG.plan.editing=!AG.plan.editing;renderAgent();break;
+    case 'plan-reject':AG.plan.status='rejected';logAdd('You','Rejected the plan');AG.feed.push({k:'msg',who:'a',html:'Understood. Tell me what to change.'});renderAgent();break;
+    case 'stop':agStop();break;
+    case 'resume':AG.stopped=false;logAdd('You','Resumed the agent');AG.feed.push({k:'sys',html:'Agent resumed in '+MODEINFO[AG.mode][0]+' mode.'});renderAgent();break;
+    case 'next':agNext();break;
+    case 'scn-high':if(AG.stopped){toast('The agent is stopped');break}agRun(STEPS[8]);break;
+    case 'scn-pkg':if(AG.stopped){toast('The agent is stopped');break}agRun(STEPS[10]);break;
+    case 'scn-lost':agDrop('The device disconnected.');if(L.started&&L.state==='running')setLiveState('lost');break;
+    case 'scn-budget':AG.budget.a=AG.budget.aMax;agDrop(`Budget reached (${AG.budget.aMax}/${AG.budget.aMax} actions). The agent stopped and needs a person to continue.`);break;
+    case 'scn-consent':agDrop('Session consent was revoked by a person. Agent actions are suspended.');break;
+    case 'scn-reset':agentReset();renderAgent();break;
+    case 'stepdown':commitMode('ask');break;
+    case 'dismiss':AG.notice=null;renderAgent();break;
+    case 'send':agSend();break;
+    case 'slash':AG.draft=b.dataset.cmd+' ';renderAgent();{const t=document.querySelector('[data-ag=draft]:not([hidden])');const vis=[...document.querySelectorAll('[data-ag=draft]')].find(x=>x.offsetParent!==null);if(vis)vis.focus()}break;
+    case 'req':if(card){card.asked=true;logAdd('Agent','Asked a person to enable High-intrusiveness probes');toast('Request sent. A person must enable it in the session launcher.');renderAgent()}break;
+  }
+}
+function agBind(el){
+  const vv=el.id==='ag-full'?'full':'side';
+  el.addEventListener('toggle',e=>{const d=e.target.closest('details[data-d]');if(d)AG.open[vv+d.dataset.d]=d.open},true);
+  el.addEventListener('click',e=>{const b=e.target.closest('[data-ag]');if(b)agAct(b)});
+  el.addEventListener('change',e=>{
+    const b=e.target.closest('[data-ag]');if(!b)return;const a=b.dataset.ag;
+    if(a==='mode')setAgMode(b.value);
+    else if(a==='dev'){AG.device=b.value;if(b.value==='physical'&&AG.mode==='bypass')agDrop('The device label changed to Physical; Bypass is not allowed there.');else renderAgent()}
+    else if(a==='highen'){AG.highEnabled=b.checked;renderAgent()}
+    else if(a==='planstep'){AG.plan.off[b.dataset.i]=!b.checked;renderAgent()}
+  });
+  el.addEventListener('input',e=>{const t=e.target.closest('[data-ag=draft]');if(t){AG.draft=t.value;updSlash()}});
+  el.addEventListener('keydown',e=>{
+    const t=e.target.closest('[data-ag=draft]');
+    if(t&&e.key==='Tab'&&e.shiftKey){e.preventDefault();cycleMode()}
+    else if(t&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();agSend()}
+    else if(e.altKey&&!e.shiftKey&&(e.key==='m'||e.key==='M')){e.preventDefault();cycleMode()}
+  });
+}
+agBind($('#ag-full'));agBind($('#ag-side-body'));
+document.addEventListener('click',e=>{const b=e.target.closest('#live-ag-banner [data-ag]');if(b)agAct(b)});
+$('#btn-ai').onclick=()=>{AG.sideOpen=!AG.sideOpen;applySide();if(AG.sideOpen)renderAgent()};
+agentReset();
 
 /* ---------- init ---------- */
 route();
