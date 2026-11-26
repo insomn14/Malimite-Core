@@ -19,6 +19,7 @@ Token visual sama dengan `web/index.html` (`--accent #4f46e5`, radius 8/14px, sy
 | 11 | Vulnerabilities + eskalasi | Tab Vulnerabilities | Kolom verdict dinamis, filter verdict, "Verify dynamically" per baris dan batch, drawer 3 langkah (Review, Test plan, Authorize) |
 | 12-13 | PoC console + PoC results | Mode fokus, lalu tab Dynamic | Checklist langkah PoC, pin evidence, draft PocSteps dengan diff, saran triage |
 | 14 | AI agent (mode izin) | Tab AI Assistant, sub-view "Dynamic agent", dan panel di Live console | Plan / Ask / Accept edits / Bypass, tool-call card, safety floor, budget, action log |
+| 15 | Agents (definisi agent) | Nav baru **Agents** | Preset, editor, validasi, provider terhubung, fallback, budget, data policy |
 
 ## 5 keputusan desain utama
 
@@ -48,6 +49,15 @@ Token visual sama dengan `web/index.html` (`--accent #4f46e5`, radius 8/14px, sy
 - **Consent** tampil di cover dan lembar persetujuan (siapa, waktu, versi pernyataan, catatan scope, baris tanda tangan reviewer).
 - **Kompatibilitas:** untuk scan tanpa sesi dinamis, output report harus identik dengan versi sekarang (tanpa seksi, lampiran, atau baris consent baru). Mockup menampilkan ini sebagai skenario "No dynamic analysis".
 - **Navigasi:** layar 13 dan 14 punya "Add to report" dan "Preview in report" yang membuka layar 10 pada anchor finding. Cetak/PDF memakai `@page` A4 dan satu halaman per `.rpage`; diverifikasi lewat `page.pdf()` (jumlah halaman PDF sama dengan jumlah halaman report).
+
+## Agents kustom dan multi-agent (layar 15 dan panel agent)
+
+- **Editor definisi agent:** daftar preset (terkunci, hanya "Duplicate & edit") dan agent kustom. Field: nama, role prompt dengan counter 4 KB (catatan: ditambahkan ke prompt dasar, tidak bisa melonggarkan safety floor), allowlist tool per tier dan tier maksimum, provider/model, fallback chain, permission cap, budget, data policy, can_spawn (hanya Orchestrator). Validasi inline plus ringkasan error; Save nonaktif selama ada error.
+- **Provider dan model:** dropdown menampilkan 7 provider dari `llm.py`; yang belum terhubung tampil "not connected" dan tidak bisa dipilih. Badge kapabilitas tool-use (verified/experimental/none), vision, dan context. Model tanpa tool-use dinonaktifkan untuk agent bertool; ollama dan glm memberi peringatan; `claude-oauth` memberi hint concurrency 1. Local only membatasi pilihan ke Ollama.
+- **Lane multi-agent** (tab AI Assistant dan sidebar Live): satu lane per agent dengan chip provider/model, "fallback in use", mode efektif (min dari cap, induk, sesi; alasan di tooltip dan teks), status, token in/out, aksi terpakai, dan Stop per agent. Hasil sub-agent tampil sebagai kartu "untrusted data from sub-agent". Independent Reviewer menandai "cross-check by a different model" atau memperingatkan bila modelnya sama.
+- **Antrean persetujuan tunggal** berlabel agent; batch hanya untuk tier yang sama; aksi device menampilkan posisi di antrean device lock. Dialog Spawn menampilkan sisa kuota (kedalaman 1, 3 konkuren, 10 total) dan hanya menawarkan provider terhubung.
+- **Keadaan khusus:** definisi tak dikenal, spawn oleh sub-agent (depth limit), dan melebihi kuota diblok dengan alasan (label "orchestration limit", terpisah dari safety floor). Provider gagal memicu fallback yang dicatat; tanpa fallback run berakhir error. Stop agent membatalkan semua lane; budget habis menurunkan semua ke Plan.
+- **Report Appendix A:** tabel per agent (provider/model, fallback, aksi, token, diblok, hash prompt) dan tabel egress data per vendor. Skenario manual dan tanpa dynamic tidak berubah.
 
 ## Temuan penting tentang token existing
 
