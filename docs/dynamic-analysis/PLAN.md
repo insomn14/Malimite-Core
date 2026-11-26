@@ -126,7 +126,23 @@ dyn_verdicts(
   reason TEXT, evidence_refs_json TEXT,  -- [{type:'event'|'flow', id}]
   confidence TEXT                -- HIGH|MEDIUM|LOW
 )
+agent_runs(                      -- §7.2–7.5: orchestrator + sub-agent, satu baris per run
+  run_id TEXT PK, session_id TEXT, parent_run_id TEXT NULL,   -- NULL = orchestrator
+  def_id TEXT, def_snapshot_json TEXT,       -- snapshot IMMUTABLE definisi saat spawn (+ sha256 role_prompt)
+  provider TEXT, model TEXT, fallback_used INTEGER DEFAULT 0,
+  state TEXT,                    -- queued|running|waiting_approval|done|error|cancelled|budget_exhausted
+  task TEXT, result_json TEXT,   -- ringkasan terstruktur + evidence_refs
+  tokens_in INTEGER, tokens_out INTEGER, llm_calls INTEGER,
+  started_at INTEGER, finished_at INTEGER, error TEXT
+)
+agent_actions(                   -- audit log append-only (§7.1 #8)
+  id INTEGER PK, session_id TEXT, run_id TEXT, ts_ms INTEGER, tool TEXT, args_hash TEXT,
+  tier TEXT, decision TEXT,      -- ALLOW|ASK|DENY(reason)
+  approver TEXT, provider TEXT, model TEXT
+)
 ```
+
+Transcript tiap run disimpan sebagai sesi di `chat.sqlite` (milik `store.py`) dengan kolom baru `parent_session_id` (safe-add), sehingga `history/clip/fork` yang ada dipakai ulang. Definisi agent (bukan run) disimpan di `~/.malimite/agents.json` (§7.2).
 
 Body besar (request/response >64 KB, screenshot, fsdiff) disimpan sebagai file di `dyn_artifacts/` dan hanya direferensikan — mengikuti pola scan dir yang sudah ada (`report.html`, `analysis.log`).
 
@@ -246,6 +262,12 @@ Semua di bawah `_check_auth` yang sama dengan endpoint lain (`API_KEY`). Prefix 
 | `GET /scans/{id}/dynamic/compare?a=&b=` | Diff dua sesi (build/versi berbeda): finding yang berubah verdict, host baru, probe event baru |
 | `GET /scans/{id}/dynamic/export` | HAR + JSON ringkasan |
 | `POST /dynamic/probes/draft` | Simpan probe draf (dari AI/manual) — **tidak** bisa dieksekusi sebelum `approve` manusia |
+| `GET/POST /dynamic/agents` · `PUT/DELETE /dynamic/agents/{id}` | CRUD definisi agent (§7.2). Validasi: provider harus `configured`, provider dengan `tool_use=none` ditolak, `role_prompt` ≤ 4 KB. Preset bawaan tidak bisa dihapus |
+| `GET .../{sid}/agents` | Pohon run (orchestrator + sub-agent): state, provider/model, token, hasil ringkas |
+| `POST .../{sid}/agents/spawn` | Spawn manual oleh user `{def_id, task}` — tunduk pada batas kedalaman/konkurensi/total (§7.3) |
+| `POST .../{sid}/agents/{run}/stop` | Hentikan satu run (dan anak-anaknya); `.../agent/stop` menghentikan semua |
+| SSE `.../{sid}/stream` | Event tambahan: `agent.spawned`, `agent.state`, `agent.message`, `agent.result`, `approval.pending{agent_id}` |
+| `GET /config/providers` (existing) | Diperluas dengan `capabilities{tool_use, vision, context}` per provider (§7.4) |
 
 Hasil `GET /scans/{id}` ditambah `dynamic_session_count`, `dynamic_verdict_counts` (opsional, `null` bila tak ada) agar badge tab muncul tanpa call tambahan; konsisten dengan `vulnerability_counts` di `ScanDetail`.
 
@@ -296,6 +318,56 @@ Mode **Bypass**: hanya untuk device berlabel `lab/emulator` kecuali admin mengak
 
 API tambahan: `PUT .../sessions/{sid}/agent/mode`, `GET .../agent/actions` (audit log), `POST .../agent/actions/{aid}/approve|deny`, `POST .../agent/stop`.
 
+> Catatan penyelarasan dengan mockup (layar 14): mockup menambahkan mode **Ask** sebagai mode keempat (setiap aksi selain tier `read` meminta persetujuan per aksi). Urutan izin untuk seluruh dokumen ini: **Plan < Ask < Accept edits < Bypass**.
+
+### 7.2 Definisi agent (`AgentDef`) — kustomisasi oleh pengguna
+
+Pengguna dapat membuat, menyalin, dan mengedit **definisi agent**. Disimpan di `~/.malimite/agents.json` (pola yang sama dengan `llm-config.json`: 0600, atomic write; lihat `web/app/agent/llm_config.py`), dengan override opsional per scan.
+
+| Field | Keterangan |
+|---|---|
+| `id`, `name`, `description` | Identitas; `id` stabil untuk audit |
+| `role_prompt` (≤ 4 KB) | **Ditambahkan** ke system prompt dasar, tidak menggantikannya. Tidak punya kekuatan melonggarkan safety floor (ditegakkan di server) |
+| `tools_allowlist` | Subset tool dynamic (§7) + tier maksimum yang boleh dipanggil |
+| `provider`, `model`, `fallback[{provider,model}]` | §7.4 |
+| `permission_cap` | `plan | ask | accept | bypass` — batas atas; efektifnya selalu ≤ induk & sesi (§7.5) |
+| `budget` | `{max_actions, max_turns, max_minutes, max_output_tokens}` — dipotong oleh anggaran sesi bersama |
+| `can_spawn` | Hanya `true` untuk Orchestrator; sub-agent selalu `false` |
+| `data_policy` | `redacted_only` (default) atau `local_only` (hanya provider lokal, mis. Ollama) |
+
+Preset bawaan (dapat diedit lewat salinan; aslinya tidak dapat dihapus):
+**Orchestrator** · **Traffic Analyst** (tier `read`: events/flows) · **Crypto & Storage Verifier** (`observe`: probe pasif) · **PoC Writer** (hanya draft; hasil tetap harus di-accept manusia) · **Device Operator** (`modify_device`; maks. 1 per device) · **Independent Reviewer** (read-only; **disarankan memakai provider/model berbeda** dari Orchestrator untuk cross-check verdict).
+
+Setiap run memakai **snapshot immutable** definisi (hash `role_prompt` ikut dicatat) sehingga audit dan report dapat direproduksi meski definisi diedit kemudian.
+
+### 7.3 Spawn & orkestrasi (orchestrator + sub-agent)
+
+Topologi: satu **Orchestrator** (agent yang di-chat user) mendelegasikan ke **sub-agent** spesialis. Tidak ada peer-to-peer antar sub-agent.
+
+- Tool baru: `spawn_agent(def_id, task, inputs)` dan `await_agents(run_ids)`. Pengguna juga dapat spawn manual dari UI. **Orchestrator hanya dapat memilih definisi yang sudah ada; ia tidak dapat membuat atau mengubah definisi.**
+- Sub-agent menjalankan **loop sendiri** (generalisasi `_loop` di `web/app/agent/loop.py` agar menerima tool set, `LlmCfg`, budget, dan `agent_ctx` sebagai parameter) dengan transcript terpisah. Hasil akhir = ringkasan terstruktur (batas panjang tetap) + `evidence_refs`, dikembalikan ke orchestrator sebagai tool_result **yang dibungkus `wrap()`** — **data tak tepercaya**, tidak pernah instruksi.
+- Batas (setting `DYNAMIC_AGENT_*`): kedalaman **1**; sub-agent konkuren ≤ 3; total spawn per sesi ≤ 10; **anggaran aksi/waktu dibagi seluruh agent dalam satu sesi**, bukan per agent.
+- Fan-out hanya untuk pekerjaan read/observe; aksi yang memutasi device diserialisasi (§7.5).
+
+### 7.4 Provider & model LLM per agent
+
+Basis kode yang dipakai ulang: `LlmCfg` dan `resolve_llm(scan_provider, scan_model, provider, model)` di `web/app/agent/llm.py` **sudah mendukung override provider+model per request**; kunci diambil dari `scanner.llm_env` → `llm_config.effective_fields` → env. Daftar provider yang terhubung sudah ada di `GET /api/v1/config/providers`.
+
+- **Resolusi**: fungsi baru `resolve_agent_llm(agent_def, session)` membungkus `resolve_llm`. Hanya provider berstatus `configured` yang boleh dipilih.
+- **Fallback**: bila `LlmError` tetap muncul setelah retry bawaan `chat_step`, coba entri `fallback[]` berurutan; pemakaian fallback dicatat (`fallback_used`) dan tampil di UI/report.
+- **Metadata kapabilitas (baru)**: saat ini hanya ada `VISION_CAPABLE_PROVIDERS`; tidak ada data tool-use/context window. Tambah `PROVIDER_CAPS` dan ekspos lewat `GET /config/providers`. Agent bertool **tidak boleh** memakai provider `tool_use=none`; `experimental` (mis. ollama, glm — tool-use belum terverifikasi) diberi peringatan di editor agent.
+- **Limiter per provider (baru, `web/app/agent/limiter.py`)**: `_chat_rate_limit` yang ada hanya menghitung request HTTP (30/menit global), bukan panggilan LLM, dan tidak ada throttle per provider. Dengan beberapa agent paralel, tambahkan semaphore/token bucket per provider (`LLM_PROVIDER_CONCURRENCY`, default 2; **`claude-oauth` = 1** karena burst-limit langganan lebih ketat; refresh token OAuth sendiri sudah aman terhadap konkurensi).
+- **Usage accounting (baru)**: belum ada pencatatan token/biaya. Tangkap token in/out dari respons `chat_step`, simpan di `agent_runs`, tampilkan di UI dan Appendix A report. **Perlu diverifikasi** bahwa `parse_anthropic`/`parse_openai` mengekspos `usage`; bila tidak, tambahkan.
+- **Egress data**: tiap agent bisa mengirim konteks ke vendor berbeda. Provider+model per agent dicatat di audit dan Appendix A; `data_policy=local_only` membatasi agent ke provider lokal. Output tool ke LLM tetap ter-redact (§9).
+
+### 7.5 Izin, device, dan konkurensi lintas agent
+
+- `effective_mode(agent) = min(agent.permission_cap, mode_induk, mode_sesi)` (urutan Plan < Ask < Accept < Bypass). `policy.decide(tool, args, session, mode, agent)` menerapkan `effective_mode` + `tools_allowlist ∩ tier`. **Safety floor (§7.1) berlaku per sesi untuk semua agent** dan tidak dapat dilonggarkan oleh `role_prompt`, definisi, maupun orchestrator.
+- **Device lock**: satu `asyncio.Lock` per device untuk aksi tier `modify_device`/`bypass_probe`/observe yang memutasi, per **aksi** (antrean FIFO), bukan per run; tier `read` berjalan paralel.
+- **Approval multiplexing** (bagian tersulit): konfirmasi saat ini memakai *return-and-resume* pada satu stream per sesi (`loop.py` `tool_confirm_needed` → `awaiting_confirmation`, dan `_ACTIVE_CHATS` di `main.py`). Sub-agent paralel tidak bisa memakai pola itu. Rancangan: sub-agent memblok pada `asyncio.Future` per `tool_use_id`; event `approval.pending` membawa `agent_id`; UI menampilkan **satu antrean persetujuan** berlabel agent; `/confirm-tool` meresolusi Future. Orchestrator tetap memakai mekanisme yang ada.
+- **Stop**: `Stop agent` membatalkan seluruh task group agent sesi; tersedia juga stop per run; `Stop & detach` tetap mutlak. Device terputus / anggaran habis / consent dicabut → semua agent turun ke Plan.
+- **Audit**: setiap aksi mencatat `run_id`, provider, model, dan approver (`user | auto_accept | bypass_mode`).
+
 ---
 
 ## 8. Integrasi Report, SARIF, CI
@@ -331,6 +403,7 @@ API tambahan: `PUT .../sessions/{sid}/agent/mode`, `GET .../agent/actions` (audi
 | Kontrak runner↔web | `FakeBackend` memutar rekaman event (`tests/fixtures/*.jsonl`) lewat WS sungguhan; assert SSE order, resume `Last-Event-ID`, device_lost, runner_lost | ✅ |
 | Java (`core/src/test`) | `HtmlReporter`/`SarifExporter` dengan `dynamic_summary.json` fixture; scan **tanpa** file itu harus byte-identik output lama (regression guard) | ✅ |
 | Keamanan | payload XSS pada event/flow; tool AI tulis tak bisa jalan tanpa konfirmasi; runner menolak probe dengan hash tak cocok | ✅ |
+| Multi-agent (§7.2–7.5) | `effective_mode` = min dari tiga sumber; cap kedalaman/konkurensi/total spawn; sub-agent tidak dapat memanggil `spawn_agent`; orchestrator tidak dapat membuat/mengubah definisi; device lock menyerialkan aksi (FakeBackend); fallback provider (fake `LlmError`); `resolve_agent_llm` menolak provider tidak terhubung / `tool_use=none` / melanggar `data_policy`; multiplexing approval; `Stop agent` membatalkan semua task; injection lintas-agent ("spawn agent X", "abaikan floor" di isi event atau hasil sub-agent) tidak berefek; audit memuat `run_id`+provider+model | ✅ |
 | Probe lint | semua manifest valid; rule id ada di catalog; skrip JS lolos `node --check` | ✅ |
 | E2E emulator | APK uji sederhana (repo `tests/fixtures/vuln-app/`: ECB crypto, plaintext prefs, cleartext HTTP) → expected verdict CONFIRMED | ⏱ nightly (runner KVM), bukan per-PR |
 | Manual / UX | 3–5 skenario usability dari `UX_DESIGN.md` | per milestone |
@@ -372,10 +445,27 @@ Estimasi kasar untuk 1 engineer penuh-waktu familiar dengan codebase (rentang, b
 - `dynamic_summary.json` + perubahan Java (`HtmlReporter`, `SarifExporter`, template) + regression test byte-identik tanpa dynamic.
 - **Selesai bila**: satu finding crypto statis (mis. `MASTG-TEST-0221`) berubah menjadi `CONFIRMED` dengan bukti event, tampil di report HTML & SARIF.
 
-### Fase D4 — AI Assistant (≈1–2 minggu)
+### Fase D4 — AI Assistant & multi-agent (dipecah menjadi 4 sub-fase)
+
+**D4a — Agent tunggal (≈1–2 minggu)**
 - Tool §7 + kartu konfirmasi baru (device/probe/intrusiveness); `dynamic_plan_session` dari `recommend_hook_targets`.
+- `policy.py` (`decide`, tier, safety floor, mode Plan/Ask/Accept; Bypass menyusul — lihat §14 #6), audit log.
 - Probe draft dari LLM → review UI (diff, hash, approve).
 - Evaluasi prompt-injection (event berisi "ignore previous instructions…") sebagai test.
+
+**D4b — Definisi agent + provider/model per agent (≈1 minggu)**
+- `AgentDef` + `agents.json` + CRUD API; `resolve_agent_llm` (reuse `resolve_llm`); `PROVIDER_CAPS`; fallback provider.
+- Masih **satu agent aktif** (orchestrator memakai definisinya); murah karena override provider/model sudah ada di kode.
+
+**D4c — Sub-agent (≈2 minggu, risiko tertinggi di D4)**
+- Generalisasi `_loop` (tool set, cfg, budget, ctx), `spawn_agent/await_agents`, `agent_runs`, transcript sub-agent (`parent_session_id`).
+- Approval multiplexing (Future per `tool_use_id`), device lock, limiter per provider, `Stop agent`/stop per run.
+- **Tidak dirilis sebelum Bypass + safety floor lolos review keamanan** (§14 #6).
+
+**D4d — Preset, reviewer, usage (≈1 minggu)**
+- Preset bawaan (Traffic Analyst, Crypto & Storage Verifier, PoC Writer, Device Operator, Independent Reviewer), usage accounting (token per run), rincian per agent di Appendix A report.
+
+Estimasi tambahan akibat multi-agent: **±3–4 minggu** di atas rencana D4 semula. Urutan wajib: D4a → D4b → D4c → D4d.
 
 ### Fase D5 — iOS (≈3–4 minggu, risiko tertinggi)
 - Backend `ios_frida` (usbmux/`frida-server` pada device jailbroken; Corellium sebagai opsional kemudian), probe: Keychain, `NSUserDefaults`, `NSURLSession` trust evaluation, jailbreak detection.
@@ -389,14 +479,14 @@ Estimasi kasar untuk 1 engineer penuh-waktu familiar dengan codebase (rentang, b
 - Metrik (sesi aktif, event/s, drop rate, runner heartbeat), retention, audit log consent, load test 500k event, pen-test internal terhadap runner channel.
 
 ### Ringkasan dependensi
-`D0 → D1 → {D2, D4 (setelah D3)}`; `D3` butuh `D1`(+`D2` untuk finding jaringan); `D5` independen setelah `D1` kontrak stabil; `D6` butuh `D3`.
+`D0 → D1 → {D2, D4a (setelah D3) → D4b → D4c → D4d}`; `D3` butuh `D1`(+`D2` untuk finding jaringan); `D5` independen setelah `D1` kontrak stabil; `D6` butuh `D3`.
 
 ---
 
 ## 12. Daftar file yang akan disentuh (perkiraan)
 
-Baru: `runner/**`, `probes/**`, `web/app/dynamic/**`, `web/tests/test_dynamic_*.py`, `deploy/runner.Dockerfile`, `docs/dynamic-analysis/{PROTOCOL,ADR}.md`, `tests/fixtures/vuln-app/**`.
-Modifikasi: `web/app/main.py` (include router, `ScanDetail` field, delete scan ikut hapus dynamic), `web/app/db.py` (`_ensure_dynamic_columns`, query verdict), `web/app/models.py`, `web/app/config.py` (`DYNAMIC_ENABLED`, retention, batas), `web/app/agent/tools.py` (+ `loop.py` hanya jika kartu konfirmasi perlu field tambahan), `web/index.html` (tab, halaman, komponen), `core/.../{HtmlReporter,SarifExporter,ReportRenderer,SqliteStore}.java`, `core/.../report-template/*.html`, `tools/malimite-ci/malimite_ci.py`, `README.md`, `PHASES.md` (tambah Phase 9 "Dynamic Analysis" — nomor menyesuaikan), `THIRD_PARTY_NOTICES.md`, `.github/workflows/ci.yml` (job unit `runner/` + nightly).
+Baru: `runner/**`, `probes/**`, `web/app/dynamic/**` (termasuk `agents.py`, `policy.py`), `web/app/agent/limiter.py`, `web/tests/test_dynamic_*.py`, `deploy/runner.Dockerfile`, `docs/dynamic-analysis/{PROTOCOL,ADR}.md`, `tests/fixtures/vuln-app/**`.
+Modifikasi: `web/app/main.py` (include router, `ScanDetail` field, delete scan ikut hapus dynamic), `web/app/db.py` (`_ensure_dynamic_columns`, query verdict), `web/app/models.py`, `web/app/config.py` (`DYNAMIC_ENABLED`, retention, batas), `web/app/agent/tools.py` (tool dynamic, `spawn_agent`), `web/app/agent/loop.py` (generalisasi `_loop`, approval Future), `web/app/agent/llm.py` (`PROVIDER_CAPS`, capture usage), `web/app/agent/llm_config.py` (kapabilitas di `GET /config/providers`), `web/app/agent/store.py` (`parent_session_id`), `web/index.html` (tab, halaman, komponen), `core/.../{HtmlReporter,SarifExporter,ReportRenderer,SqliteStore}.java`, `core/.../report-template/*.html`, `tools/malimite-ci/malimite_ci.py`, `README.md`, `PHASES.md` (tambah Phase 9 "Dynamic Analysis" — nomor menyesuaikan), `THIRD_PARTY_NOTICES.md`, `.github/workflows/ci.yml` (job unit `runner/` + nightly).
 
 ---
 
@@ -411,6 +501,11 @@ Modifikasi: `web/app/main.py` (include router, `ScanDetail` field, delete scan i
 | Lisensi frida/mitmproxy | Distribusi | Tidak dibundel; lisensi diverifikasi sebelum D1 merge |
 | False assurance ("not reproduced" dibaca "aman") | Risiko produk | §4.2: label, coverage gating, tidak pernah auto-FP, disclaimer di report |
 | Scope creep ke "full pentest framework" | Jadwal | §1.2 non-tujuan; backlog terpisah |
+| Prompt-injection lintas-agent (isi traffic/log → sub-agent → orchestrator) | Eskalasi aksi / spawn tak diinginkan | Hasil sub-agent = data tak tepercaya (`wrap()`); orchestrator tak bisa membuat definisi; tools_allowlist & floor ditegakkan server; test injection (§10) |
+| Ledakan biaya & rate-limit saat banyak agent | Tagihan / 429 / OAuth burst-limit | Anggaran bersama per sesi, cap spawn, limiter per provider (claude-oauth = 1), usage accounting |
+| Parser stream belum tentu mengekspos `usage`; tool-use ollama/glm tak terverifikasi | Accounting tak akurat; agent gagal memanggil tool | Verifikasi di D4b; label `experimental`; blok provider `tool_use=none` |
+| Kompleksitas approval multiplexing & pembatalan task | Deadlock / aksi yatim | Future per `tool_use_id` dengan timeout, task group tunggal, test pembatalan |
+| Konteks sensitif dikirim ke banyak vendor LLM | Kebocoran data / kepatuhan | `data_policy`, redaksi sebelum LLM, provider+model per agent tercatat di audit & report |
 
 ---
 
@@ -422,3 +517,6 @@ Modifikasi: `web/app/main.py` (include router, `ScanDetail` field, delete scan i
 4. **Lisensi/distribusi**: boleh mem-bundle frida/mitmproxy di image Docker, atau hanya instruksi instalasi?
 5. **Corellium / device farm** di roadmap atau di luar scope?
 6. **Mode Bypass untuk agent (§7.1)**: apakah boleh ada sama sekali pada rilis pertama? Rekomendasi: D4 dirilis hanya dengan Plan + Accept edits; Bypass menyusul setelah review keamanan, terbatas pada emulator/lab.
+7. **Independent Reviewer**: wajib memakai provider/model berbeda dari Orchestrator (cross-check sungguhan) atau hanya disarankan?
+8. **Batas biaya**: cukup batas token/aksi per sesi, atau perlu *cost cap* dalam mata uang per run (butuh tabel harga per model)?
+9. **Berbagi definisi agent per tim**: apakah definisi/preset perlu dibagikan antar pengguna (terkait #3 multi-user), atau tetap per instalasi?
