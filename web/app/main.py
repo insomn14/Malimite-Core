@@ -1145,7 +1145,7 @@ async def get_report(request: Request, scan_id: str):
 
 
 # Must match HtmlReporter.TEMPLATE_VERSION — bump both when the HTML layout changes.
-_HTML_REPORT_TEMPLATE_VERSION = "8"
+_HTML_REPORT_TEMPLATE_VERSION = "9"
 _HTML_REPORT_TEMPLATE_META = (
     f'<meta name="malimite-report-template" content="{_HTML_REPORT_TEMPLATE_VERSION}">'
 )

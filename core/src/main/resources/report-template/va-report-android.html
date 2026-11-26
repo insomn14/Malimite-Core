@@ -26,7 +26,7 @@
   controls:  [{group, name, status: PRESENT|PARTIAL|ABSENT|UNKNOWN, signal, detail, rule, confidence}]
   findings*: [{id, severity: CRITICAL|HIGH|MEDIUM|LOW|INFO, cvss, cvss_vector, title, rule,
               source: MASTG|LLM, category, cwe, masvs, description, affected[{name,type,location}],
-              evidence, poc[], remediation, reference, status: OPEN|IN_PROGRESS|FIXED|ACCEPTED|FALSE_POSITIVE}]
+              evidence, poc[], remediation, reference, reviewer_note, status: OPEN|IN_PROGRESS|FIXED|ACCEPTED|FALSE_POSITIVE}]
   code_surface: {entry_points[], entry_points_count, classes[{name, fn}]}
   strings_sample: [{address, segment, value}], strings_total
   Teks bebas (title, description, remediation, executive_note) boleh string atau {"id":"…","en":"…"}.
@@ -238,6 +238,7 @@ const L = {
   details:["Detail Temuan","Detailed Findings"], affected:["Komponen Terdampak","Affected Components"],
   evidence:["Bukti","Evidence"], poc:["Proof of Concept — Langkah Reproduksi","Proof of Concept — Steps to Reproduce"],
   remediation:["Rekomendasi Perbaikan","Remediation"], reference:["Referensi","Reference"],
+  reviewerNote:["Catatan Reviewer","Reviewer Note"],
   rule:["Aturan","Rule"], cwe:["CWE","CWE"], masvs:["MASVS","MASVS"],
   llmNote:["Temuan ini dihasilkan analisis berbasis LLM dan perlu diverifikasi manual sebelum ditindaklanjuti.","This finding was produced by LLM-assisted analysis and requires manual verification before action."],
   aiAssistantNote:["Temuan ini ditambahkan secara manual melalui AI Assistant dan telah dikonfirmasi oleh peninjau sebelum disimpan.","This finding was manually added through the AI Assistant and was confirmed by a reviewer before being saved."],
@@ -440,6 +441,7 @@ const details = `
       <div class="f-sec"><div class="h">${t("remediation")}</div>${(f.remediation_steps||[]).length
         ?`<ol>${f.remediation_steps.map(p=>`<li>${tx(p)}</li>`).join("")}</ol>`
         :`<p>${tx(f.remediation)}</p>`}</div>
+      ${f.reviewer_note?`<div class="f-sec"><div class="h">${t("reviewerNote")}</div><p>${tx(f.reviewer_note)}</p></div>`:""}
       ${f.reference?`<div class="f-sec"><div class="h">${t("reference")}</div><p class="small">${link(f.reference)}</p></div>`:""}
       ${f.source==="LLM"?`<div class="note">${t("llmNote")}</div>`:""}
       ${f.source==="AI_ASSISTANT"?`<div class="note">${t("aiAssistantNote")}</div>`:""}

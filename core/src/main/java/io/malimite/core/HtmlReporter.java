@@ -44,7 +44,7 @@ public final class HtmlReporter {
      * stale reports and re-render via {@link ReportRenderer}. Keep in sync with
      * {@code web/app/main.py}'s {@code _HTML_REPORT_TEMPLATE_VERSION}.
      */
-    public static final String TEMPLATE_VERSION = "8";
+    public static final String TEMPLATE_VERSION = "9";
 
     private static final String IOS_TEMPLATE_RESOURCE = "/report-template/va-report-ios.html";
     private static final String ANDROID_TEMPLATE_RESOURCE = "/report-template/va-report-android.html";
@@ -253,6 +253,7 @@ public final class HtmlReporter {
                 if (remSteps.length() > 1) f.put("remediation_steps", remSteps);
             }
             if (notBlank(v.referenceUrl())) f.put("reference", v.referenceUrl());
+            if (notBlank(v.overrideNote())) f.put("reviewer_note", v.overrideNote());
             f.put("status", templateStatus(v.status()));
             out.put(f);
         }

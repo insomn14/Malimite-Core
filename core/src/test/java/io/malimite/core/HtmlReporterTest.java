@@ -304,6 +304,25 @@ class HtmlReporterTest {
         assertTrue(html.contains("aiAssistantNote"), "template must carry the AI Assistant disclosure copy");
     }
 
+    @Test void triageNoteIsExportedAndRenderedByBothTemplates(@TempDir Path tmp) throws Exception {
+        var noted = new AnalysisReport.VulnerabilityRecord(
+                4L, "AI-9a1a992f", "Third-party decoder without allowlist", "CODE",
+                "LOW", 3.1, "CWE-20", "d", "FUNCTION", "decodedImageWithData:options:",
+                "e", null, "steps", "rem", null,
+                "open", "INFO", 0.0, "Dinilai ulang setelah pengujian runtime.",
+                null, null, null, null, "none", null, null);
+        JSONObject f = renderedData(reportWithFindings(noted), tmp).getJSONArray("findings").getJSONObject(0);
+        assertEquals("Dinilai ulang setelah pengujian runtime.", f.getString("reviewer_note"));
+        assertFalse(renderedData(reportWithFindings(
+                finding(5L, "MSTG-TEST-1", "x", "CODE", "LOW", 1.0, "FUNCTION", "x", "x")), tmp)
+                .getJSONArray("findings").getJSONObject(0).has("reviewer_note"));
+        for (String t : List.of("/report-template/va-report-ios.html", "/report-template/va-report-android.html")) {
+            String html = new String(HtmlReporterTest.class.getResourceAsStream(t).readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(html.contains("f.reviewer_note"), t + " must render the reviewer note");
+        }
+    }
+
     @Test void llmAssistedFindingStillGetsTheOlderLlmSourceTag(@TempDir Path tmp) throws Exception {
         // Regression guard: adding the "AI-" prefix check must not reclassify this scanner's own
         // pre-existing LLM-ASSISTED SCAN MODE findings (RuleId prefix "LLM-", unrelated to the
