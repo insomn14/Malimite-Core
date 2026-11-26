@@ -1,0 +1,1298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Malimite Dynamic Analysis — wireframes</title>
+<style>
+/* ===== Tokens: identical to web/index.html :root, plus the proposed dynamic-analysis tokens ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f8f9fb;--surface:#fff;--border:#e2e4e9;--text:#1a1d23;
+  --muted:#6b7280;--accent:#4f46e5;--accent-h:#4338ca;
+  --high:#dc2626;--medium:#d97706;--low:#2563eb;--info:#6b7280;
+  --green:#16a34a;--red:#dc2626;--yellow:#ca8a04;
+  --radius:8px;--shadow:0 1px 3px rgba(0,0,0,.08);
+  /* NEW: control border that meets 3:1 non-text contrast (existing --border is decorative only) */
+  --border-strong:#8b909a;
+  /* NEW: verdict tokens (text/bg pairs all >= 6:1) */
+  --v-confirmed-fg:#991b1b;--v-confirmed-bg:#fee2e2;--v-confirmed-bd:#b91c1c;
+  --v-notrepro-fg:#166534;--v-notrepro-bg:#dcfce7;--v-notrepro-bd:#15803d;
+  --v-inconcl-fg:#92400e;--v-inconcl-bg:#fef3c7;--v-inconcl-bd:#b45309;
+  --v-nottested-fg:#4b5563;--v-nottested-bg:#f1f5f9;--v-nottested-bd:#6b7280;
+  /* NEW: live indicators */
+  --rec-fg:#b91c1c;--rec-bg:#fef2f2;--rec-bd:#b91c1c;
+  --icpt-fg:#fff;--icpt-bg:#92400e;
+  /* NEW: finding source = dynamic */
+  --dyn-fg:#075985;--dyn-bg:#e0f2fe;--dyn-bd:#0284c7;
+}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.skip{position:absolute;left:-999px;top:0;background:var(--accent);color:#fff;padding:.5rem 1rem;z-index:999}.skip:focus{left:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.muted{color:var(--muted)}
+.ico{width:1em;height:1em;flex:none;vertical-align:-.125em;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* nav (same as product, 52px sticky) */
+nav.app-nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;align-items:center;gap:1rem;height:52px;position:sticky;top:0;z-index:100}
+.nav-logo{font-weight:700;font-size:1.1rem;display:flex;align-items:center;gap:.4rem}
+.nav-logo .ico{width:22px;height:22px;color:var(--accent)}
+.nav-link{color:var(--muted);font-size:.875rem;padding:.25rem .5rem;border-radius:4px;white-space:nowrap}
+.nav-link:hover,.nav-link.active{color:var(--text);background:var(--bg);text-decoration:none}
+.nav-link.active{font-weight:600}
+.new-tag{font-size:.6rem;font-weight:700;letter-spacing:.04em;background:var(--dyn-bg);color:var(--dyn-fg);border-radius:4px;padding:0 .3rem;margin-left:.25rem;vertical-align:1px}
+.nav-spacer{flex:1}
+/* NEW global recording chip: visible on every page while a session is live */
+.rec-chip{display:inline-flex;align-items:center;gap:.45rem;background:var(--rec-bg);color:var(--rec-fg);border:1px solid var(--rec-bd);border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700}
+.rec-chip:hover{text-decoration:none;background:#fee2e2}
+.rec-chip[hidden]{display:none}
+.rec-chip{white-space:nowrap}
+@media(max-width:1180px){nav.app-nav{gap:.5rem;padding:0 1rem}.rec-chip .full{display:none}}
+.dot{width:9px;height:9px;border-radius:50%;background:currentColor;display:inline-block;flex:none}
+.dot.pulse{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin .9s linear infinite}
+@media(prefers-reduced-motion:reduce){.dot.pulse,.spin{animation:none}}
+
+/* wireframe screen switcher (NOT part of the product UI) */
+.wf-bar{background:#fffbe6;border-bottom:1px dashed #b45309;padding:.45rem 1.5rem;display:flex;flex-wrap:wrap;gap:.35rem .5rem;align-items:center;font-size:.78rem}
+.wf-bar b{color:#78350f;margin-right:.3rem}
+.wf-bar a{color:#1a1d23;padding:.15rem .55rem;border:1px solid #d6c27a;border-radius:999px;background:#fff}
+.wf-bar a[aria-current=page]{background:#1a1d23;color:#fff;border-color:#1a1d23}
+.wf-bar a:hover{text-decoration:none;background:#fdf3c4}.wf-bar a[aria-current=page]:hover{background:#1a1d23}
+.wf-hint{margin-left:auto;color:#78350f}
+kbd{font:600 .72rem ui-monospace,monospace;background:#fff;border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:4px;padding:0 .3rem}
+
+main{width:100%;max-width:1500px;margin:0 auto;padding:1.25rem 1.5rem 3rem}
+main:focus{outline:none}
+h1{font-size:1.25rem;line-height:1.3}
+.page-head{display:flex;flex-wrap:wrap;align-items:flex-start;gap:.75rem 1rem;margin-bottom:1rem}
+.page-head .sub{color:var(--muted);font-size:.85rem;flex-basis:100%;margin-top:-.4rem}
+.head-actions{margin-left:auto;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.wf-state{display:inline-flex;align-items:center;gap:.4rem;font-size:.75rem;color:#78350f;background:#fffbe6;border:1px dashed #b45309;border-radius:6px;padding:.15rem .5rem}
+.wf-state select{font:inherit;font-size:.75rem;border:1px solid var(--border-strong);border-radius:4px;padding:.1rem .25rem;background:#fff}
+
+/* cards / buttons / badges: same classes as product */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 4px 16px rgba(16,24,40,.04);padding:1.1rem 1.25rem;min-width:0}
+.card+.card{margin-top:1rem}
+.card-title{font-weight:700;font-size:.97rem;margin-bottom:.7rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.card-title .sp{margin-left:auto;font-weight:400;font-size:.78rem;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;border-radius:var(--radius);font:inherit;font-size:.8rem;font-weight:600;cursor:pointer;border:1px solid transparent;transition:background .12s;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover:not(:disabled){background:var(--accent-h)}
+.btn-ghost{background:transparent;color:#374151;border-color:var(--border-strong)}.btn-ghost:hover{background:var(--bg)}
+.btn-outline{background:var(--surface);color:var(--text);border-color:var(--border-strong)}.btn-outline:hover{background:#f7f7ff}
+.btn-outline .ico{color:var(--accent)}
+.btn-danger{background:#fee2e2;color:#991b1b;border-color:#b91c1c}.btn-danger:hover{background:#fecaca}
+.btn-stop{background:#b91c1c;color:#fff;border-color:#991b1b}.btn-stop:hover{background:#991b1b}
+.btn-sm{padding:.25rem .6rem;font-size:.75rem}
+.btn:disabled{cursor:not-allowed;opacity:.55}
+.btn-link{background:none;border:0;color:var(--accent);font:inherit;font-size:.75rem;font-weight:600;cursor:pointer;padding:.1rem .3rem}.btn-link:hover{text-decoration:underline}
+.badge{display:inline-flex;align-items:center;gap:.25rem;padding:.12rem .5rem;border-radius:999px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.badge .ico{font-size:.85rem}
+.badge-high{background:#fee2e2;color:#991b1b}.badge-medium{background:#fef3c7;color:#92400e}.badge-low{background:#dbeafe;color:#1e40af}.badge-info{background:#f3f4f6;color:#4b5563}
+.badge-android{background:#dcfce7;color:#166534}.badge-ios{background:#e0e7ff;color:#3730a3}
+.badge-done{background:#dcfce7;color:#166534}.badge-muted{background:#f1f5f9;color:#4b5563}
+.badge-confirm{background:#ede9fe;color:#6d28d9}.badge-ai{background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe}
+.chip{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;font-weight:600;padding:.12rem .5rem;border-radius:999px;background:var(--bg);border:1px solid var(--border-strong);color:#374151;white-space:nowrap}
+.chip.off{border-style:dashed}
+/* NEW: verdict badge — always icon + text, never colour alone */
+.verdict{display:inline-flex;align-items:center;gap:.3rem;padding:.12rem .55rem .12rem .4rem;border-radius:999px;font-size:.68rem;font-weight:700;letter-spacing:.03em;border:1px solid;white-space:nowrap}
+.v-confirmed{color:var(--v-confirmed-fg);background:var(--v-confirmed-bg);border-color:var(--v-confirmed-bd)}
+.v-notrepro{color:var(--v-notrepro-fg);background:var(--v-notrepro-bg);border-color:var(--v-notrepro-bd)}
+.v-inconcl{color:var(--v-inconcl-fg);background:var(--v-inconcl-bg);border-color:var(--v-inconcl-bd)}
+.v-nottested{color:var(--v-nottested-fg);background:var(--v-nottested-bg);border-color:var(--v-nottested-bd);border-style:dashed}
+.verdict.prov{border-style:dotted}
+.src-dyn{display:inline-flex;align-items:center;gap:.25rem;background:var(--dyn-bg);color:var(--dyn-fg);border:1px solid var(--dyn-bd);border-radius:999px;padding:.1rem .5rem;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+/* NEW: intrusiveness — bars + word, never colour alone */
+.intr{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;font-weight:700;padding:.1rem .45rem;border-radius:6px;border:1px solid;white-space:nowrap}
+.intr i{display:inline-flex;gap:2px}.intr i b{width:3px;height:10px;background:currentColor;opacity:.25;border-radius:1px}
+.intr.l{color:#166534;background:#dcfce7;border-color:#15803d}.intr.l i b:nth-child(1){opacity:1}
+.intr.m{color:#92400e;background:#fef3c7;border-color:#b45309}.intr.m i b:nth-child(-n+2){opacity:1}
+.intr.h{color:#991b1b;background:#fee2e2;border-color:#b91c1c}.intr.h i b{opacity:1}
+.tab-n{font-size:.66rem;font-weight:700;padding:.02rem .42rem;border-radius:999px;background:#eef0f4;color:#4b5563;font-variant-numeric:tabular-nums}
+.tab-n.live{background:var(--rec-bg);color:var(--rec-fg);border:1px solid var(--rec-bd)}
+
+/* tabs */
+.tabs{display:flex;overflow-x:auto;border-bottom:2px solid var(--border);margin-bottom:1.1rem;scrollbar-width:thin}
+.tab{flex:0 0 auto;white-space:nowrap;padding:.5rem .9rem;font-size:.8rem;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;display:inline-flex;gap:.35rem;align-items:center;background:none;border-top:0;border-left:0;border-right:0;font-family:inherit;cursor:default}
+a.tab,button.tab{cursor:pointer}
+a.tab:hover{color:var(--text);text-decoration:none}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab[aria-disabled=true]{opacity:.75}
+.sd-head{display:flex;align-items:center;gap:1rem;margin-bottom:.9rem}
+.plat{width:44px;height:44px;border-radius:12px;background:#dcfce7;color:#166534;display:flex;align-items:center;justify-content:center;font-weight:800}
+.sd-title{font-size:1.2rem}
+.sd-meta{display:flex;flex-wrap:wrap;gap:.2rem 1rem;color:var(--muted);font-size:.8rem}
+.st-pill{font-size:.7rem;font-weight:700;border-radius:999px;padding:.1rem .55rem;background:#dcfce7;color:#166534;margin-left:.5rem;vertical-align:2px}
+.subnav{display:flex;gap:.25rem;margin-bottom:1rem;flex-wrap:wrap}
+.subnav a{padding:.3rem .8rem;border-radius:999px;font-size:.8rem;font-weight:600;color:#374151;border:1px solid var(--border-strong);background:var(--surface)}
+.subnav a[aria-current=page]{background:#eef0ff;color:var(--accent);border-color:var(--accent)}
+.subnav a:hover{text-decoration:none;background:#f7f7ff}
+.crumbs{font-size:.78rem;color:var(--muted);margin-bottom:.4rem}
+
+/* alerts / state panels */
+.alert{padding:.7rem 1rem;border-radius:var(--radius);font-size:.85rem;margin-bottom:.9rem;display:flex;gap:.6rem;align-items:flex-start;border:1px solid}
+.alert .ico{margin-top:.2rem;font-size:1rem}
+.alert .acts{margin-left:auto;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
+.alert-info{background:#eff6ff;color:#1e40af;border-color:#93c5fd}
+.alert-error{background:#fef2f2;color:#991b1b;border-color:#fca5a5}
+.alert-warn{background:#fffbeb;color:#92400e;border-color:#fcd34d}
+.alert-ok{background:#f0fdf4;color:#166534;border-color:#86efac}
+.state-panel{display:flex;align-items:center;gap:1rem;padding:1.5rem 1.4rem;border:1px dashed var(--border-strong);border-radius:14px;background:var(--surface)}
+.state-panel .big{font-size:2rem;color:var(--accent);display:flex}
+.state-panel strong{display:block;font-size:1rem}
+.state-panel .acts{margin-left:auto;display:flex;gap:.5rem}
+
+/* tables */
+.tbl-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px}
+table.t{width:100%;border-collapse:collapse;font-size:.82rem}
+.t th{position:sticky;top:0;background:#f3f4f6;text-align:left;font-weight:600;padding:.5rem .65rem;font-size:.76rem;white-space:nowrap;border-bottom:1px solid var(--border);z-index:1}
+.t td{padding:.5rem .65rem;border-top:1px solid var(--border);vertical-align:middle}
+.t tbody tr:first-child td{border-top:0}
+.t tr.row{cursor:pointer}.t tr.row:hover td{background:#fafbff}
+.t tr.sel td{background:#eef0ff}
+.t tr.row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.t .num{text-align:right;font-variant-numeric:tabular-nums}
+.t td.dim{color:var(--muted)}
+.stat-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;margin-bottom:1rem}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:.8rem 1rem}
+.stat .v{font-size:1.5rem;font-weight:750;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat .l{font-size:.76rem;color:var(--muted);font-weight:600}
+.stat .s{font-size:.72rem;color:var(--muted);margin-top:.15rem}
+.grid-main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:1rem;align-items:start}
+@media(max-width:1180px){.grid-main{grid-template-columns:1fr}.stat-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:.25rem .8rem;font-size:.8rem}.kv dt{color:var(--muted)}.kv dd{font-weight:600;overflow-wrap:anywhere}
+.checks{list-style:none;display:flex;flex-direction:column;gap:.4rem;font-size:.82rem}
+.checks li{display:flex;gap:.5rem;align-items:flex-start}
+.checks .ico{margin-top:.2rem}
+.ok{color:#166534}.warn{color:#92400e}.bad{color:#991b1b}
+.switch{display:inline-flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.78rem}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch .track{width:34px;height:20px;border-radius:999px;background:#fff;border:2px solid var(--border-strong);position:relative;flex:none;transition:background .1s}
+.switch .track::after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--border-strong);transition:transform .1s}
+.switch input:checked+.track{background:var(--accent);border-color:var(--accent)}
+.switch input:checked+.track::after{background:#fff;transform:translateX(14px)}
+.switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px}
+.switch input:disabled+.track{opacity:.5}
+input[type=text],input[type=search],select,textarea{font:inherit;font-size:.82rem;padding:.4rem .6rem;border:1px solid var(--border-strong);border-radius:8px;background:#fff;color:var(--text);min-width:0}
+textarea{width:100%;resize:vertical}
+label.fl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-weight:600}
+.fs{border:0;margin-bottom:1.1rem}.fs legend{font-weight:700;font-size:.9rem;margin-bottom:.5rem;display:flex;gap:.5rem;align-items:center}
+.step-n{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:.72rem;display:inline-flex;align-items:center;justify-content:center}
+.opt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.6rem}
+.opt{position:relative;display:block;border:1px solid var(--border-strong);border-radius:10px;padding:.65rem .75rem .65rem 2.1rem;background:#fff;cursor:pointer;min-width:0}
+.opt input{position:absolute;left:.7rem;top:.8rem}
+.opt:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 2px #c7d0ff;background:#f7f8ff}
+.opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.opt:has(input:disabled){opacity:.6;cursor:not-allowed;border-style:dashed}
+.opt .t1{font-weight:700;font-size:.85rem;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
+.opt .t2{font-size:.76rem;color:var(--muted);margin-top:.15rem}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden}
+.seg label{padding:.4rem .9rem;font-size:.8rem;font-weight:600;cursor:pointer;border-left:1px solid var(--border-strong);position:relative}
+.seg label:first-child{border-left:0}
+.seg input{position:absolute;opacity:0}
+.seg label:has(input:checked){background:var(--accent);color:#fff}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-3px}
+.sticky-plan{position:sticky;top:68px}
+.bar{height:8px;background:#eef0f4;border-radius:999px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--accent)}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(17,24,39,.55);z-index:300;display:flex;align-items:center;justify-content:center;padding:1.25rem}
+.overlay[hidden]{display:none}
+.modal{background:var(--surface);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.28);width:min(640px,100%);max-height:calc(100vh - 2.5rem);display:flex;flex-direction:column;overflow:hidden}
+.modal-h{padding:1.1rem 1.3rem .4rem;display:flex;gap:.8rem}
+.modal-h h2{font-size:1.15rem;line-height:1.3}
+.modal-b{padding:.5rem 1.3rem 1rem;overflow:auto;font-size:.85rem}
+.modal-f{display:flex;gap:.6rem;align-items:center;padding:.85rem 1.3rem;border-top:1px solid var(--border)}
+.modal-f .info{margin-right:auto;color:var(--muted);font-size:.76rem}
+.icon-circle{width:38px;height:38px;border-radius:50%;background:#fef3c7;color:#92400e;display:flex;align-items:center;justify-content:center;flex:none;font-size:1.2rem}
+.ck{display:flex;gap:.6rem;align-items:flex-start;padding:.6rem .75rem;border:1px solid var(--border-strong);border-radius:8px;margin-top:.6rem;cursor:pointer}
+.ck input{margin-top:.25rem;width:16px;height:16px;flex:none}
+.ck.danger{border-color:#b91c1c;background:#fef2f2}
+.will{list-style:none;display:flex;flex-direction:column;gap:.35rem;margin:.5rem 0}
+.will li{display:flex;gap:.5rem}.will .ico{margin-top:.2rem;color:var(--accent)}
+.steps{list-style:none;display:flex;flex-direction:column;gap:.45rem;margin:.6rem 0}
+.steps li{display:flex;gap:.5rem;align-items:center;color:var(--muted)}
+.steps li.done{color:var(--text)}.steps li.done .ico{color:#166534}
+.toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#1a1d23;color:#fff;border-radius:10px;padding:.55rem 1rem;font-size:.82rem;z-index:400;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:90vw}
+.toast[hidden]{display:none}
+
+/* ===== LIVE console ===== */
+.live-bar{position:sticky;top:52px;z-index:50;background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--rec-bd);border-radius:12px;padding:.6rem .9rem;display:flex;flex-wrap:wrap;gap:.5rem .9rem;align-items:center;margin-bottom:.75rem;box-shadow:0 2px 8px rgba(16,24,40,.06)}
+.live-bar.is-stopped,.live-bar.is-lost{border-top-color:var(--border-strong)}
+.live-bar .grp{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap}
+.live-bar .ctl{margin-left:auto}
+.icpt{display:inline-flex;align-items:center;gap:.4rem;background:var(--icpt-bg);color:var(--icpt-fg);border-radius:6px;padding:.2rem .6rem;font-size:.75rem;font-weight:700}
+.icpt.off{background:#f1f5f9;color:#374151;border:1px dashed var(--border-strong)}
+.rec-pill{display:inline-flex;align-items:center;gap:.4rem;background:var(--rec-bg);color:var(--rec-fg);border:1px solid var(--rec-bd);border-radius:6px;padding:.2rem .6rem;font-size:.75rem;font-weight:700}
+.rec-pill.off{background:#f1f5f9;color:#374151;border:1px dashed var(--border-strong)}
+.live-grid{display:grid;grid-template-columns:280px minmax(0,1fr) 310px;gap:.75rem;align-items:start}
+@media(max-width:1279px){.live-grid{grid-template-columns:260px minmax(0,1fr)}.live-right{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.live-right .card+.card{margin-top:0}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;min-width:0}
+.panel-h{display:flex;align-items:center;gap:.5rem;padding:.55rem .75rem;border-bottom:1px solid var(--border);font-weight:700;font-size:.82rem}
+.panel-h .sp{margin-left:auto;font-weight:400;color:var(--muted);font-size:.72rem}
+.panel-b{padding:.6rem .75rem}
+.probe-grp{font-size:.66rem;font-weight:700;color:#4b5563;letter-spacing:.06em;text-transform:uppercase;margin:.6rem 0 .25rem}
+.probe-grp:first-child{margin-top:0}
+.probe{display:flex;align-items:center;gap:.4rem;padding:.25rem 0;font-size:.78rem;border-bottom:1px solid #f1f2f4}
+.probe .nm{flex:1;min-width:0;overflow-wrap:break-word}
+.probe .ct{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.72rem;min-width:2ch;text-align:right}
+.vtabs{display:flex;border-bottom:1px solid var(--border);padding:0 .4rem;gap:.1rem;align-items:center}
+.vtabs .tab{padding:.45rem .75rem}
+.vtabs .tools{margin-left:auto;display:flex;gap:.4rem;align-items:center;padding:.2rem}
+.chipbar{display:flex;gap:.35rem;flex-wrap:wrap;padding:.5rem .75rem;border-bottom:1px solid var(--border);align-items:center}
+.fchip{font:inherit;font-size:.72rem;font-weight:600;border:1px solid var(--border-strong);background:#fff;border-radius:999px;padding:.1rem .6rem;cursor:pointer;color:#374151}
+.fchip[aria-pressed=true]{background:#eef0ff;border-color:var(--accent);color:var(--accent)}
+.vlist{list-style:none;height:300px;overflow:auto;position:relative;font-size:.78rem}
+.vlist:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.vlist li{display:grid;grid-template-columns:96px 64px minmax(0,1fr) auto;gap:.5rem;align-items:center;padding:.22rem .75rem;border-bottom:1px solid #f4f5f7;cursor:pointer;min-height:28px}
+.vlist li:hover{background:#fafbff}
+.vlist li[aria-selected=true]{background:#eef0ff;box-shadow:inset 3px 0 0 var(--accent)}
+.vlist li.hit{background:#fff7f7}
+.vlist .ts{font-family:ui-monospace,monospace;color:var(--muted);font-size:.72rem}
+.vlist .sm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srcb{font-size:.62rem;font-weight:700;letter-spacing:.04em;border-radius:4px;padding:.05rem .3rem;border:1px solid;text-align:center;display:inline-flex;gap:.2rem;align-items:center;justify-content:center}
+.s-frida{color:#6d28d9;border-color:#a78bfa;background:#f5f3ff}.s-http{color:#075985;border-color:#7dd3fc;background:#f0f9ff}
+.s-log{color:#374151;border-color:#9ca3af;background:#f9fafb}.s-fs{color:#92400e;border-color:#fbbf24;background:#fffbeb}
+.vlist .rl{font-size:.68rem;font-weight:700;color:#4338ca;white-space:nowrap}
+.follow-pill{position:absolute;right:.75rem;bottom:.6rem;z-index:5}
+.listwrap{position:relative}
+.logbox{background:#111;color:#e2e8f0;font-family:monospace;font-size:.72rem;height:300px;overflow:auto;padding:.5rem .75rem;white-space:pre-wrap;word-break:break-all}
+.logbox .lv-E{color:#fca5a5}.logbox .lv-W{color:#fcd34d}.logbox .lv-D{color:#94a3b8}
+.detail{border-top:1px solid var(--border);padding:.7rem .85rem;min-height:190px;font-size:.8rem}
+.detail h3{font-size:.85rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem}
+.code{background:#111;color:#e2e8f0;border-radius:6px;padding:.5rem .7rem;font-family:monospace;font-size:.72rem;line-height:1.55;white-space:pre-wrap;word-break:break-word;max-height:140px;overflow:auto}
+.mask{display:inline-flex;align-items:center;gap:.3rem;background:#f1f5f9;border:1px solid var(--border);border-radius:4px;padding:0 .3rem;font-family:ui-monospace,monospace;font-size:.74rem;color:#374151}
+.mask button{font:inherit;font-size:.68rem;font-weight:700;color:var(--accent);background:none;border:0;cursor:pointer;padding:0 .1rem;text-decoration:underline}
+.cov{list-style:none;display:flex;flex-direction:column;gap:.5rem;font-size:.78rem}
+.cov li{display:flex;flex-direction:column;gap:.15rem;padding-bottom:.45rem;border-bottom:1px solid #f1f2f4}
+.cov .r{font-family:ui-monospace,monospace;font-size:.7rem;color:var(--muted)}
+.phone{width:150px;margin:0 auto;border:3px solid #374151;border-radius:20px;background:#fff;overflow:hidden;position:relative}
+.phone .scr{padding:.7rem .6rem;height:250px;font-size:.62rem;display:flex;flex-direction:column;gap:.35rem;transition:filter .1s}
+.phone .scr.blur{filter:blur(4px)}
+.phone .fld{border:1px solid #9ca3af;border-radius:4px;padding:.25rem;color:#4b5563}
+.phone .btnf{background:#4f46e5;color:#fff;border-radius:4px;text-align:center;padding:.25rem;font-weight:700}
+.film{display:flex;gap:.3rem;margin-top:.5rem;overflow:auto}
+.film button{flex:none;width:44px;height:64px;border:1px solid var(--border-strong);border-radius:4px;background:#f3f4f6;font-size:.55rem;color:#4b5563;cursor:pointer;line-height:1.1;padding:2px}
+.film button[aria-pressed=true]{outline:2px solid var(--accent)}
+.empty-note{padding:1.5rem;text-align:center;color:var(--muted);font-size:.82rem}
+
+/* vuln card (same as product .vuln-card) */
+.vuln-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:.75rem;overflow:hidden}
+.vuln-card.is-dynamic{box-shadow:inset 3px 0 0 var(--dyn-bd)}
+.vuln-head{display:flex;align-items:center;gap:.75rem;padding:.7rem 1rem;flex-wrap:wrap}
+.vuln-id{font-size:.72rem;color:var(--muted);font-weight:600}
+.vuln-title{font-weight:600;font-size:.9rem;flex:1;min-width:200px}
+.vuln-body{padding:0 1rem 1rem;border-top:1px solid var(--border)}
+.vuln-section{margin-top:1rem}
+.vuln-section-title{font-size:.72rem;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem}
+.vuln-status-strip{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;font-size:.75rem;color:#374151;padding:.4rem .6rem;background:var(--bg);border-radius:4px;margin:.7rem 0 0}
+.vuln-status-strip.dyn{background:var(--dyn-bg);color:var(--dyn-fg)}
+.vuln-status-strip .label{font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.evid{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.evid-row{display:grid;grid-template-columns:90px minmax(0,1fr) auto;gap:.6rem;padding:.5rem .7rem;border-top:1px solid var(--border);align-items:start;font-size:.78rem}
+.evid-row:first-child{border-top:0}
+.hist{list-style:none;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;font-size:.76rem;color:var(--muted)}
+.hist li::after{content:"→";margin-left:.5rem;color:var(--muted)}.hist li:last-child::after{content:""}
+.verdict-note{font-size:.82rem;margin-top:.5rem}
+
+/* chat */
+.chat{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:.7rem}
+.msg{max-width:92%;padding:.6rem .8rem;border-radius:12px;font-size:.85rem}
+.msg.u{align-self:flex-end;background:var(--accent);color:#fff}
+.msg.a{align-self:flex-start;background:var(--surface);border:1px solid var(--border)}
+.chat-tool{border:1px solid var(--border);border-radius:8px;background:var(--bg);padding:.3rem .6rem;font-size:.75rem;margin:.3rem 0}
+.chat-tool summary{cursor:pointer;display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+.chat-confirm{margin:.4rem 0;padding:.65rem .75rem;border:1px solid #7c3aed;border-radius:8px;background:#f5f3ff;font-size:.8rem}
+.chat-confirm.resolved{border-color:var(--border-strong);background:var(--bg)}
+.chat-confirm-head{display:flex;align-items:center;gap:.5rem;font-weight:600;margin-bottom:.4rem;flex-wrap:wrap}
+.chat-confirm-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:.3rem .8rem;font-size:.76rem;margin-bottom:.4rem}
+.chat-confirm-fields .k{color:#4b5563;margin-right:.3rem}.chat-confirm-fields .v{font-weight:600;overflow-wrap:anywhere}.chat-confirm-fields>div{min-width:0}
+.chat-confirm-actions{display:flex;gap:.4rem;margin-top:.5rem;align-items:center;flex-wrap:wrap}
+.chat-in{display:flex;gap:.5rem;margin-top:.4rem}.chat-in input{flex:1}
+
+/* report mock */
+.report{background:#fff;border:1px solid var(--border);max-width:900px;margin:0 auto;padding:2rem 2.2rem;font-family:Georgia,'Times New Roman',serif;color:#111}
+.report h2{font-family:system-ui,sans-serif;font-size:1.3rem;border-bottom:2px solid #111;padding-bottom:.3rem;margin-bottom:.8rem}
+.report h3{font-family:system-ui,sans-serif;font-size:.95rem;margin:1.1rem 0 .4rem}
+.report p,.report li{font-size:.9rem;line-height:1.55}
+.report table{width:100%;border-collapse:collapse;font-family:system-ui,sans-serif;font-size:.8rem;margin:.5rem 0}
+.report th,.report td{border:1px solid #cbd5e1;padding:.35rem .5rem;text-align:left;vertical-align:top}.report th{background:#f1f5f9}
+.report .note{border-left:4px solid #b45309;background:#fffbeb;padding:.5rem .8rem;font-family:system-ui,sans-serif;font-size:.8rem;margin:.6rem 0}
+[hidden]{display:none!important}
+@media(max-width:1180px){.hs{display:none}}
+.screen[hidden]{display:none}
+.two{display:grid;grid-template-columns:260px minmax(0,1fr);gap:1rem;align-items:start}
+@media(max-width:1100px){.two{grid-template-columns:1fr}}
+.sess{display:block;width:100%;text-align:left;font:inherit;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.55rem .7rem;margin-bottom:.5rem;cursor:pointer}
+.sess[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 2px #c7d0ff}
+.sess .t{font-weight:700;font-size:.82rem;display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+.sess .s{display:block;font-size:.72rem;color:var(--muted)}
+.drawer{position:sticky;top:68px}
+</style>
+</head>
+<body>
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-logo" viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/></symbol>
+<symbol id="i-device" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></symbol>
+<symbol id="i-slash" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></symbol>
+<symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M9.5 9.5a2.5 2.5 0 015 .5c0 1.5-2.5 2-2.5 3.5M12 17v.5"/></symbol>
+<symbol id="i-dashed" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></symbol>
+<symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></symbol>
+<symbol id="i-term" viewBox="0 0 24 24"><path d="M4 6l6 6-6 6M12 19h8"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 01-12 0zM12 18v3"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4M4 5v4h4M4 13a8 8 0 0014 4M20 19v-4h-4"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 012-2h10"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></symbol>
+<symbol id="i-cam" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="12" rx="2"/><circle cx="12" cy="13" r="3"/><path d="M8 7l1.5-2h5L16 7"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></symbol>
+<symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+<nav class="app-nav" aria-label="Main">
+  <span class="nav-logo"><svg class="ico"><use href="#i-logo"/></svg> Malimite</span>
+  <a class="nav-link" href="#" data-inert>Home</a>
+  <a class="nav-link" href="#" data-inert>Scans</a>
+  <a class="nav-link" href="#" data-inert>Learned Rules</a>
+  <a class="nav-link" href="#probes" data-nav="probes">Probes<span class="new-tag">NEW</span></a>
+  <a class="nav-link" href="#devices" data-nav="devices">Devices<span class="new-tag">NEW</span></a>
+  <a class="nav-link" href="#" data-inert>Config</a>
+  <span class="nav-spacer"></span>
+  <a id="nav-rec" class="rec-chip" href="#live" hidden aria-label="Session recording. Open live console."><span class="dot pulse" aria-hidden="true"></span><span>REC<span class="full"> · com.example.bank</span> · <span id="nav-rec-t">00:00:00</span></span></a>
+</nav>
+
+<div class="wf-bar" role="navigation" aria-label="Wireframe screens (not part of the product UI)">
+  <b>Wireframe screens:</b>
+  <a href="#devices">1 Devices</a><a href="#launcher">2 Launcher + consent</a><a href="#live">3 Live session</a><a href="#results">4 Session review</a><a href="#finding">5 Finding detail</a><a href="#probes">6 Probe Library</a><a href="#traffic">7 Traffic inspector</a><a href="#compare">8 Compare</a><a href="#assistant">9 AI Assistant</a><a href="#report">10 HTML report</a>
+  <span class="wf-hint">Press <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> to jump · dummy data only</span>
+</div>
+
+<main id="main" tabindex="-1">
+
+<!-- shared scan header (scan-context screens) -->
+<div id="scanctx" hidden>
+  <div class="sd-head">
+    <div class="plat" aria-hidden="true">A</div>
+    <div>
+      <h2 class="sd-title">com.example.bank <span class="st-pill">done</span></h2>
+      <div class="sd-meta"><span>bank-v4.2.0.apk</span><span>Android</span><span class="mono">a3f9c1d2</span><span>Auto · Claude Sonnet</span><span>Today 13:41</span></div>
+    </div>
+  </div>
+  <div class="tabs" role="tablist" aria-label="Scan result sections" id="scantabs">
+    <span class="tab" role="tab" aria-selected="false" aria-disabled="true">Summary</span>
+    <a class="tab" id="tab-vuln" role="tab" href="#finding" aria-selected="false">Vulnerabilities <span class="tab-n">23</span></a>
+    <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Assessment</span>
+    <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Functions</span>
+    <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Strings</span>
+    <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Resources</span>
+    <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Entry Points</span>
+    <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Offensive</span>
+    <a class="tab" id="tab-dyn" role="tab" href="#results" aria-selected="false">Dynamic <span class="tab-n" id="tab-dyn-n">4</span></a>
+    <span class="tab" role="tab" aria-disabled="true" aria-selected="false">LLM Findings</span>
+    <a class="tab" id="tab-ai" role="tab" href="#assistant" aria-selected="false">AI Assistant</a>
+    <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Log</span>
+    <span class="tab" role="tab" aria-disabled="true" aria-selected="false">Downloads</span>
+  </div>
+</div>
+
+<!-- ===================== 1. DEVICES ===================== -->
+<section class="screen" id="s-devices" data-title="Devices &amp; Runner" data-nav="devices" hidden>
+  <div class="page-head">
+    <h1>Devices &amp; Runner</h1>
+    <div class="head-actions">
+      <label class="wf-state">Preview state
+        <select id="dev-state"><option value="ok">Healthy</option><option value="loading">Loading</option><option value="none">No runner configured</option><option value="offline">Runner offline</option><option value="denied">Permission denied (viewer)</option></select></label>
+      <button class="btn btn-outline" type="button" data-toast="Opens Config → Dynamic runner">Runner settings</button>
+    </div>
+    <p class="sub">Where dynamic sessions run. A device must be on the allowlist before anyone can start a session on it.</p>
+  </div>
+  <div id="dev-body"></div>
+</section>
+
+<!-- ===================== 2. LAUNCHER ===================== -->
+<section class="screen" id="s-launcher" data-title="New dynamic session" data-ctx="scan" data-tab="dyn" hidden>
+  <div class="crumbs"><a href="#results">Dynamic</a> › New session</div>
+  <div class="page-head"><h1>New dynamic session</h1>
+    <p class="sub">Run com.example.bank on a device, load probes, and verify static findings against real behaviour.</p></div>
+  <div class="grid-main" style="grid-template-columns:minmax(0,1fr) 300px">
+    <form id="launch-form" onsubmit="return false" aria-label="Session configuration">
+      <div class="card">
+        <fieldset class="fs"><legend><span class="step-n">1</span> Device</legend>
+          <div class="opt-grid" id="dev-opts">
+            <label class="opt"><input type="radio" name="dev" value="pixel" checked><span class="t1">Pixel_7_API_34 <span class="badge badge-android">Android 14</span></span><span class="t2">Emulator · rooted AVD · frida-server 16.5.2 · ready</span></label>
+            <label class="opt"><input type="radio" name="dev" value="s21" disabled><span class="t1">Galaxy S21 <span class="badge badge-muted">Unauthorized</span></span><span class="t2">USB · accept the debugging prompt on the device first. <a href="#devices">Fix in Devices</a></span></label>
+            <label class="opt"><input type="radio" name="dev" value="iphone" disabled><span class="t1">iPhone 12 <span class="badge badge-ios">iOS 16.3</span> <span class="badge badge-muted">Busy</span></span><span class="t2">In use by session #7 (dina) · back in ~6 min</span></label>
+          </div>
+          <div class="alert alert-warn" style="margin:.7rem 0 0"><svg class="ico"><use href="#i-alert"/></svg><div><strong>ABI mismatch.</strong> bank-v4.2.0.apk only ships arm64-v8a native libraries; this emulator is x86_64. Java/Kotlin probes will work, native probes will not.</div></div>
+        </fieldset>
+        <fieldset class="fs"><legend><span class="step-n">2</span> Probe preset <span class="chip">changes the plan on the right</span></legend>
+          <div class="opt-grid" id="preset-opts">
+            <label class="opt"><input type="radio" name="preset" value="findings" checked><span class="t1">From static findings <span class="badge badge-confirm">Recommended</span></span><span class="t2">Picks the probes that can verify your 23 open findings.</span></label>
+            <label class="opt"><input type="radio" name="preset" value="passive"><span class="t1">Passive baseline <span class="intr l"><i><b></b><b></b><b></b></i>Low</span></span><span class="t2">Observe only. Safe to run on any build.</span></label>
+            <label class="opt"><input type="radio" name="preset" value="storage"><span class="t1">Storage &amp; crypto <span class="intr l"><i><b></b><b></b><b></b></i>Low</span></span><span class="t2">SharedPreferences, Keystore, files, Cipher/Mac usage.</span></label>
+            <label class="opt"><input type="radio" name="preset" value="network"><span class="t1">Network &amp; pinning <span class="intr h"><i><b></b><b></b><b></b></i>High</span></span><span class="t2">Intercepts HTTPS. Includes SSL pinning bypass.</span></label>
+            <label class="opt"><input type="radio" name="preset" value="full"><span class="t1">Full audit <span class="intr h"><i><b></b><b></b><b></b></i>High</span></span><span class="t2">All categories incl. root/anti-Frida bypass. May trigger RASP or backend alerts.</span></label>
+            <label class="opt"><input type="radio" name="preset" value="custom"><span class="t1">Custom <a href="#probes" class="btn-link">choose in Probe Library</a></span><span class="t2">Start from any preset, then toggle probes.</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="fs"><legend><span class="step-n">3</span> Mode</legend>
+          <div class="seg" role="radiogroup" aria-label="Session mode" id="mode-seg">
+            <label><input type="radio" name="mode" value="manual" checked>Manual</label>
+            <label><input type="radio" name="mode" value="guided">Guided</label>
+            <label><input type="radio" name="mode" value="auto">Automated</label>
+          </div>
+          <p class="muted" id="mode-help" style="margin-top:.5rem;font-size:.8rem"></p>
+          <label class="fl" id="auto-flow" hidden style="margin-top:.6rem;max-width:380px">Automation flow
+            <select><option>login_and_transfer.yaml (uploaded by you, 2 days ago)</option><option>Upload a new flow…</option></select></label>
+        </fieldset>
+        <fieldset class="fs" style="margin-bottom:0"><legend><span class="step-n">4</span> Capture</legend>
+          <div style="display:flex;flex-wrap:wrap;gap:.5rem 1.4rem">
+            <label class="switch"><input type="checkbox" checked><span class="track"></span>HTTP(S) traffic (mitmproxy)</label>
+            <label class="switch"><input type="checkbox" checked><span class="track"></span>Logcat</label>
+            <label class="switch"><input type="checkbox" checked><span class="track"></span>Filesystem diff</label>
+            <label class="switch"><input type="checkbox"><span class="track"></span>Screenshots every 5 s</label>
+            <label class="switch"><input type="checkbox"><span class="track"></span>Capture raw secret values <span class="chip">off = hashed</span></label>
+          </div>
+        </fieldset>
+      </div>
+    </form>
+    <aside class="sticky-plan" aria-label="Session plan">
+      <div class="card">
+        <div class="card-title">Session plan</div>
+        <dl class="kv" id="plan-kv"></dl>
+        <div style="margin:.8rem 0 .3rem;font-size:.78rem;font-weight:600">Static findings this plan can verify</div>
+        <div class="bar" aria-hidden="true"><i id="plan-bar" style="width:60%"></i></div>
+        <div id="plan-cov" class="muted" style="font-size:.76rem;margin-top:.25rem"></div>
+        <div id="plan-alert"></div>
+        <button class="btn btn-primary" id="btn-start" type="button" style="margin-top:1rem;width:100%;justify-content:center" data-open-consent><svg class="ico"><use href="#i-play"/></svg> Review &amp; start…</button>
+        <p class="muted" style="font-size:.72rem;margin-top:.4rem">You will confirm authorization on the next step. Nothing runs on the device before that.</p>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================== 3. LIVE ===================== -->
+<section class="screen" id="s-live" data-title="Live session" data-ctx="none" data-tab="dyn" hidden>
+  <div class="crumbs" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">Focus mode · <a href="#results">com.example.bank › Dynamic</a> › Session #3 (live) <span class="chip">Scan tabs hidden while recording so the console gets the full height</span></div>
+  <div class="live-bar" id="live-bar">
+    <div class="grp">
+      <span class="rec-pill" id="rec-pill"><span class="dot pulse" aria-hidden="true"></span><span id="rec-text">RECORDING</span> <span class="mono" id="live-t">00:04:12</span></span>
+      <span class="icpt" id="icpt"><svg class="ico"><use href="#i-globe"/></svg><span id="icpt-text">INTERCEPTING HTTPS · mitmproxy 10.0.2.2:8080</span></span>
+    </div>
+    <div class="grp"><span class="chip"><svg class="ico"><use href="#i-device"/></svg> Pixel_7_API_34</span><span class="chip mono">com.example.bank 4.2.0</span><span class="chip">Manual</span><span class="chip">Consent: you · 14:02 · ENG-2291</span></div>
+    <div class="grp ctl">
+      <label class="wf-state">Preview state
+        <select id="live-state"><option value="running">Running</option><option value="paused">Capture paused</option><option value="lost">Device disconnected</option><option value="runner">Runner link lost</option><option value="denied">Probe load denied</option><option value="stopped">Stopped</option></select></label>
+      <button class="btn btn-outline" id="btn-pause" type="button" aria-pressed="false"><svg class="ico"><use href="#i-pause"/></svg><span>Pause capture</span></button>
+      <button class="btn btn-stop" id="btn-stop" type="button" title="Stop &amp; detach (Alt+Shift+X)"><svg class="ico"><use href="#i-stop"/></svg> Stop &amp; detach <kbd style="color:#111">Alt+Shift+X</kbd></button>
+    </div>
+  </div>
+  <div id="live-banner"></div>
+  <div class="live-grid">
+    <!-- probes -->
+    <section class="panel" aria-labelledby="pp-h">
+      <div class="panel-h" id="pp-h"><svg class="ico"><use href="#i-plug"/></svg> Probes <span class="sp" id="probe-count">9 of 11 on</span></div>
+      <div class="panel-b" id="probe-list"></div>
+    </section>
+    <!-- center -->
+    <section class="panel" aria-label="Session events">
+      <div class="vtabs" role="tablist" aria-label="Event views">
+        <button class="tab active" role="tab" id="lt-timeline" aria-selected="true" data-lv="timeline">Timeline <span class="tab-n" id="n-all">0</span></button>
+        <button class="tab" role="tab" id="lt-traffic" aria-selected="false" data-lv="traffic">Traffic <span class="tab-n" id="n-http">0</span></button>
+        <button class="tab" role="tab" id="lt-logs" aria-selected="false" data-lv="logs">Logs <span class="tab-n" id="n-log">0</span></button>
+        <div class="tools"><label class="switch"><input type="checkbox" id="follow" checked><span class="track"></span>Follow live</label><a class="btn btn-ghost btn-sm" href="#traffic">Open inspector</a></div>
+      </div>
+      <div class="chipbar" id="chipbar" role="group" aria-label="Filter by source">
+        <button class="fchip" data-f="all" aria-pressed="true">All</button><button class="fchip" data-f="frida" aria-pressed="false">Frida</button><button class="fchip" data-f="http" aria-pressed="false">HTTP</button><button class="fchip" data-f="log" aria-pressed="false">Log</button><button class="fchip" data-f="fs" aria-pressed="false">FS</button>
+        <label class="fchip" style="display:inline-flex;gap:.3rem;align-items:center;cursor:pointer"><input type="checkbox" id="only-hits"> Only matches a static finding</label>
+        <span class="muted" style="margin-left:auto;font-size:.72rem" id="win-note"></span>
+      </div>
+      <div class="listwrap" id="lw-timeline"><ul class="vlist" id="vl" role="listbox" tabindex="0" aria-label="Session timeline. Use arrow keys to move, Enter to open details." aria-live="off"></ul>
+        <button class="btn btn-primary btn-sm follow-pill" id="jump" hidden type="button">↓ <span id="jump-n">0</span> new — jump to live</button></div>
+      <div class="listwrap" id="lw-traffic" hidden><ul class="vlist" id="vl-http" role="listbox" tabindex="0" aria-label="HTTP flows"></ul></div>
+      <div class="listwrap" id="lw-logs" hidden><pre class="logbox" id="logbox" tabindex="0" aria-label="Logcat stream"></pre></div>
+      <div class="detail" id="detail" aria-live="polite"><div class="empty-note">Select an event to see its arguments, stack and linked finding.</div></div>
+    </section>
+    <!-- right -->
+    <div class="live-right">
+      <section class="panel" aria-labelledby="cov-h">
+        <div class="panel-h" id="cov-h"><svg class="ico"><use href="#i-shield"/></svg> Findings being verified <span class="sp">provisional</span></div>
+        <div class="panel-b"><ul class="cov" id="cov"></ul>
+          <p class="muted" style="font-size:.7rem;margin-top:.5rem">Final verdicts are computed when the session stops.</p></div>
+      </section>
+      <section class="panel" aria-labelledby="scr-h">
+        <div class="panel-h" id="scr-h"><svg class="ico"><use href="#i-cam"/></svg> Device screen <span class="sp"><label class="switch"><input type="checkbox" id="blur" checked><span class="track"></span>Blur</label></span></div>
+        <div class="panel-b">
+          <figure class="phone" aria-label="Placeholder for the device screenshot: the bank app login screen"><div class="scr blur" id="scr"><b style="font-size:.8rem">Example Bank</b><span class="fld">user@example.com</span><span class="fld">••••••••</span><span class="btnf">Sign in</span><span class="muted">Balance: $12,480.00</span></div></figure>
+          <div class="film" id="film" role="group" aria-label="Screenshot timeline"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. SESSION REVIEW ===================== -->
+<section class="screen" id="s-results" data-title="Dynamic — sessions &amp; review" data-ctx="scan" data-tab="dyn" hidden>
+  <div class="page-head"><h1>Dynamic</h1>
+    <div class="head-actions"><label class="wf-state">Preview source <select id="res-src"><option value="manual">Manual session</option><option value="ci">CI session</option></select></label>
+      <a class="btn btn-ghost" href="#compare">Compare sessions</a><a class="btn btn-primary" href="#launcher"><svg class="ico"><use href="#i-play"/></svg> New session</a></div></div>
+  <div class="two">
+    <div role="group" aria-label="Sessions for this scan">
+      <button class="sess" aria-pressed="true" type="button" data-sess="3"><span class="t">#3 · Pixel 7 <span class="badge badge-done">Done</span></span><span class="s">Today 14:02 · 12m · Guided</span><span class="s">5 confirmed · 2 inconclusive</span></button>
+      <button class="sess" aria-pressed="false" type="button" data-sess="ci"><span class="t">#2 · CI emulator <span class="badge badge-done">Done</span></span><span class="s">Yesterday 22:10 · 6m · Automated</span><span class="s">4 confirmed · 4 inconclusive</span></button>
+      <button class="sess" aria-pressed="false" type="button" data-sess="1"><span class="t">#1 · Pixel 7 <span class="badge badge-muted">Stopped early</span></span><span class="s">2 days ago · 2m · Manual</span><span class="s">1 confirmed</span></button>
+    </div>
+    <div>
+      <div class="alert alert-info" id="res-prov" hidden><svg class="ico"><use href="#i-link"/></svg><div><strong>Run by CI</strong> · pipeline <a href="#" data-inert>#482</a> · commit <span class="mono">9be41c7</span> · triggered by <b>release-bot</b> · gate <b>passed</b> (no new CONFIRMED ≥ High)</div></div>
+      <div class="card">
+        <div class="card-title">Session #3 <span class="muted" style="font-weight:400;font-size:.8rem" id="res-sub">Pixel_7_API_34 · Guided · 17 probes · 12 min 04 s · authorized by you (ENG-2291)</span>
+          <span class="sp"><button class="btn btn-ghost btn-sm" type="button" data-toast="Downloads session bundle: events.jsonl, flows.har (redacted), screenshots">Export evidence</button></span></div>
+        <div class="stat-row">
+          <div class="stat"><div class="v">5</div><div class="l"><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></div><div class="s">3 High · 2 Medium</div></div>
+          <div class="stat"><div class="v">3</div><div class="l"><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></div><div class="s">not proof of safety</div></div>
+          <div class="stat"><div class="v">2</div><div class="l"><span class="verdict v-inconcl"><svg class="ico"><use href="#i-help"/></svg>INCONCLUSIVE</span></div><div class="s">probe fired, evidence ambiguous</div></div>
+          <div class="stat"><div class="v">13</div><div class="l"><span class="verdict v-nottested"><svg class="ico"><use href="#i-dashed"/></svg>NOT_TESTED</span></div><div class="s">no matching probe or flow not exercised</div></div>
+        </div>
+        <div class="chipbar" style="padding:0 0 .6rem;border:0" role="group" aria-label="Filter by verdict">
+          <button class="fchip" data-vf="all" aria-pressed="true">All 23</button><button class="fchip" data-vf="confirmed" aria-pressed="false">Confirmed</button><button class="fchip" data-vf="notrepro" aria-pressed="false">Not reproduced</button><button class="fchip" data-vf="inconcl" aria-pressed="false">Inconclusive</button><button class="fchip" data-vf="nottested" aria-pressed="false">Not tested</button>
+          <span style="margin-left:auto" class="muted" id="res-count"></span>
+        </div>
+        <div class="tbl-wrap"><table class="t" id="res-tbl"><caption class="sr">Static findings with dynamic verdicts</caption>
+          <thead><tr><th>Rule</th><th>Finding</th><th>Static</th><th>Dynamic verdict</th><th class="num">Evidence</th><th>Action</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="card-title">New findings seen only dynamically <span class="src-dyn"><svg class="ico"><use href="#i-pulse"/></svg>dynamic</span> <span class="sp">2 candidates · not in Vulnerabilities yet</span></div>
+        <div class="tbl-wrap"><table class="t"><thead><tr><th>Title</th><th>Severity</th><th>Evidence</th><th>Action</th></tr></thead><tbody>
+          <tr><td><b>Auth token sent in URL query string</b><div class="mono muted" style="font-size:.7rem">GET https://api.bank.example/v2/statements?token=•••</div></td><td><span class="badge badge-high">High</span></td><td>2 flows</td><td><button class="btn btn-outline btn-sm" type="button" data-addfinding="Auth token sent in URL query string">Add to Vulnerabilities</button></td></tr>
+          <tr><td><b>Clipboard holds account number after copy</b><div class="mono muted" style="font-size:.7rem">ClipboardManager.setPrimaryClip</div></td><td><span class="badge badge-low">Low</span></td><td>1 event</td><td><button class="btn btn-outline btn-sm" type="button" data-addfinding="Clipboard holds account number after copy">Add to Vulnerabilities</button></td></tr>
+        </tbody></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 5. FINDING DETAIL ===================== -->
+<section class="screen" id="s-finding" data-title="Finding detail with dynamic evidence" data-ctx="scan" data-tab="vuln" hidden>
+  <div class="page-head"><h1>Vulnerabilities</h1>
+    <div class="head-actions"><label class="wf-state">Preview verdict <select id="fd-state"><option value="confirmed">CONFIRMED</option><option value="notrepro">NOT_REPRODUCED</option><option value="inconcl">INCONCLUSIVE</option><option value="nottested">NOT_TESTED</option><option value="dynamic">New dynamic finding</option></select></label></div></div>
+  <div class="vuln-card" id="fd-card">
+    <div class="vuln-head"><span class="badge badge-high">High</span><span class="vuln-id">#7 · MASTG-STORAGE-1</span><span class="vuln-title">Sensitive data stored in SharedPreferences without encryption</span><span id="fd-verdict"></span><span class="chip">Status: Open</span></div>
+    <div class="vuln-body" id="fd-body"></div>
+  </div>
+</section>
+
+<!-- ===================== 6. PROBE LIBRARY ===================== -->
+<section class="screen" id="s-probes" data-title="Probe Library" data-nav="probes" hidden>
+  <div class="page-head"><h1>Probe Library</h1>
+    <div class="head-actions"><button class="btn btn-outline" type="button" id="btn-propose"><svg class="ico"><use href="#i-spark"/></svg> Propose probe with AI</button><button class="btn btn-ghost" type="button" data-toast="Opens editor (custom probes need the 'author' role)">New custom probe</button></div>
+    <p class="sub">Catalog of Frida probes. A probe is reviewed once, then reusable by every session. Script bodies are never shown here without the author role.</p></div>
+  <div class="grid-main" style="grid-template-columns:minmax(0,1fr) 340px">
+    <div class="card">
+      <div class="chipbar" style="padding:0 0 .6rem;border:0">
+        <input type="search" id="pf-q" placeholder="Search name, hook or rule id…" aria-label="Search probes" style="width:240px">
+        <label class="sr" for="pf-plat">Platform</label><select id="pf-plat"><option value="">All platforms</option><option>Android</option><option>iOS</option></select>
+        <label class="sr" for="pf-phase">Phase</label><select id="pf-phase"><option value="">All phases</option><option>ENVIRONMENT</option><option>TRANSPORT</option><option>SECRETS</option><option>SESSION</option></select>
+        <label class="sr" for="pf-int">Intrusiveness</label><select id="pf-int"><option value="">Any intrusiveness</option><option value="l">Low</option><option value="m">Medium</option><option value="h">High</option></select>
+        <span class="muted" style="margin-left:auto" id="pf-count"></span>
+      </div>
+      <div class="tbl-wrap"><table class="t" id="pf-tbl"><caption class="sr">Probe catalog</caption>
+        <thead><tr><th>Probe</th><th class="hs">Phase</th><th>Platform</th><th>Intrusiveness</th><th>Rules</th><th class="hs">Source</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <aside class="drawer card" id="pf-detail" aria-live="polite" aria-label="Probe details"></aside>
+  </div>
+</section>
+
+<!-- ===================== 7. TRAFFIC INSPECTOR ===================== -->
+<section class="screen" id="s-traffic" data-title="Traffic inspector" data-ctx="scan" data-tab="dyn" hidden>
+  <div class="crumbs"><a href="#results">Dynamic</a> › Session #3 › Traffic</div>
+  <div class="page-head"><h1>Traffic inspector</h1>
+    <div class="head-actions"><span class="chip"><svg class="ico"><use href="#i-lock"/></svg> Values masked by default</span><a class="btn btn-ghost" href="#results">Back to session</a></div></div>
+  <div class="grid-main" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)">
+    <div class="card" style="padding:.8rem">
+      <div class="chipbar" style="padding:0 0 .6rem;border:0">
+        <input type="search" id="tf-q" placeholder="Search URL, header or body…" aria-label="Search flows" style="flex:1;min-width:160px">
+        <button class="fchip" data-tf="secret" aria-pressed="false">Has secret</button><button class="fchip" data-tf="clear" aria-pressed="false">Cleartext</button><button class="fchip" data-tf="err" aria-pressed="false">Non-2xx</button><button class="fchip" data-tf="pin" aria-pressed="false">Pinning bypassed</button>
+      </div>
+      <div class="muted" style="font-size:.74rem;margin-bottom:.4rem" id="tf-count"></div>
+      <div class="tbl-wrap" style="max-height:520px"><table class="t" id="tf-tbl"><caption class="sr">HTTP flows</caption>
+        <thead><tr><th class="hs">#</th><th class="hs">Time</th><th>Method</th><th>Host / path</th><th>Status</th><th class="num hs">Size</th><th>Flags</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <aside class="card drawer" id="tf-detail" aria-live="polite" aria-label="Flow details"></aside>
+  </div>
+</section>
+
+<!-- ===================== 8. COMPARE ===================== -->
+<section class="screen" id="s-compare" data-title="Session comparison" data-ctx="scan" data-tab="dyn" hidden>
+  <div class="crumbs"><a href="#results">Dynamic</a> › Compare</div>
+  <div class="page-head"><h1>Compare sessions</h1></div>
+  <div class="card">
+    <div style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end">
+      <label class="fl">Baseline<select id="cmp-a"><option>#2 · build 4.1.0 · CI emulator · yesterday</option><option>#1 · build 4.1.0 · Pixel 7 · 2 days ago</option></select></label>
+      <span aria-hidden="true" style="padding-bottom:.4rem">→</span>
+      <label class="fl">Target<select id="cmp-b"><option>#3 · build 4.2.0 · Pixel 7 · today</option></select></label>
+      <label class="switch" style="margin-left:auto"><input type="checkbox" id="cmp-diff" checked><span class="track"></span>Show changes only</label>
+    </div>
+    <div class="alert alert-warn" style="margin:.8rem 0 0"><svg class="ico"><use href="#i-alert"/></svg><div><strong>Different device and mode.</strong> #2 ran automated on an emulator, #3 ran guided on a Pixel 7. Differences in <i>NOT_TESTED</i> may reflect coverage, not the build.</div></div>
+    <div class="stat-row" style="margin-top:.9rem">
+      <div class="stat"><div class="v bad">1</div><div class="l">Regressed</div><div class="s">worse than baseline</div></div>
+      <div class="stat"><div class="v ok">2</div><div class="l">Improved</div><div class="s">confirmed → not reproduced</div></div>
+      <div class="stat"><div class="v">1</div><div class="l">New</div><div class="s">only in target</div></div>
+      <div class="stat"><div class="v">19</div><div class="l">Unchanged</div><div class="s">hidden by filter</div></div>
+    </div>
+    <div class="tbl-wrap"><table class="t" id="cmp-tbl"><caption class="sr">Verdict changes between sessions</caption><thead><tr><th>Change</th><th>Rule</th><th>Finding</th><th>Baseline #2</th><th>Target #3</th></tr></thead><tbody>
+      <tr data-c="chg"><td><span class="chip bad">▲ Regressed</span></td><td class="mono">MASTG-CRYPTO-1</td><td>Static IV used with AES/CBC</td><td><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td></tr>
+      <tr data-c="chg"><td><span class="chip ok">▼ Improved</span></td><td class="mono">MASTG-NETWORK-1</td><td>Cleartext HTTP to analytics host</td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td><td><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></td></tr>
+      <tr data-c="chg"><td><span class="chip ok">▼ Improved</span></td><td class="mono">MASTG-STORAGE-3</td><td>Debug log contains session ID</td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td><td><span class="verdict v-notrepro"><svg class="ico"><use href="#i-slash"/></svg>NOT_REPRODUCED</span></td></tr>
+      <tr data-c="chg"><td><span class="chip">＋ New</span></td><td class="mono">dynamic</td><td>Auth token sent in URL query string <span class="src-dyn">dynamic</span></td><td><span class="verdict v-nottested"><svg class="ico"><use href="#i-dashed"/></svg>NOT_TESTED</span></td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td></tr>
+      <tr data-c="same"><td class="muted">= Unchanged</td><td class="mono">MASTG-STORAGE-1</td><td>Sensitive data stored in SharedPreferences</td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td><td><span class="verdict v-confirmed"><svg class="ico"><use href="#i-target"/></svg>CONFIRMED</span></td></tr>
+      <tr data-c="same"><td class="muted">= Unchanged</td><td class="mono">MASTG-RESILIENCE-1</td><td>Root detection can be bypassed</td><td><span class="verdict v-nottested"><svg class="ico"><use href="#i-dashed"/></svg>NOT_TESTED</span></td><td><span class="verdict v-nottested"><svg class="ico"><use href="#i-dashed"/></svg>NOT_TESTED</span></td></tr>
+    </tbody></table></div>
+    <h3 style="margin:1rem 0 .4rem;font-size:.9rem">Network surface</h3>
+    <div class="grid-main" style="grid-template-columns:1fr 1fr">
+      <div><div class="muted" style="font-size:.76rem;font-weight:700">NEW HOSTS IN TARGET</div><ul class="mono" style="font-size:.78rem;margin:.3rem 0 0 1.1rem"><li>telemetry.bank.example <span class="chip bad">cleartext</span></li></ul></div>
+      <div><div class="muted" style="font-size:.76rem;font-weight:700">GONE IN TARGET</div><ul class="mono" style="font-size:.78rem;margin:.3rem 0 0 1.1rem"><li>stats.legacy-tracker.example</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 9. AI ASSISTANT ===================== -->
+<section class="screen" id="s-assistant" data-title="AI Assistant with dynamic tools" data-ctx="scan" data-tab="ai" hidden>
+  <div class="card chat-wrap"><div class="chat" id="chat">
+    <div class="msg u">Is the auth token really written to disk at login? Verify it dynamically on the Pixel.</div>
+    <div class="msg a">
+      <p>Static analysis flags <span class="mono">MASTG-STORAGE-1</span> in <span class="mono">AuthStore.save()</span>. No session has exercised this path yet, so I can't tell whether it is reachable. I can run a short, low-intrusiveness session to check.</p>
+      <details class="chat-tool"><summary><span class="mono">list_probes(rule_id="MASTG-STORAGE-1")</span> <span class="badge badge-done">ok</span></summary><pre class="code">storage.sharedprefs.write  v1.2.0  low
+fs.snapshot                v0.9.1  medium</pre></details>
+      <div class="chat-confirm" id="cf-start">
+        <div class="chat-confirm-head"><span class="badge badge-confirm" id="cf-start-b">needs confirmation</span><span>Start a dynamic session?</span></div>
+        <div class="chat-confirm-fields">
+          <div><span class="k">Device</span><span class="v">Pixel_7_API_34</span></div>
+          <div><span class="k">App</span><span class="v">com.example.bank 4.2.0</span></div>
+          <div><span class="k">Probes</span><span class="v">2 (storage.sharedprefs.write, fs.snapshot)</span></div>
+          <div><span class="k">Intrusiveness</span><span class="v"><span class="intr m"><i><b></b><b></b><b></b></i>Medium</span></span></div>
+          <div><span class="k">Traffic interception</span><span class="v">Off</span></div>
+          <div><span class="k">Mode / limit</span><span class="v">Guided · max 5 min</span></div>
+        </div>
+        <p style="font-size:.76rem;color:#4b5563">Approving does not authorize testing. You will still confirm authorization in the next dialog.</p>
+        <div class="chat-confirm-actions" id="cf-start-a"><button class="btn btn-primary btn-sm" type="button" id="cf-start-ok"><svg class="ico"><use href="#i-check"/></svg> Approve</button><button class="btn btn-ghost btn-sm" type="button" id="cf-start-no">Decline</button></div>
+      </div>
+    </div>
+    <div class="msg u">Looks good. Also hook the BiometricPrompt callback, I think the fallback PIN path skips the check.</div>
+    <div class="msg a">
+      <p>No existing probe covers the biometric fallback. I drafted one that only <i>observes</i> the callback result and which authentication type was used.</p>
+      <div class="chat-confirm" id="cf-probe">
+        <div class="chat-confirm-head"><span class="badge badge-confirm" id="cf-probe-b">needs confirmation</span><span>Add this probe to the Probe Library?</span></div>
+        <div class="chat-confirm-fields">
+          <div><span class="k">Name</span><span class="v mono">auth.biometric.callback</span></div>
+          <div><span class="k">Platform / phase</span><span class="v">Android · SESSION</span></div>
+          <div><span class="k">Hooks</span><span class="v mono">BiometricPrompt$AuthenticationCallback.*</span></div>
+          <div><span class="k">Intrusiveness</span><span class="v"><span class="intr l"><i><b></b><b></b><b></b></i>Low</span> observe only</span></div>
+          <div><span class="k">Side effects</span><span class="v">None (no return values changed)</span></div>
+          <div><span class="k">Rule</span><span class="v mono">MASTG-AUTH-2</span></div>
+        </div>
+        <details class="chat-tool"><summary>Script (generated, 24 lines) — review before approving</summary><pre class="code">// script body omitted in this wireframe
+// production shows the full source with syntax highlighting,
+// and a static lint result: "no state-changing calls, no network, no file writes"</pre></details>
+        <p style="font-size:.76rem;color:#4b5563">Saved as <b>draft</b>. A draft probe cannot run until a second person with the author role publishes it.</p>
+        <div class="chat-confirm-actions" id="cf-probe-a"><button class="btn btn-primary btn-sm" type="button" id="cf-probe-ok"><svg class="ico"><use href="#i-check"/></svg> Approve draft</button><button class="btn btn-ghost btn-sm" type="button" id="cf-probe-no">Decline</button></div>
+      </div>
+    </div>
+    <div class="msg a">
+      <p>After a session ends I can read its events. Example, once session #3 is available:</p>
+      <details class="chat-tool" open><summary><span class="mono">session_events(session=3, source="frida", query="putString")</span> <span class="badge badge-done">ok</span></summary><pre class="code">00:03:41.220  SharedPreferences$Editor.putString  file=auth_prefs.xml key=auth_token value=sha256:9f2c…(len 171)
+00:03:41.224  SharedPreferences$Editor.apply     file=auth_prefs.xml
+(values are hashed unless the session captured raw values; the assistant never sees unmasked secrets)</pre></details>
+    </div>
+    <form class="chat-in" onsubmit="return false"><label class="sr" for="chat-input">Message the assistant</label><input id="chat-input" type="text" placeholder="Ask about this scan or its dynamic sessions…"><button class="btn btn-primary" type="button" data-toast="Wireframe: chat is static">Send</button></form>
+  </div></div>
+</section>
+
+<!-- ===================== 10. REPORT ===================== -->
+<section class="screen" id="s-report" data-title="HTML report section" hidden>
+  <div class="page-head"><h1>HTML report — Dynamic Analysis section</h1><p class="sub">Static mock of the section appended to the existing report (same file as SARIF-equivalent content, self-contained, no scripts).</p></div>
+  <article class="report">
+    <h2>6. Dynamic Analysis</h2>
+    <h3>6.1 Authorization &amp; provenance</h3>
+    <table><tr><th>Session</th><td>#3 (2025-06-12 14:02–14:14 UTC, 12 min)</td><th>Authorized by</th><td>jane.doe · ref ENG-2291 · confirmed 14:02</td></tr>
+      <tr><th>Device</th><td>Pixel_7_API_34 (emulator, Android 14, frida-server 16.5.2)</td><th>Mode</th><td>Guided · 17 probes · max intrusiveness Medium</td></tr>
+      <tr><th>Build</th><td>com.example.bank 4.2.0 (sha256 3c1e…a9)</td><th>Triggered by</th><td>Manual (UI)</td></tr></table>
+    <h3>6.2 Verdict summary</h3>
+    <table><tr><th>Verdict</th><th>Count</th><th>Meaning</th></tr>
+      <tr><td>■ CONFIRMED</td><td>5</td><td>Behaviour observed at runtime; evidence referenced below.</td></tr>
+      <tr><td>⊘ NOT_REPRODUCED</td><td>3</td><td>Probe was active and the flow was exercised, nothing observed. This is not proof the issue is absent.</td></tr>
+      <tr><td>? INCONCLUSIVE</td><td>2</td><td>Probe fired but evidence is ambiguous.</td></tr>
+      <tr><td>○ NOT_TESTED</td><td>13</td><td>No matching probe, or the code path was not exercised.</td></tr></table>
+    <h3>6.3 Confirmed findings</h3>
+    <table><tr><th>Rule</th><th>Finding</th><th>Evidence</th></tr>
+      <tr><td>MASTG-STORAGE-1</td><td>Sensitive data stored in SharedPreferences without encryption</td><td>E-0412 SharedPreferences$Editor.putString file=auth_prefs.xml key=auth_token value=[redacted sha256:9f2c…] at 00:03:41</td></tr>
+      <tr><td>MASTG-CRYPTO-1</td><td>Static IV used with AES/CBC</td><td>E-0388, E-0391 Cipher.doFinal AES/CBC/PKCS5Padding iv=identical across 2 calls</td></tr></table>
+    <div class="note"><b>Redaction.</b> Tokens, cookies, card numbers and e-mail addresses are masked in this report. Raw values are available in the session bundle to users with the “reveal” permission.</div>
+    <div class="note"><b>Limitations.</b> Dynamic results depend on which screens were exercised. 13 findings were not tested; absence of a CONFIRMED verdict does not mean the application is safe.</div>
+  </article>
+</section>
+</main>
+
+<!-- CONSENT MODAL -->
+<div class="overlay" id="consent" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="consent-h" aria-describedby="consent-d">
+    <div class="modal-h"><span class="icon-circle" aria-hidden="true"><svg class="ico"><use href="#i-shield"/></svg></span>
+      <div><h2 id="consent-h">Confirm you are authorized to test this app</h2><p class="muted" id="consent-d" style="font-size:.8rem">Dynamic analysis runs code on a device and intercepts its network traffic.</p></div></div>
+    <div class="modal-b" id="consent-b">
+      <div id="consent-form">
+        <p style="font-weight:600;margin-top:.3rem">If you continue, Malimite will:</p>
+        <ul class="will" id="will"></ul>
+        <label class="ck"><input type="checkbox" id="ck1"><span><b>I'm authorized to test com.example.bank</b> on this device, and I have permission to intercept its traffic.</span></label>
+        <label class="ck danger" id="ck2-wrap" hidden><input type="checkbox" id="ck2"><span><b>I understand this preset changes app behaviour</b> (SSL pinning bypass). It can trigger fraud or RASP alerts on the backend and may change what the app does.</span></label>
+        <label class="fl" style="margin-top:.7rem;max-width:340px">Engagement or ticket reference <span class="muted" style="font-weight:400">(your org requires this)</span><input type="text" id="ref" placeholder="e.g. ENG-2291" autocomplete="off"></label>
+        <p class="muted" style="font-size:.74rem;margin-top:.6rem">Recorded with your name, time, device and scan, and shown in the report. Valid for this app on this device for 8 hours.</p>
+      </div>
+      <div id="consent-run" hidden>
+        <p style="font-weight:600;margin:.4rem 0">Starting session…</p>
+        <ol class="steps" role="status" aria-live="polite" id="steps"></ol>
+      </div>
+    </div>
+    <div class="modal-f"><span class="info" id="consent-info">Start stays disabled until you confirm.</span>
+      <button class="btn btn-ghost" type="button" id="consent-cancel">Cancel</button>
+      <button class="btn btn-primary" type="button" id="consent-ok" disabled>Start session</button></div>
+  </div>
+</div>
+
+<!-- GENERIC CONFIRM MODAL -->
+<div class="overlay" id="gen" hidden>
+  <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="gen-h" aria-describedby="gen-d" style="width:min(520px,100%)">
+    <div class="modal-h"><span class="icon-circle" aria-hidden="true"><svg class="ico"><use href="#i-alert"/></svg></span><div><h2 id="gen-h"></h2></div></div>
+    <div class="modal-b" id="gen-d"></div>
+    <div class="modal-f"><button class="btn btn-ghost" type="button" id="gen-cancel">Cancel</button><button class="btn btn-primary" type="button" id="gen-ok">Confirm</button></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<div class="sr" id="live-announce" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+'use strict';
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ico=(n,c='')=>`<svg class="ico ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const pad=n=>String(n).padStart(2,'0');
+const hms=s=>`${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`;
+const VERD={confirmed:['v-confirmed','target','CONFIRMED'],notrepro:['v-notrepro','slash','NOT_REPRODUCED'],inconcl:['v-inconcl','help','INCONCLUSIVE'],nottested:['v-nottested','dashed','NOT_TESTED']};
+const verdict=(k,prov)=>{const v=VERD[k];return `<span class="verdict ${v[0]}${prov?' prov':''}">${ico(v[1])}${prov?'PROVISIONAL · ':''}${v[2]}</span>`};
+const INT={l:['l','Low'],m:['m','Medium'],h:['h','High']};
+const intr=k=>`<span class="intr ${INT[k][0]}"><i><b></b><b></b><b></b></i>${INT[k][1]}</span>`;
+function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
+function announce(m){$('#live-announce').textContent=m}
+
+/* ---------- router ---------- */
+const ORDER=['devices','launcher','live','results','finding','probes','traffic','compare','assistant','report'];
+function show(id){
+  if(!ORDER.includes(id)) id='devices';
+  $$('.screen').forEach(s=>s.hidden=s.id!=='s-'+id);
+  const s=$('#s-'+id);
+  $$('.wf-bar a').forEach((a,i)=>{ if(ORDER[i]===id) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current')});
+  $$('nav.app-nav a[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===s.dataset.nav));
+  const ctx=$('#scanctx'); ctx.hidden=s.dataset.ctx!=='scan';
+  ['vuln','dyn','ai'].forEach(t=>{const e=$('#tab-'+t);const on=s.dataset.tab===t;e.classList.toggle('active',on);e.setAttribute('aria-selected',on)});
+  document.title=s.dataset.title.replace(/&amp;/g,'&')+' — Malimite wireframe';
+  window.scrollTo(0,0);
+  if(id==='devices')renderDevices();
+  if(id==='launcher')renderPlan();
+  if(id==='live')liveShown();
+  if(id==='results')renderResults();
+  if(id==='finding')renderFinding();
+  if(id==='probes')renderProbes();
+  if(id==='traffic')renderTraffic();
+}
+function route(){show((location.hash||'#devices').slice(1))}
+window.addEventListener('hashchange',()=>{route();$('#main').focus({preventScroll:true})});
+$$('a[data-inert]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();toast('Not part of this wireframe')}));
+document.addEventListener('click',e=>{const b=e.target.closest('[data-toast]');if(b)toast(b.dataset.toast)});
+document.addEventListener('keydown',e=>{
+  if(e.target.closest('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey||!$('#consent').hidden||!$('#gen').hidden)return;
+  const n=e.key==='0'?9:(/^[1-9]$/.test(e.key)?+e.key-1:-1);
+  if(n>=0&&ORDER[n]){location.hash='#'+ORDER[n]}
+});
+
+/* ---------- modals ---------- */
+let lastFocus=null;
+function openModal(el,opener){lastFocus=opener||document.activeElement;el.hidden=false;const f=$('input:not([disabled]),button:not([disabled])',el);(f||el).focus()}
+function closeModal(el){el.hidden=true;if(lastFocus&&lastFocus.isConnected)lastFocus.focus()}
+function trap(el){el.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();closeModal(el);return}
+  if(e.key!=='Tab')return;
+  const f=$$('input:not([disabled]),button:not([disabled]),select,a[href]',el).filter(x=>x.offsetParent!==null);
+  if(!f.length)return;const a=f[0],z=f[f.length-1];
+  if(e.shiftKey&&document.activeElement===a){e.preventDefault();z.focus()}
+  else if(!e.shiftKey&&document.activeElement===z){e.preventDefault();a.focus()}
+})}
+trap($('#consent'));trap($('#gen'));
+function confirmDlg({title,body,ok='Confirm',cls='btn-primary',onOk}){
+  $('#gen-h').textContent=title;$('#gen-d').innerHTML=body;const b=$('#gen-ok');b.textContent=ok;b.className='btn '+cls;
+  b.onclick=()=>{closeModal($('#gen'));onOk&&onOk()};openModal($('#gen'));
+}
+$('#gen-cancel').onclick=()=>closeModal($('#gen'));
+
+/* ---------- 1. devices ---------- */
+const DEVICES=[
+ {id:'pixel',name:'Pixel_7_API_34',sub:'emulator-5554',type:'Emulator',os:'Android 14',plat:'android',frida:'16.5.2 (matches)',root:'Rooted AVD',allow:true,state:'ready'},
+ {id:'s21',name:'Galaxy S21',sub:'R5CT10XXXXX',type:'USB device',os:'Android 13',plat:'android',frida:'not installed',root:'Not rooted',allow:false,state:'unauth'},
+ {id:'iphone',name:'iPhone 12',sub:'00008101-…A1E',type:'USB device',os:'iOS 16.3',plat:'ios',frida:'16.5.2 (matches)',root:'Rootless jailbreak',allow:true,state:'busy'},
+];
+const STATE_UI={ready:['check','Ready','badge-done'],busy:['pulse','Busy · session #7','badge-confirm'],unauth:['alert','Unauthorized','badge-medium'],off:['x','Offline','badge-muted']};
+let selDev='pixel';
+function renderDevices(){
+  const st=$('#dev-state').value, b=$('#dev-body');
+  if(st==='loading'){b.innerHTML=`<div class="state-panel" role="status"><span class="big">${ico('refresh','spin')}</span><div><strong>Contacting runner…</strong><span class="muted">runner-lab-01 · this usually takes under 2 s</span></div></div>`;return}
+  if(st==='none'){b.innerHTML=`<div class="state-panel"><span class="big">${ico('plug')}</span><div><strong>No dynamic runner connected</strong><span class="muted">Dynamic analysis needs a runner on a host that has adb, USB access and frida. It is separate from the Malimite web server.</span></div><div class="acts"><button class="btn btn-primary" type="button" data-toast="Opens Config → Dynamic runner">Connect a runner</button><a class="btn btn-ghost" href="#devices" data-toast="Opens docs: Runner setup">Setup guide</a></div></div>
+   <div class="card" style="margin-top:1rem"><div class="card-title">What you need</div><ol style="margin-left:1.2rem;font-size:.85rem;display:flex;flex-direction:column;gap:.3rem"><li>Install the runner on a host with adb and a device or emulator. <span class="chip mono">pip install malimite-runner</span></li><li>Start it and copy the pairing code it prints.</li><li>Paste the code in Config. Malimite verifies the connection and checks frida versions.</li></ol></div>`;return}
+  if(st==='denied'){b.innerHTML=`<div class="alert alert-info">${ico('lock')}<div><strong>View only.</strong> Your role can see devices but not start sessions or change the allowlist. Ask an admin for the “dynamic:run” permission.</div></div>`+deviceTable(true,false);bindDev();return}
+  const off=st==='offline';
+  b.innerHTML=(off?`<div class="alert alert-error" role="alert">${ico('x')}<div><strong>Runner offline.</strong> runner-lab-01 has not responded since 14:21 (3 min ago). Running sessions on it were detached. Last known device list is shown below and cannot be used.<div class="muted" style="color:#991b1b;margin-top:.2rem">Check that the runner process is up and the network path (:7443) is open.</div></div><div class="acts"><button class="btn btn-outline btn-sm" type="button" data-toast="Retrying…">Retry now</button><button class="btn btn-ghost btn-sm" type="button" data-toast="Opens runner log">View runner log</button></div></div>`:'')+
+  `<div class="stat-row">
+    <div class="stat"><div class="l">Runner</div><div class="v" style="font-size:1.05rem;margin-top:.3rem">${off?`<span class="badge badge-muted">${ico('x')}Offline</span>`:`<span class="badge badge-done">${ico('check')}Connected</span>`}</div><div class="s">runner-lab-01 · v0.3.1 · ${off?'last seen 14:21':'12 ms'}</div></div>
+    <div class="stat"><div class="l">Devices ready</div><div class="v">${off?0:1} <span class="muted" style="font-size:.9rem">of 3</span></div><div class="s">1 busy · 1 needs attention</div></div>
+    <div class="stat"><div class="l">Active sessions</div><div class="v">1 <span class="muted" style="font-size:.9rem">/ 2 limit</span></div><div class="s">#7 on iPhone 12 (dina)</div></div>
+    <div class="stat"><div class="l">Intercept proxy</div><div class="v" style="font-size:1.05rem;margin-top:.3rem"><span class="badge badge-done">${ico('check')}Listening</span></div><div class="s">mitmproxy 10.4 · :8080 · CA valid 11 mo</div></div></div>`+deviceTable(off,true);
+  bindDev();
+}
+function deviceTable(disabled,full){
+  const rows=DEVICES.map(d=>{const s=disabled&&full?'off':d.state;const u=STATE_UI[s];
+   return `<tr class="row${d.id===selDev?' sel':''}" tabindex="0" data-d="${d.id}" aria-selected="${d.id===selDev}"><td><b>${d.name}</b><div class="muted mono" style="font-size:.7rem">${d.sub}</div></td><td>${d.type}<div class="muted" style="font-size:.72rem">${d.os}</div></td><td>${d.root}</td><td>${d.frida}</td>
+   <td><label class="switch"><input type="checkbox" ${d.allow?'checked':''} ${disabled?'disabled':''} aria-label="Allowlist ${d.name}" data-allow="${d.id}"><span class="track"></span><span>${d.allow?'Allowed':'Not allowed'}</span></label></td>
+   <td><span class="badge ${u[2]}">${ico(u[0])}${u[1]}</span></td>
+   <td><a class="btn btn-outline btn-sm" ${s==='ready'&&d.allow&&!disabled?'href="#launcher"':'aria-disabled="true" tabindex="-1" style="opacity:.5;pointer-events:none"'}>${ico('play')} Start session</a></td></tr>`}).join('');
+  const d=DEVICES.find(x=>x.id===selDev);
+  const chk=(k,t,x)=>`<li>${ico(k==='ok'?'check':k==='warn'?'alert':'x')}<span class="${k}"><b>${t}</b>${x?`<span class="muted" style="display:block;font-weight:400">${x}</span>`:''}</span></li>`;
+  const pre=d.id==='pixel'?[chk('ok','adb reachable','emulator-5554 · authorized'),chk('ok','frida-server 16.5.2 running','matches runner client'),chk('ok','Proxy CA in system store','expires in 11 months'),chk('ok','Free storage 4.1 GB',''),chk('warn','ABI mismatch for com.example.bank','App ships arm64-v8a only; emulator is x86_64. Native probes will fail.')]
+   :d.id==='s21'?[chk('ok','adb reachable','USB'),chk('bad','USB debugging not authorized','Accept the “Allow USB debugging?” prompt on the phone, then re-run preflight.'),chk('bad','frida-server not installed','Needs root, or an app repackaged with Gadget.')]
+   :[chk('ok','usbmux reachable',''),chk('ok','frida-server 16.5.2 running',''),chk('warn','Device busy','Session #7 owned by dina. Sessions are one per device.')];
+  return `<div class="grid-main"><div class="card"><div class="card-title">Devices <span class="sp">${disabled&&full?'last known state':'refreshed 4 s ago'} · <button class="btn-link" type="button" data-toast="Rescanning devices…">${ico('refresh')} Rescan</button></span></div>
+   <div class="tbl-wrap"><table class="t"><caption class="sr">Devices known to the runner</caption><thead><tr><th>Device</th><th>Type</th><th>Root / JB</th><th>frida-server</th><th>Allowlist</th><th>State</th><th></th></tr></thead><tbody>${rows}
+   <tr><td colspan="7" class="dim">${ico('globe')} <b>Corellium</b> — cloud devices. Not configured. <span class="chip">Planned</span></td></tr></tbody></table></div>
+   <p class="muted" style="font-size:.74rem;margin-top:.5rem">Only allow-listed devices can be targeted. Allowlist changes are written to the audit log.</p></div>
+   <aside class="card"><div class="card-title">Preflight · ${d.name} <span class="sp"><button class="btn-link" type="button" data-toast="Preflight re-run">Re-run</button></span></div><ul class="checks" aria-live="polite">${pre.join('')}</ul></aside></div>`;
+}
+function bindDev(){
+  $$('#dev-body tr.row').forEach(r=>{const go=()=>{selDev=r.dataset.d;renderDevices()};r.onclick=e=>{if(e.target.closest('a,label,input'))return;go()};r.onkeydown=e=>{if(e.target===r&&(e.key==='Enter'||e.key===' ')){e.preventDefault();go();$(`#dev-body tr[data-d="${selDev}"]`)?.focus()}}});
+  $$('[data-allow]').forEach(c=>c.onchange=()=>{const d=DEVICES.find(x=>x.id===c.dataset.allow);d.allow=c.checked;toast(`${d.name} ${d.allow?'added to':'removed from'} the allowlist (audit logged)`);renderDevices()});
+}
+$('#dev-state').onchange=renderDevices;
+
+/* ---------- 2. launcher ---------- */
+const PRESETS={
+ findings:{n:'From static findings',probes:17,int:'m',cov:14,traffic:true,high:false,eta:'~10 min'},
+ passive:{n:'Passive baseline',probes:9,int:'l',cov:8,traffic:false,high:false,eta:'~5 min'},
+ storage:{n:'Storage & crypto',probes:14,int:'l',cov:12,traffic:false,high:false,eta:'~8 min'},
+ network:{n:'Network & pinning',probes:11,int:'h',cov:7,traffic:true,high:true,eta:'~8 min'},
+ full:{n:'Full audit',probes:31,int:'h',cov:19,traffic:true,high:true,eta:'~20 min'},
+ custom:{n:'Custom',probes:0,int:'l',cov:0,traffic:false,high:false,eta:'—'}};
+const MODES={manual:'You drive the app on the device. Malimite records everything.',guided:'A checklist (login, transfer, settings…) is pinned next to the console and ticks off as probes see each step.',auto:'Malimite replays an uploaded UI flow, then stops. Best for CI and regressions.'};
+function curPreset(){return $('input[name=preset]:checked').value}
+function renderPlan(){
+  const p=PRESETS[curPreset()],mode=$('input[name=mode]:checked').value;
+  $('#mode-help').textContent=MODES[mode];$('#auto-flow').hidden=mode!=='auto';
+  $('#plan-kv').innerHTML=`<dt>App</dt><dd class="mono">com.example.bank 4.2.0</dd><dt>Device</dt><dd>Pixel_7_API_34</dd><dt>Preset</dt><dd>${p.n}</dd><dt>Probes</dt><dd>${p.probes}</dd><dt>Max intrusiveness</dt><dd>${intr(p.int)}</dd><dt>Traffic</dt><dd>${p.traffic?'Intercepted via proxy':'Not intercepted'}</dd><dt>Mode</dt><dd style="text-transform:capitalize">${mode}</dd><dt>Estimated</dt><dd>${p.eta}</dd>`;
+  $('#plan-bar').style.width=(p.cov/23*100)+'%';
+  $('#plan-cov').textContent=p.cov?`${p.cov} of 23 open findings can be verified. The other ${23-p.cov} have no matching probe.`:'Choose probes in the Probe Library.';
+  $('#plan-alert').innerHTML=p.high?`<div class="alert alert-warn" style="margin:.8rem 0 0">${ico('alert')}<div><b>High intrusiveness.</b> This preset alters app behaviour. You will be asked to confirm.</div></div>`:'';
+  $('#btn-start').disabled=curPreset()==='custom';
+}
+$('#launch-form').addEventListener('change',renderPlan);
+$('#launch-form').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.ctrlKey&&!$('#btn-start').disabled)$('#btn-start').click()});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-open-consent]');if(b)openConsent(b)});
+function openConsent(opener){
+  const p=PRESETS[curPreset()];
+  $('#will').innerHTML=[`Install and launch <b>com.example.bank 4.2.0</b> on <b>Pixel_7_API_34</b> (user data kept: <b>No, fresh install</b>)`,`Inject <b>${p.probes||'selected'} probes</b> (max intrusiveness: ${INT[p.int][1]}) into the running app`,p.traffic?`Route device HTTP(S) through the proxy at <b>10.0.2.2:8080</b>. Only com.example.bank flows are stored; other apps' traffic is dropped, not saved.`:'Not intercept network traffic',`Revert proxy and detach everything when you press <b>Stop &amp; detach</b>, or after 30 min of inactivity`].map(t=>`<li>${ico('check')}<span>${t}</span></li>`).join('');
+  $('#ck1').checked=false;$('#ck2').checked=false;$('#ck2-wrap').hidden=!p.high;$('#ref').value='';
+  $('#consent-form').hidden=false;$('#consent-run').hidden=true;$('#consent-cancel').hidden=false;
+  $('#consent-ok').textContent='Start session';updConsent();openModal($('#consent'),opener);
+}
+function updConsent(){const need=!$('#ck2-wrap').hidden;const ok=$('#ck1').checked&&(!need||$('#ck2').checked);$('#consent-ok').disabled=!ok;
+  $('#consent-info').textContent=ok?'Ready. Recording starts when the app is up.':'Start stays disabled until you confirm'+(need?' both boxes.':'.')}
+['ck1','ck2'].forEach(i=>$('#'+i).onchange=updConsent);
+$('#consent-cancel').onclick=()=>closeModal($('#consent'));
+$('#consent-ok').onclick=()=>{
+  $('#consent-form').hidden=true;$('#consent-run').hidden=false;$('#consent-ok').disabled=true;$('#consent-cancel').hidden=true;
+  const S=['Reserving device','Installing com.example.bank','Starting proxy and installing CA','Spawning app and loading probes'];
+  $('#steps').innerHTML=S.map(s=>`<li>${ico('refresh','spin')}<span>${s}</span></li>`).join('');
+  $('#consent-info').textContent='Starting…';
+  $$('#steps li').forEach((li,i)=>setTimeout(()=>{li.className='done';li.innerHTML=`${ico('check')}<span>${S[i]}</span>`;
+    if(i===S.length-1){setTimeout(()=>{closeModal($('#consent'));startLive();location.hash='#live'},350)}},500*(i+1)));
+};
+
+/* ---------- 3. live ---------- */
+const PROBES=[
+ ['ENVIRONMENT',[['env.root.observe','Root checks (observe)','l',1],['env.frida.observe','Anti-Frida checks (observe)','l',1],['env.root.bypass','Root detection bypass','h',0]]],
+ ['TRANSPORT',[['net.okhttp.trace','OkHttp request trace','l',1],['net.pinning.bypass','SSL pinning bypass','h',1]]],
+ ['SECRETS',[['storage.sharedprefs','SharedPreferences writes','l',1],['crypto.cipher','Cipher / Mac usage','l',1],['keystore.use','Keystore access','l',1],['fs.snapshot','Filesystem snapshot','m',1]]],
+ ['SESSION',[['webview.config','WebView config & bridge','l',1],['ipc.intent','Intent & URL scheme','l',1]]]];
+const probeOn={};PROBES.forEach(g=>g[1].forEach(p=>probeOn[p[0]]=!!p[3]));
+const probeCt={};
+const SCRIPT=[
+ {s:'log',lv:'I',m:'ActivityManager: Start proc com.example.bank for activity MainActivity'},
+ {s:'frida',p:'env.root.observe',t:'File.exists("/system/xbin/su")',d:'returned false',a:{path:'/system/xbin/su',return:'false'}},
+ {s:'http',m:'GET',h:'api.bank.example',u:'/v2/config',st:200,sz:'1.2 KB'},
+ {s:'frida',p:'net.okhttp.trace',t:'okhttp3.RealCall.execute',d:'GET https://api.bank.example/v2/config',a:{url:'https://api.bank.example/v2/config',method:'GET'}},
+ {s:'http',m:'POST',h:'api.bank.example',u:'/v2/auth/login',st:200,sz:'0.9 KB',secret:1},
+ {s:'frida',p:'crypto.cipher',t:'javax.crypto.Cipher.doFinal',d:'AES/CBC/PKCS5Padding · ENCRYPT · key 16 B · iv static',rule:'MASTG-CRYPTO-1',a:{transformation:'AES/CBC/PKCS5Padding',opmode:'ENCRYPT',key:'[16 bytes]',iv:'00000000000000000000000000000000',input_len:'171'}},
+ {s:'frida',p:'storage.sharedprefs',t:'SharedPreferences$Editor.putString',d:'file=auth_prefs.xml key=auth_token value=••••',rule:'MASTG-STORAGE-1',secret:'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.x9k2',a:{file:'auth_prefs.xml',key:'auth_token',value:'@secret'}},
+ {s:'fs',m:'+ /data/data/com.example.bank/shared_prefs/auth_prefs.xml (new, 1.1 KB, mode 0660)',rule:'MASTG-STORAGE-1'},
+ {s:'log',lv:'D',m:'AuthStore: session persisted'},
+ {s:'frida',p:'keystore.use',t:'KeyStore.getEntry',d:'alias=bank_master_key provider=AndroidKeyStore',a:{alias:'bank_master_key',provider:'AndroidKeyStore'}},
+ {s:'http',m:'GET',h:'api.bank.example',u:'/v2/accounts',st:200,sz:'4.8 KB',secret:1},
+ {s:'log',lv:'W',m:'OkHttp: Cleartext HTTP traffic to telemetry.bank.example'},
+ {s:'http',m:'POST',h:'telemetry.bank.example',u:'/collect',st:204,sz:'0 B',clear:1,rule:'MASTG-NETWORK-1'},
+ {s:'frida',p:'webview.config',t:'WebView.addJavascriptInterface',d:'name=NativeBridge on https://help.bank.example',rule:'MASTG-PLATFORM-7',a:{name:'NativeBridge',url:'https://help.bank.example/faq'}},
+ {s:'frida',p:'ipc.intent',t:'Activity.startActivity',d:'bankapp://transfer?to=…&amount=…',a:{intent:'bankapp://transfer?to=NL91ABNA0417164300&amount=50'}},
+ {s:'log',lv:'E',m:'chromium: [ERROR:ssl_client_socket_impl.cc] handshake failed; net_error -202'},
+ {s:'http',m:'GET',h:'cdn.bank.example',u:'/img/promo-banner.webp',st:200,sz:'88 KB'},
+ {s:'frida',p:'net.pinning.bypass',t:'CertificatePinner.check',d:'pin for api.bank.example bypassed (testing)',a:{host:'api.bank.example',action:'bypassed'}},
+ {s:'http',m:'GET',h:'api.bank.example',u:'/v2/statements?token=…',st:200,sz:'12 KB',secret:1,rule:'dyn'},
+ {s:'log',lv:'I',m:'MainActivity: onResume'},
+ {s:'http',m:'GET',h:'api.bank.example',u:'/v2/profile',st:401,sz:'86 B'},
+ {s:'frida',p:'crypto.cipher',t:'javax.crypto.Cipher.doFinal',d:'AES/CBC/PKCS5Padding · DECRYPT · iv static',rule:'MASTG-CRYPTO-1',a:{transformation:'AES/CBC/PKCS5Padding',opmode:'DECRYPT',iv:'00000000000000000000000000000000'}},
+];
+const COV=[
+ {r:'MASTG-STORAGE-1',t:'Token stored in SharedPreferences',need:'storage.sharedprefs',hit:'MASTG-STORAGE-1'},
+ {r:'MASTG-CRYPTO-1',t:'Static IV with AES/CBC',need:'crypto.cipher',hit:'MASTG-CRYPTO-1'},
+ {r:'MASTG-NETWORK-1',t:'Cleartext HTTP to telemetry host',need:'net.okhttp.trace',hit:'MASTG-NETWORK-1'},
+ {r:'MASTG-NETWORK-2',t:'No certificate pinning',need:'net.pinning.bypass',hit:null},
+ {r:'MASTG-PLATFORM-7',t:'JS bridge exposed in WebView',need:'webview.config',hit:'MASTG-PLATFORM-7'},
+ {r:'MASTG-RESILIENCE-1',t:'Root detection bypassable',need:'env.root.bypass',hit:null}];
+const L={tms:0,ev:[],flows:[],logs:[],n:{all:0,http:0,log:0},t:252,idx:0,state:'running',filter:'all',hits:false,sel:null,view:'timeline',following:true,unseen:0,cov:{},started:false,id:0,rendered:0,tv:'timeline'};
+const CAP=400;
+let tickT=null,clockT=null;
+function startLive(){
+  Object.assign(L,{tms:0,ev:[],flows:[],logs:[],n:{all:0,http:0,log:0},t:0,idx:0,state:'running',sel:null,unseen:0,cov:{},started:true,id:0});
+  Object.keys(probeCt).forEach(k=>delete probeCt[k]);
+  COV.forEach(c=>L.cov[c.r]='waiting');
+  $('#follow').checked=true;L.following=true;
+  setLiveState('running');
+  // preload ~4 minutes of history so the screen is not empty on arrival
+  for(let i=0;i<22;i++){emit(true,true)};L.t=Math.floor(L.tms/1000)+4;L.tms=L.t*1000;
+  clearInterval(tickT);clearInterval(clockT);
+  tickT=setInterval(tick,950);clockT=setInterval(()=>{if(L.state==='running'||L.state==='paused'){L.t++;paintClock()}},1000);
+  renderAll();
+}
+function paintClock(){const t=hms(L.t);$('#live-t').textContent=t;$('#nav-rec-t').textContent=t}
+function emit(silent,pre){
+  const it=SCRIPT[L.idx%SCRIPT.length];L.idx++;
+  if(it.p&&!probeOn[it.p])return;
+  if(it.p)probeCt[it.p]=(probeCt[it.p]||0)+1;
+  L.tms=pre?L.tms+4000+Math.random()*9000:Math.max(L.tms+60+Math.random()*320,L.t*1000+Math.random()*200);
+  const id=++L.id,ts=hms(Math.floor(L.tms/1000))+'.'+String(Math.floor(L.tms%1000)).padStart(3,'0');
+  const e=Object.assign({},it,{id,ts});
+  if(it.s==='http'){L.flows.push(e);L.n.http++}
+  if(it.s==='log'){L.logs.push(e);L.n.log++}
+  L.ev.push(e);L.n.all++;
+  if(it.rule&&it.rule!=='dyn'){const c=COV.find(c=>c.hit===it.rule);if(c&&L.cov[c.r]!=='confirmed'){L.cov[c.r]='confirmed';if(!silent)announce(`Provisional signal: ${c.r} — ${c.t}`)}}
+  COV.forEach(c=>{if(L.cov[c.r]==='waiting'){L.cov[c.r]=probeOn[c.need]?'waiting':'notrun'}else if(L.cov[c.r]==='notrun'&&probeOn[c.need])L.cov[c.r]='waiting'});
+  if(!silent){ if(!L.following)L.unseen++; }
+  return e;
+}
+let pending=0;
+function tick(){
+  if(!$('#s-live')||$('#s-live').hidden&&false)return;
+  if(L.state!=='running')return;
+  const k=1+Math.floor(Math.random()*3);for(let i=0;i<k;i++)emit();
+  scheduleRender();
+}
+let raf=0;function scheduleRender(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;renderAll()})}
+function match(e){
+  if(L.filter!=='all'&&e.s!==L.filter)return false;
+  if(L.hits&&!(e.rule&&e.rule!=='dyn'))return false;return true;
+}
+function rowHtml(e){
+  const sm=e.s==='frida'?`<b>${esc(e.t)}</b> <span class="muted">${esc(e.d)}</span>`:e.s==='http'?`<b>${e.m}</b> ${esc(e.h)}${esc(e.u)} <span class="muted">${e.st} · ${e.sz}</span>`:e.s==='log'?`<span class="muted">${e.lv}/</span> ${esc(e.m)}`:esc(e.m);
+  const rl=e.rule&&e.rule!=='dyn'?`<span class="rl" title="Matches static finding ${e.rule}">→ ${e.rule}</span>`:e.rule==='dyn'?`<span class="src-dyn">new</span>`:'';
+  const lab={frida:'FRIDA',http:'HTTP',log:'LOG',fs:'FS'}[e.s];
+  return `<li role="option" id="ev${e.id}" data-id="${e.id}" aria-selected="${L.sel===e.id}" class="${e.rule&&e.rule!=='dyn'?'hit':''}"><span class="ts">${e.ts}</span><span class="srcb s-${e.s}">${lab}</span><span class="sm">${sm}</span>${rl}</li>`;
+}
+function renderAll(){
+  $('#n-all').textContent=L.n.all.toLocaleString();$('#n-http').textContent=L.n.http;$('#n-log').textContent=L.n.log;
+  // windowing: render only the newest CAP rows (production: virtualised list, older rows paged from the session store)
+  const list=L.ev.filter(match);const win=list.slice(-CAP);
+  const vl=$('#vl');const atBottom=L.following;
+  vl.innerHTML=win.map(rowHtml).join('');
+  $('#win-note').textContent=list.length>CAP?`Showing latest ${CAP} of ${list.length.toLocaleString()} · older events load on scroll`:`${list.length} events`;
+  if(atBottom)vl.scrollTop=vl.scrollHeight;
+  $('#jump').hidden=L.following||L.unseen===0;$('#jump-n').textContent=L.unseen;
+  if(L.sel)vl.setAttribute('aria-activedescendant','ev'+L.sel);
+  $('#vl-http').innerHTML=L.flows.slice(-CAP).map(rowHtml).join('');
+  $('#logbox').innerHTML=L.logs.slice(-CAP).map(e=>`<span class="lv-${e.lv}">${e.ts.slice(0,8)} ${e.lv}/ ${esc(e.m)}</span>`).join('\n');
+  if(L.following){const lb=$('#logbox');lb.scrollTop=lb.scrollHeight;const vh=$('#vl-http');vh.scrollTop=vh.scrollHeight}
+  renderProbes2();renderCov();renderFilm();paintClock();
+}
+function renderProbes2(){
+  const on=Object.values(probeOn).filter(Boolean).length,tot=Object.keys(probeOn).length;
+  $('#probe-count').textContent=`${on} of ${tot} on`;
+  const lock=L.state==='lost'||L.state==='stopped'||L.state==='runner';
+  $('#probe-list').innerHTML=PROBES.map(g=>`<div class="probe-grp">${g[0]}</div>`+g[1].map(p=>`<div class="probe"><label class="switch" style="flex:1;min-width:0"><input type="checkbox" data-probe="${p[0]}" ${probeOn[p[0]]?'checked':''} ${lock?'disabled':''}><span class="track"></span><span class="nm">${p[1]}</span></label>${intr(p[2])}<span class="ct" title="events">${probeCt[p[0]]||0}</span></div>`).join('')).join('');
+}
+function renderCov(){
+  const stopped=L.state==='stopped';
+  $('#cov').innerHTML=COV.map(c=>{const s=L.cov[c.r]||'waiting';
+   let v=s==='confirmed'?verdict('confirmed',!stopped):s==='notrun'?verdict('nottested'):stopped?verdict(c.hit?'inconcl':'notrepro'):`<span class="chip off">${ico('refresh')}Observing…</span>`;
+   return `<li><span class="r">${c.r}</span><span>${c.t}</span><span>${v}</span></li>`}).join('');
+}
+function renderFilm(){
+  const frames=[['00:00','Splash'],['00:41','Login'],['01:35','Home'],['02:58','Transfer'],['03:30','Settings']];
+  $('#film').innerHTML=frames.map((f,i)=>`<button type="button" aria-pressed="${i===1}" aria-label="Screenshot at ${f[0]}: ${f[1]}">${f[0]}<br>${f[1]}</button>`).join('');
+}
+function detailHtml(e){
+  const mk=v=>`<span class="mask" data-secret="${esc(e.secret||'')}"><span class="mv">••••••••</span><button type="button" data-reveal aria-pressed="false">Reveal</button></span>`;
+  if(e.s==='frida'){
+   const args=Object.entries(e.a||{}).map(([k,v])=>`<dt class="mono">${k}</dt><dd class="mono" style="font-weight:400">${v==='@secret'?mk():esc(v)}</dd>`).join('');
+   return `<h3><span class="srcb s-frida">FRIDA</span><span class="mono">${esc(e.t)}</span><span class="muted" style="font-weight:400">${e.ts} · probe ${e.p}</span></h3>
+   <dl class="kv" style="margin:.4rem 0">${args}</dl>
+   <div class="code">at com.example.bank.data.AuthStore.save(AuthStore.kt:48)\nat com.example.bank.ui.login.LoginViewModel.onSuccess(LoginViewModel.kt:112)\nat kotlinx.coroutines.DispatchedTask.run(…)</div>
+   <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap;align-items:center">
+    ${e.rule?`<a class="btn btn-outline btn-sm" href="#finding">${ico('link')} Finding ${e.rule}</a>`:''}
+    <button class="btn btn-ghost btn-sm" type="button" data-toast="Marked as evidence for ${e.rule||'a finding'} (wireframe)">${ico('check')} Mark as evidence</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-toast="Copied (masked)">${ico('copy')} Copy</button>
+    <span class="muted" style="font-size:.7rem;margin-left:auto">Reveals are logged in the audit trail</span></div>`}
+  if(e.s==='http')return `<h3><span class="srcb s-http">HTTP</span><span class="mono">${e.m} ${esc(e.h)}${esc(e.u)}</span> <span class="badge ${e.st>=400?'badge-high':'badge-done'}">${e.st}</span></h3><p class="muted">${e.sz} · ${e.clear?'cleartext, ':''}${e.secret?'contains secret · ':''}pinning bypassed</p><a class="btn btn-outline btn-sm" href="#traffic" style="margin-top:.5rem">Open in Traffic inspector</a>`;
+  if(e.s==='fs')return `<h3><span class="srcb s-fs">FS</span> File created</h3><p class="mono" style="font-size:.76rem">${esc(e.m)}</p>${e.rule?`<a class="btn btn-outline btn-sm" href="#finding" style="margin-top:.5rem">${ico('link')} Finding ${e.rule}</a>`:''}`;
+  return `<h3><span class="srcb s-log">LOG</span> ${e.lv}/ log line</h3><p class="mono" style="font-size:.76rem">${esc(e.m)}</p>`;
+}
+function select(id){
+  const e=L.ev.find(x=>x.id===id);if(!e)return;L.sel=id;
+  $$('#vl li,#vl-http li').forEach(li=>li.setAttribute('aria-selected',li.dataset.id==id));
+  $('#vl').setAttribute('aria-activedescendant','ev'+id);
+  $('#detail').innerHTML=detailHtml(e);
+  const li=$('#ev'+id);if(li)li.scrollIntoView({block:'nearest'});
+}
+function bindLive(){
+  const lists=['#vl','#vl-http'];
+  lists.forEach(sel=>{
+    const vl=$(sel);
+    vl.addEventListener('click',e=>{const li=e.target.closest('li');if(li)select(+li.dataset.id)});
+    vl.addEventListener('keydown',e=>{
+      const vis=$$('li',vl);if(!vis.length)return;let i=vis.findIndex(li=>+li.dataset.id===L.sel);
+      if(e.key==='ArrowDown'||e.key==='j'){e.preventDefault();i=Math.min(vis.length-1,i+1)}
+      else if(e.key==='ArrowUp'||e.key==='k'){e.preventDefault();i=Math.max(0,i<0?vis.length-1:i-1)}
+      else if(e.key==='Home'){e.preventDefault();i=0}else if(e.key==='End'){e.preventDefault();i=vis.length-1}
+      else if(e.key==='f'){$('#follow').click();return}else return;
+      if(i>=0){L.following=false;$('#follow').checked=false;select(+vis[i].dataset.id)}
+    });
+  });
+  $('#vl').addEventListener('scroll',()=>{const v=$('#vl');const at=v.scrollHeight-v.scrollTop-v.clientHeight<24;
+    if(!at&&L.following){L.following=false;$('#follow').checked=false}
+    if(at&&!L.following){L.following=true;$('#follow').checked=true;L.unseen=0;$('#jump').hidden=true}});
+  $('#follow').onchange=()=>{L.following=$('#follow').checked;if(L.following){L.unseen=0;renderAll()}};
+  $('#jump').onclick=()=>{L.following=true;$('#follow').checked=true;L.unseen=0;renderAll();$('#vl').focus()};
+  $('#chipbar').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;L.filter=b.dataset.f;$$('#chipbar [data-f]').forEach(x=>x.setAttribute('aria-pressed',x===b));renderAll()});
+  $('#only-hits').onchange=e=>{L.hits=e.target.checked;renderAll()};
+  $$('.vtabs [data-lv]').forEach(t=>t.onclick=()=>{L.tv=t.dataset.lv;$$('.vtabs [data-lv]').forEach(x=>{const on=x===t;x.classList.toggle('active',on);x.setAttribute('aria-selected',on)});
+    $('#lw-timeline').hidden=L.tv!=='timeline';$('#lw-traffic').hidden=L.tv!=='traffic';$('#lw-logs').hidden=L.tv!=='logs';$('#chipbar').hidden=L.tv!=='timeline'});
+  $('.vtabs').addEventListener('keydown',e=>{const t=$$('.vtabs [data-lv]');let i=t.indexOf(document.activeElement);if(i<0)return;if(e.key==='ArrowRight')i=(i+1)%t.length;else if(e.key==='ArrowLeft')i=(i+t.length-1)%t.length;else return;e.preventDefault();t[i].focus();t[i].click()});
+  $('#detail').addEventListener('click',e=>{const b=e.target.closest('[data-reveal]');if(!b)return;const m=b.closest('.mask');const on=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',on);b.textContent=on?'Hide':'Reveal';m.querySelector('.mv').textContent=on?m.dataset.secret:'••••••••';if(on)toast('Reveal logged: you · now · event #'+L.sel)});
+  $('#probe-list').addEventListener('change',e=>{const c=e.target.closest('[data-probe]');if(!c)return;const id=c.dataset.probe;const p=PROBES.flatMap(g=>g[1]).find(x=>x[0]===id);
+    if(c.checked&&p[2]==='h'){c.checked=false;confirmDlg({title:`Enable “${p[1]}”?`,body:`<p>This probe <b>changes app behaviour</b> (it alters return values to get past a check). It can trigger fraud or RASP alerts on the backend.</p><p style="margin-top:.5rem">${intr('h')} Enabling is recorded in the session audit trail.</p>`,ok:'Enable probe',onOk:()=>{probeOn[id]=true;renderAll();toast(p[1]+' enabled')}})}
+    else{probeOn[id]=c.checked;renderAll()}});
+  $('#blur').onchange=e=>$('#scr').classList.toggle('blur',e.target.checked);
+  $('#btn-pause').onclick=()=>{setLiveState(L.state==='paused'?'running':'paused')};
+  $('#btn-stop').onclick=()=>{if(L.state!=='stopped')setLiveState('stopped')};
+  $('#live-state').onchange=e=>setLiveState(e.target.value);
+}
+function setLiveState(s){
+  L.state=s;$('#live-state').value=s;
+  const bar=$('#live-bar'),rec=$('#rec-pill'),ic=$('#icpt'),ban=$('#live-banner'),p=$('#btn-pause');
+  bar.classList.toggle('is-stopped',s==='stopped');bar.classList.toggle('is-lost',s==='lost'||s==='runner');
+  const recOff=s==='paused'||s==='lost'||s==='stopped'||s==='runner';
+  rec.classList.toggle('off',recOff);
+  $('#rec-text').textContent={running:'RECORDING',paused:'CAPTURE PAUSED',lost:'NOT RECORDING',runner:'NOT RECORDING',denied:'RECORDING',stopped:'STOPPED'}[s];
+  $('.dot',rec).classList.toggle('pulse',s==='running'||s==='denied');
+  const interceptOn=s==='running'||s==='paused'||s==='denied';
+  ic.classList.toggle('off',!interceptOn);
+  $('#icpt-text').textContent=interceptOn?'INTERCEPTING HTTPS · mitmproxy 10.0.2.2:8080':s==='stopped'?'NOT INTERCEPTING · proxy reverted':'NOT INTERCEPTING · state unknown';
+  p.setAttribute('aria-pressed',s==='paused');$('span',p).textContent=s==='paused'?'Resume capture':'Pause capture';
+  p.disabled=!(s==='running'||s==='paused');
+  $('#btn-stop').disabled=s==='stopped';
+  $('#nav-rec').hidden=s==='stopped'||!L.started;
+  let h='';
+  if(s==='paused')h=`<div class="alert alert-warn" role="status">${ico('pause')}<div><strong>Capture paused.</strong> The app keeps running and traffic is still routed through the proxy, but events are <b>not</b> being saved.</div><div class="acts"><button class="btn btn-outline btn-sm" type="button" onclick="document.getElementById('btn-pause').click()">Resume capture</button></div></div>`;
+  if(s==='lost')h=`<div class="alert alert-error" role="alert">${ico('x')}<div><strong>Device disconnected at ${hms(L.t)}.</strong> ${L.n.all.toLocaleString()} events up to this point are saved. Reconnecting… attempt 2 of 5. Proxy settings on the device could not be reverted — they reset when the emulator restarts.</div><div class="acts"><button class="btn btn-outline btn-sm" type="button" data-toast="Retrying connection…">Retry now</button><button class="btn btn-danger btn-sm" type="button" onclick="document.getElementById('btn-stop').click()">End session</button></div></div>`;
+  if(s==='runner')h=`<div class="alert alert-warn" role="alert">${ico('alert')}<div><strong>Lost contact with the runner.</strong> The session keeps running on the runner and events are buffered there (up to 10 min). The display resumes when the link returns. Reconnecting…</div><div class="acts"><button class="btn btn-danger btn-sm" type="button" onclick="document.getElementById('btn-stop').click()">Stop &amp; detach</button></div></div>`;
+  if(s==='denied')h=`<div class="alert alert-error" role="alert">${ico('lock')}<div><strong>2 probes could not load.</strong> <span class="mono">keystore.use</span>, <span class="mono">env.frida.observe</span>: the app denied attach (anti-Frida check). The other 9 probes are running. Findings that depend on these probes will show NOT_TESTED.</div><div class="acts"><button class="btn btn-outline btn-sm" type="button" data-toast="Reload with anti-Frida evasion needs high-intrusiveness confirmation">Retry with evasion…</button></div></div>`;
+  if(s==='stopped')h=`<div class="alert alert-ok" role="status">${ico('check')}<div><strong>Session stopped.</strong> Proxy reverted and device detached. Computing verdicts for 23 findings…</div><div class="acts"><a class="btn btn-primary btn-sm" href="#results">Review results</a></div></div>`;
+  ban.innerHTML=h;
+  renderProbes2();renderCov();
+  if(s==='stopped'){clearInterval(tickT)}
+  announce({paused:'Capture paused',lost:'Device disconnected. Recording stopped.',stopped:'Session stopped',running:'Recording',runner:'Runner connection lost',denied:'Some probes could not load'}[s]);
+}
+function liveShown(){
+  if(!L.started)startLive();
+  else{renderAll();setLiveState(L.state)}
+}
+document.addEventListener('keydown',e=>{if(e.altKey&&e.shiftKey&&(e.key==='X'||e.key==='x')&&L.started&&L.state!=='stopped'){e.preventDefault();setLiveState('stopped');if($('#s-live').hidden)toast('Session stopped, proxy reverted')}});
+bindLive();
+
+/* ---------- 4. results ---------- */
+const FIND=[
+ ['MASTG-STORAGE-1','Sensitive data in SharedPreferences','high','confirmed',3],['MASTG-CRYPTO-1','Static IV used with AES/CBC','high','confirmed',2],['MASTG-NETWORK-1','Cleartext HTTP to telemetry host','medium','confirmed',2],
+ ['MASTG-PLATFORM-7','JS bridge exposed in WebView','high','confirmed',1],['MASTG-STORAGE-5','World-readable export file','medium','confirmed',1],
+ ['MASTG-NETWORK-2','Certificate pinning missing','medium','inconcl',4],['MASTG-AUTH-2','Biometric fallback skips check','high','inconcl',2],
+ ['MASTG-STORAGE-3','Debug log contains session ID','low','notrepro',0],['MASTG-NETWORK-3','TLS 1.0 accepted','medium','notrepro',0],['MASTG-PLATFORM-2','Exported activity without permission','medium','notrepro',0],
+ ['MASTG-RESILIENCE-1','Root detection can be bypassed','medium','nottested',0],['MASTG-RESILIENCE-3','Anti-debug missing','low','nottested',0],['MASTG-CRYPTO-4','Hardcoded API key in resources','high','nottested',0]];
+let vf='all';
+function renderResults(){
+  const ci=$('#res-src').value==='ci';$('#res-prov').hidden=!ci;
+  $('#res-sub').textContent=ci?'CI emulator · Automated · 17 probes · 6 min 12 s · authorized by CI service account (policy: ci-default)':'Pixel_7_API_34 · Guided · 17 probes · 12 min 04 s · authorized by you (ENG-2291)';
+  $$('[data-vf]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.vf===vf));
+  const rows=FIND.filter(f=>vf==='all'||f[3]===vf);
+  $('#res-count').textContent=`Showing ${rows.length} of 23 (wireframe lists 13)`;
+  $('#res-tbl tbody').innerHTML=rows.map(f=>`<tr><td class="mono">${f[0]}</td><td>${f[1]}</td><td><span class="badge badge-${f[2]}">${f[2]}</span></td><td>${verdict(f[3])}</td><td class="num">${f[4]?`<a href="#finding">${f[4]} event${f[4]>1?'s':''}</a>`:'<span class="muted">—</span>'}</td>
+   <td>${f[3]==='nottested'?`<a class="btn btn-ghost btn-sm" href="#launcher">Test this</a>`:f[3]==='confirmed'||f[3]==='inconcl'?`<a class="btn btn-ghost btn-sm" href="#finding">Review</a>`:`<a class="btn btn-ghost btn-sm" href="#finding">Details</a>`}</td></tr>`).join('')||`<tr><td colspan="6" class="empty-note">No findings with this verdict in this session.</td></tr>`;
+}
+$('#res-src').onchange=renderResults;
+document.addEventListener('click',e=>{const b=e.target.closest('[data-vf]');if(b){vf=b.dataset.vf;renderResults()}
+  const s=e.target.closest('[data-sess]');if(s){$$('[data-sess]').forEach(x=>x.setAttribute('aria-pressed',x===s));if(s.dataset.sess==='ci'){$('#res-src').value='ci'}else if(s.dataset.sess==='3'){$('#res-src').value='manual'}renderResults()}
+  const a=e.target.closest('[data-addfinding]');if(a){confirmDlg({title:'Add to Vulnerabilities?',body:`<p><b>${esc(a.dataset.addfinding)}</b></p><p class="muted" style="margin-top:.4rem">Creates a finding with source <span class="src-dyn">dynamic</span>, linked to its evidence. It appears in SARIF and the HTML report. You can mark it as false positive later.</p>`,ok:'Add finding',onOk:()=>{a.disabled=true;a.textContent='Added';toast('Added as dynamic finding #24')}})}});
+
+/* ---------- 5. finding ---------- */
+function renderFinding(){
+  const k=$('#fd-state').value,card=$('#fd-card');
+  const dyn=k==='dynamic';card.classList.toggle('is-dynamic',dyn||k==='confirmed');
+  $('.vuln-title',card).textContent=dyn?'Auth token sent in URL query string':'Sensitive data stored in SharedPreferences without encryption';
+  $('.vuln-id',card).textContent=dyn?'#24 · dynamic':'#7 · MASTG-STORAGE-1';
+  $('#fd-verdict').innerHTML=dyn?`<span class="src-dyn">${ico('pulse')}dynamic</span> ${verdict('confirmed')}`:verdict(k);
+  const evid={
+   confirmed:`<div class="evid"><div class="evid-row"><span class="mono muted">00:03:41.220</span><div><b class="mono">SharedPreferences$Editor.putString</b><div class="mono muted">file=auth_prefs.xml key=auth_token value=<span class="mask"><span class="mv">sha256:9f2c…a41e</span></span> (len 171)</div><div class="mono muted" style="font-size:.7rem">at AuthStore.save(AuthStore.kt:48)</div></div><a class="btn btn-ghost btn-sm" href="#live">View in timeline</a></div>
+     <div class="evid-row"><span class="mono muted">00:03:41.231</span><div><b class="mono">+ shared_prefs/auth_prefs.xml</b><div class="muted">New file, mode 0660, 1.1 KB (filesystem diff)</div></div><a class="btn btn-ghost btn-sm" href="#live">View in timeline</a></div>
+     <div class="evid-row"><span class="mono muted">00:03:40.870</span><div><b>POST /v2/auth/login → 200</b><div class="muted">Response body contains the token written next</div></div><a class="btn btn-ghost btn-sm" href="#traffic">Open flow</a></div></div>`,
+   inconcl:`<div class="evid"><div class="evid-row"><span class="mono muted">00:03:41.220</span><div><b class="mono">SharedPreferences$Editor.putString</b><div class="mono muted">file=settings.xml key=last_user value=<span class="mask"><span class="mv">sha256:11ab…</span></span></div><div class="muted">Write seen, but the key does not look like a credential. Needs a human call.</div></div><a class="btn btn-ghost btn-sm" href="#live">View in timeline</a></div></div>`,
+   notrepro:`<div class="alert alert-info" style="margin:0">${ico('shield')}<div><b>What this means.</b> Probe <span class="mono">storage.sharedprefs.write</span> was active for the whole session and the login and settings screens were exercised. No write containing credential-like data was seen. The code path may exist but was not reached.</div></div>`,
+   nottested:`<div class="alert alert-warn" style="margin:0">${ico('alert')}<div><b>No evidence either way.</b> The probe was off in this session. <a href="#launcher">Start a session with this probe</a> or use Re-test below.</div></div>`,
+   dynamic:`<div class="evid"><div class="evid-row"><span class="mono muted">00:09:02.114</span><div><b>GET api.bank.example/v2/statements?token=<span class="mask"><span class="mv">••••</span></span></b><div class="muted">200 · 12 KB · seen twice</div></div><a class="btn btn-ghost btn-sm" href="#traffic">Open flow</a></div></div>`}[k];
+  const hist={confirmed:['#1 NOT_TESTED','#2 INCONCLUSIVE','#3 CONFIRMED'],inconcl:['#2 NOT_TESTED','#3 INCONCLUSIVE'],notrepro:['#2 CONFIRMED','#3 NOT_REPRODUCED'],nottested:['#3 NOT_TESTED'],dynamic:['#3 CONFIRMED (new)']}[k];
+  const strip=k==='nottested'?'':`<div class="vuln-status-strip dyn"><span class="label">Dynamic</span>Session #3 · today 14:02 · Pixel_7_API_34 · ${dyn?'found by observation, not by a rule':'probe storage.sharedprefs.write v1.2.0'}${k==='confirmed'?' · verdict set automatically':''}</div>`;
+  $('#fd-body').innerHTML=`
+   <div class="vuln-status-strip"><span class="label">Triage</span>Status Open · Severity High (static) · reviewer: —</div>
+   <div class="vuln-section"><div class="vuln-section-title">Static analysis</div><p style="font-size:.85rem">AuthStore.save() writes the bearer token to <span class="mono">auth_prefs.xml</span> via <span class="mono">SharedPreferences.putString</span> without wrapping it in EncryptedSharedPreferences. Location: <a href="#" data-inert class="mono">com.example.bank.data.AuthStore.save</a></p></div>
+   <div class="vuln-section"><div class="vuln-section-title">Dynamic evidence ${dyn?'':verdict(k)}</div>${strip}
+     ${k==='confirmed'||k==='inconcl'||dyn?`<div style="margin-top:.6rem">${evid}</div>`:`<div style="margin-top:.6rem">${evid}</div>`}
+     <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-top:.7rem">
+       <button class="btn btn-outline" type="button" id="btn-retest">${ico('refresh')} Re-test on Pixel_7_API_34</button>
+       <button class="btn btn-ghost" type="button" id="btn-override">Override verdict…</button>
+       <span class="muted" style="font-size:.74rem" id="retest-note">Runs only probe storage.sharedprefs.write · Low intrusiveness · ~2 min · uses your 14:02 authorization</span></div>
+     <div style="margin-top:.8rem"><div class="vuln-section-title">Verdict history</div><ul class="hist" aria-label="Verdict history">${hist.map(h=>`<li>${esc(h)}</li>`).join('')}</ul></div>
+   </div>
+   <div class="vuln-section"><div class="vuln-section-title">Remediation</div><p style="font-size:.85rem">Store the token with EncryptedSharedPreferences or the Android Keystore, and keep it out of backups.</p></div>`;
+  $('#btn-retest').onclick=()=>{
+    const b=$('#btn-retest');b.disabled=true;b.innerHTML=`${ico('refresh','spin')} Re-testing… 0:04`;let t=4;
+    const iv=setInterval(()=>{t++;b.innerHTML=`${ico('refresh','spin')} Re-testing… 0:0${Math.min(t,9)}`},900);
+    setTimeout(()=>{clearInterval(iv);b.disabled=false;b.innerHTML=`${ico('refresh')} Re-test on Pixel_7_API_34`;$('#retest-note').textContent='Session #4 (re-test) finished 0:08 ago: verdict unchanged, +1 event.';announce('Re-test finished. Verdict unchanged.');toast('Re-test finished: CONFIRMED again')},4000)};
+  $('#btn-override').onclick=()=>confirmDlg({title:'Override dynamic verdict?',body:`<label class="fl">New verdict<select><option>NOT_REPRODUCED</option><option>INCONCLUSIVE</option><option>CONFIRMED</option></select></label><label class="fl" style="margin-top:.6rem">Reason (required)<textarea rows="2" placeholder="e.g. Value is a non-secret UI preference"></textarea></label><p class="muted" style="font-size:.76rem;margin-top:.5rem">The automatic verdict is kept and can be restored with “Revert to automatic”, like AI Fix overrides.</p>`,ok:'Save override',onOk:()=>toast('Override saved (wireframe)')});
+}
+$('#fd-state').onchange=renderFinding;
+
+/* ---------- 6. probes ---------- */
+const PLIB=[
+ {id:'storage.sharedprefs.write',n:'SharedPreferences writes',ph:'SECRETS',pl:'Android',i:'l',r:['MASTG-STORAGE-1'],src:'Built-in',v:'1.2.0',h:['SharedPreferencesImpl$EditorImpl.putString','…putStringSet','…commit / apply'],fx:'Observe only. Values are hashed at source unless “capture raw values” is on.',par:[['capture_raw_values','false'],['max_events_per_sec','50']]},
+ {id:'crypto.cipher',n:'Cipher / Mac usage',ph:'SECRETS',pl:'Android',i:'l',r:['MASTG-CRYPTO-1','MASTG-CRYPTO-2'],src:'Built-in',v:'1.4.0',h:['javax.crypto.Cipher.init / doFinal','javax.crypto.Mac.doFinal'],fx:'Observe only. Key bytes are never sent to the server; only length and algorithm.',par:[['log_iv','true']]},
+ {id:'crypto.commoncrypto',n:'CommonCrypto (CCCrypt)',ph:'SECRETS',pl:'iOS',i:'l',r:['MASTG-CRYPTO-1'],src:'Built-in',v:'1.1.0',h:['CCCrypt','CCCryptorCreate'],fx:'Observe only.',par:[]},
+ {id:'keystore.use',n:'Keystore access',ph:'SECRETS',pl:'Android',i:'l',r:['MASTG-STORAGE-2'],src:'Built-in',v:'1.0.3',h:['KeyStore.getEntry / getKey'],fx:'Observe only.',par:[]},
+ {id:'net.okhttp.trace',n:'OkHttp request trace',ph:'TRANSPORT',pl:'Android',i:'l',r:['MASTG-NETWORK-1'],src:'Built-in',v:'1.3.0',h:['okhttp3.RealCall.execute / enqueue'],fx:'Observe only.',par:[]},
+ {id:'net.pinning.bypass',n:'SSL pinning bypass',ph:'TRANSPORT',pl:'Android',i:'h',r:['MASTG-NETWORK-2'],src:'Built-in',v:'2.0.1',h:['CertificatePinner.check','TrustManagerImpl.verifyChain'],fx:'Changes behaviour: certificate checks return success. Required for interception. May trigger backend alerts.',par:[['only_hosts','api.bank.example']]},
+ {id:'env.root.observe',n:'Root checks (observe)',ph:'ENVIRONMENT',pl:'Android',i:'l',r:['MASTG-RESILIENCE-1'],src:'Built-in',v:'1.0.2',h:['File.exists','Runtime.exec("su")'],fx:'Observe only.',par:[]},
+ {id:'env.root.bypass',n:'Root detection bypass',ph:'ENVIRONMENT',pl:'Android',i:'h',r:['MASTG-RESILIENCE-1'],src:'Built-in',v:'1.5.0',h:['File.exists','Build.TAGS'],fx:'Changes behaviour: return values of detection calls are altered.',par:[]},
+ {id:'fs.snapshot',n:'Filesystem snapshot & diff',ph:'SECRETS',pl:'Android',i:'m',r:['MASTG-STORAGE-1','MASTG-STORAGE-5'],src:'Built-in',v:'0.9.1',h:['(runner-side, adb)'],fx:'Reads the app sandbox before and after. No writes.',par:[['include_cache','false']]},
+ {id:'webview.config',n:'WebView config & JS bridge',ph:'SESSION',pl:'Android',i:'l',r:['MASTG-PLATFORM-7'],src:'Built-in',v:'1.1.0',h:['WebView.addJavascriptInterface','WebSettings.setJavaScriptEnabled'],fx:'Observe only.',par:[]},
+ {id:'ios.keychain.access',n:'Keychain access (SecItem*)',ph:'SECRETS',pl:'iOS',i:'l',r:['MASTG-STORAGE-2'],src:'Built-in',v:'1.0.0',h:['SecItemAdd','SecItemCopyMatching'],fx:'Observe only.',par:[]},
+ {id:'auth.biometric.callback',n:'BiometricPrompt callback trace',ph:'SESSION',pl:'Android',i:'l',r:['MASTG-AUTH-2'],src:'AI draft',v:'0.1.0',h:['BiometricPrompt$AuthenticationCallback.*'],fx:'Observe only (static lint passed).',par:[],draft:1},
+ {id:'acme.custom.deeplink',n:'Deep-link logger (team)',ph:'SESSION',pl:'Android',i:'l',r:[],src:'Custom',v:'0.3.0',h:['Activity.onNewIntent'],fx:'Observe only.',par:[]}];
+let selProbe='storage.sharedprefs.write';
+function renderProbes(){
+  const q=$('#pf-q').value.toLowerCase(),pl=$('#pf-plat').value,ph=$('#pf-phase').value,it=$('#pf-int').value;
+  const rows=PLIB.filter(p=>(!q||(p.n+p.id+p.r.join()+p.h.join()).toLowerCase().includes(q))&&(!pl||p.pl===pl)&&(!ph||p.ph===ph)&&(!it||p.i===it));
+  $('#pf-count').textContent=`${rows.length} of ${PLIB.length} probes`;
+  $('#pf-tbl tbody').innerHTML=rows.map(p=>`<tr class="row${p.id===selProbe?' sel':''}" tabindex="0" data-p="${p.id}" aria-selected="${p.id===selProbe}"><td><b>${p.n}</b><div class="mono muted" style="font-size:.7rem">${p.id} · v${p.v}</div></td><td class="hs">${p.ph}</td><td><span class="badge badge-${p.pl==='iOS'?'ios':'android'}">${p.pl}</span></td><td>${intr(p.i)}</td><td class="mono" style="font-size:.7rem">${p.r.join('<br>')||'—'}</td><td class="hs">${p.draft?'<span class="badge badge-ai">AI draft · needs review</span>':p.src}</td></tr>`).join('')||`<tr><td colspan="4" class="empty-note">No probes match these filters. <button class="btn-link" type="button" id="pf-reset">Clear filters</button></td></tr>`;
+  const p=PLIB.find(x=>x.id===selProbe);
+  $('#pf-detail').innerHTML=p?`<div class="card-title">${p.n}</div><div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.6rem">${intr(p.i)}<span class="chip">${p.ph}</span><span class="badge badge-${p.pl==='iOS'?'ios':'android'}">${p.pl}</span>${p.draft?'<span class="badge badge-ai">AI draft</span>':''}</div>
+   <dl class="kv"><dt>ID</dt><dd class="mono">${p.id}</dd><dt>Version</dt><dd>${p.v}</dd><dt>Verifies</dt><dd class="mono">${p.r.join(', ')||'—'}</dd><dt>Side effects</dt><dd style="font-weight:400">${p.fx}</dd></dl>
+   <div class="vuln-section-title" style="margin-top:.8rem">Hooks</div><ul class="mono" style="font-size:.72rem;margin-left:1rem">${p.h.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>
+   ${p.par.length?`<div class="vuln-section-title" style="margin-top:.8rem">Parameters</div>${p.par.map(x=>`<label class="fl" style="margin-bottom:.4rem">${x[0]}<input type="text" value="${x[1]}"></label>`).join('')}`:''}
+   <div class="vuln-section-title" style="margin-top:.8rem">Script</div><div class="code">/* script body hidden — requires the “author” role.\n   Static lint: no network, no file writes. */</div>
+   <div style="display:flex;gap:.4rem;margin-top:.8rem;flex-wrap:wrap">${p.draft?`<button class="btn btn-primary" type="button" data-toast="Published (needs a second reviewer)">Review &amp; publish</button><button class="btn btn-ghost" type="button" data-toast="Draft deleted">Discard</button>`:`<a class="btn btn-primary" href="#launcher">${ico('play')} Use in next session</a><button class="btn btn-ghost" type="button" data-toast="Opens version history">History</button>`}</div>`:'';
+  $$('#pf-tbl tr.row').forEach(r=>{const go=()=>{selProbe=r.dataset.p;renderProbes();$(`#pf-tbl tr[data-p="${selProbe}"]`)?.focus()};r.onclick=go;r.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}});
+  const rs=$('#pf-reset');if(rs)rs.onclick=()=>{['pf-q','pf-plat','pf-phase','pf-int'].forEach(i=>$('#'+i).value='');renderProbes()};
+}
+['pf-q','pf-plat','pf-phase','pf-int'].forEach(i=>$('#'+i).addEventListener('input',renderProbes));
+$('#btn-propose').onclick=()=>{
+  confirmDlg({title:'Propose a probe with AI',body:`<label class="fl">What should it observe?<textarea rows="3" id="pp-t">Log which authentication type (biometric vs. device credential) was used in BiometricPrompt callbacks.</textarea></label><p class="muted" style="font-size:.76rem;margin-top:.5rem">The assistant drafts the probe and asks for your approval in chat. Drafts cannot run until published by a reviewer.</p>`,ok:'Draft in AI Assistant',onOk:()=>{location.hash='#assistant'}})};
+
+/* ---------- 7. traffic ---------- */
+const HOSTS=[['api.bank.example','/v2/accounts',200],['api.bank.example','/v2/accounts/NL91/transactions?page=1',200],['api.bank.example','/v2/auth/login',200],['cdn.bank.example','/img/promo-banner.webp',200],['telemetry.bank.example','/collect',204],['api.bank.example','/v2/profile',401],['api.bank.example','/v2/statements?token=eyJ…',200],['help.bank.example','/faq',200],['api.bank.example','/v2/transfer',201]];
+const FLOWS=[];for(let i=0;i<120;i++){const h=HOSTS[(i*7+3)%HOSTS.length];const m=h[1].includes('login')||h[1].includes('transfer')||h[1]==='/collect'?'POST':'GET';
+  FLOWS.push({n:1248-119+i,t:hms(60+i*5),m,h:h[0],u:h[1],st:h[2],sz:[1.2,4.8,0.9,88,0,.1,12,6.4,.7][(i*7+3)%HOSTS.length]+' KB',secret:/login|token|accounts|statements|transfer/.test(h[1]),clear:h[0].startsWith('telemetry'),err:h[2]>=400,pin:!h[0].startsWith('telemetry')})}
+const tf={q:'',f:{},sel:null};
+function renderTraffic(){
+  const rows=FLOWS.filter(f=>(!tf.q||(f.h+f.u+f.m).toLowerCase().includes(tf.q))&&(!tf.f.secret||f.secret)&&(!tf.f.clear||f.clear)&&(!tf.f.err||f.err)&&(!tf.f.pin||f.pin));
+  $('#tf-count').textContent=`${rows.length} of 1,248 flows · wireframe renders 120 rows; production list is virtualised`;
+  $('#tf-tbl tbody').innerHTML=rows.map(f=>`<tr class="row${f.n===tf.sel?' sel':''}" tabindex="0" data-n="${f.n}" aria-selected="${f.n===tf.sel}"><td class="dim num hs">${f.n}</td><td class="mono dim hs">${f.t}</td><td><b>${f.m}</b></td><td class="mono" style="font-size:.74rem;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.h+f.u)}">${esc(f.h)}<span class="muted">${esc(f.u)}</span></td><td><span class="badge ${f.st>=400?'badge-high':'badge-done'}">${f.st}</span></td><td class="num hs">${f.sz}</td><td>${f.secret?`<span class="chip" title="Contains secret">${ico('lock')}secret</span> `:''}${f.clear?`<span class="chip bad" title="Cleartext HTTP">${ico('alert')}http</span>`:''}</td></tr>`).join('')||`<tr><td colspan="7" class="empty-note">No flows match. <button class="btn-link" type="button" id="tf-reset">Clear filters</button></td></tr>`;
+  $$('#tf-tbl tr.row').forEach(r=>{const go=()=>{tf.sel=+r.dataset.n;renderTraffic();$(`#tf-tbl tr[data-n="${tf.sel}"]`)?.focus()};r.onclick=go;r.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}else if(e.key==='ArrowDown'&&r.nextElementSibling){e.preventDefault();r.nextElementSibling.focus()}else if(e.key==='ArrowUp'&&r.previousElementSibling){e.preventDefault();r.previousElementSibling.focus()}}});
+  const rs=$('#tf-reset');if(rs)rs.onclick=()=>{tf.q='';tf.f={};$('#tf-q').value='';$$('[data-tf]').forEach(b=>b.setAttribute('aria-pressed','false'));renderTraffic()};
+  const f=FLOWS.find(x=>x.n===tf.sel);const d=$('#tf-detail');
+  if(!f){d.innerHTML=`<div class="empty-note">Select a flow to inspect it.<br><span style="font-size:.76rem">Tokens, cookies and PII are masked until you reveal them.</span></div>`;return}
+  const mutating=f.m!=='GET';
+  const mk=(v,k)=>`<span class="mask" data-secret="${esc(v)}"><span class="mv">••••••••</span><button type="button" data-reveal aria-pressed="false" aria-label="Reveal ${k}">Reveal</button></span>`;
+  d.innerHTML=`<div class="card-title"><span class="mono">${f.m} ${esc(f.h)}${esc(f.u)}</span></div>
+   <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.6rem"><span class="badge ${f.st>=400?'badge-high':'badge-done'}">${f.st}</span><span class="chip">${f.sz}</span>${f.pin?'<span class="chip">Pinning bypassed</span>':''}${f.clear?'<span class="chip bad">Cleartext</span>':''}</div>
+   <div class="vtabs" role="tablist" style="padding:0;margin-bottom:.5rem"><button class="tab active" role="tab" aria-selected="true">Request</button><button class="tab" role="tab" aria-selected="false" data-toast="Response tab (wireframe)">Response</button><button class="tab" role="tab" aria-selected="false" data-toast="Timing tab (wireframe)">Timing</button></div>
+   <dl class="kv" style="margin-bottom:.6rem"><dt class="mono">Authorization</dt><dd style="font-weight:400">Bearer ${mk('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.x9k2','Authorization')}</dd><dt class="mono">Cookie</dt><dd style="font-weight:400">${mk('sid=7f3a91c2e0','Cookie')}</dd><dt class="mono">User-Agent</dt><dd style="font-weight:400">okhttp/4.12.0</dd></dl>
+   <div class="vuln-section-title">Body</div><div class="code">{\n  "account": "NL91 ABNA ${'•'.repeat(4)} 4300",\n  "email": "<span class="mask">••••@••••.com</span>",\n  "amount": 50.00\n}</div>
+   <div style="display:flex;gap:.4rem;margin-top:.7rem;flex-wrap:wrap;align-items:center">
+    <button class="btn btn-outline btn-sm" type="button" id="btn-ev">${ico('link')} Mark as evidence…</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-toast="Copied cURL with secrets masked">${ico('copy')} Copy as cURL (masked)</button>
+    <button class="btn btn-ghost btn-sm" type="button" id="btn-replay" ${mutating?'disabled aria-describedby="rp-why"':''}>${ico('refresh')} Replay (read-only)</button></div>
+   <p class="muted" style="font-size:.72rem;margin-top:.4rem" id="rp-why">${mutating?'Replay is off for POST/PUT/DELETE: it could change real data. Copy as cURL to run it yourself.':'Sends one GET from the runner host to an allow-listed host. Response is shown here, not stored as a new flow.'}</p>
+   <div id="ev-pop" hidden class="alert alert-info" style="margin-top:.6rem;flex-direction:column;gap:.4rem"><label class="fl" style="width:100%">Attach to<select id="ev-sel"><option>MASTG-NETWORK-1 · Cleartext HTTP to telemetry host</option><option>MASTG-STORAGE-1 · Sensitive data in SharedPreferences</option><option>Create new dynamic finding…</option></select></label><div style="display:flex;gap:.4rem"><button class="btn btn-primary btn-sm" type="button" id="ev-ok">Attach</button><button class="btn btn-ghost btn-sm" type="button" id="ev-no">Cancel</button></div></div>`;
+  $('#btn-ev').onclick=()=>{$('#ev-pop').hidden=false;$('#ev-sel').focus()};
+  $('#ev-no').onclick=()=>{$('#ev-pop').hidden=true;$('#btn-ev').focus()};
+  $('#ev-ok').onclick=()=>{toast('Flow #'+f.n+' attached as evidence (wireframe)');$('#ev-pop').hidden=true;$('#btn-ev').focus()};
+  const rp=$('#btn-replay');if(rp&&!rp.disabled)rp.onclick=()=>toast('Replayed GET: 200 in 84 ms (wireframe)');
+  $$('[data-reveal]',d).forEach(b=>b.onclick=()=>{const m=b.closest('.mask');const on=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',on);b.textContent=on?'Hide':'Reveal';m.querySelector('.mv').textContent=on?m.dataset.secret:'••••••••';if(on)toast('Reveal logged to audit trail')});
+}
+$('#tf-q').oninput=e=>{tf.q=e.target.value.toLowerCase();renderTraffic()};
+$$('[data-tf]').forEach(b=>b.onclick=()=>{const k=b.dataset.tf;tf.f[k]=!tf.f[k];b.setAttribute('aria-pressed',!!tf.f[k]);renderTraffic()});
+
+/* ---------- 8. compare ---------- */
+function cmp(){const on=$('#cmp-diff').checked;$$('#cmp-tbl tbody tr').forEach(r=>r.hidden=on&&r.dataset.c==='same')}
+$('#cmp-diff').onchange=cmp;
+
+/* ---------- 9. assistant ---------- */
+function resolve(prefix,ok){
+  const box=$('#cf-'+prefix);box.classList.add('resolved');
+  $('#cf-'+prefix+'-b').className='badge '+(ok?'badge-done':'badge-muted');$('#cf-'+prefix+'-b').textContent=ok?'approved':'declined';
+  $('#cf-'+prefix+'-a').innerHTML=`<span class="muted" style="font-style:italic;font-size:.75rem">${ok?(prefix==='start'?'✓ Approved — waiting for your authorization…':'✓ Approved — saved as draft'):'Declined'}</span>`;
+}
+$('#cf-start-ok').onclick=()=>{resolve('start',true);selDev='pixel';const r=$('input[name=preset][value=storage]');if(r)r.checked=true;openConsent($('#cf-start'))};
+$('#cf-start-no').onclick=()=>resolve('start',false);
+$('#cf-probe-ok').onclick=()=>{resolve('probe',true);toast('Draft saved in Probe Library')};
+$('#cf-probe-no').onclick=()=>resolve('probe',false);
+
+/* ---------- init ---------- */
+route();
+})();
+</script>
+</body>
+</html>
