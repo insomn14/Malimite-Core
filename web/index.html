@@ -3514,9 +3514,13 @@ function chatProgressStart() {
   el.setAttribute('aria-live', 'polite');
   el.innerHTML = '<span class="sp" aria-hidden="true"></span><span class="lbl"></span><span class="sub"></span><span class="t"></span>';
   const t0 = Date.now();
-  let phase = 'thinking', toolName = '', timer = 0;
+  let phase = 'thinking', toolName = '', timer = 0, stopped = false;
   const paint = () => {
-    if (!el.isConnected) { clearInterval(timer); return; }
+    if (stopped) { clearInterval(timer); return; }
+    // The history re-render (chatRenderHistory) empties #chat-msgs, which used to take the pill with it
+    // for good while the stream was still running. Put it back, and keep it below the newest block.
+    const b = document.getElementById('chat-msgs');
+    if (b && b.lastElementChild !== el) b.appendChild(el);
     const writing = phase === 'writing';
     el.querySelector('.lbl').textContent = phase === 'tool' ? 'Running tool' : phase === 'confirm' ? 'Waiting for confirmation' : writing ? 'Writing answer' : 'Thinking';
     el.querySelector('.sub').textContent = (phase === 'tool' || phase === 'confirm') ? (toolName || '') : '';
@@ -3538,7 +3542,7 @@ function chatProgressStart() {
         b.scrollTop = b.scrollHeight;
       }
     },
-    stop() { clearInterval(timer); timer = 0; if (el.isConnected) el.remove(); },
+    stop() { stopped = true; clearInterval(timer); timer = 0; if (el.isConnected) el.remove(); },
   };
 }
 
