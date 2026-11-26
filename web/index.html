@@ -1161,13 +1161,13 @@ tr:hover td{background:#fafaff}
 .cm-tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .cm-body label{display:flex;flex-direction:column;gap:.25rem;font-size:.8rem;font-weight:650}
 .cm-body .cm-hint{font-weight:400;font-size:.72rem;color:var(--muted)}
-.cm-presets{display:flex;flex-wrap:wrap;gap:.35rem}
-.cm-preset{border:1px solid var(--border);background:#fff;border-radius:999px;padding:.25rem .7rem;font:inherit;font-size:.74rem;cursor:pointer}
-.cm-preset:hover,.cm-preset.on{border-color:var(--accent);color:var(--accent)}
 .cm-keyrow{position:relative}.cm-keyrow .ctl{padding-right:2.4rem}
 .cm-eye{position:absolute;right:.4rem;top:50%;transform:translateY(-50%);border:0;background:none;cursor:pointer;color:var(--muted);display:flex}
 .cm-models{display:flex;flex-direction:column;gap:.4rem;max-height:190px;overflow:auto}
 .cm-model-row{display:flex;gap:.4rem}
+.cm-adv{border:1px solid var(--border);border-radius:10px;padding:.15rem .8rem}
+.cm-adv summary{cursor:pointer;font-size:.82rem;font-weight:650;padding:.55rem 0}
+.cm-adv-body{display:flex;flex-direction:column;gap:.75rem;padding:.2rem 0 .8rem}
 .cm-foot{display:flex;justify-content:flex-end;gap:.5rem;padding:.8rem 1.4rem 1.1rem;border-top:1px solid var(--border)}
 @media(max-width:600px){.cfgp-grid{grid-template-columns:1fr}}
 </style>
@@ -3100,8 +3100,18 @@ function renderConfigProviderCard(data, provider) {
     </div>`;
 }
 
+/** A built-in provider counts as "added" once it is connected — except Ollama, whose always-on
+    env default does not mean the user ever added it. */
+function cfgpAdded(data, p) {
+  const st = configProviderStatus(data, p);
+  return st.configured && !(p === 'ollama' && st.source === 'env');
+}
+
 function renderConfigPage(data) {
-  const cards = CONFIG_PROVIDER_ORDER.map(p => renderConfigProviderCard(data, p)).join('')
+  // Only providers the user has added (or the server's .env already provides) get a card; the rest
+  // are added from the "Add LLM Provider" dialog. Claude OAuth keeps its own card (login flow);
+  // Ollama's always-on default is not "added" until saved from the dialog.
+  const cards = CONFIG_PROVIDER_ORDER.filter(p => p === 'claude-oauth' || cfgpAdded(data, p)).map(p => renderConfigProviderCard(data, p)).join('')
     + (data.providers || []).filter(p => p.custom).map(p => renderCustomProviderCard(data, p)).join('');
   return `
     <div class="page-wrap" id="config-page">
@@ -3117,7 +3127,7 @@ function renderConfigPage(data) {
           <h2>Your LLM Providers</h2>
           <p>Manage connected providers, set a default, and test connections.</p>
         </div>
-        <button type="button" class="btn btn-primary" onclick="openCustomProvider()">${ico('plus')} Custom Model API</button>
+        <button type="button" class="btn btn-primary" onclick="openCustomProvider()">${ico('plus')} Add LLM Provider</button>
       </div>
       <div class="cfgp-grid">${cards}</div>
     </div>`;
@@ -3240,24 +3250,80 @@ function renderCustomProviderCard(data, st) {
     </div>`;
 }
 
+const CM_BUILTIN = ['openai', 'claude', 'deepseek', 'glm', 'bedrock', 'ollama'];
+// fields shown up front for a built-in provider; the rest go under "Customized settings"
+const CM_TOP_FIELDS = ['api_key', 'access_key_id', 'secret_access_key'];
+
 window.openCustomProvider = function(editId) {
   const st = editId ? (_configCache?.providers || []).find(p => p.provider === editId) : null;
+  const base = {bf: {}, sel: 'openai', adv: false, msg: '', ok: false, busy: false, force: false, showKey: false};
   _cm = st
-    ? {tab: 'custom', editing: true, id: st.provider, name: st.name, protocol: st.protocol, base_url: st.fields.base_url || '',
+    ? {...base, tab: 'custom', editing: true, id: st.provider, name: st.name, protocol: st.protocol, base_url: st.fields.base_url || '',
        api_key: '', hasKey: !!st.masked.api_key, models: [...st.models],
-       headers: Object.entries(st.headers || {}).map(([k, v]) => `${k}: ${v}`).join('\n'), msg: '', ok: false, busy: false, force: false, showKey: false}
-    : {tab: 'custom', editing: false, id: '', name: '', protocol: 'openai', base_url: '', api_key: '', hasKey: false,
-       models: [''], headers: '', msg: '', ok: false, busy: false, force: false, showKey: false};
+       headers: Object.entries(st.headers || {}).map(([k, v]) => `${k}: ${v}`).join('\n')}
+    : {...base, tab: 'third', editing: false, id: '', name: '', protocol: 'openai', base_url: '', api_key: '', hasKey: false,
+       models: [''], headers: ''};
   renderCustomModal();
 };
 
 function cmCapture() {
-  if (!_cm || !document.getElementById('cm-id')) return;
-  const v = id => (document.getElementById(id)?.value || '');
-  _cm.id = v('cm-id').trim().toLowerCase(); _cm.name = v('cm-name').trim();
-  _cm.base_url = v('cm-url').trim(); _cm.protocol = v('cm-proto'); _cm.api_key = v('cm-key').trim();
-  _cm.models = [...document.querySelectorAll('.cm-model-in')].map(i => i.value.trim());
-  _cm.headers = v('cm-headers');
+  if (!_cm) return;
+  const el = id => document.getElementById(id);
+  const set = (id, k, f = x => x) => { const e = el(id); if (e) _cm[k] = f(e.value); };
+  set('cm-id', 'id', x => x.trim().toLowerCase()); set('cm-name', 'name', x => x.trim());
+  set('cm-url', 'base_url', x => x.trim()); set('cm-proto', 'protocol'); set('cm-key', 'api_key', x => x.trim());
+  set('cm-headers', 'headers');
+  if (el('cm-id')) _cm.models = [...document.querySelectorAll('.cm-model-in')].map(i => i.value.trim());
+  document.querySelectorAll('.cm-bf').forEach(i => { _cm.bf[i.dataset.key] = i.value.trim(); });
+}
+
+const cmIsBuiltin = () => _cm.tab === 'third' && !_cm.sel.startsWith('p:');
+
+function cmKeyHtml(m) {
+  return `<label>API key<span class="cm-keyrow"><input class="ctl" id="cm-key" type="${m.showKey ? 'text' : 'password'}" value="${escAttr(m.api_key)}"
+      placeholder="${m.hasKey ? 'Leave blank to keep the saved key' : 'Optional for keyless gateways'}" autocomplete="off" spellcheck="false"/>
+    <button type="button" class="cm-eye" onclick="cmToggleKey()" aria-label="Show or hide key">${ico(m.showKey ? 'eyeOff' : 'eye')}</button></span>
+    <span class="cm-hint">${esc(LLM_KEY_NOTE.replace('It is never stored.', 'It is stored only on this server.'))}</span></label>`;
+}
+
+function cmEndpointHtml(m) {
+  return `<label>Provider ID<input class="ctl" id="cm-id" value="${escAttr(m.id)}" ${m.editing ? 'readonly' : ''} placeholder="my-provider" autocomplete="off" spellcheck="false"/>
+      <span class="cm-hint">a-z, 0-9, “-” or “_”. Used as the provider name in scans, the AI Assistant and AI Fix.</span></label>
+    <label>Display name<input class="ctl" id="cm-name" value="${escAttr(m.name)}" placeholder="My Provider" autocomplete="off"/></label>
+    <label>Base URL<input class="ctl" id="cm-url" value="${escAttr(m.base_url)}" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false"/>
+      <span class="cm-hint">Include the version path. <code>/chat/completions</code> (OpenAI) or <code>/messages</code> (Anthropic) is appended.</span></label>
+    <label>API protocol<select class="ctl" id="cm-proto">
+      <option value="openai"${m.protocol === 'openai' ? ' selected' : ''}>OpenAI Chat Completions</option>
+      <option value="anthropic"${m.protocol === 'anthropic' ? ' selected' : ''}>Anthropic Messages</option></select></label>`;
+}
+
+function cmModelsHeadersHtml(m) {
+  return `<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem">
+      <b style="font-size:.8rem">Models</b>
+      <button type="button" class="btn btn-outline btn-sm" id="cm-fetch" onclick="cmFetchModels()">${ico('refresh')} Fetch models</button></div>
+      <div class="cm-models">${m.models.map((x, i) => `<div class="cm-model-row">
+        <input class="ctl cm-model-in" value="${escAttr(x)}" placeholder="model-id" autocomplete="off" spellcheck="false"/>
+        <button type="button" class="btn btn-outline btn-sm" onclick="cmRemoveModel(${i})" aria-label="Remove model">${ico('trash')}</button></div>`).join('')}</div>
+      <div class="cm-hint" style="margin:.35rem 0">You can also add model IDs manually if discovery is unavailable. Left empty, the models the endpoint lists are used.</div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="cmAddModel()">${ico('plus')} Add model</button></div>
+    <label>Extra headers (optional)<textarea class="ctl" id="cm-headers" rows="2" style="height:auto;padding:.5rem .75rem;font-family:monospace;font-size:.78rem" placeholder="x-custom-header: value" spellcheck="false">${esc(m.headers)}</textarea>
+      <span class="cm-hint">One <code>Name: value</code> per line. <code>{session}</code> becomes a stable per-conversation id. Put secrets in the API key field, not here.</span></label>`;
+}
+
+const cmAdv = (m, inner) => `<details class="cm-adv" ${m.adv ? 'open' : ''} ontoggle="_cm && (_cm.adv = this.open)"><summary>Customized settings</summary><div class="cm-adv-body">${inner}</div></details>`;
+
+function cmBodyHtml(m) {
+  if (m.tab === 'custom') return cmEndpointHtml(m) + cmKeyHtml(m) + cmModelsHeadersHtml(m);
+  const opts = `<optgroup label="Built-in">${CM_BUILTIN.map(p => `<option value="${p}"${m.sel === p ? ' selected' : ''}>${esc(CONFIG_PROVIDER_META[p].name)}${cfgpAdded(_configCache, p) ? ' ✓' : ''}</option>`).join('')}</optgroup>`
+    + `<optgroup label="OpenAI-compatible">${CM_PRESETS.map(p => `<option value="p:${p.id}"${m.sel === 'p:' + p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</optgroup>`;
+  const pick = `<label>Provider<select class="ctl" id="cm-sel" onchange="cmSelect(this.value)">${opts}</select></label>`;
+  if (!cmIsBuiltin()) return pick + cmKeyHtml(m) + cmAdv(m, cmEndpointHtml(m) + cmModelsHeadersHtml(m));
+  const meta = CONFIG_PROVIDER_META[m.sel];
+  const field = f => `<label>${esc(f.label)}<input class="ctl cm-bf" data-key="${f.key}" type="${f.type}" value="${escAttr(m.bf[f.key] || '')}" placeholder="${escAttr(f.placeholder)}" autocomplete="off" spellcheck="false"/></label>`;
+  const top = meta.fields.filter(f => CM_TOP_FIELDS.includes(f.key)), rest = meta.fields.filter(f => !CM_TOP_FIELDS.includes(f.key));
+  return pick + `<p class="cm-hint" style="margin:0">${esc(meta.desc)}</p>` + top.map(field).join('')
+    + (top.length ? `<div class="cm-hint">${esc(LLM_KEY_NOTE.replace('It is never stored.', 'It is stored only on this server.'))}</div>` : '')
+    + (rest.length ? cmAdv(m, rest.map(field).join('')) : '');
 }
 
 function renderCustomModal() {
@@ -3269,43 +3335,19 @@ function renderCustomModal() {
     document.body.appendChild(ov);
   }
   const m = _cm;
-  const presets = m.tab === 'preset' && !m.editing ? `<div class="cm-presets">${CM_PRESETS.map(p =>
-    `<button type="button" class="cm-preset${m.id === p.id ? ' on' : ''}" onclick="cmPreset('${p.id}')">${esc(p.name)}</button>`).join('')}</div>` : '';
   ov.innerHTML = `
     <div class="cm-modal" role="dialog" aria-modal="true" aria-labelledby="cm-title">
       <div class="cm-head">
-        <div><h3 id="cm-title">${m.editing ? 'Edit' : 'Add'} custom model provider</h3>
-          <p>Connect any OpenAI-compatible or Anthropic-compatible endpoint.</p></div>
+        <div><h3 id="cm-title">${m.editing ? 'Edit custom model provider' : 'Add LLM provider'}</h3>
+          <p>${m.tab === 'third' ? 'Pick a provider from the catalog and enter its API key.' : 'Connect any OpenAI-compatible or Anthropic-compatible endpoint.'}</p></div>
         <button type="button" class="btn btn-ghost btn-sm" onclick="closeCustomProvider()" aria-label="Close">${ico('x')}</button>
       </div>
       <div class="cm-body">
         ${m.editing ? '' : `<div class="cm-tabs">
-          <button type="button" class="cm-tab${m.tab === 'preset' ? ' on' : ''}" onclick="cmTab('preset')">${ico('layers')} Third-party provider</button>
-          <button type="button" class="cm-tab${m.tab === 'custom' ? ' on' : ''}" onclick="cmTab('custom')">${ico('code')} Custom Model API</button>
+          <button type="button" class="cm-tab${m.tab === 'third' ? ' on' : ''}" onclick="cmTab('third')">${ico('layers')} Third-party model provider</button>
+          <button type="button" class="cm-tab${m.tab === 'custom' ? ' on' : ''}" onclick="cmTab('custom')">${ico('code')} Custom model API</button>
         </div>`}
-        ${presets}
-        <label>Provider ID<input class="ctl" id="cm-id" value="${escAttr(m.id)}" ${m.editing ? 'readonly' : ''} placeholder="my-provider" autocomplete="off" spellcheck="false"/>
-          <span class="cm-hint">a-z, 0-9, “-” or “_”. Used as the provider name in scans, the AI Assistant and AI Fix.</span></label>
-        <label>Display name<input class="ctl" id="cm-name" value="${escAttr(m.name)}" placeholder="My Provider" autocomplete="off"/></label>
-        <label>Base URL<input class="ctl" id="cm-url" value="${escAttr(m.base_url)}" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false"/>
-          <span class="cm-hint">Include the version path. <code>/chat/completions</code> (OpenAI) or <code>/messages</code> (Anthropic) is appended.</span></label>
-        <label>API protocol<select class="ctl" id="cm-proto">
-          <option value="openai"${m.protocol === 'openai' ? ' selected' : ''}>OpenAI Chat Completions</option>
-          <option value="anthropic"${m.protocol === 'anthropic' ? ' selected' : ''}>Anthropic Messages</option></select></label>
-        <label>API key<span class="cm-keyrow"><input class="ctl" id="cm-key" type="${m.showKey ? 'text' : 'password'}" value="${escAttr(m.api_key)}"
-            placeholder="${m.hasKey ? 'Leave blank to keep the saved key' : 'Optional for keyless gateways'}" autocomplete="off" spellcheck="false"/>
-          <button type="button" class="cm-eye" onclick="cmToggleKey()" aria-label="Show or hide key">${ico(m.showKey ? 'eyeOff' : 'eye')}</button></span>
-          <span class="cm-hint">${esc(LLM_KEY_NOTE.replace('It is never stored.', 'It is stored only on this server.'))}</span></label>
-        <div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem">
-          <b style="font-size:.8rem">Models</b>
-          <button type="button" class="btn btn-outline btn-sm" id="cm-fetch" onclick="cmFetchModels()">${ico('refresh')} Fetch models</button></div>
-          <div class="cm-models">${m.models.map((x, i) => `<div class="cm-model-row">
-            <input class="ctl cm-model-in" value="${escAttr(x)}" placeholder="model-id" autocomplete="off" spellcheck="false"/>
-            <button type="button" class="btn btn-outline btn-sm" onclick="cmRemoveModel(${i})" aria-label="Remove model">${ico('trash')}</button></div>`).join('')}</div>
-          <div class="cm-hint" style="margin:.35rem 0">You can also add model IDs manually if discovery is unavailable.</div>
-          <button type="button" class="btn btn-outline btn-sm" onclick="cmAddModel()">${ico('plus')} Add model</button></div>
-        <label>Extra headers (optional)<textarea class="ctl" id="cm-headers" rows="2" style="height:auto;padding:.5rem .75rem;font-family:monospace;font-size:.78rem" placeholder="x-custom-header: value" spellcheck="false">${esc(m.headers)}</textarea>
-          <span class="cm-hint">One <code>Name: value</code> per line. <code>{session}</code> becomes a stable per-conversation id. Put secrets in the API key field, not here.</span></label>
+        ${cmBodyHtml(m)}
         <div class="cfgp-note ${m.msg ? (m.ok ? 'ok' : 'err') : ''}" id="cm-msg" role="status">${esc(m.msg)}</div>
       </div>
       <div class="cm-foot">
@@ -3317,11 +3359,12 @@ function renderCustomModal() {
 }
 
 window.closeCustomProvider = function() { _cm = null; renderCustomModal(); };
-window.cmTab = function(t) { cmCapture(); _cm.tab = t; renderCustomModal(); };
-window.cmPreset = function(pid) {
+window.cmTab = function(t) { cmCapture(); _cm.tab = t; _cm.msg = ''; _cm.force = false; renderCustomModal(); };
+window.cmSelect = function(v) {
   cmCapture();
-  const p = CM_PRESETS.find(x => x.id === pid);
-  Object.assign(_cm, {id: p.id, name: p.name, base_url: p.url, protocol: 'openai', headers: p.headers || ''});
+  _cm.sel = v; _cm.msg = ''; _cm.force = false;
+  const p = CM_PRESETS.find(x => 'p:' + x.id === v);
+  if (p) Object.assign(_cm, {id: p.id, name: p.name, base_url: p.url, protocol: 'openai', headers: p.headers || '', models: ['']});
   renderCustomModal();
 };
 window.cmToggleKey = function() { cmCapture(); _cm.showKey = !_cm.showKey; renderCustomModal(); };
@@ -3344,39 +3387,62 @@ async function cmProbe() {
 
 window.cmFetchModels = async function() {
   cmCapture();
-  if (!_cm.base_url) { _cm.msg = 'Enter the Base URL first.'; _cm.ok = false; renderCustomModal(); return; }
+  if (!_cm.base_url) { _cm.msg = 'Enter the Base URL first.'; _cm.ok = false; _cm.adv = true; renderCustomModal(); return; }
   const btn = document.getElementById('cm-fetch');
   if (btn) { btn.disabled = true; btn.innerHTML = ico('loader', 'ico-spin') + ' Fetching…'; }
   try {
     const r = await cmProbe();
     cmCapture();
-    if (r.ok) {
-      _cm.models = [...new Set([..._cm.models.filter(Boolean), ...r.models])].slice(0, 500);
-      _cm.msg = r.message;
-    } else _cm.msg = r.message;
-    _cm.ok = r.ok;
+    if (r.ok) _cm.models = [...new Set([..._cm.models.filter(Boolean), ...r.models])].slice(0, 500);
+    _cm.msg = r.message; _cm.ok = r.ok;
   } catch (e) { _cm.msg = e.message || String(e); _cm.ok = false; }
   renderCustomModal();
 };
 
+async function cmFinish() {
+  _cm = null; renderCustomModal();
+  await fetchConfigProviders();
+  render(renderConfigPage(_configCache));
+}
+
+async function cmSaveBuiltin(force) {
+  const p = _cm.sel, meta = CONFIG_PROVIDER_META[p], body = {};
+  for (const f of meta.fields) body[f.key] = _cm.bf[f.key] || '';
+  if (p === 'ollama' && !body.base_url) body.base_url = 'http://localhost:11434';
+  if (p !== 'ollama' && !CM_TOP_FIELDS.some(k => body[k])) {
+    _cm.msg = `Enter the ${meta.fields.find(f => CM_TOP_FIELDS.includes(f.key)).label}.`; _cm.ok = false; renderCustomModal(); return;
+  }
+  _cm.busy = true; _cm.force = false; _cm.ok = true; _cm.msg = force || p === 'ollama' ? '' : 'Testing connection…'; renderCustomModal();
+  try {
+    if (!force && p !== 'ollama') {   // /llm/test cannot probe a typed Ollama URL, so Ollama saves directly
+      const r = await api('/llm/test', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({provider: p, api_key: body.api_key || '', access_key_id: body.access_key_id || '',
+                              secret_access_key: body.secret_access_key || '', region: body.region || ''})});
+      if (!r.ok) { _cm.busy = false; _cm.force = true; _cm.ok = false; _cm.msg = r.message; renderCustomModal(); return; }
+    }
+    await api(`/config/providers/${p}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    await cmFinish();
+  } catch (e) { _cm.busy = false; _cm.ok = false; _cm.msg = e.message || String(e); renderCustomModal(); }
+}
+
 window.cmSave = async function(force) {
   cmCapture();
-  if (!_cm.id || !_cm.base_url) { _cm.msg = 'Provider ID and Base URL are required.'; _cm.ok = false; renderCustomModal(); return; }
+  if (cmIsBuiltin()) return cmSaveBuiltin(force);
+  if (!_cm.id || !_cm.base_url) { _cm.msg = 'Provider ID and Base URL are required.'; _cm.ok = false; _cm.adv = true; renderCustomModal(); return; }
   _cm.busy = true; _cm.force = false; _cm.msg = force ? '' : 'Testing connection…'; _cm.ok = true; renderCustomModal();
   try {
+    let models = _cm.models.filter(Boolean);
     if (!force) {
       const r = await cmProbe();
-      if (!r.ok) { _cm.busy = false; _cm.force = true; _cm.ok = false; _cm.msg = r.message; cmKeepInputs(); return; }
+      if (!r.ok) { _cm.busy = false; _cm.force = true; _cm.ok = false; _cm.msg = r.message; renderCustomModal(); return; }
+      if (!models.length) models = r.models.slice(0, 100);   // nothing typed: use what the endpoint lists
     }
     await api(`/config/custom-providers/${encodeURIComponent(_cm.id)}`, {method: 'PUT', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({name: _cm.name, protocol: _cm.protocol, base_url: _cm.base_url, api_key: _cm.api_key,
-                            models: _cm.models.filter(Boolean), headers: cmHeaders()})});
-    _cm = null; renderCustomModal();
-    await fetchConfigProviders();
-    render(renderConfigPage(_configCache));
-  } catch (e) { _cm.busy = false; _cm.ok = false; _cm.msg = e.message || String(e); cmKeepInputs(); }
+                            models, headers: cmHeaders()})});
+    await cmFinish();
+  } catch (e) { _cm.busy = false; _cm.ok = false; _cm.msg = e.message || String(e); renderCustomModal(); }
 };
-function cmKeepInputs() { renderCustomModal(); }
 
 window.deleteCustomProvider = async function(pid) {
   if (!confirm(`Remove the custom provider "${pid}"? Scans that used it will need another provider.`)) return;
