@@ -11,6 +11,11 @@ This is an attribution list, not legal advice.
 |---|---|---|
 | [**Malimite**](https://github.com/LaurieWired/Malimite) by [LaurieWired](https://github.com/LaurieWired) | Apache-2.0 | The Ghidra-backed analysis design, ported without Swing: `GhidraProject` → `GhidraRunner`, `DynamicDecompile`/`FileProcessing` → `MalimiteAnalyzer`/`IpaExtractor`, `AIBackend` → `LlmEnricher`, `DumpClassData.java` → the bundled Ghidra post-script, `SQLiteDBHandler` → `SqliteStore`. These files are derived and have been modified; upstream publishes no `NOTICE` file. |
 
+The iOS native engine (`--ios-engine native`, `core/src/main/java/io/malimite/core/ios/`) was inspired by [**REipa**](https://github.com/JRBusiness/REipa)
+(JRBusiness, MIT): its Rust Mach-O/ObjC/arm64 pipeline demonstrated the approach and served as a speed and memory benchmark.
+Malimite-Core's engine is an independent Java implementation that also resolves stubs, selectors and string literals into
+named pseudocode; no REipa source code is included.
+
 Droid ASC, the Android decompiler backend described below, was inspired by [**MG1937/ASC**](https://github.com/MG1937/ASC)
 ("a super FAST Android decompiler front-end designed for Agents/Mobile Researchers", Apache-2.0).
 

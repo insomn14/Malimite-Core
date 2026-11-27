@@ -16,7 +16,7 @@ live here is long finished; see [`PHASES.md`](../PHASES.md) for the full develop
 | **Decompilation** | `GhidraRunner` (headless `analyzeHeadless` + socket IPC), `GhidraOnDemand` (persistent project, single-class re-decompile), `JadxRunner` / `JadxIngest` (Android DEX → Java), `AscRunner` (Droid ASC backend), `OnDemandDecompiler` (shared by the AI Assistant and the Functions tab), `io.malimite.core.ios.IosNativeIngest` (Ghidra-free iOS engine, backs `--ios-engine native`), `SyntaxParser` / `DemangleSwift` |
 | **Detection** | `VulnerabilityScanner` + `VulnerabilityCatalog` (iOS MASTG/MSTG), `AndroidVulnerabilityCatalog` (Android MASTG), `VulnerabilityRule`, `ScanScope` / `ScanScopeFilter` (Fast/Full/Auto Fix/Offensive scoping), `RuleQuality` (gates for LLM-learned rules), `ObfuscationSignals`, `ElfNativeProtections`, `AndroidLibraryDefinitions` / `AndroidNativeLibraryDefinitions` / `LibraryDefinitions` (first/third-party classification) |
 | **Security Assessment** | `AssessmentScanner`, `AssessmentCatalog`, `AssessmentResult`, `AssessmentStatus` (PRESENT/PARTIAL/ABSENT/UNKNOWN controls inventory, separate from vulnerability findings) |
-| **LLM providers** | `LlmProvider` (interface), `LlmProviderFactory`, `OpenAiProvider`, `ClaudeProvider`, `ClaudeOAuthProvider` (+ `AnthropicOAuthCredentials` / `AnthropicOAuthLogin` for `malimite claude-login`), `DeepSeekProvider` / `DeepSeekModels`, `OllamaProvider`, `LlmEnricher` (per-function enrichment + AI Fix's prompt infra is on the Python side, see `web/app/finding_fix.py`), `LlmMode`, `LlmCache`, `LearnedRulesStore` |
+| **LLM providers** | `LlmProvider` (interface), `LlmProviderFactory`, `OpenAiProvider`, `ClaudeProvider`, `ClaudeOAuthProvider` (+ `AnthropicOAuthCredentials` / `AnthropicOAuthLogin` for `malimite claude-login`), `DeepSeekProvider` / `DeepSeekModels`, `OllamaProvider`, `BedrockProvider` / `GlmProvider`, custom endpoints (`LlmProviderFactory` `case "custom"` → `OpenAiProvider` / `ClaudeProvider` with a full API URL and extra headers, fed by `CUSTOM_*` env vars from the web Config tab), `LlmEnricher` (per-function enrichment + AI Fix's prompt infra is on the Python side, see `web/app/finding_fix.py`), `LlmMode`, `LlmCache`, `LearnedRulesStore` |
 | **Persistence** | `SqliteStore` (the `analysis.sqlite` schema: classes, functions, strings, vulnerabilities incl. triage/AI-Fix overrides, LLM findings, assessments) |
 | **Reporting** | `ReportBuilder` (assembles `AnalysisReport` from `SqliteStore`), `HtmlReporter` (`report.html` — a bilingual VA document rendered client-side from the templates in `src/main/resources/report-template/`, picked by platform), `SarifExporter` (`findings.sarif`), `ReportRenderer` (CLI entry for regenerating reports without a full re-scan) |
 | **Platform** | `PackagePlatform` (IOS/ANDROID), `CoreConfig` (env var / system property resolution) |
@@ -32,8 +32,7 @@ AnalyzeOptions opts = AnalyzeOptions.builder()
     .assessmentEnabled(true)             // Security Assessment inventory (default: true)
     .llmEnabled(false)
     // .llmMode(LlmMode.SUMMARIZE)       // scan scope even without LLM — see README.md "Detection engines"
-    // .iosNative(true)                  // iOS only: Ghidra-free native engine (seconds, <1 GB)
-    // .iosNative(true)                  // iOS only: Ghidra-free native engine with lifted pseudocode
+    // .iosNative(true)                  // iOS only: Ghidra-free native engine with lifted pseudocode (seconds, <1 GB)
     // .decompiler("asc")                // Android: "jadx" (default) or "asc" (Droid ASC)
     .build();
 
