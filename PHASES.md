@@ -313,6 +313,28 @@ An organization's Bitbucket Pipelines or Jenkins build calls `tools/malimite-ci`
 
 ---
 
+## Phase 5i — LLM Provider Config (Config tab)
+
+**Status: ✅ Complete**
+
+**Goal:** Enter LLM credentials once in the web UI and have every consumer (LLM Enrichment during scans, AI Assistant, AI Fix, Auto Enhance) use the same providers, including user-defined OpenAI/Anthropic-compatible endpoints.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 5i.1 | Server-side credential store | ✅ | `web/app/agent/llm_config.py` persists `~/.malimite/llm-config.json` (atomic write, `0600`); priority per-request key > Config > `.env`; secrets masked in every response |
+| 5i.2 | Custom providers | ✅ | `data["custom"][id]` = name, protocol (`openai`/`anthropic`), base URL, key, models, headers; id doubles as the provider name everywhere; id validated and cannot shadow a built-in |
+| 5i.3 | Python path | ✅ | `resolve_llm()` → `LlmCfg(protocol, headers)`; `chat_step()` uses `{base}/chat/completions` or `{base}/messages` for custom, legacy `/v1/...` for built-ins |
+| 5i.4 | Java path | ✅ | `scanner.llm_env()` exports `LLM_PROVIDER=custom` + `CUSTOM_*`; `LlmProviderFactory` `case "custom"`; `OpenAiProvider`/`ClaudeProvider` accept a full URL + extra headers |
+| 5i.5 | Extra headers / OpenCode Go | ✅ | `{session}` placeholder (scan id); `x-opencode-session` auto-added for `opencode.ai` (HTTP 400 otherwise) |
+| 5i.6 | Probe | ✅ | `llm_probe.probe_custom()` = `GET {base}/models`, accepts `data[].id` or `models[].name`; "Fetch models" and "Test connection & save" in the UI |
+| 5i.7 | Add LLM Provider dialog | ✅ | Catalog of built-ins and presets (OpenCode Go, OpenRouter, Groq, Together, Mistral, Fireworks, xAI, Gemini OpenAI-compat, LM Studio, vLLM) + Custom model API tab; Config page lists only added providers |
+| 5i.8 | One source of truth for pickers | ✅ | `_configCache` (`GET /config/providers`) drives the upload form, AI Assistant, AI Fix and Auto Enhance dropdowns (connected providers only); AI Assistant composer redesigned (provider/model pills, round send button) |
+| 5i.9 | Tests | ✅ | `test_custom_provider.py`, `test_llm_config.py`, `test_llm_probe.py`, Java `LlmProviderFactoryBedrockGlmTest` (custom cases) |
+
+**Open items:** `test_attachments_validation` and `test_ai_fix_accepts_provider_and_model_override` fail with HTTP 400 (`DEEPSEEK_API_KEY is not configured`) when the test environment has no server-side DeepSeek key (both pre-date this phase); a real tool-calling chat and a real scan with a custom provider were not exercised end to end (only a plain chat call and factory unit tests); OpenCode asks for an own `User-Agent` (not sent).
+
+---
+
 ## Phase 6 — Observability
 **Status: ❌ Not started — NEXT MAJOR PHASE**
 
@@ -397,6 +419,7 @@ Phase 5e  ██████████  AI Fix                  100%   ✅ DON
 Phase 5f  ██████████  VA Report Overhaul      100%   ✅ DONE
 Phase 5g  ██████████  Auto Enhance            100%   ✅ DONE
 Phase 5h  ██████████  Org CI/CD Integration   100%   ✅ DONE [malimite-ci, Bitbucket/Jenkins templates, concurrency/retention, fail-on/SARIF bug fix]
+Phase 5i  ██████████  LLM Provider Config      100%   ✅ DONE [Config tab, custom providers, Java + Python wiring]
 Phase 6   ░░░░░░░░░░  Observability             0%   ← NEXT MAJOR PHASE
 Phase 7   ████░░░░░░  Security & Hardening     ~40%   [started: 7.1, 7.2, 7.4, 7.5, 7.8 partial; scan rate-limit/concurrency new in 5h]
 Phase 8   █░░░░░░░░░  Scale & Enterprise       ~10%   [8.6 result retention done in 5h; 8.1–8.5, 8.7 not started]
@@ -476,6 +499,7 @@ Priority: zip-bomb guard in validators (7.3) and rate limiting (7.2) before JWT 
 | Functions Explorer | `web/` | JADX-GUI-style file tree + source viewer + outline + on-demand decompile for the Functions tab |
 | iOS light scan (`--ios-light`) | removed | Replaced by the native engine below; `--ios-light` / `MALIMITE_IOS_LIGHT` / `--ios-engine light` remain as deprecated aliases of `native` |
 | iOS native engine (`--ios-engine native`) | `core/ios/` + `cli/` + `web/` | Pure-Java Mach-O loader (chained fixups + classic binds), ObjC class/method recovery, arm64 subset decoder, stub resolver and linear lifter. Fills Classes/Functions/MachoStrings/EntryPoints/FunctionReferences (`Origin=NATIVE`). Krom Staging (53 MB arm64): ingest 2.1 s / 0.26 GB heap, full CLI scan 56 s / ~1 GB RSS. Follow-ups done: Swift class methods named from `__swift5_types` vtables (`Module.Type` / `getter_3`; ~7.3k of Krom's ~65k unnamed functions) plus protocol witnesses of local types (`Greeter.witness_0`, ~190 on Krom), method names match Ghidra (bare selector; `+`/`-` only on a class/instance selector clash), field reads kept (`return *(self + 0x30);`), forward-skip, if/else, do-while and top-tested while structuring (`Structurer`, 1:1 line mapping; absorbed lines come out blank), symbol-table names added as `__LINKEDIT` strings, rules needing Ghidra-only syntax skipped and listed in `scan.json` `rulesNotEvaluated`, native LLM enrichment drops `sub_*` and defaults to 1500 functions, `--llm-concurrency` and UI fields for concurrency / max functions, `RuleQuality` rejects quadratic leading-wildcard regexes and regexes that hard-code `sub_<addr>`. Parity vs Ghidra on Krom (scope ALL): 436 vs 311 findings, 97.6% function-name overlap after demangling `_TtC…`; remaining gaps are Ghidra-syntax rules, the non-specific-rule cap, and rules learned from native output. Not yet: Swift structs/enums/closures (no descriptors to name them from), `break`/`continue`, `LocalVariableReferences`/`TypeInformation` rows. Also added a regex step budget in `VulnerabilityScanner` (a quadratic learned rule stalled the native scan) and a per-class scope cache in `ScanScopeFilter` |
+| LLM Config tab + custom providers | `web/` + `core/` | See Phase 5i |
 | Claude Pro/Max OAuth LLM provider (`claude-oauth`) | `core/` + `cli/` + `web/` | `malimite claude-login` subcommand (interactive PKCE, `--import`, or pasted tokens); no separately-billed `ANTHROPIC_API_KEY` |
 | Claude/DeepSeek model catalog refresh | `web/` + `core/` | Default Claude model is now Sonnet 5 (was 4.6); DeepSeek's official Flash id is now `deepseek-flash` (was `deepseek-v4-flash`, still accepted) |
 | Python Slack bot (Socket Mode) | `bot/python/` | Supersedes Java bot module; IPA + APK |

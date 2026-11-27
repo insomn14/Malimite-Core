@@ -31,6 +31,7 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 - [Web UI & REST API](#web-ui--rest-api)
 - [AI Assistant](#ai-assistant)
   - [Functions tab (Functions Explorer)](#functions-tab-functions-explorer)
+  - [LLM providers & the Config tab](#llm-providers--the-config-tab)
   - [Claude Pro/Max OAuth](#claude-promax-oauth-no-separately-billed-api-key)
 - [Slack bot](#slack-bot)
 - [CI/CD integration](#cicd-integration)
@@ -87,7 +88,7 @@ Malimite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 | **Ghidra decompilation** | Headless `analyzeHeadless` → C-like pseudocode (iOS Mach-O; Android `lib/arm64-v8a/*.so`) |
 | **JADX decompilation** | Android DEX → Java sources via `jadx` CLI, ingested into SQLite |
 | **MASTG / MSTG rule engines** | Platform catalogs: iOS (`VulnerabilityCatalog`) + Android (`AndroidVulnerabilityCatalog`) — STORAGE, CRYPTO, NETWORK, PLATFORM, AUTH, CODE, RESILIENCE |
-| **LLM enrichment** | Per-function analysis via OpenAI, Claude, DeepSeek, or Ollama (platform-aware prompts) |
+| **LLM enrichment** | Per-function analysis via OpenAI, Claude, DeepSeek, Ollama, AWS Bedrock, Zai GLM or any user-added OpenAI/Anthropic-compatible endpoint (platform-aware prompts); providers are managed once in the web **Config** tab |
 | **Security Assessment** | Controls inventory (obfuscation, SSL pinning, root/Frida detection, FLAG_SECURE, …) — separate from vulnerability findings |
 | **Self-learning rules** | LLM `detection_regex` validated and persisted per platform (`learned_rules.json` / `learned_rules_android.json`) |
 | **Triage workflow** | Mark false positive / accepted risk / fixed; override severity & CVSS |
@@ -308,6 +309,12 @@ Drop an `.ipa`, `.apk` or `.xapk` on the upload page (enable **Security Assessme
 | `GET` | `/api/v1/scans/{id}/report` | HTML report |
 | `GET` | `/api/v1/scans/{id}/sarif` | SARIF download |
 | `GET` | `/api/v1/scans/{id}/functions` | Browse decompiled functions |
+| `GET` | `/api/v1/config/providers` | Config tab: status of every built-in and custom provider (secrets masked) |
+| `POST` | `/api/v1/config/providers/{provider}` | Save a built-in provider's credentials (blank fields keep the stored value) |
+| `PUT` | `/api/v1/config/custom-providers/{id}` | Create/update a custom provider (name, protocol, base URL, key, models, extra headers) |
+| `POST` | `/api/v1/config/custom-providers/probe` | Test connection / Fetch models for a custom endpoint (`GET {base_url}/models`) |
+| `DELETE` | `/api/v1/config/providers/{id}` | Remove a stored provider |
+| `PUT` | `/api/v1/config/default` | Scan-wide default provider/model |
 
 ---
 
@@ -323,7 +330,7 @@ After a scan finishes, the web UI shows an **AI Assistant** tab: a chat with an 
 | `decompile` | Fresh single-class decompile: `asc` (Android, fast), `jadx` (Android), `ghidra` (iOS Mach-O, or Android `.so` via `lib`). Results are cached |
 | `recommend_hook_targets` | Recon-only, deterministic (no extra LLM call) ranking of symbols worth a Frida hook for AUTHORIZED pentest work, built from this scan's vulnerabilities and Security Assessment (SSL pinning, root/jailbreak, anti-debug, crypto/keychain). Confidence: HIGH (known symbol + call graph) / MEDIUM (known symbol only) / LOW (assessment text only) |
 
-- **Config:** uses the scan's LLM provider/model by default (overridable per chat). The API key comes from the **server's** `web/.env` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`, or `OLLAMA_BASE_URL`), never from a per-upload key. Optional: `CHAT_MAX_TURNS`, `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_CONTINUATIONS`, `CHAT_TOOL_CAP`, `HEAVY_CONCURRENCY`, `GHIDRA_ONDEMAND_TIMEOUT`. An answer cut off by the output limit is continued automatically and shown (and saved) as one message (default 5400).
+- **Config:** uses the scan's LLM provider/model by default (overridable per chat). The provider dropdown lists only the providers connected in the **Config** tab (see [LLM providers & the Config tab](#llm-providers--the-config-tab)). Credentials come from that tab or the **server's** `web/.env` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`, or `OLLAMA_BASE_URL`), never from a per-upload key. The composer has provider/model pills and a send button. Optional: `CHAT_MAX_TURNS`, `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_CONTINUATIONS`, `CHAT_TOOL_CAP`, `HEAVY_CONCURRENCY`, `GHIDRA_ONDEMAND_TIMEOUT`. An answer cut off by the output limit is continued automatically and shown (and saved) as one message (default 5400).
 - **Storage:** chat history and the decompile cache live in `<scan-dir>/chat.sqlite`; the scan database is opened read-only.
 - **Ghidra on demand:** the scan deletes its Ghidra project, so the first `ghidra` request per binary re-imports and analyzes it into a persistent `<scan-dir>/ghidra-proj/` (minutes: measured 3.6 min for a 50 MB Mach-O, seconds for a small `.so`; disk about 1.2x the binary, 60 MB measured); later requests reopen it (`-process -noanalysis`, about 4 s).
 - **API:** `POST /api/v1/scans/{id}/chat` (SSE stream), `GET /api/v1/scans/{id}/chat`, `DELETE /api/v1/scans/{id}/chat/{session_id}`.
@@ -335,6 +342,28 @@ After a scan finishes, the web UI shows an **AI Assistant** tab: a chat with an 
 ### Functions tab (Functions Explorer)
 
 A JADX-GUI-style browser for everything a scan decompiled: a resizable, searchable file tree on the left (classes grouped by package, methods under each class) and a source viewer on the right with syntax highlighting, an outline dropdown to jump to a method, and cross-tab links (e.g. a STORAGE finding's "Affected" asset jumps straight to its source). Code already stored by the scan opens instantly; a **Decompile** button triggers a fresh on-demand decompile (`asc`/`jadx` for Android classes) when nothing is stored yet or a second opinion is wanted, sharing its cache with the AI Assistant's `decompile` tool. Each open file gets its own tab so you can compare several classes/functions side by side. Backed by `GET /api/v1/scans/{id}/classes`, `GET /api/v1/scans/{id}/source`, and `POST /api/v1/scans/{id}/decompile`.
+
+### LLM providers & the Config tab
+
+Provider credentials are entered once in the web **Config** tab and stored server-side in `~/.malimite/llm-config.json` (`LLM_CONFIG_PATH`; atomic write, mode `0600`). Secrets are never sent back to the browser (only masked, e.g. `sk-0...6d8b`). A blank field on save keeps the stored value. Resolution order for a built-in provider: per-request key (legacy API callers) > Config tab > server `.env`. So a key that exists only in `web/.env` still shows as connected.
+
+**Add LLM Provider** opens a dialog with two tabs:
+
+- **Third-party provider:** a catalog. Built-ins (OpenAI, Anthropic API key, DeepSeek, Zai GLM, AWS Bedrock, Ollama) are saved via `POST /config/providers/{p}`. Presets (OpenCode Go, OpenRouter, Groq, Together AI, Mistral, Fireworks, xAI, Google Gemini via its OpenAI-compatible endpoint, LM Studio, vLLM) pre-fill a custom provider.
+- **Custom model API:** Provider ID (`a-z0-9_-`, max 32, not a built-in name), display name, protocol (`openai` or `anthropic`), base URL, API key, model list and extra headers. **Fetch models** and **Test connection & save** call `GET {base_url}/models`.
+
+A custom provider's id works anywhere a built-in name does: the upload form, the AI Assistant, AI Fix and Auto Enhance. The base URL is used as typed: Malimite appends `/chat/completions` (OpenAI protocol, `Authorization: Bearer`) or `/messages` (Anthropic protocol, `x-api-key`), so include the version path (`https://opencode.ai/inference/go/v1`). Extra headers support a `{session}` placeholder (replaced by the scan id). For `opencode.ai` hosts the required `x-opencode-session: {session}` header is added automatically.
+
+Every dropdown (upload form's LLM Enrichment, AI Assistant, AI Fix, Auto Enhance) lists only providers that are connected in Config. Config shows only providers that were added (Claude OAuth always; Ollama only after it was saved explicitly, an `OLLAMA_BASE_URL` in `.env` alone does not count).
+
+**End-to-end wiring.** One store, two runtimes:
+
+| Consumer | Runtime | How it gets the provider |
+|---|---|---|
+| AI Assistant, AI Fix, Auto Enhance | Python (`web/app/agent/llm.py`) | `resolve_llm()` builds an `LlmCfg` from the Config store; `chat_step()` picks URL and auth header from its `protocol` |
+| LLM Enrichment during a scan | Java CLI subprocess | `scanner.llm_env()` exports env vars; a custom id becomes `--llm-provider custom` with `CUSTOM_PROTOCOL`, `CUSTOM_BASE_URL`, `CUSTOM_API_KEY`, `CUSTOM_HEADERS` (JSON) and `CUSTOM_SESSION` (scan id); `LlmProviderFactory` creates `OpenAiProvider` or `ClaudeProvider` with the custom URL and headers |
+
+Known gaps: Ollama cannot be probed from the dialog (saved without a test); Gemini has no native protocol, only its OpenAI-compatible endpoint; the model list for non-DeepSeek OpenCode Go models may need the Anthropic protocol (not confirmed by their docs).
 
 ### Claude Pro/Max OAuth (no separately-billed API key)
 
@@ -449,7 +478,7 @@ Enable (default) with `--assessment` or the web **Security Assessment** checkbox
 
 ### LLM enrichment
 
-Supported providers: **OpenAI**, **Anthropic Claude**, **DeepSeek**, **Ollama**.
+Supported providers: **OpenAI**, **Anthropic Claude** (API key or Pro/Max OAuth), **DeepSeek**, **Ollama**, **AWS Bedrock**, **Zai GLM**, and **custom** OpenAI/Anthropic-compatible endpoints (OpenCode Go, OpenRouter, Groq, ... see [LLM providers & the Config tab](#llm-providers--the-config-tab)).
 
 Modes: `summarize` (Fast Scan) · `find_vulns` (Full Scan) · `auto_fix` · `offensive`
 
@@ -604,7 +633,8 @@ malimite claude-login [OPTIONS]
 | `MALIMITE_LEARNED_RULES` / `MALIMITE_LEARNED_RULES_IOS` | iOS learned-rules JSON (default `~/.malimite/learned_rules.json`) |
 | `MALIMITE_LEARNED_RULES_ANDROID` | Android learned-rules JSON (default `~/.malimite/learned_rules_android.json`) |
 | `MALIMITE_LEARNED_MAX_SEVERITY` | Highest severity an LLM-learned rule may report (`CRITICAL`…`INFO`, default `MEDIUM`) |
-| `LLM_PROVIDER` | `openai` · `claude` · `claude-oauth` (Claude Pro/Max subscription, no API key — see [Claude Pro/Max OAuth](#claude-promax-oauth-no-separately-billed-api-key)) · `deepseek` · `ollama` · `none` |
+| `LLM_PROVIDER` | `openai` · `claude` · `claude-oauth` (Claude Pro/Max subscription, no API key — see [Claude Pro/Max OAuth](#claude-promax-oauth-no-separately-billed-api-key)) · `deepseek` · `ollama` · `bedrock` · `glm` · `custom` (set by the web service from a Config-tab custom provider, together with `CUSTOM_PROTOCOL` / `CUSTOM_BASE_URL` / `CUSTOM_API_KEY` / `CUSTOM_HEADERS` / `CUSTOM_SESSION`) · `none` |
+| `LLM_CONFIG_PATH` | Web service: where the Config tab stores provider credentials (default `~/.malimite/llm-config.json`) |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `ANTHROPIC_API_KEY` | Anthropic API key (only for `claude`; `claude-oauth` needs no key, it uses `malimite claude-login`'s stored session) |
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
@@ -645,9 +675,9 @@ Malimite-Core/
 ## Testing
 
 ```bash
-mvn test -pl core,cli                            # 262 tests: Java core + CLI
-python -m unittest discover web/tests             # 214 tests: FastAPI web service
-python -m unittest discover tools/malimite-ci -p "test_*.py"   # 31 tests: CI/CD client
+mvn test -pl core,cli                            # 316 tests: Java core + CLI
+python -m unittest discover web/tests             # 394 tests: FastAPI web service (2 tests need a server-side DeepSeek key, see PHASES.md Phase 5i)
+python -m unittest discover tools/malimite-ci -p "test_*.py"   # 43 tests: CI/CD client
 # or: cd web && source .venv/bin/activate && pytest tests/
 ```
 
@@ -665,6 +695,7 @@ See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 - ✅ AI Assistant: chat over the scan with tools, on-demand ASC / JADX / Ghidra decompilation, Frida hook-target recommendations
 - ✅ Functions Explorer: JADX-GUI-style file tree + source viewer for everything a scan decompiled
 - ✅ Claude Pro/Max OAuth as an LLM provider — no separately-billed `ANTHROPIC_API_KEY` required
+- ✅ Config tab: one server-side store for all LLM providers, including user-added OpenAI/Anthropic-compatible endpoints, shared by LLM Enrichment (Java) and the AI Assistant / AI Fix / Auto Enhance (Python)
 - ✅ iOS native engine (`--ios-engine native`): Ghidra-free Mach-O + ObjC metadata + arm64 lifter that produces named pseudocode, so `DECOMPILED` rules, the LLM stage and the Functions Explorer work on binaries Ghidra cannot analyse
 - ✅ Triage workflow and AI Fix: reviewer overrides and LLM-rewritten finding text, both reversible and both reflected in `report.html`
 - ✅ `report.html` rewritten as a formal, bilingual (ID/EN) Vulnerability Assessment document — cover page, risk rating scale, MASVS mapping, approval sheet, glossary, Android manifest summary, print/PDF-ready
