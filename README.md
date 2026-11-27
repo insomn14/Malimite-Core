@@ -30,7 +30,7 @@ See demo @ [watch](https://free.smmall.cloud/MTc4NjMzMDU0MDg1Mw)
 - [Quick start](#quick-start)
 - [Web UI & REST API](#web-ui--rest-api)
 - [AI Assistant](#ai-assistant)
-  - [Functions tab (Functions Explorer)](#functions-tab-functions-explorer)
+  - [Decompiled tab](#decompiled-tab)
   - [LLM providers & the Config tab](#llm-providers--the-config-tab)
   - [Claude Pro/Max OAuth](#claude-promax-oauth-no-separately-billed-api-key)
 - [Slack bot](#slack-bot)
@@ -339,9 +339,15 @@ After a scan finishes, the web UI shows an **AI Assistant** tab: a chat with an 
 - **Container:** the web image runs as an unprivileged user (uid 10001). Its entrypoint chowns an existing root-owned scan volume once, then drops privileges. Decompiler subprocesses get an allowlisted environment (no LLM or API keys).
 - **Stored keys:** a per-upload LLM key is only used while the scan runs and is no longer written to `meta.json`; older plaintext keys are removed at startup.
 
-### Functions tab (Functions Explorer)
+### Decompiled tab
 
-A JADX-GUI-style browser for everything a scan decompiled: a resizable, searchable file tree on the left (classes grouped by package, methods under each class) and a source viewer on the right with syntax highlighting, an outline dropdown to jump to a method, and cross-tab links (e.g. a STORAGE finding's "Affected" asset jumps straight to its source). Code already stored by the scan opens instantly; a **Decompile** button triggers a fresh on-demand decompile (`asc`/`jadx` for Android classes) when nothing is stored yet or a second opinion is wanted, sharing its cache with the AI Assistant's `decompile` tool. Each open file gets its own tab so you can compare several classes/functions side by side. Backed by `GET /api/v1/scans/{id}/classes`, `GET /api/v1/scans/{id}/source`, and `POST /api/v1/scans/{id}/decompile`.
+One tab for everything a scan extracted, with a sub-nav: **Functions · Strings · Resources · Entry Points** (these used to be four separate tabs; old `#/scan/<id>/functions|strings|resources|entrypoints` links still redirect). The address bar always reflects the view (`#/scan/<id>/decompiled/functions?class=<FQN>`, `…/strings?q=`, `…/resources?q=&type=&hl=`, `…/entrypoints?q=&type=`), so a view can be shared, and every cross-link (Summary tiles, a finding's "View in Decompiled › Functions →", an entry point's class) is a real link that Back returns from.
+
+- **Functions:** a JADX-GUI-style browser: a resizable, windowed class list on the left (Android: the package tree with severity roll-ups per folder and a pinned **Native** folder per library; iOS: the full uncapped list with `Global`/`Imports`/`Libraries` pinned), with a path-aware filter, "With findings" / "Entry point" chips and keyboard navigation; a source viewer on the right with syntax highlighting, per-file tabs that remember their scroll position, a clickable breadcrumb, an outline to jump to a function, findings marked inline in the gutter, and a **Cross-refs** panel (entry point, findings, manifest resources of the open class). Code already stored by the scan opens instantly; a **Decompile** button triggers a fresh on-demand decompile (`asc`/`jadx` for Android classes) when nothing is stored yet, sharing its cache with the AI Assistant's `decompile` tool. **All sources (.zip)** sits in the sub-nav.
+- **Strings / Resources:** live search over the value column, numbered pager with page size, wrap/copy/Ask AI per row; Resources adds a type facet with counts and "n findings →" chips for values a finding points at.
+- **Entry Points:** collapsible groups by type; native symbols grouped per library; every row with a class opens it in Functions.
+
+Backed by `GET /api/v1/scans/{id}/classes`, `/source`, `/strings`, `/resources`, `/entrypoints`, `/decompiled.zip` and `POST /api/v1/scans/{id}/decompile` (the REST API is unchanged).
 
 ### LLM providers & the Config tab
 
@@ -693,10 +699,10 @@ See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 - ✅ Android APK analysis (JADX or Droid ASC for DEX + optional Ghidra arm64 `.so`)
 - ✅ Security Assessment mode (PRESENT / PARTIAL / ABSENT / UNKNOWN), aware of bytecode-VM obfuscation
 - ✅ AI Assistant: chat over the scan with tools, on-demand ASC / JADX / Ghidra decompilation, Frida hook-target recommendations
-- ✅ Functions Explorer: JADX-GUI-style file tree + source viewer for everything a scan decompiled
+- ✅ Decompiled tab: Functions (JADX-GUI-style class browser + source viewer + Cross-refs), Strings, Resources and Entry Points behind one tab with shareable URLs
 - ✅ Claude Pro/Max OAuth as an LLM provider — no separately-billed `ANTHROPIC_API_KEY` required
 - ✅ Config tab: one server-side store for all LLM providers, including user-added OpenAI/Anthropic-compatible endpoints, shared by LLM Enrichment (Java) and the AI Assistant / AI Fix / Auto Enhance (Python)
-- ✅ iOS native engine (`--ios-engine native`): Ghidra-free Mach-O + ObjC metadata + arm64 lifter that produces named pseudocode, so `DECOMPILED` rules, the LLM stage and the Functions Explorer work on binaries Ghidra cannot analyse
+- ✅ iOS native engine (`--ios-engine native`): Ghidra-free Mach-O + ObjC metadata + arm64 lifter that produces named pseudocode, so `DECOMPILED` rules, the LLM stage and the Decompiled tab work on binaries Ghidra cannot analyse
 - ✅ Triage workflow and AI Fix: reviewer overrides and LLM-rewritten finding text, both reversible and both reflected in `report.html`
 - ✅ `report.html` rewritten as a formal, bilingual (ID/EN) Vulnerability Assessment document — cover page, risk rating scale, MASVS mapping, approval sheet, glossary, Android manifest summary, print/PDF-ready
 - ✅ Auto Enhance: bulk AI Fix as a server-side background job with live Activity Log, Cancel Batch, and per-finding Retry

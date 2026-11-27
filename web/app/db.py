@@ -742,7 +742,7 @@ def _like(q: str) -> str:
 
 async def list_classes(db_path: str, executable: str, query: str, limit: int, offset: int, cap: int = 200) -> list[dict]:
     """`cap` keeps the chat agent's tool (`cap=200`, the default) from flooding the model's context;
-    the Functions tab's tree needs the whole inventory at once, so its route passes a much higher cap."""
+    the Decompiled › Functions class browser needs the whole inventory at once, so its route passes a much higher cap."""
     limit = max(1, min(limit, cap))
     async with _ro(db_path) as db:
         async with db.execute(
@@ -943,7 +943,7 @@ async def get_resources_by_type(db_path: str, types: list[str], query: str, limi
 async def get_resources_page(db_path: str, type_: Optional[str], query: Optional[str],
                               page: int, size: int) -> ResourcePage:
     """One stable, one-based page of ResourceStrings (optionally one `type`, optional substring
-    filter on value) for the Resources tab, mirroring get_strings_page's shape."""
+    filter on value) for Decompiled › Resources, mirroring get_strings_page's shape."""
     page = max(page, 1)
     size = max(10, min(size, 200))
     offset = (page - 1) * size

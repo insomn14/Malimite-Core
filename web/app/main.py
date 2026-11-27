@@ -249,7 +249,7 @@ async def get_functions(
 
 @app.get("/api/v1/scans/{scan_id}/classes")
 async def get_classes(request: Request, scan_id: str, query: str = "", limit: int = 200_000, offset: int = 0):
-    """Class names only (no decompiled code) — the data source for the Functions tab's file tree.
+    """Class names only (no decompiled code) — the data source for the Decompiled › Functions class browser.
     Unlike the chat agent's list_classes tool, the tree needs the whole inventory at once, so this
     route raises db.list_classes's default 200-row cap (a real app can have tens of thousands)."""
     _check_auth(request)
@@ -280,7 +280,7 @@ class DecompileRequest(BaseModel):
 
 @app.post("/api/v1/scans/{scan_id}/decompile")
 async def post_decompile(request: Request, scan_id: str, req: DecompileRequest):
-    """On-demand decompile of one Android class for the Functions tab, when nothing is stored yet.
+    """On-demand decompile of one Android class for Decompiled › Functions, when nothing is stored yet.
     Android asc/jadx only — ghidra native targets (iOS Mach-O, Android .so) need a symbol/address
     picker this tab doesn't have, and stay reachable only through the AI Assistant's decompile tool.
     Shares its cache (and its concurrency limit) with that tool: both read/write the same

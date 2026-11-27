@@ -19,7 +19,7 @@ CREATE TABLE Functions(FunctionName TEXT, ParentClass TEXT, DecompilationCode TE
 
 
 class FunctionsRoutesTests(unittest.TestCase):
-    """The three read-only routes backing the Functions tab's tree + viewer. Real SQLite data
+    """The three read-only routes backing Decompiled › Functions' class browser + viewer. Real SQLite data
     (not mocked), since these routes just pass through to db.py's existing query functions."""
 
     def setUp(self):
@@ -59,7 +59,7 @@ class FunctionsRoutesTests(unittest.TestCase):
 
     def test_classes_returns_more_than_the_agent_tools_200row_cap(self):
         # Regression: db.list_classes clamps `limit` to a `cap` (default 200, sized for the chat
-        # agent). The Functions tab tree needs every class at once — found via a real TestApp scan
+        # agent). The Decompiled › Functions class browser needs every class at once — found via a real TestApp scan
         # (30k+ classes) silently truncating to 200 before this route raised its cap.
         c = sqlite3.connect(self.path)
         c.executemany("INSERT INTO Classes VALUES (?,?,?)",
