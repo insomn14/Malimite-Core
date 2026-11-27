@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Decompiled — mockup</title>
+<style>
+:root{--bg:#f8f9fb;--border:#e2e4e9;--text:#1a1d23;--muted:#6b7280;--accent:#4f46e5;--soft:#eef0ff;--high:#dc2626;--med:#d97706;--low:#2563eb;--green:#16a34a;--code:#0d1117}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.5 system-ui,-apple-system,sans-serif;background:#e9ebf0;color:var(--text)}
+button,input,select{font:inherit;color:inherit}button{cursor:pointer}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+/* ── mockup chrome (bukan bagian dari app) ── */
+.ctl-bar{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;align-items:center;padding:.55rem 1rem;background:#111827;color:#9ca3af;font-size:.78rem}
+.grp{display:inline-flex;gap:2px;padding:2px;background:#1f2937;border-radius:8px}
+.grp button{border:0;background:none;color:#9ca3af;padding:.25rem .65rem;border-radius:6px}
+.grp button.on{background:var(--accent);color:#fff}
+.stage{display:grid;justify-items:center;gap:1rem;padding:1.25rem}
+.frame{container-type:inline-size;position:relative;width:100%;max-width:1240px;background:var(--bg);border:1px solid #cfd3da;border-radius:14px;overflow:hidden;box-shadow:0 10px 40px rgba(16,24,40,.12)}
+.frame.mobile{max-width:390px}
+.notes{width:100%;max-width:1240px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem}
+.notes h2{font-size:.9rem;margin-bottom:.6rem}
+.notes ul{list-style:none;display:grid;gap:.45rem;font-size:.84rem}
+.notes li{display:flex;gap:.6rem;align-items:flex-start}
+.notes .foot{margin-top:.8rem;font-size:.74rem;color:var(--muted)}
+.pin{display:inline-grid;place-items:center;flex:none;width:18px;height:18px;border-radius:50%;background:#f59e0b;color:#111;font:700 .65rem/1 system-ui;font-style:normal}
+.frame .pin{margin-left:.35rem;vertical-align:middle}
+.nopins .frame .pin{display:none}
+
+/* ── app chrome ── */
+.nav{display:flex;align-items:center;gap:1rem;height:46px;padding:0 1rem;background:#fff;border-bottom:1px solid var(--border);font-size:.85rem;color:var(--muted)}
+.nav b{color:var(--text);font-size:1rem}
+.head{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1rem;margin:1rem 1rem .6rem;padding:.9rem 1.1rem;background:#fff;border:1px solid var(--border);border-radius:14px}
+.tile{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;background:var(--soft);color:var(--accent);font-weight:800}
+.head h1{font-size:1.1rem}
+.st{font-size:.7rem;font-weight:700;color:var(--green);background:#dcfce7;border-radius:999px;padding:.1rem .55rem}
+.meta{color:var(--muted);font-size:.78rem}
+.tabs{display:flex;gap:.1rem;padding:0 1rem;border-bottom:1px solid var(--border);overflow-x:auto}
+.tab{display:inline-flex;align-items:center;gap:.35rem;padding:.6rem .62rem;font-size:.8rem;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.n{font-size:.68rem;font-weight:700;color:#4b5563;background:#eceef3;border-radius:999px;padding:0 .4rem;font-variant-numeric:tabular-nums}
+.on>.n{background:var(--soft);color:var(--accent)}
+.sub{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.75rem 1rem 0}
+.sub .sp{flex:1}
+.seg{display:inline-flex;gap:2px;padding:3px;background:#eceef3;border-radius:11px;max-width:100%;overflow-x:auto}
+.seg button{display:inline-flex;align-items:center;gap:.35rem;border:0;background:transparent;padding:.4rem .75rem;border-radius:8px;font-size:.78rem;font-weight:600;color:#4b5563;white-space:nowrap}
+.seg button.on{background:#fff;color:var(--accent);box-shadow:0 1px 3px rgba(16,24,40,.12)}
+.btn{display:inline-flex;align-items:center;gap:.35rem;border:1px solid var(--border);background:#fff;border-radius:8px;padding:.3rem .7rem;font-size:.78rem;font-weight:600;white-space:nowrap}
+.btn:hover{background:#f7f7ff;border-color:#c3c6f2}
+.btn.on{background:var(--soft);border-color:#c3c6f2;color:var(--accent)}
+kbd{font:600 .66rem ui-monospace,monospace;border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:0 .3rem;background:#fff;color:var(--muted)}
+.work{padding:.8rem 1rem 1.2rem}
+.md{display:none}
+.tabs,.seg,.otabs{scrollbar-width:none}.tabs::-webkit-scrollbar,.seg::-webkit-scrollbar,.otabs::-webkit-scrollbar{display:none}
+.row .badge{justify-self:start}
+
+/* ── toolbar bersama ── */
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin-bottom:.7rem}
+.search{position:relative;flex:1 1 260px;min-width:0}
+.search input{width:100%;height:40px;padding:0 .8rem 0 2.2rem;border:1px solid var(--border);border-radius:10px;background:#fff;font-size:.85rem}
+.search svg{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.search input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+select{height:40px;border:1px solid var(--border);border-radius:10px;background:#fff;padding:0 .7rem;font-size:.82rem}
+.chips{display:flex;gap:.4rem;flex-wrap:wrap}
+.chip{border:1px solid var(--border);background:#fff;border-radius:999px;padding:.2rem .7rem;font-size:.75rem;font-weight:600;color:#4b5563}
+.chip.on{background:var(--soft);border-color:#c3c6f2;color:var(--accent)}
+.panel{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.rl{display:flex;justify-content:space-between;gap:.75rem;flex-wrap:wrap;padding:.6rem .9rem;font-size:.78rem;color:var(--muted);border-bottom:1px solid var(--border)}
+.row{display:grid;gap:.75rem;align-items:center;padding:.5rem .9rem;border-bottom:1px solid #f1f2f4;min-width:0}
+.row:last-child{border-bottom:0}
+.row.h{background:#f8f9fb;font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.row:not(.h):hover{background:#fafbff}
+.cs{grid-template-columns:minmax(0,1fr) 230px 96px}
+.cr{grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr) 150px 110px}
+.ep{grid-template-columns:92px minmax(0,1fr) auto}
+.val{font:.78rem/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
+.val.nw{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acts{display:flex;gap:.2rem;justify-content:flex-end;opacity:0}
+.row:hover .acts,.row:focus-within .acts{opacity:1}
+.ib{border:1px solid var(--border);background:#fff;border-radius:6px;width:26px;height:26px;display:inline-grid;place-items:center;font-size:.75rem;color:var(--muted)}
+.ib:hover{color:var(--accent);border-color:#c3c6f2}
+.xchip{display:inline-flex;gap:.25rem;align-items:center;font:600 .72rem system-ui;color:var(--accent);background:var(--soft);border-radius:6px;padding:.1rem .45rem;white-space:nowrap}
+.badge{font-size:.66rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;border-radius:6px;padding:.15rem .5rem;background:#f1f2f4;color:#4b5563;white-space:nowrap}
+.badge.activity,.badge.app{background:#e0e7ff;color:#3730a3}.badge.service{background:#dcfce7;color:#166534}.badge.receiver{background:#fef3c7;color:#92400e}.badge.native{background:#f3e8ff;color:#6b21a8}.badge.provider{background:#dbeafe;color:#1e40af}
+.sv{font-size:.62rem;font-weight:800;border-radius:5px;padding:.05rem .35rem;margin-right:.35rem}
+.sv.HIGH{background:#fee2e2;color:var(--high)}.sv.MEDIUM{background:#fef3c7;color:var(--med)}.sv.LOW{background:#dbeafe;color:var(--low)}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;padding:.6rem .9rem;font-size:.78rem;color:var(--muted)}
+.pb{display:flex;gap:.3rem}
+.pb button{min-width:30px;height:30px;border:1px solid var(--border);border-radius:8px;background:#fff;font-weight:600;font-size:.76rem}
+.pb button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+mark{background:#fde68a;color:inherit;border-radius:3px}
+.hlrow{background:#fef9c3!important}
+.from{display:inline-flex;align-items:center;gap:.5rem;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:.35rem .7rem;font-size:.78rem;margin-bottom:.7rem}
+.from button{border:0;background:none;color:inherit;font-weight:700}
+.grph{display:flex;align-items:center;gap:.5rem;padding:.55rem .9rem;background:#f8f9fb;border-bottom:1px solid var(--border);font-size:.76rem;font-weight:700;cursor:pointer}
+.nm{font:650 .78rem ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}.nm .mem{color:var(--muted);font-weight:500}
+.pk{font:.7rem ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);overflow-wrap:anywhere}
+
+/* ── Functions ── */
+.fn{position:relative;display:grid;grid-template-columns:260px minmax(0,1fr) 240px;height:600px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff}
+.fn.nox{grid-template-columns:260px minmax(0,1fr)}.fn.nox .xref{display:none}
+.tree{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--border)}
+.tree .tb{padding:.55rem;border-bottom:1px solid var(--border);display:grid;gap:.4rem}
+.tree .search input{height:34px;font-size:.8rem}
+.tlist{flex:1;overflow:auto;padding:.3rem 0;font-size:.8rem}
+.tn{display:flex;align-items:center;gap:.35rem;padding:.28rem .55rem;cursor:pointer;white-space:nowrap;list-style:none}
+.tn:hover{background:var(--bg)}.tn.on{background:var(--soft);color:var(--accent);font-weight:600}
+summary::-webkit-details-marker{display:none}
+.ar{display:inline-block;width:1em;font-size:.7rem;color:var(--muted);transition:transform .12s}
+details[open]>summary .ar{transform:rotate(90deg)}
+.kids{margin-left:.85rem;border-left:1px solid #eef0f3}
+.lb{overflow:hidden;text-overflow:ellipsis}
+.lb small{color:var(--muted);font-weight:400}
+.dot{width:7px;height:7px;border-radius:50%;margin-left:auto;flex:none}
+.roll{margin-left:auto;font-size:.68rem;font-weight:700}
+.epi{color:var(--accent);font-size:.8rem}
+.view{display:flex;flex-direction:column;min-width:0;min-height:0}
+.otabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--border);flex:none}
+.ot{display:flex;gap:.5rem;align-items:center;padding:.4rem .7rem;font-size:.78rem;color:var(--muted);border-right:1px solid var(--border);white-space:nowrap}
+.ot.on{background:var(--bg);color:var(--text)}
+.crumb{display:flex;align-items:center;gap:.4rem;padding:.45rem .75rem;border-bottom:1px solid var(--border);font-size:.74rem;color:var(--muted)}
+.crumb .btn{flex:none}
+.path{display:flex;gap:.2rem;align-items:center;flex:1;min-width:0;overflow:hidden;white-space:nowrap;font-family:ui-monospace,monospace}
+.path a{color:var(--muted)}.path .cur{color:var(--text);font-weight:700}
+.codewrap{flex:1;min-height:0;overflow:auto;background:var(--code);display:flex;align-items:flex-start;font:.78rem/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c9d1d9}
+.gut{position:sticky;left:0;flex:none;text-align:right;user-select:none;padding:.8rem 0;background:#090c10;color:#4b5563;border-right:1px solid #1c232c;min-width:3.2rem}
+.gut div,.code div{height:1.65em}
+.gut div{padding:0 .7rem;position:relative}
+.gut .m{color:#fecaca;background:rgba(220,38,38,.2);cursor:pointer}
+.gut .m::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--high)}
+.code{padding:.8rem 1rem;white-space:pre;min-width:max-content}
+.code .mk{background:rgba(220,38,38,.12)}
+.inl{margin-left:1.2rem;font:700 .68rem system-ui;color:#fecaca;background:rgba(220,38,38,.25);border-radius:5px;padding:.05rem .45rem}
+.k{color:#ff7b72}.s{color:#a5d6ff}.c{color:#8b949e;font-style:italic}.t{color:#79c0ff}.f{color:#d2a8ff}
+.xref{border-left:1px solid var(--border);overflow:auto;font-size:.78rem}
+.xref h3{display:flex;justify-content:space-between;align-items:center;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:.75rem .8rem .3rem}
+.xi{display:block;padding:.35rem .8rem;border-top:1px solid #f1f2f4;color:var(--text)}
+.xi:hover{background:var(--bg);text-decoration:none}
+.xi small{display:block;color:var(--muted);font:.7rem ui-monospace,monospace;overflow-wrap:anywhere}
+.go{display:block;padding:.3rem .8rem .55rem;font-size:.72rem;font-weight:700}
+
+/* ── layar xref ── */
+.lab{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:.2rem 0 .5rem}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.6rem;margin-bottom:1rem}
+.stat{background:#fff;border:1px solid var(--border);border-radius:12px;padding:.7rem .9rem;text-align:left}
+.stat b{display:block;font-size:1.2rem}.stat span{font-size:.76rem;color:var(--muted)}
+.stat em{display:block;font:600 .68rem ui-monospace,monospace;color:var(--accent);font-style:normal;margin-top:.25rem}
+.card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:.9rem 1.1rem;margin-bottom:1rem}
+.aff{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.45rem .6rem;margin-top:.45rem;font-size:.8rem}
+.aff .u{font:.68rem ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}
+.redir{border:1px dashed #c3c6f2;background:var(--soft);border-radius:12px;padding:.7rem .9rem;font-size:.8rem}
+.redir code{font:.72rem ui-monospace,monospace}
+
+@container (max-width:1100px){
+  .fn,.fn.nox{grid-template-columns:250px minmax(0,1fr)}
+  .fn .xref{display:none}
+  .fn.x1 .xref{display:block;position:absolute;top:0;right:0;bottom:0;width:260px;z-index:5;background:#fff;box-shadow:-8px 0 24px rgba(0,0,0,.1)}
+}
+@container (max-width:900px){
+  .nav .lk{display:none}
+  .crumb{flex-wrap:wrap}.path{flex-basis:100%}
+  .fn,.fn.nox{grid-template-columns:minmax(0,1fr)}
+  .fn .tree,.fn .xref{display:none}
+  .fn.t1 .tree{display:flex;position:absolute;inset:0;z-index:5;background:#fff}
+  .fn.x1 .xref{display:block;position:absolute;inset:0;z-index:5;background:#fff}
+  .md{display:inline-flex}.dk{display:none}
+  .row.h{display:none}
+  .cs,.cr,.ep{grid-template-columns:minmax(0,1fr)}
+  .acts{opacity:1;justify-content:flex-start}
+  .sub .sp{display:none}
+  .grid4{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<div class="ctl-bar" id="ctl"></div>
+<div class="stage"><div class="frame" id="frame"></div><section class="notes" id="notes"></section></div>
+
+<script>
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hl=(s,q)=>{s=esc(s);if(!q)return s;return s.replace(new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>`<mark>${m}</mark>`)};
+const pin=n=>`<i class="pin">${n}</i>`;
+const SEARCH='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+const RANK={HIGH:0,MEDIUM:1,LOW:2},COL={HIGH:'var(--high)',MEDIUM:'var(--med)',LOW:'var(--low)'};
+
+/* ── data contoh (disarikan dari scan Krom; sebagian nama fiktif) ── */
+const P={
+ android:{pkg:'com.krom.android.staging',file:'Krom-v1.4.8-staging-release.apk',name:'Android',tile:'A',vuln:84,cls:'12.1K',str:'65.7K',nres:284,ep:346,
+  tree:[
+   {n:'com.krom.android',kids:[
+     {n:'devtools.activity',kids:[{c:'DebugActivity',sev:'MEDIUM',ep:1},{c:'DebugInfoActivity',ep:1}]},
+     {n:'services',kids:[{c:'DeeplinkHandleActivity',sev:'HIGH',ep:1,open:1},{c:'MySmsBroadcastReceiver',sev:'LOW',ep:1}]},
+     {n:'ui.splash',kids:[{c:'SplashActivity',ep:1}]}]},
+   {n:'com.getkeepsafe.relinker',shut:1,kids:[{c:'ReLinker'},{c:'TextUtils'}]},
+   {n:'a00',shut:1,kids:[{c:'C0014a'},{c:'AbstractC0059a'}]}],
+  tabs:['DeeplinkHandleActivity','DebugActivity','TextUtils'],
+  path:['com','krom','android','services'],cur:'DeeplinkHandleActivity',outline:4,
+  code:['<span class="k">package</span> com.krom.android.services;','',
+   '<span class="k">public final class</span> <span class="t">DeeplinkHandleActivity</span> <span class="k">extends</span> <span class="t">AppCompatActivity</span> {',
+   '    <span class="k">protected void</span> <span class="f">onCreate</span>(<span class="t">Bundle</span> bundle) {',
+   '        <span class="k">super</span>.onCreate(bundle);',
+   '        <span class="t">Uri</span> data = getIntent().getData();',
+   '        <span class="t">String</span> target = data.getQueryParameter(<span class="s">"url"</span>);',
+   '        <span class="t">WebView</span> web = <span class="k">new</span> <span class="t">WebView</span>(<span class="k">this</span>);',
+   '        web.getSettings().setJavaScriptEnabled(<span class="k">true</span>);',
+   '        web.loadUrl(target);','        setContentView(web);','    }','}'],
+  mk:10,mkNote:'HIGH · WebView memuat URL dari deeplink tanpa validasi',
+  xe:{t:'activity',nm:'DeeplinkHandleActivity',pk:'com.krom.android.services'},
+  xf:[['HIGH','WebView memuat URL tak tepercaya'],['MEDIUM','Komponen exported tanpa permission']],
+  xs:['url','deeplink://','javascript:'],xr:['&lt;activity … exported=true&gt;  (AndroidManifest)'],
+  strings:[
+   {v:'https://api.staging.example.com/v2/auth/login',cls:'AuthApi',k:'URLs'},
+   {v:'DeltaCounter(count=',cls:'C0014a'},{v:'media3.decoder',cls:'C0064f'},{v:'Buffer too small (',cls:'C0064f'},
+   {v:'Bearer eyJhbGciOi…(dipotong)',cls:'TokenStore',k:'Secrets'},
+   {v:':memory:',cls:'AbstractC0059a'},{v:'SupportSQLite',cls:'AbstractC0059a'},{v:'/data/local/tmp/frida-server',cls:'RootCheck',k:'Paths'},
+   {v:'support@example.com',cls:'HelpActivity',k:'Emails'},{v:'deleting the database file:',cls:'AbstractC0059a'},{v:'ExoPlayer:SimpleDecoder',cls:'C0066h'}],
+  segs:[],
+  res:[
+   {id:'PackageName',v:'PackageName=com.krom.android.staging',t:'manifest'},{id:'MinSdk',v:'MinSdk=26',t:'manifest'},
+   {id:'Debuggable',v:'Debuggable=false',t:'manifest'},{id:'AllowBackup',v:'AllowBackup=false',t:'manifest'},
+   {id:'NetworkSecurityConfig',v:'NetworkSecurityConfig=res/8G.xml',t:'manifest',f:1,hl:1},
+   {id:'Permission',v:'Permission=android.permission.READ_CONTACTS',t:'manifest-permission',f:1},
+   {id:'Permission',v:'Permission=android.permission.INTERNET',t:'manifest-permission'},
+   {id:'Permission',v:'Permission=android.permission.CAMERA',t:'manifest-permission'},
+   {id:'app_name',v:'Krom Staging',t:'string'},{id:'Component',v:'activity …DeeplinkHandleActivity exported=true',t:'component',f:2}],
+  rtypes:[['manifest',6],['manifest-permission',18],['component',31],['string',229]],
+  eps:[{t:'activity',nm:'DebugActivity',pk:'com.krom.android.devtools.activity',f:1},{t:'activity',nm:'DebugInfoActivity',pk:'com.krom.android.devtools'},
+   {t:'activity',nm:'DeeplinkHandleActivity',pk:'com.krom.android.services',f:2},{t:'activity',nm:'SplashActivity',pk:'com.krom.android.ui.splash'},
+   {t:'receiver',nm:'MySmsBroadcastReceiver',pk:'com.krom.android',f:1},
+   {t:'native',nm:'libbugsnag-ndk.so',pk:'Global.entry'},{t:'native',nm:'libbugsnag-plugin-android-anr.so',pk:'Global.entry'},{t:'native',nm:'libbugsnag-root-detection.so',pk:'Global.entry'}],
+  etypes:[['activity',4],['receiver',1],['native',341]],ecol:'native'},
+ ios:{pkg:'com.krom.ios.staging',file:'Krom Staging v1.4.8.ipa',name:'iOS',tile:'i',vuln:107,cls:'4.9K',str:'125K',nres:212,ep:85,
+  tree:[
+   {n:'App',kids:[{c:'AppDelegate',sev:'MEDIUM',ep:1,open:1},{c:'SessionManager',sev:'HIGH'},{c:'PinningDelegate'}]},
+   {n:'Swift modules',kids:[{n:'SwiftMessages',kids:[{c:'SwiftMessages.Config'},{c:'SwiftMessages.Presenter'}]},{n:'Atributika',shut:1,kids:[{c:'AttributedTextView'}]}]},
+   {n:'Third-party (Obj-C)',shut:1,kids:[{c:'_GACAppCheckAPIService'},{c:'FIRAnalyticsConnector',ep:1},{c:'APMAnalytics',ep:1}]},
+   {n:'Native',kids:[{c:'Global'},{c:'Imports'},{c:'Libraries'}]}],
+  tabs:['AppDelegate','_GACAppCheckAPIService'],path:['App'],cur:'AppDelegate',outline:13,
+  code:['<span class="c">// -[AppDelegate application:didFinishLaunchingWithOptions:] [NATIVE]</span>',
+   '<span class="k">bool</span> <span class="f">-[AppDelegate application:didFinishLaunchingWithOptions:]</span>(<span class="t">id</span> self, <span class="t">SEL</span> _cmd, <span class="t">id</span> app, <span class="t">id</span> opts) {',
+   '    [<span class="t">FIRApp</span> <span class="f">configure</span>];','    [self <span class="f">setupNetworking</span>];',
+   '    <span class="t">NSURL</span> *base = [<span class="t">NSURL</span> <span class="f">URLWithString</span>:<span class="s">@"http://staging.example.com"</span>];',
+   '    [self <span class="f">startSession</span>:base];','    <span class="k">return true</span>;','}'],
+  mk:5,mkNote:'MEDIUM · Endpoint HTTP cleartext',
+  xe:{t:'method',nm:'AppDelegate',pk:'application:didFinishLaunchingWithOptions:'},
+  xf:[['MEDIUM','Endpoint cleartext (ATS)']],xs:['staging','http://staging.example.com'],xr:['Info.plist › NSAppTransportSecurity'],
+  strings:[
+   {v:'staging',addr:'0x182053300',seg:'__const'},{v:'launch-page',addr:'0x182053320',seg:'__const'},{v:'krom_ios',addr:'0x18205336a',seg:'__const'},
+   {v:'https://api.example.com/v1/session',addr:'0x1820540a0',seg:'__cstring',k:'URLs'},{v:'AppCoordinatorImpl',addr:'0x182053380',seg:'__const'},
+   {v:'NUIApplicationState',addr:'0x1820533a6',seg:'__const'},{v:'os_unfair_lock_s',addr:'0x1820536e0',seg:'__const'},
+   {v:'NSAttributedStringKey',addr:'0x182053704',seg:'__objc_methname'},{v:'AuthorizationStatus',addr:'0x182053720',seg:'__objc_methname'}],
+  segs:['__const','__cstring','__objc_methname'],
+  res:[{id:'CFBundleIdentifier',v:'com.krom.ios.staging',t:'plist'},{id:'MinimumOSVersion',v:'15.0',t:'plist'},
+   {id:'NSAppTransportSecurity',v:'NSAllowsArbitraryLoads=true',t:'plist',f:1,hl:1},{id:'CFBundleURLSchemes',v:'krom',t:'url-scheme',f:1},
+   {id:'keychain-access-groups',v:'$(AppIdentifierPrefix)com.krom',t:'entitlement'},{id:'NSCameraUsageDescription',v:'Untuk memindai dokumen',t:'plist'}],
+  rtypes:[['plist',140],['entitlement',9],['url-scheme',3],['storyboard',60]],
+  eps:[{t:'app',nm:'AppDelegate',pk:'krom_ios',mem:'application:didFinishLaunchingWithOptions:',f:1},{t:'app',nm:'SceneDelegate',pk:'krom_ios',mem:'scene:willConnectToSession:options:'},
+   {t:'sdk',nm:'APMAnalytics',pk:'',mem:'+load'},{t:'sdk',nm:'APMAnalytics',pk:'',mem:'+initialize'},{t:'sdk',nm:'FIRAnalyticsConnector',pk:'',mem:'+load'},
+   {t:'sdk',nm:'FIRCLSCompoundOperation',pk:'',mem:'main'}],
+  etypes:[['app',3],['sdk',82]],ecol:'sdk'}
+};
+const S={plat:'android',mobile:false,pins:true,screen:'dec',sub:'functions',xref:true,t1:false,x1:false,fq:'',sq:'',rq:'',eq:'',chip:'All',rt:'all',et:'all',wrap:false,open:{}};
+const A=()=>P[S.plat];
+
+/* ── tree ── */
+const worst=(a,b)=>!a?b:!b?a:(RANK[a]<=RANK[b]?a:b);
+const sevOf=n=>n.c?n.sev:(n.kids||[]).reduce((s,k)=>worst(s,sevOf(k)),null);
+const cnt=n=>n.c?(n.sev?1:0):(n.kids||[]).reduce((s,k)=>s+cnt(k),0);
+const flat=(ns,p='')=>ns.flatMap(n=>n.c?[{...n,p}]:flat(n.kids,p?p+'.'+n.n:n.n));
+const treeHtml=ns=>ns.map(n=>n.c
+ ?`<div class="tn${n.open?' on':''}" title="${n.c}">${n.ep?'<span class="epi" title="Entry point">⎆</span>':''}<span class="lb">${n.c}</span>${n.sev?`<span class="dot" style="background:${COL[n.sev]}"></span>`:''}</div>`
+ :`<details${n.shut?'':' open'}><summary class="tn"><span class="ar">▸</span><span class="lb">${n.n}</span>${cnt(n)?`<span class="roll" style="color:${COL[sevOf(n)]}">● ${cnt(n)}</span>`:''}</summary><div class="kids">${treeHtml(n.kids)}</div></details>`).join('');
+function treeBody(){
+  const q=S.fq.trim().toLowerCase();if(!q)return treeHtml(A().tree);
+  const hit=flat(A().tree).filter(n=>(n.p+'.'+n.c).toLowerCase().includes(q));
+  return `<div class="rl" style="padding:.3rem .55rem;border:0">${hit.length} cocok · path penuh${S.plat==='ios'?'':''}</div>`+hit.map(n=>`<div class="tn" title="${n.p}.${n.c}"><span class="lb"><small>${hl(n.p+'.',S.fq)}</small>${hl(n.c,S.fq)}</span>${n.sev?`<span class="dot" style="background:${COL[n.sev]}"></span>`:''}</div>`).join('')||'<div class="rl">Tidak ada yang cocok.</div>';
+}
+
+/* ── tampilan ── */
+const toolbarSearch=(key,ph)=>`<label class="search">${SEARCH}<input data-in="${key}" value="${esc(S[key])}" placeholder="${ph}" autocomplete="off"></label>`;
+const pager=(shown,total,filtered,n)=>`<div class="pager"><span>Menampilkan 1–${shown} dari ${filtered?shown:total}${n?pin(n):''}</span>${filtered?'':'<span style="display:flex;gap:.6rem;align-items:center"><select style="height:30px;font-size:.74rem"><option>50 / halaman</option><option>100</option><option>200</option></select><span class="pb"><button>‹</button><button class="on">1</button><button>2</button><button>3</button><button disabled>…</button><button>›</button></span></span>'}</div>`;
+
+const V={};
+V.functions=()=>{const a=A(),mk=a.mk,wide=$('#frame').clientWidth>1100,xon=wide?S.xref:S.x1;
+ return `<div class="fn${S.xref?'':' nox'}${S.t1?' t1':''}${S.x1?' x1':''}">
+  <aside class="tree"><div class="tb">${toolbarSearch('fq','Filter class — path atau nama…')}
+   <div class="chips"><button class="chip">Dengan temuan</button><button class="chip">Entry point ⎆</button>${pin(3)}<button class="chip md" data-act="t1">Tutup ✕</button></div></div>
+   <div class="tlist" id="tlist">${treeBody()}</div></aside>
+  <section class="view">
+   <div class="otabs">${a.tabs.map((t,i)=>`<div class="ot${i?'':' on'}">${t} <span>×</span></div>`).join('')}</div>
+   <div class="crumb"><button class="btn md" data-act="t1">☰ Browse</button>
+    <span class="path">${a.path.map(p=>`<a href="#">${p}</a><span>›</span>`).join('')}<span class="cur">${a.cur}</span>${pin(4)}</span>
+    <button class="btn">Outline (${a.outline})</button><button class="btn">Ask AI</button><button class="btn" title="Salin">⧉</button>
+    <button class="btn${xon?' on':''}" data-act="xr">⇥ Refs</button></div>
+   <div class="codewrap"><div class="gut">${a.code.map((_,i)=>`<div${i+1===mk?' class="m" title="Buka temuan di Vulnerabilities"':''}>${i+1}</div>`).join('')}</div>
+    <div class="code">${a.code.map((l,i)=>`<div${i+1===mk?' class="mk"':''}>${l}${i+1===mk?`<span class="inl">⚠ ${a.mkNote}</span>${pin(5)}`:''}</div>`).join('')}</div></div>
+  </section>
+  <aside class="xref">
+   <h3>Entry point ${pin(6)}</h3><a class="xi" href="#"><span class="badge ${a.xe.t}">${a.xe.t}</span> <b class="mono" style="font-size:.76rem">${a.xe.nm}</b><small>${a.xe.pk}</small></a><a class="go" href="#">Buka di Entry Points →</a>
+   <h3>Temuan (${a.xf.length})</h3>${a.xf.map(([s,t])=>`<a class="xi" href="#"><span class="sv ${s}">${s}</span>${t}</a>`).join('')}<a class="go" href="#">Buka di Vulnerabilities →</a>
+   <h3>Strings di class ini (${a.xs.length})</h3>${a.xs.map(s=>`<a class="xi mono" href="#" style="font-size:.74rem">${esc(s)}</a>`).join('')}<a class="go" href="#">Lihat di Strings →</a>
+   <h3>Resources (${a.xr.length})</h3>${a.xr.map(s=>`<a class="xi" href="#">${s}</a>`).join('')}<a class="go" href="#">Lihat di Resources →</a>
+  </aside></div>`};
+
+function stringsRows(){
+  const a=A(),q=S.sq.trim().toLowerCase(),ios=S.plat==='ios';
+  const rows=a.strings.filter(s=>(!q||s.v.toLowerCase().includes(q))&&(S.chip==='All'||s.k===S.chip));
+  const body=rows.map(s=>`<div class="row cs"><div class="val${S.wrap?'':' nw'}" title="${esc(s.v)}">${hl(s.v,S.sq.trim())}</div>
+   <div>${ios?`<span class="pk">${s.addr}</span> <span class="badge">${s.seg}</span>`:`<span class="xchip">⎆ ${s.cls} ↗</span>`}</div>
+   <div class="acts"><button class="ib" title="Salin">⧉</button><button class="ib" title="Tanya AI">✦</button><button class="ib" title="Buka class">↗</button></div></div>`).join('');
+  return `<div class="rl"><span>${rows.length.toLocaleString()} string cocok · dari ${a.str}</span><span>Pencarian di kolom <b>Value</b></span></div>
+   <div class="row h cs"><div>Value ${pin(3)}</div><div>${ios?'Alamat · segment':'Class'} ${pin(4)}</div><div></div></div>${body||'<div class="rl">Tidak ada string yang cocok.</div>'}${pager(rows.length,a.str,q||S.chip!=='All',5)}`;
+}
+V.strings=()=>{const a=A();
+ return `<div class="bar">${toolbarSearch('sq','Cari string… (live, tanpa tombol Search)')}${pin(1)}
+  ${a.segs.length?`<select><option>Semua segment</option>${a.segs.map(s=>`<option>${s}</option>`).join('')}</select>`:''}
+  <button class="btn${S.wrap?' on':''}" data-act="wrap">↵ Wrap</button></div>
+  <div class="chips" style="margin-bottom:.7rem">${['All','URLs','Secrets','Paths','Emails'].map(c=>`<button class="chip${S.chip===c?' on':''}" data-chip="${c}">${c==='All'?'Semua':c}</button>`).join('')}${pin(2)}</div>
+  <div class="panel" id="srows">${stringsRows()}</div>`};
+
+function resRows(){
+  const a=A(),q=S.rq.trim().toLowerCase();
+  const rows=a.res.filter(r=>(S.rt==='all'||r.t===S.rt)&&(!q||(r.id+r.v).toLowerCase().includes(q)));
+  return `<div class="rl"><span>${rows.length} resource cocok · dari ${a.nres}</span><span>Pencarian di <b>Resource</b> dan <b>Value</b></span></div>
+   <div class="row h cr"><div>Resource</div><div>Value</div><div>Type</div><div>${pin(3)}</div></div>
+   ${rows.map(r=>`<div class="row cr${r.hl?' hlrow':''}"><div class="val" title="${esc(r.id)}">${hl(r.id,S.rq.trim())}</div><div class="val" title="${esc(r.v)}">${hl(r.v,S.rq.trim())}</div><div><span class="badge">${r.t}</span></div>
+    <div class="acts" style="opacity:1">${r.f?`<span class="xchip">⚠ ${r.f} temuan →</span>`:''}</div></div>`).join('')}${pager(rows.length,a.nres,q||S.rt!=='all')}`;
+}
+V.resources=()=>{const a=A(),tot=a.rtypes.reduce((s,[,n])=>s+n,0);
+ return `${S.plat==='android'?`<div class="from">Dibuka dari temuan: <b>Cleartext traffic permitted</b> ${pin(2)}<button title="Hapus">✕</button></div>`:''}
+  <div class="bar">${toolbarSearch('rq','Cari resource atau value… (live)')}
+   <div class="seg">${[['all','Semua',tot],...a.rtypes.map(([t,n])=>[t,t,n])].map(([t,l,n])=>`<button class="${S.rt===t?'on':''}" data-rt="${t}">${l} <span class="n">${n}</span></button>`).join('')}${pin(1)}</div></div>
+  <div class="panel" id="rrows">${resRows()}</div>`};
+
+function epRows(){
+  const a=A(),q=S.eq.trim().toLowerCase();
+  const tl={activity:'Activity',receiver:'Receiver',native:'Native',app:'Kode aplikasi',sdk:'Third-party SDK'};
+  const groups=a.etypes.map(([t,n])=>[t,n,a.eps.filter(e=>e.t===t&&(!q||(e.nm+e.pk+(e.mem||'')).toLowerCase().includes(q)))]).filter(([t])=>S.et==='all'||S.et===t);
+  return groups.map(([t,n,list])=>{const shut=a.ecol===t&&!S.open[t]||(S.open[t]===false);
+   return `<div class="grph" data-grp="${t}"><span class="ar" style="transform:rotate(${shut?0:90}deg)">▸</span>${tl[t]} <span class="n">${n}</span>${t==='native'?` <span style="font-weight:400;color:var(--muted)">· dikelompokkan per library</span>${pin(3)}`:''}${t==='sdk'?pin(4):''}</div>
+    ${shut?'':list.map((e,i)=>`<div class="row ep" title="Buka di Functions"><span class="badge ${e.t}">${e.t==='sdk'?'SDK':e.t}</span>
+     <div style="min-width:0"><div class="nm">${hl(e.nm,S.eq.trim())}${e.mem?`<span class="mem">.${hl(e.mem,S.eq.trim())}</span>`:''}</div>${e.pk?`<div class="pk">${hl(e.pk,S.eq.trim())}</div>`:''}</div>
+     <div style="display:flex;gap:.4rem;align-items:center">${e.f?`<span class="xchip">⚠ ${e.f}</span>`:''}${e.t==='native'?'':`<a class="btn" href="#">Functions ↗</a>`}${i===0&&e.t!=='native'?pin(2):''}</div></div>`).join('')||'<div class="rl">Tidak ada yang cocok.</div>'}`}).join('')+pager(a.eps.length,a.ep,q||S.et!=='all');
+}
+V.entrypoints=()=>{const a=A();
+ return `<div class="bar">${toolbarSearch('eq','Filter class, package, member…')}
+  <div class="seg">${[['all','Semua',a.ep],...a.etypes.map(([t,n])=>[t,t==='sdk'?'Third-party':t==='app'?'App':t,n])].map(([t,l,n])=>`<button class="${S.et===t?'on':''}" data-et="${t}" style="text-transform:capitalize">${l} <span class="n">${n}</span></button>`).join('')}${pin(1)}</div></div>
+  <div class="panel" id="erows">${epRows()}</div>`};
+
+/* ── layar xref: tab lain yang menaut ke Decompiled ── */
+const XS=()=>{const a=A(),id='3d36097d…';
+ const st=(n,l,t)=>`<div class="stat"><b>${n}</b><span>${l}</span><em>→ Decompiled › ${t}</em></div>`;
+ return `<div class="lab">Summary ${pin(1)}</div>
+  <div class="grid4">${st(a.cls,'Classes & functions','Functions')}${st(a.str,'Strings','Strings')}${st(a.nres,'Resources','Resources')}${st(a.ep,'Entry points','Entry Points')}</div>
+  <div class="card"><div class="lab">Summary · mini-list Entry Points ${pin(2)}</div>
+   ${a.eps.slice(0,3).map(e=>`<div class="row ep" style="padding-left:0;padding-right:0"><span class="badge ${e.t}">${e.t==='sdk'?'SDK':e.t}</span><div class="nm">${e.nm}<span class="mem">${e.mem?'.'+e.mem:''}</span></div><a href="#">Functions ↗</a></div>`).join('')}
+   <a href="#" class="mono" style="font-size:.74rem">Lihat semua → #/scan/${id}/decompiled/entrypoints</a></div>
+  <div class="lab">Vulnerabilities · kartu temuan ${pin(3)}</div>
+  <div class="card"><b><span class="sv HIGH">HIGH</span>WebView memuat URL tak tepercaya</b>
+   <div class="aff"><span class="mono">com.krom.android.services.DeeplinkHandleActivity</span> · <a href="#">View in Decompiled › Functions →</a><div class="u">#/scan/${id}/decompiled/functions?class=com.krom.android.services.DeeplinkHandleActivity</div></div>
+   <div class="aff"><span class="mono">NetworkSecurityConfig</span> · <a href="#">View in Decompiled › Resources →</a><div class="u">#/scan/${id}/decompiled/resources?q=NetworkSecurityConfig%3Dres%2F8G.xml&amp;hl=1</div></div></div>
+  <div class="lab">Tab lain — xref baru ${pin(4)}</div>
+  <div class="card" style="font-size:.8rem;display:grid;gap:.5rem">
+   <div><b>LLM Findings / Offensive</b> · kolom Class &amp; Function menjadi link: <a href="#" class="mono">AuthRepository.login ↗</a></div>
+   <div><b>Assessment</b> · langkah “Search strings…” menjadi link: <a href="#">Buka Strings dengan filter “frida” →</a> ${pin(5)}</div>
+   <div><b>Light-scan banner</b> · “Decompile fungsi satuan dari <a href="#">Decompiled › Functions</a> atau AI Assistant”.</div></div>
+  <div class="redir">${pin(6)} Link lama tetap jalan: <code>#/scan/&lt;id&gt;/functions|strings|resources|entrypoints</code> → di-redirect ke <code>#/scan/&lt;id&gt;/decompiled/&lt;sub&gt;</code>.</div>`};
+
+const NOTES={
+ functions:['Satu tab <b>Decompiled</b> menggantikan empat tab; bar tab tidak lagi terpotong di 1024px. Angka di pill = jumlah class.','Sub-nav segmented + count; pilihan terakhir diingat per scan dan masuk URL (<code>…/decompiled/functions</code>). Pintasan <kbd>1</kbd>–<kbd>4</kbd>, plus <kbd>Ctrl K</kbd> “Go to…”.','Filter menampilkan <b>path penuh</b> + highlight (tidak lagi <code>A11</code>/<code>Acdd</code> tanpa konteks). Folder punya roll-up severity; chip “Dengan temuan” untuk triage. iOS dikelompokkan (App / Swift modules / Third-party / Native) dan tidak dipotong 500.','Breadcrumb path bisa diklik (loncat ke folder di tree). Posisi scroll tiap tab file diingat; scrollbar horizontal menempel di dasar viewer.','Temuan tampil <b>inline</b> di gutter/baris kode; klik membuka kartunya di Vulnerabilities.','Panel <b>Cross-refs</b> (bisa disembunyikan): entry point, temuan, string, dan resource untuk class aktif. Di mobile menjadi sheet penuh; tombol “☰ Browse” berada di <b>atas</b> viewer.'],
+ strings:['Pencarian <b>live</b> (debounce), tanpa tombol Search — sama seperti Functions &amp; Entry Points. Cakupan kolom ditulis jelas.','Quick filter (URL / secret-like / path / email) — <i>opsional</i>, Fase 3.','Value lebar, monospace, wrap bisa di-toggle; aksi hover: Salin, Tanya AI, Buka class.','Kolom “Where” menggantikan Address/Segment/Label: Android → chip class (xref ke Functions), iOS → alamat + segment. Kolom kosong (Label iOS, <code>jadx:N</code> Android) dibuang.','Pager bernomor + ukuran halaman, sama dengan Entry Points.'],
+ resources:['Facet type berupa segmented dengan count (kalau >6 type → “More ▾”).','Chip asal-lompatan: “Dibuka dari temuan …” + ✕ untuk menghapus filter; baris sasaran di-highlight.','Baris yang dirujuk temuan menampilkan <b>“n temuan →”</b> (xref terbalik ke Vulnerabilities).'],
+ entrypoints:['Filter live + segmented (sama seperti sekarang); grup bisa dilipat.','Baris bisa diklik → Functions (class yang sama); tombol eksplisit “Functions ↗”.','Android — Native: nama <b>library</b> jadi judul (bukan 341 baris <code>Global.&lt;symbol&gt;</code>); satu baris grup per library (≈14), dilipat default.','iOS — “Kode aplikasi” vs “Third-party SDK” (heuristik prefix bundle/modul); SDK dilipat default. Perlu data tambahan, lihat plan.'],
+ xref:['Tile Summary menaut ke <code>decompiled/&lt;sub&gt;</code>; “Classes” dan “Functions” sebelumnya sama-sama ke Functions → digabung jadi satu tile.','Mini-list Entry Points: tiap baris menaut ke class-nya.','“View in Functions/Resources” di Vulnerabilities memakai URL baru yang bisa dibagikan, menggantikan variabel global <code>fnPendingOpen</code>/<code>resPendingHighlight</code>.','LLM Findings, Offensive, dan Assessment mendapat link baru ke Decompiled.','Assessment: langkah pengecekan statis jadi tautan ber-query.','Redirect link lama (bookmark) — tidak ada deep-link eksternal lain: Slack &amp; CI hanya menaut ke <code>#/scan/&lt;id&gt;</code>.']
+};
+
+/* ── render ── */
+function chrome(){const a=A();
+ const tabs=[['Summary'],['Vulnerabilities',a.vuln],['Assessment'],['Decompiled',a.cls,1],['LLM Findings'],['AI Assistant'],['Log'],['Downloads']];
+ return `<div class="nav"><b>Malimite</b><span class="lk">Home</span><span class="lk">Scans</span><span class="lk">Learned Rules</span><span class="lk">Config</span></div>
+  <div class="head"><span class="tile">${a.tile}</span><div><h1>${a.pkg} <span class="st">DONE</span></h1><div class="meta">${a.file} · ${a.name}</div></div></div>
+  <div class="tabs">${tabs.map(([l,n,on])=>`<span class="tab${on?' on':''}">${l}${n?` <span class="n">${n}</span>`:''}${on?pin(1):''}</span>`).join('')}</div>`;
+}
+function sub(){const a=A();
+ const it=[['functions','Functions',a.cls],['strings','Strings',a.str],['resources','Resources',a.nres],['entrypoints','Entry Points',a.ep]];
+ return `<div class="sub"><div class="seg" role="tablist">${it.map(([k,l,n])=>`<button class="${S.sub===k?'on':''}" data-sub="${k}">${l} <span class="n">${n}</span></button>`).join('')}</div>${pin(2)}<span class="sp"></span>
+  <button class="btn">⌕ Go to… <kbd>Ctrl K</kbd></button>${S.sub==='functions'?'<button class="btn dk">↓ All sources (.zip)</button>':''}</div>`;
+}
+function render(){
+ document.body.classList.toggle('nopins',!S.pins);
+ $('#frame').className='frame'+(S.mobile?' mobile':'');
+ $('#frame').innerHTML=S.screen==='dec'?chrome()+sub()+`<div class="work">${V[S.sub]()}</div>`:`<div class="nav"><b>Malimite</b><span class="lk">Dibuka dari tab lain</span></div><div class="work">${XS()}</div>`;
+ const key=S.screen==='dec'?S.sub:'xref';
+ $('#notes').innerHTML=`<h2>Catatan — ${{functions:'Decompiled › Functions',strings:'Decompiled › Strings',resources:'Decompiled › Resources',entrypoints:'Decompiled › Entry Points',xref:'Xref dari tab lain'}[key]}</h2><ul>${NOTES[key].map((t,i)=>`<li>${pin(i+1)}<span>${t}</span></li>`).join('')}</ul><p class="foot">Data contoh disarikan dari scan Krom (Android &amp; iOS native); sebagian nama fiktif. Ini mockup statis — bukan kode produksi.</p>`;
+ const g=(l,items)=>`<span>${l}</span><span class="grp">${items.map(([k,t,on])=>`<button class="${on?'on':''}" data-c="${k}">${t}</button>`).join('')}</span>`;
+ $('#ctl').innerHTML=g('Platform',[['android','Android',S.plat==='android'],['ios','iOS',S.plat==='ios']])+g('Viewport',[['desktop','Desktop',!S.mobile],['mobile','Mobile',S.mobile]])
+  +g('Layar',[['dec','Decompiled',S.screen==='dec'],['xref','Xref dari tab lain',S.screen==='xref']])+g('Anotasi',[['pins1','On',S.pins],['pins0','Off',!S.pins]]);
+}
+const $=s=>document.querySelector(s);
+const REP={fq:['#tlist',treeBody],sq:['#srows',stringsRows],rq:['#rrows',resRows],eq:['#erows',epRows]};
+document.addEventListener('input',e=>{const k=e.target.dataset.in;if(!k)return;S[k]=e.target.value;$(REP[k][0]).innerHTML=REP[k][1]()});
+document.addEventListener('click',e=>{
+ const t=e.target.closest('[data-c],[data-sub],[data-act],[data-chip],[data-rt],[data-et],[data-grp]');if(!t)return;
+ const d=t.dataset;
+ if(d.c){const v=d.c;if(v==='android'||v==='ios')S.plat=v;else if(v==='desktop'||v==='mobile')S.mobile=v==='mobile';else if(v==='dec'||v==='xref')S.screen=v;else S.pins=v==='pins1';S.t1=S.x1=false}
+ else if(d.sub){S.sub=d.sub;S.t1=S.x1=false}
+ else if(d.act){if(d.act==='xr'){if($('#frame').clientWidth>1100)S.xref=!S.xref;else{S.x1=!S.x1;S.t1=false}}else if(d.act==='wrap')S.wrap=!S.wrap;else if(d.act==='t1'){S.t1=!S.t1;S.x1=false}}
+ else if(d.chip)S.chip=d.chip;else if(d.rt)S.rt=d.rt;else if(d.et)S.et=d.et;
+ else if(d.grp){const shut=A().ecol===d.grp?!S.open[d.grp]:S.open[d.grp]===false;S.open[d.grp]=shut}
+ render();
+});
+document.addEventListener('keydown',e=>{if(e.target.matches('input,select'))return;const i='1234'.indexOf(e.key);if(i>=0&&S.screen==='dec'){S.sub=['functions','strings','resources','entrypoints'][i];render()}});
+render();
+</script>
+</body>
+</html>
