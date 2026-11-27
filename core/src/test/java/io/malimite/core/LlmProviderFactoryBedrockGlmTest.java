@@ -79,4 +79,22 @@ class LlmProviderFactoryBedrockGlmTest {
         assertNull(LlmProviderFactory.create(Map.of()));
         assertNull(LlmProviderFactory.create(Map.of("LLM_PROVIDER", "none")));
     }
+
+    @Test void factoryCreatesCustomProviderPerProtocol() {
+        assertInstanceOf(OpenAiProvider.class, LlmProviderFactory.create(Map.of(
+                "LLM_PROVIDER", "custom", "CUSTOM_BASE_URL", "https://gw.io/v1/", "CUSTOM_API_KEY", "k", "LLM_MODEL", "m")));
+        assertInstanceOf(ClaudeProvider.class, LlmProviderFactory.create(Map.of(
+                "LLM_PROVIDER", "custom", "CUSTOM_PROTOCOL", "anthropic", "CUSTOM_BASE_URL", "https://gw.io/v1",
+                "CUSTOM_API_KEY", "k", "LLM_MODEL", "m")));
+    }
+
+    @Test void factoryCustomWithoutBaseUrlThrows() {
+        assertThrows(IllegalStateException.class, () -> LlmProviderFactory.create(Map.of("LLM_PROVIDER", "custom")));
+    }
+
+    @Test void factoryCustomAcceptsHeadersJson() {
+        assertInstanceOf(OpenAiProvider.class, LlmProviderFactory.create(Map.of(
+                "LLM_PROVIDER", "custom", "CUSTOM_BASE_URL", "https://gw.io/v1", "LLM_MODEL", "m",
+                "CUSTOM_HEADERS", "{\"x-opencode-session\":\"{session}\"}", "CUSTOM_SESSION", "scan-1")));
+    }
 }

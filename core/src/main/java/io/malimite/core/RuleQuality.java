@@ -62,14 +62,59 @@ public final class RuleQuality {
 
     /** Static quality gate used when learning and when loading stored rules. */
     public static boolean passes(String regex) {
-        return hasSemanticAnchor(regex) && isBounded(regex);
+        return !hasAddressBoundName(regex) && hasSemanticAnchor(regex) && isBounded(regex);
     }
 
     /** Why {@link #passes} rejects {@code regex}, or null when it passes (for logs). */
     public static String rejection(String regex) {
+        if (hasQuadraticPrefix(regex)) return "unanchored leading wildcard/lookahead: quadratic on large functions (anchor it with \\A)";
+        if (hasAddressBoundName(regex)) return "names a function by its address (sub_/FUN_<hex>): only matches this exact build";
         if (!hasSemanticAnchor(regex)) return "no semantic anchor: only decompiler vocabulary, so it matches generic code";
         if (!isBounded(regex)) return "only short unbounded words (e.g. exec/Runtime) that also match longer identifiers";
         return null;
+    }
+
+    /**
+     * {@code Matcher.find()} retries at every start offset, so a regex that opens with {@code .*} or a lookahead whose
+     * body starts with a wildcard ({@code (?![\s\S]*X)}) rescans the rest of the function each time: O(n^2) on a
+     * 50 KB body, which is what hit the regex step budget on a real Swift app.
+     */
+    private static final Pattern QUADRATIC_PREFIX =
+            Pattern.compile("^(?:\\(\\?[a-z]+\\))?(?:\\(\\?<?!(?:\\[\\\\s\\\\S\\]|\\.)[*+]|(?:\\.|\\[\\\\s\\\\S\\])[*+])");
+
+    public static boolean hasQuadraticPrefix(String regex) {
+        return regex != null && QUADRATIC_PREFIX.matcher(regex).find();
+    }
+
+    /** {@code sub_1001d0b1c}, {@code FUN_1001cf7e8}, or a literal hex prefix such as {@code sub_1001d0[0-9a-f]{3}}. */
+    private static final Pattern ADDRESS_NAME = Pattern.compile("\\b(?:sub|FUN|LAB|DAT)_[0-9a-fA-F]{6,}");
+
+    /** True when the regex hard-codes an auto-generated name, which changes with every build of the binary. */
+    public static boolean hasAddressBoundName(String regex) {
+        return regex != null && ADDRESS_NAME.matcher(regex).find();
+    }
+
+    /**
+     * Tokens only Ghidra's decompiler prints: {@code PTR_s_x}/{@code DAT_}/{@code FUN_} labels, {@code unaffXX}/{@code lVar1}
+     * locals, {@code undefined8}, {@code *(uint *)(...)} casts and Swift {@code Module::Type::method} namespaces. The native
+     * engine emits none of them. {@code param_N} is deliberately absent: native also names parameters that way.
+     */
+    private static final Pattern GHIDRA_TOKEN = Pattern.compile(
+            "PTR_|DAT_|FUN_|unaff_|\\b[a-z]Var\\d|in_stack|\\bin_[xw]\\d|[A-Za-z0-9_]::[A-Za-z_]|\\$\\$closure|\\bundefined\\d?\\b"
+                    // Ghidra prints imports with the Mach-O underscore (_swift_release); the native engine drops it
+                    + "|(?<![A-Za-z0-9])_(?:swift_|objc_|pthread_|dispatch_|os_|CC_|Sec[A-Z]|(?:free|malloc|memcpy|memmove|memset|strcpy|strcat|strlen)\\b)"
+                    + "|\\\\\\*\\\\\\(\\w+ \\\\\\*\\\\\\)");
+
+    /**
+     * True when no alternative of {@code regex} can match without a Ghidra-only token, so the rule cannot fire on
+     * native-engine output. Conservative: the regex is split on every {@code |} (even inside groups), so a rule is only
+     * reported when every piece carries such a token; an uncertain rule stays evaluated.
+     */
+    public static boolean requiresGhidraSyntax(String regex) {
+        if (regex == null) return false;
+        for (String piece : regex.split("\\|", -1))
+            if (!GHIDRA_TOKEN.matcher(piece).find()) return false;
+        return true;
     }
 
     /**

@@ -56,10 +56,15 @@ class UploadRouteTests(unittest.TestCase):
         self.assertEqual(self.post("a.xapk", b"").status_code, 400)
 
     # scanner.create_scan(data, filename, llm_enabled, llm_provider, llm_mode, llm_model,
-    #   llm_api_key, assessment_enabled, ios_light, decompiler, ci_pipeline_url, ci_commit_sha,
-    #   ci_triggered_by) — decompiler is index 9. Pinned by name here (not args[-1]) so adding a
+    #   llm_api_key, assessment_enabled, decompiler, ci_pipeline_url, ci_commit_sha,
+    #   ci_triggered_by) — decompiler is index 8. Pinned by name here (not args[-1]) so adding a
     # new trailing positional parameter (e.g. the ci_* fields) doesn't silently break this.
-    DECOMPILER_ARG_INDEX = 9
+    DECOMPILER_ARG_INDEX = 8
+
+    def test_legacy_ios_light_form_field_selects_the_native_engine(self):
+        self.client.post("/api/v1/scans", files={"file": ("a.ipa", b"PK\x03\x04data")},
+                         data={"llm_provider": "none", "ios_light": "true"})
+        self.assertEqual(self.create.await_args.args[-3], "native")   # ios_engine is followed by the two LLM tuning ints
 
     def test_decompiler_defaults_to_jadx_and_accepts_asc(self):
         for value in ("jadx", "asc"):
@@ -88,7 +93,7 @@ class UploadRouteTests(unittest.TestCase):
         self.assertEqual(main._ACCEPTED_EXTENSIONS, (".ipa", ".apk", ".xapk"))
 
     # scanner.create_scan's trailing three positional args, in order.
-    CI_ARG_INDICES = (10, 11, 12)  # ci_pipeline_url, ci_commit_sha, ci_triggered_by
+    CI_ARG_INDICES = (9, 10, 11)  # ci_pipeline_url, ci_commit_sha, ci_triggered_by
 
     def test_ci_metadata_is_passed_through_when_supplied(self):
         r = self.client.post("/api/v1/scans", files={"file": ("a.apk", b"PK\x03\x04data")},

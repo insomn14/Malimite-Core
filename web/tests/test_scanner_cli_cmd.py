@@ -16,6 +16,30 @@ class CliCmdTests(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("--llm-mode") + 1], "find_vulns")
         self.assertNotIn("--llm", cmd)
 
+    def test_ios_native_engine_flag(self):
+        cmd = scanner._cli_cmd(Path("/tmp/upload.ipa"), Path("/tmp/out"),
+                               {"llm_enabled": False, "llm_provider": "none", "ios_engine": "native"})
+        self.assertEqual(cmd[cmd.index("--ios-engine") + 1], "native")
+
+    def test_default_passes_no_ios_engine(self):
+        plain = scanner._cli_cmd(Path("/tmp/upload.ipa"), Path("/tmp/out"), {"llm_enabled": False, "llm_provider": "none"})
+        self.assertNotIn("--ios-engine", plain)
+
+    def test_llm_tuning_flags_only_with_llm_and_nonzero(self):
+        on = scanner._cli_cmd(Path("/tmp/u.ipa"), Path("/tmp/out"),
+                              {"llm_enabled": True, "llm_provider": "claude-oauth",
+                               "llm_concurrency": 4, "max_enrich_functions": 800})
+        self.assertEqual(on[on.index("--llm-concurrency") + 1], "4")
+        self.assertEqual(on[on.index("--max-enrich-functions") + 1], "800")
+        zero = scanner._cli_cmd(Path("/tmp/u.ipa"), Path("/tmp/out"),
+                                {"llm_enabled": True, "llm_provider": "claude-oauth",
+                                 "llm_concurrency": 0, "max_enrich_functions": 0})
+        self.assertNotIn("--llm-concurrency", zero)
+        self.assertNotIn("--max-enrich-functions", zero)
+        off = scanner._cli_cmd(Path("/tmp/u.ipa"), Path("/tmp/out"),
+                               {"llm_enabled": False, "llm_provider": "none", "llm_concurrency": 4})
+        self.assertNotIn("--llm-concurrency", off)
+
     def test_fast_scan_default_mode(self):
         cmd = scanner._cli_cmd(
             Path("/tmp/upload.apk"),

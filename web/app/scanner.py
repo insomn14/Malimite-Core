@@ -404,11 +404,13 @@ async def create_scan(
     llm_model: str,
     llm_api_key: str = "",
     assessment_enabled: bool = True,
-    ios_light: bool = False,
     decompiler: str = "jadx",
     ci_pipeline_url: Optional[str] = None,
     ci_commit_sha: Optional[str] = None,
     ci_triggered_by: Optional[str] = None,
+    ios_engine: str = "",
+    llm_concurrency: int = 0,
+    max_enrich_functions: int = 0,
 ) -> ScanMeta:
     _check_scan_rate_limit()
     migrate_legacy_scan_dirs()
@@ -435,7 +437,11 @@ async def create_scan(
         "llm_mode": llm_mode,
         "llm_model": llm_model,
         "assessment_enabled": assessment_enabled,
-        "ios_light": ios_light,
+        # iOS only: "native" = Ghidra-free engine (Mach-O + ObjC metadata + lifted pseudocode); anything else = Ghidra.
+        "ios_engine": "native" if ios_engine == "native" else "",
+        # LLM enrichment tuning; 0 = CLI/provider default. Clamped so a request cannot ask for an unbounded burst.
+        "llm_concurrency": max(0, min(int(llm_concurrency or 0), MAX_LLM_CONCURRENCY)),
+        "max_enrich_functions": max(0, min(int(max_enrich_functions or 0), MAX_ENRICH_FUNCTIONS)),
         # Android-only (.apk/.xapk); ignored by the CLI for .ipa. "jadx" (default) or "asc"
         # (Droid ASC — falls back to jadx server-side if the asc/droidasc binary isn't installed).
         "decompiler": decompiler if decompiler in ("jadx", "asc") else "jadx",
@@ -455,6 +461,10 @@ async def create_scan(
 
 # ── CLI argv ──────────────────────────────────────────────────────────────────
 
+MAX_LLM_CONCURRENCY = 16
+MAX_ENRICH_FUNCTIONS = 50_000
+
+
 def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
     """Build malimite-cli argv. Scan scope comes from --llm-mode even when LLM is off."""
     mode = (meta.get("llm_mode") or "summarize").strip() or "summarize"
@@ -468,21 +478,33 @@ def _cli_cmd(ipa_path: Path, out_dir: Path, meta: dict) -> list[str]:
         "--llm-mode", mode,
     ]
     if meta.get("llm_enabled") and meta.get("llm_provider") not in ("none", "", None):
-        cmd += ["--llm", "--llm-provider", meta["llm_provider"]]
-        if meta.get("llm_model"):
-            cmd += ["--llm-model", meta["llm_model"]]
+        custom = _custom_provider(meta["llm_provider"])
+        # the CLI knows custom endpoints as one provider ("custom"); llm_env() hands it the details
+        cmd += ["--llm", "--llm-provider", "custom" if custom else meta["llm_provider"]]
+        model = meta.get("llm_model") or (custom.get("models") or [""])[0] if custom else meta.get("llm_model")
+        if model:
+            cmd += ["--llm-model", model]
+        if meta.get("llm_concurrency"):
+            cmd += ["--llm-concurrency", str(meta["llm_concurrency"])]
+        if meta.get("max_enrich_functions"):
+            cmd += ["--max-enrich-functions", str(meta["max_enrich_functions"])]
     # Default CLI assessment=true; omit the flag when enabled so older picocli
     # jars with inverted --assessment polarity cannot disable the scan.
     if not meta.get("assessment_enabled", True):
         cmd += ["--no-assessment"]
-    if meta.get("ios_light"):
-        cmd += ["--ios-light"]
+    if meta.get("ios_engine") == "native":
+        cmd += ["--ios-engine", "native"]
     # CLI default is jadx; only pass --decompiler when asc was explicitly picked (Android-only —
     # the CLI itself ignores this flag for .ipa). If droidasc isn't installed/configured on this
     # host, MalimiteAnalyzer falls back to jadx server-side and logs why — never a hard failure.
     if meta.get("decompiler") == "asc":
         cmd += ["--decompiler", "asc"]
     return cmd
+
+
+def _custom_provider(provider: str) -> Optional[dict]:
+    from .agent import llm_config  # local import: same cycle as llm_env()
+    return llm_config.get_custom(provider)
 
 
 def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
@@ -531,6 +553,14 @@ def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
         base = fields.get("base_url") or settings.glm_base_url
         if base:
             env["GLM_BASE_URL"] = base
+    elif (custom := _custom_provider(provider)):
+        env["CUSTOM_PROTOCOL"] = custom.get("protocol", "openai")
+        env["CUSTOM_BASE_URL"] = custom["base_url"]
+        if per_req_key or custom.get("api_key"):
+            env["CUSTOM_API_KEY"] = per_req_key or custom["api_key"]
+        hdrs = llm_config.custom_headers(custom)
+        if hdrs:
+            env["CUSTOM_HEADERS"] = json.dumps(hdrs)
     return env
 
 
@@ -564,6 +594,7 @@ async def _run(scan_id: str, ipa_path: Path, out_dir: Path, meta: dict) -> None:
         env = dict(os.environ)
         # Per-request key takes priority over the .env/settings key
         env.update(llm_env(meta.get("llm_provider", "none"), meta.get("_llm_api_key", "")))
+        env["CUSTOM_SESSION"] = scan_id  # custom providers' {session} header placeholder
 
         log_path = out_dir / "analysis.log"
         try:

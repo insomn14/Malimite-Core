@@ -15,7 +15,9 @@ class ScanMeta(BaseModel):
     llm_mode: str = "summarize"
     llm_model: str = ""
     assessment_enabled: bool = True
-    ios_light: bool = False
+    ios_engine: str = ""
+    llm_concurrency: int = 0         # 0 = default (2 for Claude OAuth, 8 for an API key)
+    max_enrich_functions: int = 0    # 0 = default (native engine: 1500; others: no cap)
     decompiler: str = "jadx"   # Android-only: "jadx" (default) or "asc" (Droid ASC)
     # Optional CI/CD provenance — set by pipeline clients (e.g. tools/malimite-ci) so a scan
     # started by automation is distinguishable in the web UI from one uploaded by a reviewer.

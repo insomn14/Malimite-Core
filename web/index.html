@@ -504,6 +504,7 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .fn-drag-handle{flex:0 0 auto;width:6px;cursor:col-resize;background:transparent}
 .fn-drag-handle:hover,.fn-drag-handle.dragging{background:var(--accent)}
 .fn-tree-search{padding:.6rem;border-bottom:1px solid var(--border)}
+.fn-tree-search{display:flex;flex-direction:column;gap:.4rem}
 .fn-tree-search input{width:100%;padding:.4rem .6rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.8rem}
 .fn-tree-list{flex:1;overflow-y:auto;font-size:.8rem;padding:.25rem 0}
 .fn-tree-node{padding:.3rem .5rem;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:.3rem}
@@ -925,6 +926,22 @@ h3.chat-h{font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom
 .chat-chips{display:flex;flex-wrap:wrap;gap:.4rem}
 .chat-input{display:flex;gap:.5rem;margin-top:.75rem;align-items:flex-end;position:relative}
 .chat-input textarea{flex:1;min-width:0;padding:.5rem;border:1px solid var(--border);border-radius:var(--radius);font:inherit;resize:vertical}
+
+/* AI Assistant composer: input card with provider/model pills and a round send button */
+.chat-input{display:block;margin-top:.75rem;padding:.65rem .8rem .55rem;border:1px solid var(--border);border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.04);transition:border-color .12s,box-shadow .12s}
+.chat-input:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+.chat-input textarea{display:block;width:100%;padding:.15rem 0;border:0;border-radius:0;background:transparent;resize:none;min-height:2.6rem}
+.chat-input textarea:focus{outline:none;border:0;box-shadow:none}
+.chat-comp-bar{display:flex;align-items:center;gap:.4rem;margin-top:.35rem;flex-wrap:wrap}
+.chat-comp-bar select,.chat-comp-bar input{height:30px;max-width:190px;border:0;border-radius:8px;background-color:#f3f4f6;font:inherit;font-size:.78rem;color:var(--text);padding:0 .65rem}
+.chat-comp-bar select{appearance:none;-webkit-appearance:none;padding-right:1.7rem;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .5rem center;background-size:13px}
+.chat-comp-bar select:focus,.chat-comp-bar input:focus{outline:none;box-shadow:0 0 0 2px rgba(79,70,229,.25)}
+.chat-icon-btn{width:30px;height:30px;border:0;border-radius:8px;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.chat-icon-btn:hover{background:#f3f4f6;color:var(--text)}
+.chat-send-btn{width:34px;height:34px;border:0;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;transition:opacity .12s}
+.chat-send-btn:hover{filter:brightness(1.08)}
+.chat-send-btn.stop{background:var(--red)}
+.chat-input:has(textarea:placeholder-shown) #chat-send{opacity:.45}
 .chat-note{margin-top:.5rem;font-size:.7rem;color:var(--muted)}
 .chat-attachments{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
 .chat-attach-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .55rem;border:1px solid var(--border);border-radius:999px;font-size:.75rem;background:var(--surface)}
@@ -1148,6 +1165,26 @@ tr:hover td{background:#fafaff}
 .cfgp-note.err{color:#b91c1c}
 .cfgp-note.ok{color:#15803d}
 .cfgp-note.warn{color:#92400e}
+
+/* Custom Model API dialog (Config tab) */
+.cm-modal{background:var(--surface);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.28);width:min(520px,100%);max-height:calc(100vh - 2.5rem);display:flex;flex-direction:column;overflow:hidden}
+.cm-head{display:flex;justify-content:space-between;gap:.8rem;padding:1.2rem 1.4rem .4rem}
+.cm-head h3{margin:0;font-size:1.15rem}
+.cm-head p{margin:.2rem 0 0;font-size:.8rem;color:var(--muted)}
+.cm-body{padding:.4rem 1.4rem 1rem;overflow:auto;display:flex;flex-direction:column;gap:.75rem}
+.cm-tabs{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
+.cm-tab{display:flex;align-items:center;justify-content:center;gap:.4rem;height:38px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit;font-size:.82rem;font-weight:650;cursor:pointer;color:var(--text)}
+.cm-tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.cm-body label{display:flex;flex-direction:column;gap:.25rem;font-size:.8rem;font-weight:650}
+.cm-body .cm-hint{font-weight:400;font-size:.72rem;color:var(--muted)}
+.cm-keyrow{position:relative}.cm-keyrow .ctl{padding-right:2.4rem}
+.cm-eye{position:absolute;right:.4rem;top:50%;transform:translateY(-50%);border:0;background:none;cursor:pointer;color:var(--muted);display:flex}
+.cm-models{display:flex;flex-direction:column;gap:.4rem;max-height:190px;overflow:auto}
+.cm-model-row{display:flex;gap:.4rem}
+.cm-adv{border:1px solid var(--border);border-radius:10px;padding:.15rem .8rem}
+.cm-adv summary{cursor:pointer;font-size:.82rem;font-weight:650;padding:.55rem 0}
+.cm-adv-body{display:flex;flex-direction:column;gap:.75rem;padding:.2rem 0 .8rem}
+.cm-foot{display:flex;justify-content:flex-end;gap:.5rem;padding:.8rem 1.4rem 1.1rem;border-top:1px solid var(--border)}
 @media(max-width:600px){.cfgp-grid{grid-template-columns:1fr}}
 </style>
 <!-- Vendored, self-hosted (not a CDN) so the Functions tab's syntax highlighting works offline — see THIRD_PARTY_NOTICES.md -->
@@ -1267,7 +1304,19 @@ const LLM_PROVIDERS = [
   {value:'glm',          label:'Zai GLM',      keyPh:'…'},
 ];
 function providerNeedsKey(p) { return p === 'openai' || p === 'claude' || p === 'deepseek' || p === 'bedrock' || p === 'glm'; }
-function providerLabel(p) { return (LLM_PROVIDERS.find(x => x.value === p) || {label: p}).label; }
+/** User-defined endpoints (Config tab → Custom Model API), as reported by GET /config/providers. */
+function customProviders() { return (_configCache?.providers || []).filter(p => p.custom); }
+/** Built-in providers plus the user's custom ones, in the shape LLM_PROVIDERS entries have. */
+function allProviders() {
+  return LLM_PROVIDERS.concat(customProviders().map(p => ({value: p.provider, label: p.name, custom: true})));
+}
+/** Model dropdown entries for a provider: static catalog, or a custom provider's own model list. */
+function modelCatalog(p) {
+  const c = customProviders().find(x => x.provider === p);
+  if (c) return c.models.length ? c.models.map(m => ({value: m, label: m})) : undefined;
+  return LLM_MODEL_CATALOG[p === 'claude-oauth' ? 'claude' : p];
+}
+function providerLabel(p) { return (allProviders().find(x => x.value === p) || {label: p}).label; }
 const LLM_KEY_NOTE = 'Your API key is sent only to this server to authenticate with the provider. It is never stored.';
 
 /* ── Config tab provider metadata ──────────────────────────────────────────── */
@@ -1309,7 +1358,7 @@ window.onProviderChange = function(keepModel) {
   const modelEl = document.getElementById('llm-model');
   const modelSelect = document.getElementById('llm-model-select');
   if (modelEl && modelSelect) {
-    const catalog = LLM_MODEL_CATALOG[provider === 'claude-oauth' ? 'claude' : provider];
+    const catalog = modelCatalog(provider);
     const want = typeof keepModel === 'string' ? keepModel : '';
     if (catalog) {
       // Bare model IDs fit the compact cell; the descriptive label stays available as a tooltip.
@@ -1376,7 +1425,7 @@ window.onChatProviderChange = function() {
   const modelSelect = document.getElementById('chat-model-select');
   const modelEl = document.getElementById('chat-model');
   if (!modelSelect || !modelEl) return;
-  const catalog = LLM_MODEL_CATALOG[provider === 'claude-oauth' ? 'claude' : provider];
+  const catalog = modelCatalog(provider);
   if (catalog) {
     modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('')
       + `<option value="${LLM_MODEL_CUSTOM}">Custom (type model name)…</option>`;
@@ -1467,14 +1516,14 @@ function updateRunSummary() {
   const model = currentLlmModel();
   const assess = document.getElementById('assessment-enabled')?.checked !== false;
   const asc = document.getElementById('decompiler-asc');
-  const light = document.getElementById('ios-light');
+  const native = document.getElementById('ios-native');
   const out = [`<span class="chip">${ico(m.icon)} ${esc(m.label)}</span>`];
   out.push(llmOn
     ? `<span class="chip">${ico('sparkles')} ${esc(providerLabel(provider))}${model ? ' · ' + esc(model) : ''}</span>`
     : `<span class="chip off">${ico('sparkles')} No LLM</span>`);
   out.push(`<span class="chip${assess ? '' : ' off'}">${ico('shield')} Assessment ${assess ? 'on' : 'off'}</span>`);
   if (asc) out.push(`<span class="chip">${ico('cpu')} ${asc.checked ? 'Droid ASC' : 'JADX'}</span>`);
-  if (light) out.push(`<span class="chip${light.checked ? '' : ' off'}">${ico('feather')} Light scan ${light.checked ? 'on' : 'off'}</span>`);
+  if (native) out.push(`<span class="chip${native.checked ? '' : ' off'}">${ico('cpu')} Native engine ${native.checked ? 'on' : 'off'}</span>`);
   chips.innerHTML = out.join('');
 }
 
@@ -1721,6 +1770,11 @@ const ICONS = {
   history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  stop: '<rect width="12" height="12" x="6" y="6" rx="2"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   circleCheck: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
   circleX: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
   clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
@@ -1790,7 +1844,7 @@ function renderDropZoneHtml() {
     (so the form explains WHERE to go, not just that the option vanished) but are disabled. */
 function configuredProviderValues(configData) {
   const set = new Set();
-  for (const p of (configData?.providers || [])) if (p.configured) set.add(p.provider);
+  for (const p of (configData?.providers || [])) if (cfgpAdded(configData, p.provider)) set.add(p.provider);
   return set;
 }
 
@@ -1805,9 +1859,9 @@ function configuredProviderValues(configData) {
     silently picked. */
 function providerDropdownOptionsHtml(configData, selected, defaultLabel) {
   const configuredSet = configuredProviderValues(configData);
-  const known = selected && LLM_PROVIDERS.some(p => p.value === selected) && configuredSet.has(selected);
+  const known = selected && allProviders().some(p => p.value === selected) && configuredSet.has(selected);
   const opts = [`<option value=""${known ? '' : ' selected'}>${esc(defaultLabel || 'Scan default')}</option>`];
-  for (const p of LLM_PROVIDERS) {
+  for (const p of allProviders()) {
     if (!configuredSet.has(p.value)) continue;
     opts.push(`<option value="${escAttr(p.value)}"${selected === p.value ? ' selected' : ''}>${esc(p.label)}</option>`);
   }
@@ -1821,11 +1875,12 @@ function renderScanOptionsHtml(file, prefs, configData) {
   const configuredSet = configuredProviderValues(configData);
   const anyConfigured = configuredSet.size > 0;
   const provider = configuredSet.has(prefs.provider) ? prefs.provider
-    : (LLM_PROVIDERS.find(p => configuredSet.has(p.value))?.value || prefs.provider || '');
+    : (allProviders().find(p => configuredSet.has(p.value))?.value || prefs.provider || '');
   const modeOpts = Object.entries(SCAN_MODES)
     .map(([v, m]) => `<option value="${v}"${v === mode ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
-  const providerOpts = LLM_PROVIDERS
-    .map(p => `<option value="${p.value}"${p.value === provider ? ' selected' : ''}${configuredSet.has(p.value) ? '' : ' disabled'}>${esc(p.label)}${configuredSet.has(p.value) ? '' : ' — not connected'}</option>`).join('');
+  // Same list as the Config tab's cards: connected providers only (add more there).
+  const providerOpts = allProviders().filter(p => configuredSet.has(p.value))
+    .map(p => `<option value="${escAttr(p.value)}"${p.value === provider ? ' selected' : ''}>${esc(p.label)}</option>`).join('');
   const useAsc = prefs.decompiler === 'asc';
   return `
   <fieldset class="plain" id="scan-form">
@@ -1879,6 +1934,12 @@ function renderScanOptionsHtml(file, prefs, configData) {
                 <select id="llm-model-select" class="ctl" hidden></select>
                 <input id="llm-model" class="ctl" type="text" autocomplete="off" placeholder="empty = default"/>
               </span></label>
+            <label class="field"><span class="field-label">Parallel calls</span>
+              <input id="llm-concurrency" class="ctl" type="number" min="0" max="16" step="1" inputmode="numeric" placeholder="default"
+                title="Parallel LLM calls (default 2 for Claude OAuth, 8 for an API key). Higher is faster but spends the shared rate limit sooner."/></label>
+            <label class="field"><span class="field-label">Max functions</span>
+              <input id="llm-max-functions" class="ctl" type="number" min="0" max="50000" step="1" inputmode="numeric" placeholder="default"
+                title="Cap on functions sent to the LLM, largest first (default: 1500 on the native iOS engine, no cap elsewhere)."/></label>
           </div>
           <div class="cfg-note" id="llm-note">${ico('info')}<span>Using the provider connected in <a href="#/config">Config</a>.</span></div>
         </div>` : `
@@ -1902,12 +1963,13 @@ function renderScanOptionsHtml(file, prefs, configData) {
       <section class="cfg-card">
         <div class="toggle-row">
           <div style="flex:1;min-width:0">
-            <div class="cfg-head"><span class="step-num">4</span><span class="cfg-title">${ico('feather')} iOS Light Scan</span></div>
-            <p class="cfg-desc">Skip Ghidra: strings, imported symbols and plist only — seconds, little RAM. For very large .ipa files
-              that run out of memory; rules that need pseudocode are reported as not evaluated.</p>
+            <div class="cfg-head"><span class="step-num">4</span><span class="cfg-title">${ico('cpu')} iOS Native Engine</span></div>
+            <p class="cfg-desc">Skip Ghidra but still produce pseudocode: a built-in Mach-O / Objective-C engine names imports, selectors
+              and string literals in each function — seconds and under 1&nbsp;GB, even for very large .ipa files. Pseudocode is lifted
+              (registers and gotos remain); rules written for Ghidra syntax are skipped and listed in <code>scan.json</code>.</p>
           </div>
-          <label class="switch"><input type="checkbox" id="ios-light" role="switch"
-            aria-label="Enable iOS light scan"${prefs.iosLight ? ' checked' : ''}/><span class="switch-track"></span></label>
+          <label class="switch"><input type="checkbox" id="ios-native" role="switch"
+            aria-label="Enable iOS native engine"${prefs.iosNative ? ' checked' : ''}/><span class="switch-track"></span></label>
         </div>
       </section>` : `
       <section class="cfg-card">
@@ -2118,7 +2180,7 @@ route('home', async function() {
       model: currentLlmModel(),
       assessment: $('#assessment-enabled').checked,
       decompiler: $('#decompiler-asc')?.checked ? 'asc' : (loadScanPrefs().decompiler || 'jadx'),
-      iosLight: $('#ios-light') ? $('#ios-light').checked : !!loadScanPrefs().iosLight,
+      iosNative: $('#ios-native') ? $('#ios-native').checked : !!loadScanPrefs().iosNative,
     };
   }
 
@@ -2164,8 +2226,12 @@ route('home', async function() {
     fd.append('llm_provider', provider);
     fd.append('llm_mode', mode);
     fd.append('llm_model', llmOn ? currentLlmModel() : '');
+    if (llmOn) {
+      fd.append('llm_concurrency', String(Math.max(0, parseInt($('#llm-concurrency')?.value, 10) || 0)));
+      fd.append('max_enrich_functions', String(Math.max(0, parseInt($('#llm-max-functions')?.value, 10) || 0)));
+    }
     fd.append('assessment_enabled', $('#assessment-enabled')?.checked !== false);
-    fd.append('ios_light', !!$('#ios-light')?.checked);
+    fd.append('ios_engine', $('#ios-native')?.checked ? 'native' : '');
     const ascEl = $('#decompiler-asc');
     fd.append('decompiler', (ascEl && ascEl.checked) ? 'asc' : 'jadx');
 
@@ -2238,7 +2304,7 @@ route('home', async function() {
     $('#llm-provider')?.addEventListener('change', () => onProviderChange());
     $('#llm-model-select')?.addEventListener('change', onModelSelectChange);
     $('#llm-model')?.addEventListener('input', updateRunSummary);
-    $$('#scan-form input[name=decompiler], #assessment-enabled, #ios-light').forEach(el => el.addEventListener('change', updateRunSummary));
+    $$('#scan-form input[name=decompiler], #assessment-enabled, #ios-native').forEach(el => el.addEventListener('change', updateRunSummary));
     if ($('#llm-provider')) onProviderChange(prefs.provider === $('#llm-provider').value ? (prefs.model || '') : '');
     onLlmToggle(true);
     onLlmModeChange();
@@ -3054,8 +3120,19 @@ function renderConfigProviderCard(data, provider) {
     </div>`;
 }
 
+/** A built-in provider counts as "added" once it is connected — except Ollama, whose always-on
+    env default does not mean the user ever added it. */
+function cfgpAdded(data, p) {
+  const st = configProviderStatus(data, p);
+  return st.configured && !(p === 'ollama' && st.source === 'env');
+}
+
 function renderConfigPage(data) {
-  const cards = CONFIG_PROVIDER_ORDER.map(p => renderConfigProviderCard(data, p)).join('');
+  // Only providers the user has added (or the server's .env already provides) get a card; the rest
+  // are added from the "Add LLM Provider" dialog. Claude OAuth keeps its own card (login flow);
+  // Ollama's always-on default is not "added" until saved from the dialog.
+  const cards = CONFIG_PROVIDER_ORDER.filter(p => p === 'claude-oauth' || cfgpAdded(data, p)).map(p => renderConfigProviderCard(data, p)).join('')
+    + (data.providers || []).filter(p => p.custom).map(p => renderCustomProviderCard(data, p)).join('');
   return `
     <div class="page-wrap" id="config-page">
       <div class="cfgp-intro">
@@ -3070,6 +3147,7 @@ function renderConfigPage(data) {
           <h2>Your LLM Providers</h2>
           <p>Manage connected providers, set a default, and test connections.</p>
         </div>
+        <button type="button" class="btn btn-primary" onclick="openCustomProvider()">${ico('plus')} Add LLM Provider</button>
       </div>
       <div class="cfgp-grid">${cards}</div>
     </div>`;
@@ -3146,6 +3224,253 @@ window.setConfigDefault = async function(provider) {
   } catch (e) {
     alert('Could not set default: ' + (e.message || e));
   }
+};
+
+
+/* ── Custom Model API providers ───────────────────────────────────────────────
+   User-defined OpenAI- or Anthropic-compatible endpoints (stored server-side, see
+   llm_config.set_custom). The id becomes a provider name everywhere a built-in one works. */
+const CM_PRESETS = [
+  {id:'opencode', name:'OpenCode Go', url:'https://opencode.ai/inference/go/v1', headers:'x-opencode-session: {session}'},
+  {id:'openrouter', name:'OpenRouter', url:'https://openrouter.ai/api/v1'},
+  {id:'groq', name:'Groq', url:'https://api.groq.com/openai/v1'},
+  {id:'together', name:'Together AI', url:'https://api.together.xyz/v1'},
+  {id:'mistral', name:'Mistral', url:'https://api.mistral.ai/v1'},
+  {id:'fireworks', name:'Fireworks', url:'https://api.fireworks.ai/inference/v1'},
+  {id:'xai', name:'xAI', url:'https://api.x.ai/v1'},
+  {id:'gemini', name:'Google Gemini', url:'https://generativelanguage.googleapis.com/v1beta/openai'},
+  {id:'lmstudio', name:'LM Studio (local)', url:'http://localhost:1234/v1'},
+  {id:'vllm', name:'vLLM (local)', url:'http://localhost:8000/v1'},
+];
+let _cm = null;
+
+function renderCustomProviderCard(data, st) {
+  const isDefault = data.default_provider === st.provider;
+  const proto = st.protocol === 'anthropic' ? 'Anthropic Messages' : 'OpenAI Chat Completions';
+  return `
+    <div class="cfgp-card is-configured" id="cfgp-card-${escAttr(st.provider)}">
+      <div class="cfgp-card-top">
+        <div class="cfgp-icon">${esc((st.name || st.provider).slice(0, 2).toUpperCase())}</div>
+        <div class="cfgp-main">
+          <div class="cfgp-name">${esc(st.name)} ${cfgpBadgeHtml(st)} ${isDefault ? '<span class="cfgp-badge default">Default</span>' : ''}</div>
+          <div class="cfgp-desc">Custom endpoint · ${esc(proto)}</div>
+          <div class="cfgp-meta">
+            <span class="cfgp-kv">id: <code>${esc(st.provider)}</code></span>
+            <span class="cfgp-kv">base url: <code>${esc(st.fields.base_url || '')}</code></span>
+            ${st.masked.api_key ? `<span class="cfgp-kv">api key: <code>${esc(st.masked.api_key)}</code></span>` : ''}
+            <span class="cfgp-kv">models: ${st.models.length ? st.models.map(m => `<code>${esc(m)}</code>`).join(' ') : '—'}</span>
+          </div>
+        </div>
+      </div>
+      <div class="cfgp-actions">
+        <button type="button" class="btn btn-outline btn-sm" onclick="openCustomProvider('${escAttr(st.provider)}')">${ico('settings')} Edit</button>
+        ${isDefault ? '' : `<button type="button" class="btn btn-ghost btn-sm" onclick="setConfigDefault('${escAttr(st.provider)}')">Set as default</button>`}
+        <button type="button" class="btn btn-ghost btn-sm" onclick="deleteCustomProvider('${escAttr(st.provider)}')">${ico('trash')} Remove</button>
+      </div>
+    </div>`;
+}
+
+const CM_BUILTIN = ['openai', 'claude', 'deepseek', 'glm', 'bedrock', 'ollama'];
+// fields shown up front for a built-in provider; the rest go under "Customized settings"
+const CM_TOP_FIELDS = ['api_key', 'access_key_id', 'secret_access_key'];
+
+window.openCustomProvider = function(editId) {
+  const st = editId ? (_configCache?.providers || []).find(p => p.provider === editId) : null;
+  const base = {bf: {}, sel: 'openai', adv: false, msg: '', ok: false, busy: false, force: false, showKey: false};
+  _cm = st
+    ? {...base, tab: 'custom', editing: true, id: st.provider, name: st.name, protocol: st.protocol, base_url: st.fields.base_url || '',
+       api_key: '', hasKey: !!st.masked.api_key, models: [...st.models],
+       headers: Object.entries(st.headers || {}).map(([k, v]) => `${k}: ${v}`).join('\n')}
+    : {...base, tab: 'third', editing: false, id: '', name: '', protocol: 'openai', base_url: '', api_key: '', hasKey: false,
+       models: [''], headers: ''};
+  renderCustomModal();
+};
+
+function cmCapture() {
+  if (!_cm) return;
+  const el = id => document.getElementById(id);
+  const set = (id, k, f = x => x) => { const e = el(id); if (e) _cm[k] = f(e.value); };
+  set('cm-id', 'id', x => x.trim().toLowerCase()); set('cm-name', 'name', x => x.trim());
+  set('cm-url', 'base_url', x => x.trim()); set('cm-proto', 'protocol'); set('cm-key', 'api_key', x => x.trim());
+  set('cm-headers', 'headers');
+  if (el('cm-id')) _cm.models = [...document.querySelectorAll('.cm-model-in')].map(i => i.value.trim());
+  document.querySelectorAll('.cm-bf').forEach(i => { _cm.bf[i.dataset.key] = i.value.trim(); });
+}
+
+const cmIsBuiltin = () => _cm.tab === 'third' && !_cm.sel.startsWith('p:');
+
+function cmKeyHtml(m) {
+  return `<label>API key<span class="cm-keyrow"><input class="ctl" id="cm-key" type="${m.showKey ? 'text' : 'password'}" value="${escAttr(m.api_key)}"
+      placeholder="${m.hasKey ? 'Leave blank to keep the saved key' : 'Optional for keyless gateways'}" autocomplete="off" spellcheck="false"/>
+    <button type="button" class="cm-eye" onclick="cmToggleKey()" aria-label="Show or hide key">${ico(m.showKey ? 'eyeOff' : 'eye')}</button></span>
+    <span class="cm-hint">${esc(LLM_KEY_NOTE.replace('It is never stored.', 'It is stored only on this server.'))}</span></label>`;
+}
+
+function cmEndpointHtml(m) {
+  return `<label>Provider ID<input class="ctl" id="cm-id" value="${escAttr(m.id)}" ${m.editing ? 'readonly' : ''} placeholder="my-provider" autocomplete="off" spellcheck="false"/>
+      <span class="cm-hint">a-z, 0-9, “-” or “_”. Used as the provider name in scans, the AI Assistant and AI Fix.</span></label>
+    <label>Display name<input class="ctl" id="cm-name" value="${escAttr(m.name)}" placeholder="My Provider" autocomplete="off"/></label>
+    <label>Base URL<input class="ctl" id="cm-url" value="${escAttr(m.base_url)}" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false"/>
+      <span class="cm-hint">Include the version path. <code>/chat/completions</code> (OpenAI) or <code>/messages</code> (Anthropic) is appended.</span></label>
+    <label>API protocol<select class="ctl" id="cm-proto">
+      <option value="openai"${m.protocol === 'openai' ? ' selected' : ''}>OpenAI Chat Completions</option>
+      <option value="anthropic"${m.protocol === 'anthropic' ? ' selected' : ''}>Anthropic Messages</option></select></label>`;
+}
+
+function cmModelsHeadersHtml(m) {
+  return `<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem">
+      <b style="font-size:.8rem">Models</b>
+      <button type="button" class="btn btn-outline btn-sm" id="cm-fetch" onclick="cmFetchModels()">${ico('refresh')} Fetch models</button></div>
+      <div class="cm-models">${m.models.map((x, i) => `<div class="cm-model-row">
+        <input class="ctl cm-model-in" value="${escAttr(x)}" placeholder="model-id" autocomplete="off" spellcheck="false"/>
+        <button type="button" class="btn btn-outline btn-sm" onclick="cmRemoveModel(${i})" aria-label="Remove model">${ico('trash')}</button></div>`).join('')}</div>
+      <div class="cm-hint" style="margin:.35rem 0">You can also add model IDs manually if discovery is unavailable. Left empty, the models the endpoint lists are used.</div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="cmAddModel()">${ico('plus')} Add model</button></div>
+    <label>Extra headers (optional)<textarea class="ctl" id="cm-headers" rows="2" style="height:auto;padding:.5rem .75rem;font-family:monospace;font-size:.78rem" placeholder="x-custom-header: value" spellcheck="false">${esc(m.headers)}</textarea>
+      <span class="cm-hint">One <code>Name: value</code> per line. <code>{session}</code> becomes a stable per-conversation id. Put secrets in the API key field, not here.</span></label>`;
+}
+
+const cmAdv = (m, inner) => `<details class="cm-adv" ${m.adv ? 'open' : ''} ontoggle="_cm && (_cm.adv = this.open)"><summary>Customized settings</summary><div class="cm-adv-body">${inner}</div></details>`;
+
+function cmBodyHtml(m) {
+  if (m.tab === 'custom') return cmEndpointHtml(m) + cmKeyHtml(m) + cmModelsHeadersHtml(m);
+  const opts = `<optgroup label="Built-in">${CM_BUILTIN.map(p => `<option value="${p}"${m.sel === p ? ' selected' : ''}>${esc(CONFIG_PROVIDER_META[p].name)}${cfgpAdded(_configCache, p) ? ' ✓' : ''}</option>`).join('')}</optgroup>`
+    + `<optgroup label="OpenAI-compatible">${CM_PRESETS.map(p => `<option value="p:${p.id}"${m.sel === 'p:' + p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</optgroup>`;
+  const pick = `<label>Provider<select class="ctl" id="cm-sel" onchange="cmSelect(this.value)">${opts}</select></label>`;
+  if (!cmIsBuiltin()) return pick + cmKeyHtml(m) + cmAdv(m, cmEndpointHtml(m) + cmModelsHeadersHtml(m));
+  const meta = CONFIG_PROVIDER_META[m.sel];
+  const field = f => `<label>${esc(f.label)}<input class="ctl cm-bf" data-key="${f.key}" type="${f.type}" value="${escAttr(m.bf[f.key] || '')}" placeholder="${escAttr(f.placeholder)}" autocomplete="off" spellcheck="false"/></label>`;
+  const top = meta.fields.filter(f => CM_TOP_FIELDS.includes(f.key)), rest = meta.fields.filter(f => !CM_TOP_FIELDS.includes(f.key));
+  return pick + `<p class="cm-hint" style="margin:0">${esc(meta.desc)}</p>` + top.map(field).join('')
+    + (top.length ? `<div class="cm-hint">${esc(LLM_KEY_NOTE.replace('It is never stored.', 'It is stored only on this server.'))}</div>` : '')
+    + (rest.length ? cmAdv(m, rest.map(field).join('')) : '');
+}
+
+function renderCustomModal() {
+  let ov = document.getElementById('cm-overlay');
+  if (!_cm) { ov?.remove(); return; }
+  if (!ov) {
+    ov = document.createElement('div'); ov.id = 'cm-overlay'; ov.className = 'ae-overlay';
+    ov.addEventListener('mousedown', e => { if (e.target === ov) closeCustomProvider(); });
+    document.body.appendChild(ov);
+  }
+  const m = _cm;
+  ov.innerHTML = `
+    <div class="cm-modal" role="dialog" aria-modal="true" aria-labelledby="cm-title">
+      <div class="cm-head">
+        <div><h3 id="cm-title">${m.editing ? 'Edit custom model provider' : 'Add LLM provider'}</h3>
+          <p>${m.tab === 'third' ? 'Pick a provider from the catalog and enter its API key.' : 'Connect any OpenAI-compatible or Anthropic-compatible endpoint.'}</p></div>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closeCustomProvider()" aria-label="Close">${ico('x')}</button>
+      </div>
+      <div class="cm-body">
+        ${m.editing ? '' : `<div class="cm-tabs">
+          <button type="button" class="cm-tab${m.tab === 'third' ? ' on' : ''}" onclick="cmTab('third')">${ico('layers')} Third-party model provider</button>
+          <button type="button" class="cm-tab${m.tab === 'custom' ? ' on' : ''}" onclick="cmTab('custom')">${ico('code')} Custom model API</button>
+        </div>`}
+        ${cmBodyHtml(m)}
+        <div class="cfgp-note ${m.msg ? (m.ok ? 'ok' : 'err') : ''}" id="cm-msg" role="status">${esc(m.msg)}</div>
+      </div>
+      <div class="cm-foot">
+        <button type="button" class="btn btn-outline" onclick="closeCustomProvider()">Cancel</button>
+        ${m.force ? `<button type="button" class="btn btn-outline" onclick="cmSave(true)">Save anyway</button>` : ''}
+        <button type="button" class="btn btn-primary" id="cm-save" onclick="cmSave(false)" ${m.busy ? 'disabled' : ''}>Test connection &amp; save</button>
+      </div>
+    </div>`;
+}
+
+window.closeCustomProvider = function() { _cm = null; renderCustomModal(); };
+window.cmTab = function(t) { cmCapture(); _cm.tab = t; _cm.msg = ''; _cm.force = false; renderCustomModal(); };
+window.cmSelect = function(v) {
+  cmCapture();
+  _cm.sel = v; _cm.msg = ''; _cm.force = false;
+  const p = CM_PRESETS.find(x => 'p:' + x.id === v);
+  if (p) Object.assign(_cm, {id: p.id, name: p.name, base_url: p.url, protocol: 'openai', headers: p.headers || '', models: ['']});
+  renderCustomModal();
+};
+window.cmToggleKey = function() { cmCapture(); _cm.showKey = !_cm.showKey; renderCustomModal(); };
+window.cmAddModel = function() { cmCapture(); _cm.models.push(''); renderCustomModal(); document.querySelector('.cm-model-in:last-of-type')?.focus(); };
+window.cmRemoveModel = function(i) { cmCapture(); _cm.models.splice(i, 1); renderCustomModal(); };
+
+function cmHeaders() {
+  const h = {};
+  for (const line of (_cm.headers || '').split('\n')) {
+    const i = line.indexOf(':');
+    if (i > 0 && line.slice(0, i).trim()) h[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  return h;
+}
+
+async function cmProbe() {
+  return api('/config/custom-providers/probe', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({protocol: _cm.protocol, base_url: _cm.base_url, api_key: _cm.api_key, headers: cmHeaders(), provider_id: _cm.editing ? _cm.id : ''})});
+}
+
+window.cmFetchModels = async function() {
+  cmCapture();
+  if (!_cm.base_url) { _cm.msg = 'Enter the Base URL first.'; _cm.ok = false; _cm.adv = true; renderCustomModal(); return; }
+  const btn = document.getElementById('cm-fetch');
+  if (btn) { btn.disabled = true; btn.innerHTML = ico('loader', 'ico-spin') + ' Fetching…'; }
+  try {
+    const r = await cmProbe();
+    cmCapture();
+    if (r.ok) _cm.models = [...new Set([..._cm.models.filter(Boolean), ...r.models])].slice(0, 500);
+    _cm.msg = r.message; _cm.ok = r.ok;
+  } catch (e) { _cm.msg = e.message || String(e); _cm.ok = false; }
+  renderCustomModal();
+};
+
+async function cmFinish() {
+  _cm = null; renderCustomModal();
+  await fetchConfigProviders();
+  render(renderConfigPage(_configCache));
+}
+
+async function cmSaveBuiltin(force) {
+  const p = _cm.sel, meta = CONFIG_PROVIDER_META[p], body = {};
+  for (const f of meta.fields) body[f.key] = _cm.bf[f.key] || '';
+  if (p === 'ollama' && !body.base_url) body.base_url = 'http://localhost:11434';
+  if (p !== 'ollama' && !CM_TOP_FIELDS.some(k => body[k])) {
+    _cm.msg = `Enter the ${meta.fields.find(f => CM_TOP_FIELDS.includes(f.key)).label}.`; _cm.ok = false; renderCustomModal(); return;
+  }
+  _cm.busy = true; _cm.force = false; _cm.ok = true; _cm.msg = force || p === 'ollama' ? '' : 'Testing connection…'; renderCustomModal();
+  try {
+    if (!force && p !== 'ollama') {   // /llm/test cannot probe a typed Ollama URL, so Ollama saves directly
+      const r = await api('/llm/test', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({provider: p, api_key: body.api_key || '', access_key_id: body.access_key_id || '',
+                              secret_access_key: body.secret_access_key || '', region: body.region || ''})});
+      if (!r.ok) { _cm.busy = false; _cm.force = true; _cm.ok = false; _cm.msg = r.message; renderCustomModal(); return; }
+    }
+    await api(`/config/providers/${p}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    await cmFinish();
+  } catch (e) { _cm.busy = false; _cm.ok = false; _cm.msg = e.message || String(e); renderCustomModal(); }
+}
+
+window.cmSave = async function(force) {
+  cmCapture();
+  if (cmIsBuiltin()) return cmSaveBuiltin(force);
+  if (!_cm.id || !_cm.base_url) { _cm.msg = 'Provider ID and Base URL are required.'; _cm.ok = false; _cm.adv = true; renderCustomModal(); return; }
+  _cm.busy = true; _cm.force = false; _cm.msg = force ? '' : 'Testing connection…'; _cm.ok = true; renderCustomModal();
+  try {
+    let models = _cm.models.filter(Boolean);
+    if (!force) {
+      const r = await cmProbe();
+      if (!r.ok) { _cm.busy = false; _cm.force = true; _cm.ok = false; _cm.msg = r.message; renderCustomModal(); return; }
+      if (!models.length) models = r.models.slice(0, 100);   // nothing typed: use what the endpoint lists
+    }
+    await api(`/config/custom-providers/${encodeURIComponent(_cm.id)}`, {method: 'PUT', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: _cm.name, protocol: _cm.protocol, base_url: _cm.base_url, api_key: _cm.api_key,
+                            models, headers: cmHeaders()})});
+    await cmFinish();
+  } catch (e) { _cm.busy = false; _cm.ok = false; _cm.msg = e.message || String(e); renderCustomModal(); }
+};
+
+window.deleteCustomProvider = async function(pid) {
+  if (!confirm(`Remove the custom provider "${pid}"? Scans that used it will need another provider.`)) return;
+  try {
+    await api(`/config/providers/${encodeURIComponent(pid)}`, {method: 'DELETE'});
+    await fetchConfigProviders();
+    render(renderConfigPage(_configCache));
+  } catch (e) { alert('Remove failed: ' + (e.message || e)); }
 };
 
 /* Config page's own OAuth status refresh — same backend call as the old upload-form widget
@@ -3502,9 +3827,13 @@ function chatProgressStart() {
   el.setAttribute('aria-live', 'polite');
   el.innerHTML = '<span class="sp" aria-hidden="true"></span><span class="lbl"></span><span class="sub"></span><span class="t"></span>';
   const t0 = Date.now();
-  let phase = 'thinking', toolName = '', timer = 0;
+  let phase = 'thinking', toolName = '', timer = 0, stopped = false;
   const paint = () => {
-    if (!el.isConnected) { clearInterval(timer); return; }
+    if (stopped) { clearInterval(timer); return; }
+    // The history re-render (chatRenderHistory) empties #chat-msgs, which used to take the pill with it
+    // for good while the stream was still running. Put it back, and keep it below the newest block.
+    const b = document.getElementById('chat-msgs');
+    if (b && b.lastElementChild !== el) b.appendChild(el);
     const writing = phase === 'writing';
     el.querySelector('.lbl').textContent = phase === 'tool' ? 'Running tool' : phase === 'confirm' ? 'Waiting for confirmation' : writing ? 'Writing answer' : 'Thinking';
     el.querySelector('.sub').textContent = (phase === 'tool' || phase === 'confirm') ? (toolName || '') : '';
@@ -3526,7 +3855,7 @@ function chatProgressStart() {
         b.scrollTop = b.scrollHeight;
       }
     },
-    stop() { clearInterval(timer); timer = 0; if (el.isConnected) el.remove(); },
+    stop() { stopped = true; clearInterval(timer); timer = 0; if (el.isConnected) el.remove(); },
   };
 }
 
@@ -3556,7 +3885,7 @@ function chatConfirmPreviewHtml(tu) {
   }
   if (tu.name === 'apply_triage') {
     const rows = [
-      ['Finding', a.vuln_id != null ? '#' + a.vuln_id : null],
+      ['Finding', a.vuln_id != null ? '#' + a.vuln_id + ' (and every occurrence of its rule)' : null],
       ['New status', a.status], ['Severity override', a.override_severity],
       ['CVSS override', a.override_cvss_score], ['Note', a.note],
     ].filter(([, v]) => v != null && v !== '');
@@ -3735,7 +4064,7 @@ async function tabAssistant(el, id, detail) {
   if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'The AI Assistant'); return; }
   const st = chatSt(id);
   el.innerHTML = `
-    <div class="card chat-card">
+    <div class="card chat-card" data-chat-scan="${escAttr(id)}">
       <div class="chat-bar">
         <select id="chat-session" title="Chat session"></select>
         <button class="btn btn-ghost btn-sm" id="chat-rename" title="Rename this chat">Rename</button>
@@ -3743,25 +4072,24 @@ async function tabAssistant(el, id, detail) {
         <button class="btn btn-ghost btn-sm" id="chat-new">New chat</button>
         <button class="btn btn-ghost btn-sm" id="chat-export" title="Download this conversation as Markdown">Export</button>
         <button class="btn btn-ghost btn-sm" id="chat-del">Delete</button>
-        <span class="nav-spacer"></span>
-        <select id="chat-provider" title="LLM provider" onchange="onChatProviderChange()">
-          <option value="">Scan default${detail.llm_provider && detail.llm_provider !== 'none' ? ' (' + esc(detail.llm_provider) + ')' : ''}</option>
-          <option value="claude">claude</option><option value="claude-oauth">claude (OAuth)</option><option value="openai">openai</option>
-          <option value="deepseek">deepseek</option><option value="ollama">ollama</option>
-          <option value="bedrock">bedrock</option><option value="glm">glm</option>
-        </select>
-        <select id="chat-model-select" hidden title="Model override" onchange="onChatModelSelectChange()"></select>
-        <input id="chat-model" placeholder="${escAttr(detail.llm_model || 'model (default)')}" title="Model override"/>
       </div>
       <div id="chat-msgs" class="chat-msgs"></div>
       <div id="chat-err"></div>
       <div id="chat-attachment" class="chat-attachments" hidden></div>
       <div class="chat-input">
         <input type="file" id="chat-file" hidden multiple accept=".txt,.md,.markdown,.log,.csv,.json,.yaml,.yml,.xml,.toml,.ini,.cfg,.properties,.gradle,.py,.js,.jsx,.ts,.tsx,.java,.kt,.swift,.m,.mm,.c,.cpp,.h,.hpp,.go,.rs,.rb,.php,.sh,.sql,.png,.jpg,.jpeg,.webp,.gif"/>
-        <button class="btn btn-ghost" id="chat-attach" type="button" title="Attach up to 5 text/code files or images">📎</button>
-        <textarea id="chat-in" rows="2" placeholder="Ask about a class, function or behavior… (Enter to send, Shift+Enter for newline)"></textarea>
-        <button class="btn btn-primary" id="chat-send">Send</button>
-        <button class="btn btn-danger" id="chat-stop" style="display:none">Stop</button>
+        <textarea id="chat-in" rows="2" placeholder="Ask about this scan… (Enter to send, Shift+Enter for newline)"></textarea>
+        <div class="chat-comp-bar">
+          <button class="chat-icon-btn" id="chat-attach" type="button" title="Attach up to 5 text/code files or images" aria-label="Attach files">${ico('paperclip')}</button>
+          <select id="chat-provider" title="LLM provider" onchange="onChatProviderChange()">
+            ${providerDropdownOptionsHtml(_configCache, '', detail.llm_provider && detail.llm_provider !== 'none' ? 'Scan default (' + providerLabel(detail.llm_provider) + ')' : 'Scan default')}
+          </select>
+          <select id="chat-model-select" hidden title="Model override" onchange="onChatModelSelectChange()"></select>
+          <input id="chat-model" placeholder="${escAttr(detail.llm_model || 'model (default)')}" title="Model override"/>
+          <span class="nav-spacer"></span>
+          <button class="chat-send-btn" id="chat-send" type="button" title="Send" aria-label="Send">${ico('send')}</button>
+          <button class="chat-send-btn stop" id="chat-stop" type="button" title="Stop" aria-label="Stop" style="display:none">${ico('stop')}</button>
+        </div>
       </div>
       <div class="chat-note">AI output may be wrong. Decompiled code is untrusted input. Use only on software you are authorized to analyze.</div>
     </div>`;
@@ -3802,7 +4130,9 @@ async function tabAssistant(el, id, detail) {
 
   /* sid: open that session; null: keep a pending "new chat" if the user asked for one, else resume
      the last-open (or newest) session. Always refreshes the full list from the server. */
-  async function loadSession(sid) {
+  async function loadSession(sid, noAttach) {
+    // A late callback from another scan's chat must not draw into this scan's page.
+    if (document.querySelector('.chat-card')?.dataset.chatScan !== id) return;
     let data = await api('/scans/' + id + '/chat');
     st.sessions = data.sessions;
     if (sid === null && st.fresh) { st.sid = null; renderSessions(); if (!document.querySelector('.chat-msg')) chatShowPrompts(); return; }
@@ -3811,7 +4141,32 @@ async function tabAssistant(el, id, detail) {
     if (want !== data.session_id) data = await api('/scans/' + id + '/chat?session_id=' + encodeURIComponent(want));
     st.sid = want; st.fresh = false; saveSid(want);
     renderSessions();
+    // A generation can outlive the page that started it (refresh, another menu). Show what was saved
+    // before it, then re-join it so the rest streams in instead of the chat looking dead.
+    if (data.active && !noAttach) {
+      if (st.busy) return;   // already streaming (or re-joining) here; re-rendering would wipe it
+      chatRenderHistory(data.messages.slice(0, data.active.base), st);
+      reattach(want);
+      return;
+    }
     chatRenderHistory(data.messages, st);
+  }
+
+  /** Re-joins the server's still-running generation for `sid` (see GET /chat's `active`). The server
+      replays what it has produced so far, then follows it live. */
+  async function reattach(sid) {
+    st.busy = true; setBusy(true); showErr('');
+    st.ctrl = new AbortController();
+    try {
+      await streamChat(fetch('/api/v1/scans/' + id + '/chat/' + encodeURIComponent(sid) + '/attach',
+        {signal: st.ctrl.signal, headers: headers()}));
+    } catch (e) {
+      if (e.name !== 'AbortError' && !/No generation running/.test(e.message)) showErr(e.message);
+    } finally {
+      st.busy = false; st.ctrl = null;
+      if (document.getElementById('chat-in')) { setBusy(false); document.getElementById('chat-in').focus(); }
+      loadSession(st.sid, true).catch(() => {});
+    }
   }
 
   /** Shared by send() (a fresh user message) and confirmPending() (an Approve/Decline decision
@@ -4110,7 +4465,11 @@ async function tabAssistant(el, id, detail) {
   $in.addEventListener('blur', () => setTimeout(closeSlashMenu, 150));   // delay: let the mousedown above land first
 
   document.getElementById('chat-send').onclick = () => send($in.value);
-  document.getElementById('chat-stop').onclick = () => st.ctrl && st.ctrl.abort();
+  // The generation runs server-side now, so closing the stream alone would not stop it.
+  document.getElementById('chat-stop').onclick = async () => {
+    try { if (st.sid) await fetch('/api/v1/scans/' + id + '/chat/' + encodeURIComponent(st.sid) + '/stop', {method: 'POST', headers: headers()}); } catch (_) {}
+    if (st.ctrl) st.ctrl.abort();
+  };
   $in.onkeydown = e => {
     if (slashIdx >= 0) {
       if (e.key === 'ArrowDown') { e.preventDefault(); slashIdx = (slashIdx + 1) % SLASH_COMMANDS.length; paintSlashMenu(); return; }
@@ -4162,6 +4521,12 @@ async function tabAssistant(el, id, detail) {
     await loadSession(res.session_id);
   };
 
+  // A stream left over from before the user switched menus (or scans) would paint into this page, which
+  // has one shared #chat-msgs: drop every such stream. The server-side generation keeps running and
+  // loadSession() re-joins this scan's own.
+  for (const other of Object.values(chatState)) {
+    if (other.ctrl) { other.ctrl.abort(); other.ctrl = null; other.busy = false; }
+  }
   setBusy(st.busy);
   try { await loadSession(st.fresh ? null : st.sid); } catch (e) { showErr(e.message); chatShowPrompts(); }
 }
@@ -4424,7 +4789,7 @@ async function tabSummary(d) {
         <div class="kv">
           ${kvRow('Scan ID', `${esc(d.scan_id)}`)}
           ${kvRow('File', esc(d.filename))}
-          ${kvRow('Scan mode', esc(scanModeLabel(d.llm_mode)) + (d.scan_mode === 'light' ? ' (light)' : ''))}
+          ${kvRow('Scan mode', esc(scanModeLabel(d.llm_mode)) + (d.scan_mode === 'light' ? ' (light)' : d.scan_mode === 'native' ? ' (native)' : ''))}
           ${kvRow('LLM', d.llm_enabled ? esc(providerLabel(d.llm_provider)) + (d.llm_model ? ' · ' + esc(d.llm_model) : '') : 'disabled')}
           ${kvRow('Assessment', d.assessment_enabled === false ? 'disabled' : 'enabled')}
           ${kvRow('Started', esc(fmt(d.started_at)))}
@@ -4587,7 +4952,10 @@ function fnRenderShell(el) {
   el.innerHTML = `
     <div class="fn-wrap">
       <div class="fn-tree-pane" id="fn-tree-pane">
-        <div class="fn-tree-search"><input id="fn-filter" type="text" placeholder="Filter classes…" autocomplete="off"/></div>
+        <div class="fn-tree-search">
+          <input id="fn-filter" type="text" placeholder="Filter classes…" autocomplete="off"/>
+          <button type="button" class="btn btn-ghost btn-sm" id="fn-zip" title="Download every decompiled function as a .zip">↓ All sources (.zip)</button>
+        </div>
         <div class="fn-tree-list" id="fn-tree-list"></div>
       </div>
       <div class="fn-drag-handle" id="fn-drag-handle"></div>
@@ -4604,6 +4972,20 @@ function fnRenderShell(el) {
   document.getElementById('fn-filter').addEventListener('input', ev => {
     fnSt.query = ev.target.value.trim().toLowerCase();
     fnRenderTree();
+  });
+  document.getElementById('fn-zip').addEventListener('click', async ev => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/api/v1/scans/${fnSt.id}/decompiled.zip`, {headers: headers()});
+      if (!r.ok) throw new Error(await r.text());
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(await r.blob());
+      a.download = `malimite-decompiled-${fnSt.id.slice(0,8)}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) { alert('Download failed: ' + (e.message || e)); }
+    finally { btn.disabled = false; }
   });
   fnWireDragHandle();
   fnRenderTree();
@@ -5044,13 +5426,14 @@ async function tabResources(el, id, detail) {
   root.innerHTML = `
     <div class="search-bar">
       <input id="res-q" type="text" placeholder="Search resources…" autocomplete="off"/>
+      <select id="res-type" class="ctl" aria-label="Filter by resource type"><option value="">All types</option></select>
       <button id="res-search" class="btn btn-primary btn-sm">Search</button>
     </div>
     <div id="res-table"></div>
     <div id="res-pages" class="pagination strings-pagination"></div>`;
   el.replaceChildren(root);
 
-  const state = {page: 1, size: 50, query: '', highlight: null};
+  const state = {page: 1, size: 50, query: '', type: '', highlight: null};
   if (resPendingHighlight) {
     state.query = resPendingHighlight;
     state.highlight = resPendingHighlight;
@@ -5067,6 +5450,12 @@ async function tabResources(el, id, detail) {
   root.querySelector('#res-q').addEventListener('keydown', event => {
     if (event.key === 'Enter') search();
   });
+  root.querySelector('#res-type').addEventListener('change', event => {
+    state.type = event.target.value;
+    state.highlight = null;
+    state.page = 1;
+    loadResources(root, id, state);
+  });
   await loadResources(root, id, state);
 }
 
@@ -5080,6 +5469,7 @@ async function loadResources(root, id, state) {
   try {
     const params = new URLSearchParams({page: state.page, size: state.size});
     if (state.query) params.set('q', state.query);
+    if (state.type) params.set('type', state.type);
     const data = await api('/scans/'+id+'/resources?'+params);
     if (requestSeq !== resourcesRequestSeq || !root.isConnected
         || root !== document.getElementById('resources-root')) return;
@@ -5090,6 +5480,16 @@ async function loadResources(root, id, state) {
     const size  = Math.max(1, Number(data.size) || state.size);
     const pages = Math.max(0, Number(data.pages) || 0);
     state.page = page;
+
+    const typeSel = root.querySelector('#res-type');
+    const counts = data.type_counts && typeof data.type_counts === 'object' ? data.type_counts : {};
+    const typeNames = Object.keys(counts).sort();
+    if (typeSel && typeSel.options.length !== typeNames.length + 1) {
+      const all = typeNames.reduce((n, t) => n + (Number(counts[t]) || 0), 0);
+      typeSel.innerHTML = `<option value="">All types (${esc(all.toLocaleString())})</option>`
+        + typeNames.map(t => `<option value="${escAttr(t)}">${esc(t || '(none)')} (${esc((Number(counts[t]) || 0).toLocaleString())})</option>`).join('');
+    }
+    if (typeSel) typeSel.value = state.type;
 
     table.innerHTML = items.length
       ? `<div class="tbl-wrap"><table>
@@ -5774,7 +6174,7 @@ function renderVulnCard(group, i) {
         </div>
         <div class="vuln-section">
           <div class="vuln-section-title" style="display:flex;justify-content:space-between;align-items:center">
-            <span>Triage <em style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(applies to finding #${v.id})</em></span>
+            <span>Triage <em style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(applies to ${occCount > 1 ? 'all ' + occCount + ' occurrences' : 'finding #' + v.id})</em></span>
             <button class="btn-link" onclick="toggleTriage(${v.id})">Edit</button>
           </div>
           <div id="triage-${v.id}" hidden>${renderTriageForm(v)}</div>
@@ -5861,7 +6261,7 @@ window.onAiFixProviderChange = function(id) {
   const modelSelect = document.getElementById(`aifix-model-select-${id}`);
   const modelEl = document.getElementById(`aifix-model-${id}`);
   if (!modelSelect || !modelEl) return;
-  const catalog = LLM_MODEL_CATALOG[provider === 'claude-oauth' ? 'claude' : provider];
+  const catalog = modelCatalog(provider);
   if (catalog) {
     modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('')
       + `<option value="${LLM_MODEL_CUSTOM}">Custom (type model name)…</option>`;
@@ -5971,7 +6371,7 @@ const AE_FIELDS = [
   {key: 'remediation', title: 'Remediation',      desc: 'Suggest actionable fixes.'},
 ];
 
-const AE_PROVIDERS = [
+const AE_PROVIDERS_BUILTIN = [
   {value: '',             label: 'Scan default'},
   {value: 'openai',       label: 'OpenAI'},
   {value: 'claude',       label: 'Claude (API key)'},
@@ -5982,6 +6382,8 @@ const AE_PROVIDERS = [
   {value: 'glm',          label: 'Zai GLM'},
 ];
 
+const aeProviders = () => AE_PROVIDERS_BUILTIN.concat(customProviders().map(p => ({value: p.provider, label: p.name})));
+
 /** Auto Enhance modal's provider <select> options — like providerDropdownOptionsHtml, but
     keeps AE_PROVIDERS' own labels ("Claude (API key)" vs LLM_PROVIDERS' "Claude") and the
     scan-default option's dynamic label (shows the scan's own provider/model). Only providers
@@ -5991,7 +6393,7 @@ const AE_PROVIDERS = [
 function aeProviderOptionsHtml(scanDefaultLabel) {
   const configuredSet = configuredProviderValues(_configCache);
   const stillValid = AE.provider && configuredSet.has(AE.provider);
-  return AE_PROVIDERS
+  return aeProviders()
     .filter(p => !p.value || configuredSet.has(p.value))
     .map(p => `<option value="${p.value}" ${p.value ? (stillValid && AE.provider === p.value ? 'selected' : '') : (stillValid ? '' : 'selected')}>${p.value ? p.label : esc(scanDefaultLabel)}</option>`)
     .join('');
@@ -6067,9 +6469,9 @@ window.openAutoEnhance = function(tab) {
   if (!AE.scanId) return;
   AE.open = true; AE.error = '';
   AE.tab = tab || (aeRunning() ? 'log' : AE.tab || 'select');
-  if (!AE.provider && AE.detail?.llm_provider && AE_PROVIDERS.some(p => p.value === AE.detail.llm_provider)) {
+  if (!AE.provider && AE.detail?.llm_provider && aeProviders().some(p => p.value === AE.detail.llm_provider)) {
     AE.provider = AE.detail.llm_provider;
-    const cat = LLM_MODEL_CATALOG[AE.provider];
+    const cat = modelCatalog(AE.provider);
     AE.model = cat ? (cat.some(m => m.value === AE.detail.llm_model) ? AE.detail.llm_model : cat[0].value) : '';
     AE.customModel = cat ? '' : (AE.detail.llm_model || '');
   }
@@ -6407,7 +6809,7 @@ function aeRender() {
   const scrolls = ['.ae-body', '.ae-table-wrap'].map(s => ov.querySelector(s)?.scrollTop || 0);
   const total = AE.groups.length;
   const latestRun = aeRuns()[0];
-  const catalog = LLM_MODEL_CATALOG[AE.provider];
+  const catalog = modelCatalog(AE.provider);
   const modelCtl = catalog
     ? `<span class="ae-model-row"><select onchange="aeSetModel(this.value)">
          ${catalog.map(m => `<option value="${escAttr(m.value)}" ${AE.model === m.value ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
@@ -6535,7 +6937,7 @@ window.aeSetTab = t => { AE.tab = t; AE.error = ''; aeRender(); };
 window.aeSetModel = m => { AE.model = m; if (m !== LLM_MODEL_CUSTOM) AE.customModel = ''; aeRender(); };
 window.aeSetProvider = p => {
   AE.provider = p;
-  const cat = LLM_MODEL_CATALOG[p];
+  const cat = modelCatalog(p);
   AE.model = cat ? cat[0].value : '';
   AE.customModel = '';
   aeRender();

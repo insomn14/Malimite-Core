@@ -64,6 +64,14 @@ public final class AscRunner {
         }
     }
 
+    /** Test seam: an explicit command, so availability checks do not depend on what is installed on PATH. */
+    AscRunner(List<String> command, Path workDir) {
+        this.command = List.copyOf(command);
+        this.workDir = workDir;
+    }
+
+    List<String> command() { return command; }
+
     /**
      * True when the resolved command can actually be launched (e.g. the executable exists on
      * PATH, or the Python interpreter + droidasc module import under the source checkout). The

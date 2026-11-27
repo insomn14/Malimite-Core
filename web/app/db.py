@@ -432,8 +432,12 @@ async def update_vulnerability_triage(
     sets.append("UpdatedAt=?")
     args.append(int(__import__("time").time() * 1000))
 
-    sql = f"UPDATE Vulnerabilities SET {', '.join(sets)} WHERE id=?"
-    args.append(vuln_id)
+    # The Vulnerabilities tab (and the reports) show one issue per RuleId, so a triage change applies to
+    # every occurrence of the finding's rule. Updating only the one row left the card's representative
+    # (an untouched "open" sibling) on screen, so the change looked like it never happened.
+    sql = (f"UPDATE Vulnerabilities SET {', '.join(sets)} WHERE id=? OR (COALESCE(RuleId,'')<>'' "
+           "AND RuleId=(SELECT RuleId FROM Vulnerabilities WHERE id=?))")
+    args += [vuln_id, vuln_id]
 
     async with aiosqlite.connect(db_path) as db:
         await _ensure_triage_columns(db)
@@ -480,8 +484,12 @@ async def update_vulnerability_ai_fix(
     sets += ["AiFixStatus=?", "AiFixProvider=?", "AiFixModel=?", "AiFixAt=?", "UpdatedAt=?"]
     args += ["applied", provider, model, now_ms, now_ms]
 
-    sql = f"UPDATE Vulnerabilities SET {', '.join(sets)} WHERE id=?"
-    args.append(vuln_id)
+    # The Vulnerabilities tab (and the reports) show one issue per RuleId, so a triage change applies to
+    # every occurrence of the finding's rule. Updating only the one row left the card's representative
+    # (an untouched "open" sibling) on screen, so the change looked like it never happened.
+    sql = (f"UPDATE Vulnerabilities SET {', '.join(sets)} WHERE id=? OR (COALESCE(RuleId,'')<>'' "
+           "AND RuleId=(SELECT RuleId FROM Vulnerabilities WHERE id=?))")
+    args += [vuln_id, vuln_id]
 
     async with aiosqlite.connect(db_path) as db:
         await _ensure_triage_columns(db)
@@ -945,6 +953,17 @@ async def get_resources_page(db_path: str, type_: Optional[str], query: Optional
     pages = (total + size - 1) // size if total else 0
     return ResourcePage(items=items, total=total, page=page, size=size, pages=pages,
                          type_counts=await resource_type_counts(db_path))
+
+
+async def iter_function_code(db_path: str, executable: str):
+    """Yield (class, function, code) for every function that has decompiled code, class by class."""
+    async with _ro(db_path) as db:
+        async with db.execute(
+            """SELECT ParentClass, FunctionName, DecompilationCode FROM Functions
+               WHERE ExecutableName=? AND DecompilationCode IS NOT NULL AND DecompilationCode != ''
+               ORDER BY ParentClass, FunctionName""", (executable,)) as cur:
+            async for cls, fn, code in cur:
+                yield cls, fn, code
 
 
 async def get_entry_points_ro(db_path: str, executable: str) -> list[dict]:

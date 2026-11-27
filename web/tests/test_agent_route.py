@@ -43,13 +43,33 @@ class ChatRouteTests(unittest.TestCase):
             p.stop()
         self.tmp.cleanup()
 
+    def test_attach_stop_and_active_when_nothing_is_running(self):
+        sid = _events(self.client.post("/api/v1/scans/s1/chat", json={"message": "hi"}).text)[0]["session_id"]
+        self.assertIsNone(self.client.get("/api/v1/scans/s1/chat").json()["active"])
+        self.assertEqual(self.client.get(f"/api/v1/scans/s1/chat/{sid}/attach").status_code, 404)
+        self.assertEqual(self.client.post(f"/api/v1/scans/s1/chat/{sid}/stop").json(), {"stopped": False})
+
+    def test_history_reports_a_running_generation_and_attach_replays_it(self):
+        sid = _events(self.client.post("/api/v1/scans/s1/chat", json={"message": "hi"}).text)[0]["session_id"]
+        run = main.agent_runs.Run()
+        run.base = 1
+        run.events = [{"type": "token", "text": "partial"}]
+        run.done = True   # a finished buffer replays and closes, so the client call below returns
+        main.agent_runs.RUNS[sid] = run
+        try:
+            self.assertEqual(self.client.get("/api/v1/scans/s1/chat").json()["active"], {"base": 1})
+            self.assertEqual(_events(self.client.get(f"/api/v1/scans/s1/chat/{sid}/attach").text),
+                             [{"type": "token", "text": "partial"}])
+        finally:
+            main.agent_runs.RUNS.pop(sid, None)
+
     def test_stream_then_history_then_delete(self):
         r = self.client.post("/api/v1/scans/s1/chat", json={"message": "hi"})
         self.assertEqual(r.headers["content-type"].split(";")[0], "text/event-stream")
         evs = _events(r.text)
         self.assertEqual([e["type"] for e in evs], ["session", "token", "done"])
         sid = evs[0]["session_id"]
-        self.assertNotIn(sid, main._ACTIVE_CHATS)  # flag lives inside the generator and is released
+        self.assertNotIn(sid, main.agent_runs.RUNS)  # released once the run finishes
         h = self.client.get("/api/v1/scans/s1/chat").json()
         self.assertEqual(h["session_id"], sid)
         self.assertEqual([m["role"] for m in h["messages"]], ["user", "assistant"])

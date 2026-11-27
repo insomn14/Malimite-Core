@@ -48,7 +48,7 @@ class LlmConfigStoreTests(unittest.TestCase):
             self.addCleanup(p.stop)
 
     def test_empty_store_reports_unconfigured(self):
-        self.assertEqual(llm_config.load(), {"default_provider": "", "default_model": "", "providers": {}})
+        self.assertEqual(llm_config.load(), {"default_provider": "", "default_model": "", "providers": {}, "custom": {}})
         self.assertFalse(llm_config.is_configured("openai"))
         self.assertFalse(llm_config.is_configured("claude"))
         self.assertFalse(llm_config.is_configured("deepseek"))
@@ -138,7 +138,7 @@ class LlmConfigStoreTests(unittest.TestCase):
     def test_corrupted_file_falls_back_to_empty(self):
         Path(settings.llm_config_path).parent.mkdir(parents=True, exist_ok=True)
         Path(settings.llm_config_path).write_text("not valid json {{{")
-        self.assertEqual(llm_config.load(), {"default_provider": "", "default_model": "", "providers": {}})
+        self.assertEqual(llm_config.load(), {"default_provider": "", "default_model": "", "providers": {}, "custom": {}})
 
 
 class ScannerLlmEnvIntegrationTests(unittest.TestCase):

@@ -13,7 +13,7 @@ live here is long finished; see [`PHASES.md`](../PHASES.md) for the full develop
 |---|---|
 | **Entry point** | `MalimiteAnalyzer` (orchestrates the whole pipeline), `AnalyzeOptions` (input, builder-style), `AnalysisResult` / `AnalysisReport` (output) |
 | **Package handling** | `IpaExtractor` / `IpaValidator` / `Macho` / `InfoPlist` / `MobileProvision` (iOS); `ApkExtractor` / `ApkValidator` / `AndroidManifestParser` / `XapkBundle` (Android); `BinaryIdentity`, `ResourceParser`, `PlistUtils` |
-| **Decompilation** | `GhidraRunner` (headless `analyzeHeadless` + socket IPC), `GhidraOnDemand` (persistent project, single-class re-decompile), `JadxRunner` / `JadxIngest` (Android DEX → Java), `AscRunner` (Droid ASC backend), `OnDemandDecompiler` (shared by the AI Assistant and the Functions tab), `MachoLightIngest` (strings/symbols only, no Ghidra — backs `--ios-light`), `SyntaxParser` / `DemangleSwift` |
+| **Decompilation** | `GhidraRunner` (headless `analyzeHeadless` + socket IPC), `GhidraOnDemand` (persistent project, single-class re-decompile), `JadxRunner` / `JadxIngest` (Android DEX → Java), `AscRunner` (Droid ASC backend), `OnDemandDecompiler` (shared by the AI Assistant and the Functions tab), `io.malimite.core.ios.IosNativeIngest` (Ghidra-free iOS engine, backs `--ios-engine native`), `SyntaxParser` / `DemangleSwift` |
 | **Detection** | `VulnerabilityScanner` + `VulnerabilityCatalog` (iOS MASTG/MSTG), `AndroidVulnerabilityCatalog` (Android MASTG), `VulnerabilityRule`, `ScanScope` / `ScanScopeFilter` (Fast/Full/Auto Fix/Offensive scoping), `RuleQuality` (gates for LLM-learned rules), `ObfuscationSignals`, `ElfNativeProtections`, `AndroidLibraryDefinitions` / `AndroidNativeLibraryDefinitions` / `LibraryDefinitions` (first/third-party classification) |
 | **Security Assessment** | `AssessmentScanner`, `AssessmentCatalog`, `AssessmentResult`, `AssessmentStatus` (PRESENT/PARTIAL/ABSENT/UNKNOWN controls inventory, separate from vulnerability findings) |
 | **LLM providers** | `LlmProvider` (interface), `LlmProviderFactory`, `OpenAiProvider`, `ClaudeProvider`, `ClaudeOAuthProvider` (+ `AnthropicOAuthCredentials` / `AnthropicOAuthLogin` for `malimite claude-login`), `DeepSeekProvider` / `DeepSeekModels`, `OllamaProvider`, `LlmEnricher` (per-function enrichment + AI Fix's prompt infra is on the Python side, see `web/app/finding_fix.py`), `LlmMode`, `LlmCache`, `LearnedRulesStore` |
@@ -32,7 +32,8 @@ AnalyzeOptions opts = AnalyzeOptions.builder()
     .assessmentEnabled(true)             // Security Assessment inventory (default: true)
     .llmEnabled(false)
     // .llmMode(LlmMode.SUMMARIZE)       // scan scope even without LLM — see README.md "Detection engines"
-    // .iosLight(true)                   // iOS only: skip Ghidra for binaries too large to auto-analyze
+    // .iosNative(true)                  // iOS only: Ghidra-free native engine (seconds, <1 GB)
+    // .iosNative(true)                  // iOS only: Ghidra-free native engine with lifted pseudocode
     // .decompiler("asc")                // Android: "jadx" (default) or "asc" (Droid ASC)
     .build();
 

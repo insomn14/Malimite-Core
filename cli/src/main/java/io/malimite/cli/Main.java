@@ -60,7 +60,7 @@ public class Main implements Callable<Integer> {
     private boolean llm;
 
     @Option(names = "--llm-provider",
-            description = "LLM provider: openai|claude|claude-oauth|deepseek|ollama|bedrock|glm  (env: LLM_PROVIDER)",
+            description = "LLM provider: openai|claude|claude-oauth|deepseek|ollama|bedrock|glm|custom  (env: LLM_PROVIDER)",
             defaultValue = "${env:LLM_PROVIDER:-none}")
     private String llmProvider;
 
@@ -85,6 +85,13 @@ public class Main implements Callable<Integer> {
             defaultValue = "${env:MAX_ENRICH_FUNCTIONS:-0}")
     private int maxEnrichFunctions;
 
+    @Option(names = "--llm-concurrency",
+            description = "Parallel LLM calls during enrichment (0 = provider default: 2 for Claude OAuth, "
+                    + "8 for an API key). Raising it speeds up large scans but spends the shared rate-limit "
+                    + "budget faster (env: LLM_ENRICH_CONCURRENCY)",
+            defaultValue = "${env:LLM_ENRICH_CONCURRENCY:-0}")
+    private int llmConcurrency;
+
     @Option(names = "--decompiler",
             description = "Decompiler backend: 'jadx' (default) or 'asc' (Droid ASC — "
                     + "on-demand, zero-preprocessing). (env: MALIMITE_DECOMPILER)",
@@ -108,12 +115,17 @@ public class Main implements Callable<Integer> {
             defaultValue = "${env:DECOMPILE_THREADS:-8}")
     private int decompileThreads;
 
-    @Option(names = "--ios-light",
-            description = "iOS only: skip Ghidra and scan strings, imported symbols and plist only (no "
-                    + "pseudocode; pseudocode-based rules are reported as not evaluated). For binaries too "
-                    + "large for Ghidra auto-analysis. (env: MALIMITE_IOS_LIGHT)",
+    /** Removed feature kept as an alias so existing scripts keep working: the native engine replaces it. */
+    @Option(names = "--ios-light", hidden = true,
+            description = "Deprecated: same as --ios-engine native. (env: MALIMITE_IOS_LIGHT)",
             defaultValue = "${env:MALIMITE_IOS_LIGHT:-false}")
     private boolean iosLight;
+
+    @Option(names = "--ios-engine",
+            description = "iOS engine: ghidra (default, full auto-analysis) or native (Ghidra-free Mach-O/ObjC engine "
+                    + "with lifted pseudocode; seconds, <1GB). (env: MALIMITE_IOS_ENGINE)",
+            defaultValue = "${env:MALIMITE_IOS_ENGINE:-ghidra}")
+    private String iosEngine;
 
     @Option(names = "--llm-model",
             description = "Override model id per provider  (env: LLM_MODEL)",
@@ -140,6 +152,13 @@ public class Main implements Callable<Integer> {
             description = "Exit 1 if SARIF results reach this severity: HIGH|MEDIUM|LOW",
             defaultValue = "NONE")
     private String failOn;
+
+    /** native engine requested directly, or through the removed light scan (flag or engine name). */
+    private boolean useNativeEngine() {
+        boolean legacy = iosLight || "light".equalsIgnoreCase(iosEngine);
+        if (legacy) System.err.println("warning: the iOS light scan was removed; using --ios-engine native instead");
+        return legacy || "native".equalsIgnoreCase(iosEngine);
+    }
 
     @Override
     public Integer call() throws Exception {
@@ -178,7 +197,8 @@ public class Main implements Callable<Integer> {
                 .ascHome(ascHome == null || ascHome.isBlank() ? null : Path.of(ascHome))
                 .maxAscClasses(maxAscClasses)
                 .decompileThreads(decompileThreads)
-                .iosLight(iosLight)
+                .iosNative(useNativeEngine())
+                .llmConcurrency(llmConcurrency)
                 .build();
 
         AnalysisResult r = new MalimiteAnalyzer().analyze(opts);
@@ -278,6 +298,11 @@ public class Main implements Callable<Integer> {
         cfg.put("BEDROCK_MODEL_ID",      envOr("BEDROCK_MODEL_ID", ""));
         cfg.put("GLM_API_KEY",           envOr("GLM_API_KEY", ""));
         cfg.put("GLM_BASE_URL",          envOr("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"));
+        cfg.put("CUSTOM_PROTOCOL",       envOr("CUSTOM_PROTOCOL", "openai"));
+        cfg.put("CUSTOM_BASE_URL",       envOr("CUSTOM_BASE_URL", ""));
+        cfg.put("CUSTOM_API_KEY",        envOr("CUSTOM_API_KEY", ""));
+        cfg.put("CUSTOM_HEADERS",        envOr("CUSTOM_HEADERS", ""));
+        cfg.put("CUSTOM_SESSION",        envOr("CUSTOM_SESSION", ""));
         return cfg;
     }
 

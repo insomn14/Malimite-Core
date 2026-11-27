@@ -258,4 +258,79 @@ class RuleQualityTest {
         // anti-debug is a property of any binary, not of a feature the app may or may not use
         assertTrue(reported("MSTG-RESILIENCE-2", PackagePlatform.IOS, tmp.resolve("a.sqlite"), List.of("return;"), List.of()));
     }
+
+    @Test
+    void addressBoundNamesAreRejectedButGenericOnesAreNot() {
+        assertTrue(RuleQuality.hasAddressBoundName("sub_100008f88\\s*\\(\\s*0x726574616c796170"));
+        assertTrue(RuleQuality.hasAddressBoundName("sub_1001d0[0-9a-f]{3,4}\\(0x64726143796d"));
+        assertTrue(RuleQuality.hasAddressBoundName("FUN_1001cf7e8"));
+        assertFalse(RuleQuality.hasAddressBoundName("FUN_[0-9a-f]+\\(.*NSUserDefaults"));
+        assertFalse(RuleQuality.hasAddressBoundName("sub_\\w+\\(.*loadHTMLString"));
+        assertNotNull(RuleQuality.rejection("sub_100008f88\\s*\\(\\s*0x726574616c796170"));
+        assertFalse(RuleQuality.passes("sub_10000a6dc\\s*\\(\\s*0x[0-9a-f]+"));
+    }
+
+    @Test
+    void unanchoredLeadingLookaheadIsRejectedAndAnchoredFormIsLinear() {
+        String quadratic = "(?![\\s\\S]*PTR_s_setPersistentStoreDescriptions_)(?s).*__C::NSPersistentContainer::__allocating_init"
+                + "[\\s\\S]{0,2000}PTR_s_loadPersistentStoresWithCompleti";
+        String anchored = "\\A" + quadratic.replace("(?s).*", "[\\s\\S]*?");
+        assertTrue(RuleQuality.hasQuadraticPrefix(quadratic));
+        assertTrue(RuleQuality.hasQuadraticPrefix("(?s).*Foo"));
+        assertFalse(RuleQuality.hasQuadraticPrefix(anchored));
+        assertNotNull(RuleQuality.rejection(quadratic));
+
+        String body = "x = 1;\n".repeat(30_000) + "__C::NSPersistentContainer::__allocating_init(a); PTR_s_loadPersistentStoresWithCompleti";
+        long t0 = System.nanoTime();
+        assertTrue(Pattern.compile(anchored).matcher(body).find());
+        assertTrue((System.nanoTime() - t0) / 1_000_000 < 2_000, "anchored form must scan a 200 KB body in well under 2 s");
+        assertFalse(Pattern.compile(anchored).matcher(body + " PTR_s_setPersistentStoreDescriptions_").find());
+    }
+
+    @Test
+    void mach_oUnderscoreOnImportsMarksGhidraOutput() {
+        assertTrue(RuleQuality.requiresGhidraSyntax("_swift_unknownObjectWeakAssign[\\s\\S]*_free\\s*\\("));
+        assertTrue(RuleQuality.requiresGhidraSyntax("_pthread_getspecific\\s*\\([^)]*\\)"));
+        assertFalse(RuleQuality.requiresGhidraSyntax("swift_unknownObjectWeakAssign[\\s\\S]*free\\s*\\("));
+        assertFalse(RuleQuality.requiresGhidraSyntax("my_free_list|swift_release"));
+        assertFalse(RuleQuality.requiresGhidraSyntax("\\bNSLog\\("));
+    }
+
+    @Test
+    void ghidraOnlySyntaxIsDetectedConservatively() {
+        assertTrue(RuleQuality.requiresGhidraSyntax("PTR_s_loadPersistentStoresWithCompleti"));
+        assertTrue(RuleQuality.requiresGhidraSyntax("Foundation::URL::get_path[\\s\\S]{0,2000}URLForResource_withExtension_"));
+        assertTrue(RuleQuality.requiresGhidraSyntax("\\*\\(uint \\*\\)\\(param_1 \\+ 0x10\\)"));
+        assertTrue(RuleQuality.requiresGhidraSyntax("PTR_s_a_\\d+|DAT_[0-9a-f]+"));
+        // one branch can match native output, so the rule stays evaluated
+        assertFalse(RuleQuality.requiresGhidraSyntax("PTR_s_a_\\d+|NSUserDefaults"));
+        // param_N is also how the native engine names parameters
+        assertFalse(RuleQuality.requiresGhidraSyntax("param_1[\\s\\S]{0,200}NSLog"));
+        assertFalse(RuleQuality.requiresGhidraSyntax("setObject:forKey:"));
+        assertFalse(RuleQuality.requiresGhidraSyntax(null));
+    }
+
+    @Test
+    void nativeEngineSkipsAndReportsGhidraSyntaxRules(@TempDir Path tmp) throws Exception {
+        Path file = tmp.resolve("learned.json");
+        LearnedRulesStore store = new LearnedRulesStore(file, PackagePlatform.IOS);
+        String ghidraRule = store.addRule("TEST", "Ghidra syntax", "STORAGE", "MEDIUM", 4.0, "CWE-312", "d", "r",
+                "DECOMPILED", "Foundation::URL::get_path[\\s\\S]{0,2000}URLForResource_withExtension_", "p", "u");
+        String portableRule = store.addRule("TEST", "Portable", "STORAGE", "MEDIUM", 4.0, "CWE-312", "d", "r",
+                "DECOMPILED", "secretStoreWriteMarker\\(\"token\"", "p", "u");
+        assertNotNull(ghidraRule);
+        assertNotNull(portableRule);
+        try (SqliteStore db = new SqliteStore(tmp.resolve("a.sqlite").toString())) {
+            db.insertFunctionDecompilations(List.of(new SqliteStore.DecompilationResult(
+                    "save:", "Foo", "secretStoreWriteMarker(\"token\"); Foundation::URL::get_path(x); URLForResource_withExtension_(y);",
+                    "App", "NATIVE")));
+            VulnerabilityScanner scanner = new VulnerabilityScanner();
+            scanner.scan(db, "App", PackagePlatform.IOS, store, ScanScopeFilter.all(), true);
+            assertTrue(scanner.notEvaluated().contains(ghidraRule));
+            assertFalse(scanner.notEvaluated().contains(portableRule));
+            VulnerabilityScanner full = new VulnerabilityScanner();
+            full.scan(db, "App", PackagePlatform.IOS, store, ScanScopeFilter.all(), false);
+            assertTrue(full.notEvaluated().isEmpty());
+        }
+    }
 }

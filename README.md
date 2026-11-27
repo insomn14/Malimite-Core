@@ -135,7 +135,7 @@ Malimite-Core ports core analysis concepts from Malimite (`GhidraRunner`, `Synta
 |---|---|
 | **Java JDK** | 17+ |
 | **Maven** | 3.8+ |
-| **Ghidra** | 12.0.x (the web Docker image ships 12.0.4) — must contain `support/analyzeHeadless` (required for `.ipa`). 11.1.2 rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`); 12.1+ is untested (see `web/app/config.py`). Headless also needs the JDK font libraries (`libharfbuzz0b`, `libfontconfig1`, `libfreetype6` on Debian) |
+| **Ghidra** | 12.0.x (the web Docker image ships 12.0.4) — must contain `support/analyzeHeadless` (required for `.ipa`). 11.1.2 rejects the headless arguments the scan passes (`Bad argument: -enableAnalyzer`); 12.1.4 was tried on UnCrackable-Level1 with the current headless flags: same 5 findings, plus a few empty external-class stubs and `improperly aligned` pcode warnings; not yet run on a large app (see `web/app/config.py`). Headless also needs the JDK font libraries (`libharfbuzz0b`, `libfontconfig1`, `libfreetype6` on Debian) |
 | **JADX** | ≥ 1.5 — CLI `bin/jadx` (required for `.apk` DEX; set `JADX_HOME`) |
 | **Droid ASC** (optional) | `droidasc` on `PATH` (or `ASC_HOME`/`python -m droidasc`) — alternate Android decompiler, `--decompiler asc`. Falls back to JADX automatically when unavailable (see below) |
 | **Ghidra (Android native)** | Same install as iOS — used for APK `lib/arm64-v8a/*.so` when `GHIDRA_HOME` is set |
@@ -566,6 +566,9 @@ malimite [OPTIONS] <ipa|apk|xapk>
                            offensive                      (first-party + security SDKs; requires --llm)
       --include-package=<p> Extra first-party Java package prefix (repeatable)
       --llm-model=<x>      Override default model per provider
+      --llm-concurrency=<n>
+                           Parallel LLM calls (0 = default: 2 for Claude OAuth, 8 for an API key; env LLM_ENRICH_CONCURRENCY).
+                           Higher is faster but spends the shared rate-limit budget sooner
       --max-enrich-functions=<n>
                            Cap functions the LLM enricher inspects (0 = no cap; env MAX_ENRICH_FUNCTIONS)
       --decompiler=<x>     Android decompiler backend: jadx (default) | asc — Droid ASC, on-demand,
@@ -574,9 +577,15 @@ malimite [OPTIONS] <ipa|apk|xapk>
       --max-asc-classes=<n> Cap classes the ASC backend decompiles (0 = no cap; env MAX_ASC_CLASSES)
       --decompile-threads=<n>
                            Parallel ASC getclass workers (default 8; env DECOMPILE_THREADS)
-      --ios-light          iOS only: skip Ghidra, scan strings/imported symbols/plist only (no pseudocode;
-                           pseudocode-based rules report "not evaluated"). For binaries too large for
-                           Ghidra auto-analysis (env MALIMITE_IOS_LIGHT)
+      --ios-engine=<e>     iOS engine: ghidra (default) | native. native = built-in Ghidra-free
+                           Mach-O/Objective-C engine with lifted pseudocode (imports, selectors and string
+                           literals named, simple if/do-while blocks, Swift class methods named from their
+                           vtable); a ~50 MB app scans in seconds with ~1 GB RAM. Rules that need Ghidra
+                           output syntax (27 of the 69 bundled learned iOS rules) are skipped and listed
+                           under rulesNotEvaluated in scan.json. arm64 only, decrypted binaries only
+                           (env MALIMITE_IOS_ENGINE).
+                           With --llm, native skips unnamed sub_* functions and caps enrichment at 1500
+                           functions unless --max-enrich-functions is set
       --assessment / --no-assessment
                            Security-controls Assessment (default: on)
       --fail-on=<severity> Exit 1 if findings ≥ HIGH|MEDIUM|LOW
@@ -602,9 +611,10 @@ malimite claude-login [OPTIONS]
 | `DEEPSEEK_BASE_URL` | Default `https://api.deepseek.com` |
 | `OLLAMA_BASE_URL` | Default `http://localhost:11434` |
 | `LLM_MODEL` / `LLM_MAX_TOKENS` | Override provider defaults |
-| `MALIMITE_IOS_LIGHT` | iOS only: same as `--ios-light` — skip Ghidra, scan strings/symbols/plist only |
+| `MALIMITE_IOS_ENGINE` | iOS only: same as `--ios-engine` (`ghidra` / `native`). The old `--ios-light` / `MALIMITE_IOS_LIGHT` / `light` still work as deprecated aliases of `native` |
 | `ASC_HOME` / `MAX_ASC_CLASSES` / `DECOMPILE_THREADS` / `MALIMITE_DECOMPILER` | Android Droid ASC decompiler backend settings — same as `--asc-home` / `--max-asc-classes` / `--decompile-threads` / `--decompiler` |
 | `MAX_ENRICH_FUNCTIONS` | Same as `--max-enrich-functions` |
+| `LLM_ENRICH_CONCURRENCY` | Same as `--llm-concurrency` |
 | `SCAN_DIR` | Web service scan output directory |
 | `API_KEY` | Optional `X-Api-Key` for web API |
 | `CHAT_RATE_PER_MIN` | Shared rate limit for chat, AI Fix, and Auto Enhance (default 30/min; an Auto Enhance run counts once, not per finding) |
@@ -655,7 +665,7 @@ See [`PHASES.md`](PHASES.md) for the full development plan. Highlights:
 - ✅ AI Assistant: chat over the scan with tools, on-demand ASC / JADX / Ghidra decompilation, Frida hook-target recommendations
 - ✅ Functions Explorer: JADX-GUI-style file tree + source viewer for everything a scan decompiled
 - ✅ Claude Pro/Max OAuth as an LLM provider — no separately-billed `ANTHROPIC_API_KEY` required
-- ✅ iOS light scan mode (`--ios-light`): strings/symbols/plist only, for binaries too large for Ghidra auto-analysis
+- ✅ iOS native engine (`--ios-engine native`): Ghidra-free Mach-O + ObjC metadata + arm64 lifter that produces named pseudocode, so `DECOMPILED` rules, the LLM stage and the Functions Explorer work on binaries Ghidra cannot analyse
 - ✅ Triage workflow and AI Fix: reviewer overrides and LLM-rewritten finding text, both reversible and both reflected in `report.html`
 - ✅ `report.html` rewritten as a formal, bilingual (ID/EN) Vulnerability Assessment document — cover page, risk rating scale, MASVS mapping, approval sheet, glossary, Android manifest summary, print/PDF-ready
 - ✅ Auto Enhance: bulk AI Fix as a server-side background job with live Activity Log, Cancel Batch, and per-finding Retry

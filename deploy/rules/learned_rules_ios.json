@@ -1100,7 +1100,7 @@
       "remediation": "Before calling loadPersistentStores, configure the persistentStoreDescriptions array with an NSPersistentStoreDescription that sets the NSPersistentStoreFileProtectionKey option to NSFileProtectionComplete.",
       "referenceUrl": "LLM-discovered 2026-08-10 from function Global.$$closure_#1_()_-\u003e___C.NSPersistentContainer_in_Captain_Nohook.AppDelegate.persistentContainer.getter_:___C.NSPersistentContainer",
       "target": "DECOMPILED",
-      "regex": "(?![\\s\\S]*PTR_s_setPersistentStoreDescriptions_)(?s).*__C::NSPersistentContainer::__allocating_init[\\s\\S]{0,2000}PTR_s_loadPersistentStoresWithCompleti",
+      "regex": "\\A(?![\\s\\S]*PTR_s_setPersistentStoreDescriptions_)[\\s\\S]*?__C::NSPersistentContainer::__allocating_init[\\s\\S]{0,2000}PTR_s_loadPersistentStoresWithCompleti",
       "pocTemplate": "1. Decompile the app binary.\n2. Observe the NSPersistentContainer getter creates the container with only a name, then immediately calls loadPersistentStoresWithCompletionHandler.\n3. Note the absence of NSPersistentStoreDescription configuration with NSPersistentStoreFileProtectionKey.\n4. The resulting database file at the default path will lack system-level file protection, making it readable by any process/user when the device is unlocked.",
       "createdAt": 1786297445873,
       "platform": "IOS"

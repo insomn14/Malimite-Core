@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import re
+import tempfile
 import time
 import zipfile
 from collections import deque
@@ -17,9 +18,10 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, Up
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from . import auto_enhance, db, finding_fix, llm_probe, offensive_phases, scanner
-from .agent import anthropic_oauth, llm_config, loop as agent_loop, ondemand, store as chat_store
+from .agent import anthropic_oauth, llm_config, loop as agent_loop, ondemand, runs as agent_runs, store as chat_store
 from .agent.llm import PROVIDERS as LLM_PROVIDERS, VISION_CAPABLE_PROVIDERS, LlmError, resolve_llm
 from .agent.tools import Ctx, valid_class_name
 from .config import settings
@@ -116,11 +118,14 @@ async def create_scan(
     llm_model: str = Form(""),
     llm_api_key: str = Form(""),
     assessment_enabled: bool = Form(True),
-    ios_light: bool = Form(False),
+    ios_light: bool = Form(False),   # deprecated alias of ios_engine=native (the light scan was removed)
     decompiler: str = Form("jadx"),
     ci_pipeline_url: Optional[str] = Form(None),
     ci_commit_sha: Optional[str] = Form(None),
     ci_triggered_by: Optional[str] = Form(None),
+    ios_engine: str = Form(""),
+    llm_concurrency: int = Form(0),
+    max_enrich_functions: int = Form(0),
 ):
     _check_auth(request)
     name = file.filename.lower()
@@ -171,8 +176,9 @@ async def create_scan(
     return await scanner.create_scan(
         data, file.filename,
         llm_enabled, llm_provider, llm_mode, llm_model, llm_api_key,
-        assessment_enabled, ios_light, decompiler,
-        ci_pipeline_url, ci_commit_sha, ci_triggered_by,
+        assessment_enabled, decompiler,
+        ci_pipeline_url, ci_commit_sha, ci_triggered_by, "native" if ios_light else ios_engine,
+        llm_concurrency, max_enrich_functions,
     )
 
 
@@ -340,6 +346,39 @@ async def get_resources(
     if page is not None:
         return await db.get_resources_page(db_path, type, q, page, size)
     return await db.get_resources(db_path, limit)
+
+
+def _zip_name(part: str) -> str:
+    """One path component: keep it readable, never let a class/selector escape the archive or break a filesystem."""
+    clean = re.sub(r"[^A-Za-z0-9._+()@$-]+", "_", part).strip("._") or "_"
+    return clean[:100]
+
+
+@app.get("/api/v1/scans/{scan_id}/decompiled.zip")
+async def export_decompiled_sources(request: Request, scan_id: str):
+    """Every decompiled function as <class>/<function>.txt, for offline grep / diff / review."""
+    _check_auth(request)
+    db_path, exe = _require_db(scan_id)
+    tmp = tempfile.NamedTemporaryFile(prefix="malimite-src-", suffix=".zip", delete=False)
+    tmp.close()
+    seen: set[str] = set()
+    try:
+        with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
+            async for cls, fn, code in db.iter_function_code(db_path, exe):
+                path = f"{_zip_name(cls)}/{_zip_name(fn)}"
+                n, unique = 1, path
+                while unique in seen:   # selectors collide once sanitised (a:b vs a_b)
+                    n += 1
+                    unique = f"{path}_{n}"
+                seen.add(unique)
+                zf.writestr(f"{unique}.txt", code)
+    except Exception:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
+    return FileResponse(
+        tmp.name, media_type="application/zip",
+        filename=f"malimite-decompiled-{scan_id[:8]}.zip",
+        background=BackgroundTask(lambda: Path(tmp.name).unlink(missing_ok=True)))
 
 
 @app.get("/api/v1/scans/{scan_id}/entrypoints")
@@ -603,7 +642,7 @@ async def ai_fix_vulnerability(
 
     detail = scanner.get_scan_detail(scan_id)
     try:
-        cfg = resolve_llm(detail.llm_provider, detail.llm_model, req.provider, req.model)
+        cfg = resolve_llm(detail.llm_provider, detail.llm_model, req.provider, req.model, session=scan_id)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -669,7 +708,7 @@ async def start_auto_enhance(request: Request, scan_id: str, req: AutoEnhanceReq
 
     detail = scanner.get_scan_detail(scan_id)
     try:
-        cfg = resolve_llm(detail.llm_provider, detail.llm_model, req.provider, req.model)
+        cfg = resolve_llm(detail.llm_provider, detail.llm_model, req.provider, req.model, session=scan_id)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -763,7 +802,7 @@ async def retry_auto_enhance_item(request: Request, scan_id: str, job_id: str, v
         raise HTTPException(status_code=404, detail="Vulnerability not found")
     detail = scanner.get_scan_detail(scan_id)
     try:
-        cfg = resolve_llm(detail.llm_provider, detail.llm_model, job.get("provider"), job.get("model"))
+        cfg = resolve_llm(detail.llm_provider, detail.llm_model, job.get("provider"), job.get("model"), session=scan_id)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
     _chat_rate_limit()
@@ -1011,6 +1050,7 @@ async def list_config_providers(request: Request):
     in one list instead of special-casing OAuth separately."""
     _check_auth(request)
     providers = [llm_config.provider_status(p) for p in llm_config.KNOWN_PROVIDERS]
+    providers += [llm_config.custom_status(pid) for pid in llm_config.load()["custom"]]
     oauth_configured = anthropic_oauth.is_configured()
     providers.insert(1, {  # same visual slot as the old upload-form dropdown (right after "claude")
         "provider": "claude-oauth",
@@ -1026,6 +1066,46 @@ async def list_config_providers(request: Request):
         "default_provider": data["default_provider"],
         "default_model": data["default_model"],
     }
+
+
+class CustomProviderRequest(BaseModel):
+    name: str = Field("", max_length=64)
+    protocol: str = Field("openai", max_length=16)
+    base_url: str = Field(max_length=500)
+    api_key: str = Field("", max_length=4096)   # blank on update keeps the stored key
+    models: list[str] = Field(default_factory=list, max_length=500)
+    headers: dict[str, str] = Field(default_factory=dict, max_length=20)   # extra request headers; {session} = conversation id
+
+
+@app.put("/api/v1/config/custom-providers/{provider_id}")
+async def put_custom_provider(request: Request, provider_id: str, req: CustomProviderRequest):
+    """Creates/updates a user-defined LLM endpoint (OpenAI- or Anthropic-compatible). Its id then
+    works as a provider name in the upload form, AI Assistant and AI Fix like a built-in one."""
+    _check_auth(request)
+    try:
+        llm_config.set_custom(provider_id, name=req.name, protocol=req.protocol, base_url=req.base_url,
+                              api_key=req.api_key, models=[m[:200] for m in req.models],
+                              headers={k: v[:500] for k, v in req.headers.items()})
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"ok": True, "status": llm_config.custom_status(provider_id)}
+
+
+class CustomProbeRequest(BaseModel):
+    protocol: str = Field("openai", max_length=16)
+    base_url: str = Field(max_length=500)
+    api_key: str = Field("", max_length=4096)
+    headers: dict[str, str] = Field(default_factory=dict, max_length=20)
+    provider_id: str = Field("", max_length=64)   # editing: reuse that provider's stored key when api_key is blank
+    model: str = Field("", max_length=200)
+
+
+@app.post("/api/v1/config/custom-providers/probe")
+async def probe_custom_provider(request: Request, req: CustomProbeRequest):
+    """"Fetch models" / "Test connection" for the custom-provider dialog (before anything is saved)."""
+    _check_auth(request)
+    key = req.api_key.strip() or (llm_config.get_custom(req.provider_id) or {}).get("api_key", "")
+    return await llm_probe.probe_custom(req.protocol, req.base_url, key, req.model, req.headers)
 
 
 @app.post("/api/v1/config/providers/{provider}")
@@ -1048,6 +1128,9 @@ async def set_config_provider(request: Request, provider: str, req: LlmProviderC
 @app.delete("/api/v1/config/providers/{provider}", status_code=204)
 async def delete_config_provider(request: Request, provider: str):
     _check_auth(request)
+    if llm_config.get_custom(provider):
+        llm_config.delete_custom(provider)
+        return
     p = _require_known_provider(provider)
     llm_config.delete_provider(p)
 
@@ -1057,7 +1140,8 @@ async def set_config_default(request: Request, req: LlmDefaultRequest):
     """Sets the provider/model the upload form pre-selects. An empty provider clears the
     default (form falls back to the first configured provider)."""
     _check_auth(request)
-    if req.provider and req.provider not in (*llm_config.KNOWN_PROVIDERS, "claude-oauth"):
+    if req.provider and req.provider not in (*llm_config.KNOWN_PROVIDERS, "claude-oauth") \
+            and not llm_config.get_custom(req.provider):
         raise HTTPException(status_code=422, detail=f"Unknown provider '{req.provider}'.")
     data = llm_config.set_default(req.provider, req.model)
     return {"ok": True, "default_provider": data["default_provider"], "default_model": data["default_model"]}
@@ -1106,7 +1190,7 @@ async def get_report(request: Request, scan_id: str):
 
 
 # Must match HtmlReporter.TEMPLATE_VERSION — bump both when the HTML layout changes.
-_HTML_REPORT_TEMPLATE_VERSION = "8"
+_HTML_REPORT_TEMPLATE_VERSION = "9"
 _HTML_REPORT_TEMPLATE_META = (
     f'<meta name="malimite-report-template" content="{_HTML_REPORT_TEMPLATE_VERSION}">'
 )
@@ -1220,7 +1304,6 @@ class RenameChatRequest(BaseModel):
     title: str = Field(min_length=1, max_length=60)
 
 
-_ACTIVE_CHATS: set[str] = set()  # one live stream per session
 _CHAT_HITS: deque = deque()      # monotonic timestamps of recent chat requests (global sliding window)
 
 
@@ -1237,6 +1320,19 @@ def _chat_rate_limit() -> None:
 
 def _sse(ev: dict) -> str:
     return f"data: {json.dumps(ev)}\n\n"
+
+
+async def _next_base(chat_db: str, sid: str) -> int:
+    """Both run_chat() and resume_after_confirmation() persist exactly one turn before generating."""
+    return len(await chat_store.history(chat_db, sid)) + 1
+
+
+def _stream_run(run: "agent_runs.Run") -> StreamingResponse:
+    async def gen():
+        async for ev in run.follow():
+            yield _sse(ev)
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/v1/scans/{scan_id}/chat")
@@ -1272,10 +1368,10 @@ async def chat(request: Request, scan_id: str, req: ChatRequest):
     try:
         cfg = resolve_llm(sess["provider"] if sess else detail.llm_provider,
                           sess["model"] if sess else detail.llm_model,
-                          req.provider, req.model)
+                          req.provider, req.model, session=scan_id)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    if any(a.kind == "image" for a in req.attachments) and cfg.provider not in VISION_CAPABLE_PROVIDERS:
+    if any(a.kind == "image" for a in req.attachments) and cfg.provider not in VISION_CAPABLE_PROVIDERS and not cfg.protocol:
         raise HTTPException(status_code=422, detail=(
             f"The '{cfg.provider}' provider does not accept image attachments. "
             f"Switch provider to one of: {', '.join(sorted(VISION_CAPABLE_PROVIDERS))}."))
@@ -1285,32 +1381,19 @@ async def chat(request: Request, scan_id: str, req: ChatRequest):
             await chat_store.set_llm(chat_db, sid, cfg.provider, cfg.model)
     else:
         sid = await chat_store.create_session(chat_db, cfg.provider, cfg.model)
-    if sid in _ACTIVE_CHATS:
+    if sid in agent_runs.RUNS:
         raise HTTPException(status_code=409, detail="This chat session is already generating")
 
     ctx = Ctx(scan_id=scan_id, db_path=db_path, exe=exe, platform=detail.platform or "",
               scan_dir=scan_dir, meta=scanner._read_scan_json(scan_id) or {})
 
-    async def gen():
-        # claimed here, not in the route: if the client vanishes before the first iteration the flag is never set
-        if sid in _ACTIVE_CHATS:
-            yield _sse({"type": "error", "message": "This chat session is already generating"})
-            return
-        _ACTIVE_CHATS.add(sid)
-        try:
-            yield _sse({"type": "session", "session_id": sid, "provider": cfg.provider, "model": cfg.model})
-            atts = [a.model_dump() for a in req.attachments]
-            async for ev in agent_loop.run_chat(ctx, chat_db, sid, req.message, cfg, attachments=atts):
-                yield _sse(ev)
-        except Exception:
-            import logging
-            logging.getLogger("malimite").exception("chat failed for scan %s", scan_id)
-            yield _sse({"type": "error", "message": "internal error"})
-        finally:
-            _ACTIVE_CHATS.discard(sid)
+    async def body():
+        yield {"type": "session", "session_id": sid, "provider": cfg.provider, "model": cfg.model}
+        atts = [a.model_dump() for a in req.attachments]
+        async for ev in agent_loop.run_chat(ctx, chat_db, sid, req.message, cfg, attachments=atts):
+            yield ev
 
-    return StreamingResponse(gen(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return _stream_run(agent_runs.start(sid, await _next_base(chat_db, sid), body))
 
 
 class ConfirmToolRequest(BaseModel):
@@ -1337,39 +1420,28 @@ async def confirm_chat_tool(request: Request, scan_id: str, session_id: str, req
     if not sess:
         raise HTTPException(status_code=404, detail="Chat session not found")
     try:
-        cfg = resolve_llm(sess["provider"], sess["model"], None, None)
+        cfg = resolve_llm(sess["provider"], sess["model"], None, None, session=scan_id)
     except LlmError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    if session_id in _ACTIVE_CHATS:
+    if session_id in agent_runs.RUNS:
         raise HTTPException(status_code=409, detail="This chat session is already generating")
 
     ctx = Ctx(scan_id=scan_id, db_path=db_path, exe=exe, platform=detail.platform or "",
               scan_dir=scan_dir, meta=scanner._read_scan_json(scan_id) or {})
 
-    async def gen():
-        if session_id in _ACTIVE_CHATS:
-            yield _sse({"type": "error", "message": "This chat session is already generating"})
-            return
-        _ACTIVE_CHATS.add(session_id)
-        wrote = False
+    async def body():
         try:
             async for ev in agent_loop.resume_after_confirmation(ctx, chat_db, session_id, req.decisions, cfg):
-                if ev["type"] == "tool_result" and ev["ok"] and ev["name"] in ("propose_finding", "apply_triage"):
-                    wrote = True
-                yield _sse(ev)
-        except ValueError as e:
-            yield _sse({"type": "error", "message": str(e)})
-        except Exception:
-            import logging
-            logging.getLogger("malimite").exception("confirm-tool failed for scan %s", scan_id)
-            yield _sse({"type": "error", "message": "internal error"})
-        finally:
-            _ACTIVE_CHATS.discard(session_id)
-            if wrote:
-                await scanner.regenerate_report(scan_id)
+                yield ev
+        except ValueError as e:   # not a pending confirmation / decisions don't match: the user's to see
+            yield {"type": "error", "message": str(e)}
 
-    return StreamingResponse(gen(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    async def after(run):
+        if any(e["type"] == "tool_result" and e["ok"] and e["name"] in ("propose_finding", "apply_triage")
+               for e in run.events):
+            await scanner.regenerate_report(scan_id)
+
+    return _stream_run(agent_runs.start(session_id, await _next_base(chat_db, session_id), body, after))
 
 
 @app.get("/api/v1/scans/{scan_id}/chat")
@@ -1379,8 +1451,29 @@ async def get_chat(request: Request, scan_id: str, session_id: Optional[str] = N
     chat_db = chat_store.path_for(scanner._scan_dir(scan_id))
     sessions = await chat_store.list_sessions(chat_db)
     sid = session_id or (sessions[0]["id"] if sessions else None)
-    return {"sessions": sessions, "session_id": sid,
-            "messages": await chat_store.history(chat_db, sid) if sid else []}
+    msgs = await chat_store.history(chat_db, sid) if sid else []
+    run = agent_runs.RUNS.get(sid) if sid else None
+    # `base`: how many of `messages` precede what /attach replays (the run's own, still-unsaved output)
+    active = {"base": run.base} if run else None
+    return {"sessions": sessions, "session_id": sid, "messages": msgs, "active": active}
+
+
+@app.get("/api/v1/scans/{scan_id}/chat/{session_id}/attach")
+async def attach_chat(request: Request, scan_id: str, session_id: str):
+    """Re-joins a generation still running after the page that started it went away."""
+    _check_auth(request)
+    _require_db(scan_id)
+    run = agent_runs.RUNS.get(session_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="No generation running for this chat session")
+    return _stream_run(run)
+
+
+@app.post("/api/v1/scans/{scan_id}/chat/{session_id}/stop")
+async def stop_chat(request: Request, scan_id: str, session_id: str):
+    _check_auth(request)
+    _require_db(scan_id)
+    return {"stopped": agent_runs.stop(session_id)}
 
 
 @app.delete("/api/v1/scans/{scan_id}/chat/{session_id}", status_code=204)
