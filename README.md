@@ -726,6 +726,7 @@ Key upstream concepts ported (with Swing removed):
 - [**Ghidra**](https://github.com/NationalSecurityAgency/ghidra) (NSA) — iOS and native-library decompilation
 - [**JADX**](https://github.com/skylot/jadx) (skylot) — Android DEX → Java
 - [**Droid ASC**](https://pypi.org/project/droidasc/) — on-demand Android decompiler backend, a separate independently released package inspired by [**MG1937/ASC**](https://github.com/MG1937/ASC) (Apache-2.0); builds on [Androguard](https://github.com/androguard/androguard)
+- [**REipa**](https://github.com/JRBusiness/REipa) (JRBusiness, MIT) — inspiration for the Ghidra-free iOS native engine (`--ios-engine native`): its Rust Mach-O/ObjC/arm64 pipeline showed that a large IPA can be decompiled in seconds with a small memory footprint. The Java engine in `core/ios/` is an independent implementation; no REipa code is included
 - [**OWASP MASTG / MASVS**](https://mas.owasp.org/) — the detection catalogs derive from the Mobile Application Security Testing Guide (CC BY-SA 4.0)
 - [**SARIF**](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) (OASIS) — result interchange format
 
