@@ -15,6 +15,7 @@ import java.util.Map;
  * DEEPSEEK_API_KEY      = sk-...
  * DEEPSEEK_BASE_URL     = https://api.deepseek.com   (optional override)
  * OLLAMA_BASE_URL       = http://localhost:11434
+ * OLLAMA_OPTIONS        = {"num_ctx":16384,"think":false,...}  (JSON; optional, see OllamaProvider)
  * AWS_ACCESS_KEY_ID     = AKIA...                (required for provider=bedrock)
  * AWS_SECRET_ACCESS_KEY = ...                    (required for provider=bedrock)
  * AWS_REGION            = us-east-1              (optional override; default us-east-1)
@@ -92,7 +93,7 @@ public final class LlmProviderFactory {
             case "ollama" -> {
                 String url = cfg.getOrDefault("OLLAMA_BASE_URL", "http://localhost:11434");
                 log.info("LLM provider: Ollama url={} model={}", url, model.isBlank() ? "llama3" : model);
-                yield new OllamaProvider(url, model, maxTokens);
+                yield new OllamaProvider(url, model, maxTokens, cfg.get("OLLAMA_OPTIONS"));
             }
             case "bedrock" -> {
                 String accessKeyId = cfg.get("AWS_ACCESS_KEY_ID");

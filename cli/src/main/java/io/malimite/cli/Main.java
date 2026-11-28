@@ -289,6 +289,7 @@ public class Main implements Callable<Integer> {
         cfg.put("DEEPSEEK_API_KEY",    envOr("DEEPSEEK_API_KEY", ""));
         cfg.put("DEEPSEEK_BASE_URL",   envOr("DEEPSEEK_BASE_URL", "https://api.deepseek.com"));
         cfg.put("OLLAMA_BASE_URL",     envOr("OLLAMA_BASE_URL", "http://localhost:11434"));
+        cfg.put("OLLAMA_OPTIONS",      envOr("OLLAMA_OPTIONS", ""));
         // Set by web/app/scanner.py's llm_env() (from the Config tab or the server's own
         // bootstrap env) before this CLI is spawned as a subprocess — see LlmProviderFactory's
         // javadoc for the full credential-resolution chain.

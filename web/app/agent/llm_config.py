@@ -74,6 +74,60 @@ _RESERVED_IDS = frozenset(KNOWN_PROVIDERS) | {"claude-oauth", "none", "custom"}
 _CUSTOM_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 
 
+# Ollama request parameters (Config tab → Ollama → Advanced). Stored under providers.ollama.options;
+# anything unset falls back to OLLAMA_DEFAULTS. Sized for a CPU-only box: a 4096-token context (Ollama's
+# own default) cannot even hold the chat's system prompt + tool schemas (~3.1k tokens) plus one tool
+# result, and thinking models would otherwise burn the output budget on hidden reasoning.
+OLLAMA_DEFAULTS = {"num_ctx": 16384, "think": False, "temperature": 0.3, "keep_alive": "30m"}
+_OLLAMA_SPEC = {   # key -> (type, min, max)
+    "num_ctx": (int, 512, 1_048_576), "num_predict": (int, 1, 131_072), "think": (bool, 0, 1),
+    "temperature": (float, 0, 2), "top_p": (float, 0, 1), "top_k": (int, 0, 1000), "min_p": (float, 0, 1),
+    "repeat_penalty": (float, 0, 2), "num_thread": (int, 1, 256), "num_batch": (int, 1, 8192),
+}
+_KEEP_ALIVE_RE = re.compile(r"^-?\d+[smh]?$")
+
+
+def clean_ollama_options(raw) -> dict:
+    """Validates a user-supplied options dict; blank/None values are dropped (= use the default)."""
+    if not isinstance(raw, dict):
+        raise ValueError("options must be an object")
+    out = {}
+    for k, v in raw.items():
+        if v is None or (isinstance(v, str) and not v.strip()):
+            continue
+        if k == "keep_alive":
+            v = str(v).strip()
+            if not _KEEP_ALIVE_RE.match(v):
+                raise ValueError("keep_alive must look like 30m, 2h, 90s or -1")
+            out[k] = v
+            continue
+        if k not in _OLLAMA_SPEC:
+            raise ValueError(f"Unknown Ollama option '{k}'")
+        typ, lo, hi = _OLLAMA_SPEC[k]
+        try:
+            if typ is bool:
+                if not isinstance(v, bool):
+                    raise ValueError
+                out[k] = v
+                continue
+            num = typ(v)
+        except (TypeError, ValueError):
+            raise ValueError(f"'{k}' must be a {typ.__name__}") from None
+        if not lo <= num <= hi:
+            raise ValueError(f"'{k}' must be between {lo} and {hi}")
+        out[k] = num
+    return out
+
+
+def ollama_options() -> dict:
+    """Effective Ollama request parameters: defaults overlaid with what the Config tab stored."""
+    stored = (load()["providers"].get("ollama") or {}).get("options")
+    try:
+        return {**OLLAMA_DEFAULTS, **clean_ollama_options(stored or {})}
+    except ValueError:
+        return dict(OLLAMA_DEFAULTS)   # a hand-edited bad file must not take chat down
+
+
 def _path() -> Path:
     return Path(settings.llm_config_path)
 
@@ -279,8 +333,10 @@ def provider_status(provider: str) -> dict:
     for f in _SECRET_FIELDS.get(provider, ()):
         if fields.get(f):
             masked[f] = _mask(fields[f])
-    non_secret = {k: v for k, v in fields.items() if k not in _SECRET_FIELDS.get(provider, ()) and v}
+    non_secret = {k: v for k, v in fields.items() if k not in _SECRET_FIELDS.get(provider, ()) and v and k not in ("models", "options")}
     return {
+        "models": list(fields.get("models") or []),
+        **({"options": ollama_options(), "option_defaults": OLLAMA_DEFAULTS} if provider == "ollama" else {}),
         "provider": provider,
         "configured": is_configured(provider),
         "source": source,

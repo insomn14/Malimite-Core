@@ -1420,6 +1420,8 @@ select.ctl.dec-more.on{border-color:#c3c6f2;background-color:#eef0ff;color:var(-
 .cm-eye{position:absolute;right:.4rem;top:50%;transform:translateY(-50%);border:0;background:none;cursor:pointer;color:var(--muted);display:flex}
 .cm-models{display:flex;flex-direction:column;gap:.4rem;max-height:190px;overflow:auto}
 .cm-model-row{display:flex;gap:.4rem}
+.cm-presets{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
+.cm-opt-chk{flex-direction:row!important;align-items:center;gap:.5rem!important}
 .cm-adv{border:1px solid var(--border);border-radius:10px;padding:.15rem .8rem}
 .cm-adv summary{cursor:pointer;font-size:.82rem;font-weight:650;padding:.55rem 0}
 .cm-adv-body{display:flex;flex-direction:column;gap:.75rem;padding:.2rem 0 .8rem}
@@ -1462,11 +1464,10 @@ select.ctl.dec-more.on{border-color:#c3c6f2;background-color:#eef0ff;color:var(-
 
 <script>
 /* ── LLM provider change handler ── */
-// Curated, not live-fetched: a provider's real catalog needs its API key to query (which the user
-// hasn't necessarily entered yet at this point in the form) and changes over time regardless, so a
-// hardcoded list would need to stay in sync either way. Every provider here also gets an explicit
-// "Custom" escape hatch into the plain text input, so a model missing from this list is never a
-// dead end — same safety net Ollama (no fixed catalog at all) already relied on before this change.
+// Curated, not live-fetched: a provider's real catalog needs its API key to query and changes over time
+// regardless. Model pickers (upload form, AI Assistant, AI Fix, Auto Enhance) offer only these entries
+// plus the models saved in the Config tab; a model missing here is added there (Config → provider → models),
+// not typed into each picker.
 const LLM_MODEL_CATALOG = {
   openai: [
     {value:'gpt-4o', label:'gpt-4o (flagship)'},
@@ -1525,7 +1526,6 @@ const LLM_MODEL_CATALOG = {
     {value:'glm-4.5-air', label:'glm-4.5-air (fast, cheap)'},
   ],
 };
-const LLM_MODEL_CUSTOM = '__custom__';
 
 // Every provider the upload form / AI Assistant / AI Fix can pick from. `keyPh` providers need
 // an API key (or, for bedrock, an access key/secret pair — see CONFIG_PROVIDER_META below for
@@ -1553,6 +1553,9 @@ function allProviders() {
 function modelCatalog(p) {
   const c = customProviders().find(x => x.provider === p);
   if (c) return c.models.length ? c.models.map(m => ({value: m, label: m})) : undefined;
+  // Ollama has no fixed catalog: use the models fetched/saved in Config (none saved = free text)
+  const ol = p === 'ollama' ? (_configCache?.providers || []).find(x => x.provider === 'ollama')?.models : null;
+  if (ol?.length) return ol.map(m => ({value: m, label: m}));
   return LLM_MODEL_CATALOG[p === 'claude-oauth' ? 'claude' : p];
 }
 function providerLabel(p) { return (allProviders().find(x => x.value === p) || {label: p}).label; }
@@ -1594,49 +1597,23 @@ const CONFIG_PROVIDER_ORDER = ['openai', 'claude', 'claude-oauth', 'deepseek', '
    renderScanOptionsHtml's providerOpts), so there is nothing to validate here. */
 window.onProviderChange = function(keepModel) {
   const provider = document.getElementById('llm-provider')?.value || '';
-  const modelEl = document.getElementById('llm-model');
   const modelSelect = document.getElementById('llm-model-select');
-  if (modelEl && modelSelect) {
+  if (modelSelect) {
     const catalog = modelCatalog(provider);
     const want = typeof keepModel === 'string' ? keepModel : '';
-    if (catalog) {
-      // Bare model IDs fit the compact cell; the descriptive label stays available as a tooltip.
-      modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}" title="${escAttr(m.label)}">${esc(m.value)}${/\bdefault\b/i.test(m.label) ? ' (default)' : ''}</option>`).join('')
-        + `<option value="${LLM_MODEL_CUSTOM}">Custom…</option>`;
-      const known = want && catalog.some(m => m.value === want);
-      modelSelect.value = known ? want : (want ? LLM_MODEL_CUSTOM : catalog[0].value);
-      modelSelect.hidden = false;
-      modelEl.hidden = modelSelect.value !== LLM_MODEL_CUSTOM;
-      modelEl.value = known ? '' : want;
-      modelEl.placeholder = 'Type the exact model name';
-    } else {
-      // ollama (every install's local model list is different): plain text, as before.
-      modelSelect.hidden = true;
-      modelEl.hidden = false;
-      modelEl.value = want;
-      modelEl.placeholder = 'e.g. llama3 (empty = default)';
-    }
+    // Models come only from the catalog / the Config tab; a provider with none hides the picker and
+    // the scan uses that provider's default model.
+    modelSelect.innerHTML = (catalog || []).map(m => `<option value="${escAttr(m.value)}" title="${escAttr(m.label)}">${esc(m.value)}${/\bdefault\b/i.test(m.label) ? ' (default)' : ''}</option>`).join('');
+    if (catalog) modelSelect.value = catalog.some(m => m.value === want) ? want : catalog[0].value;
+    modelSelect.hidden = !catalog;
   }
   updateRunSummary();
 };
 
-window.onModelSelectChange = function() {
-  const modelSelect = document.getElementById('llm-model-select');
-  const modelEl = document.getElementById('llm-model');
-  if (!modelSelect || !modelEl) return;
-  const custom = modelSelect.value === LLM_MODEL_CUSTOM;
-  modelEl.hidden = !custom;
-  if (custom) { modelEl.value = ''; modelEl.placeholder = 'Type the exact model name'; modelEl.focus(); }
-  updateRunSummary();
-};
-
-/** Model the upload form will send: the catalog pick, or the free-text field (custom / ollama). */
+/** Model the upload form will send: the picked catalog entry, or '' (provider default). */
 function currentLlmModel() {
   const sel = document.getElementById('llm-model-select');
-  // The select stays visible with "Custom" picked (so the user can switch back without
-  // re-choosing a provider) — only read from it when it's showing a real catalog entry.
-  if (sel && !sel.hidden && sel.value !== LLM_MODEL_CUSTOM) return sel.value;
-  return (document.getElementById('llm-model')?.value || '').trim();
+  return sel && !sel.hidden ? sel.value : '';
 }
 
 window.onLlmToggle = function(fromMode) {
@@ -1656,34 +1633,17 @@ window.onLlmToggle = function(fromMode) {
   updateRunSummary();
 };
 
-/* Same dropdown-with-Custom-escape-hatch pattern as the upload form's "Model override" field,
-   reused here for the AI Assistant chat bar's own provider/model pair. claude-oauth shares
+/* The AI Assistant chat bar's provider/model pair. Models come only from the catalog / the models saved
+   in the Config tab — there is no free-text model here (add custom model IDs in Config). A provider
+   with no catalog hides the picker and the server uses that provider's default model. claude-oauth shares
    claude's model catalog — it is the same Claude models, just authenticated differently. */
 window.onChatProviderChange = function() {
   const provider = document.getElementById('chat-provider')?.value || '';
   const modelSelect = document.getElementById('chat-model-select');
-  const modelEl = document.getElementById('chat-model');
-  if (!modelSelect || !modelEl) return;
+  if (!modelSelect) return;
   const catalog = modelCatalog(provider);
-  if (catalog) {
-    modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('')
-      + `<option value="${LLM_MODEL_CUSTOM}">Custom (type model name)…</option>`;
-    modelSelect.value = catalog[0].value;
-    modelSelect.hidden = false;
-    modelEl.hidden = true;
-  } else {
-    modelSelect.hidden = true;
-    modelEl.hidden = false;
-  }
-};
-
-window.onChatModelSelectChange = function() {
-  const modelSelect = document.getElementById('chat-model-select');
-  const modelEl = document.getElementById('chat-model');
-  if (!modelSelect || !modelEl) return;
-  const custom = modelSelect.value === LLM_MODEL_CUSTOM;
-  modelEl.hidden = !custom;
-  if (custom) { modelEl.value = ''; modelEl.focus(); }
+  modelSelect.innerHTML = (catalog || []).map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('');
+  modelSelect.hidden = !catalog;
 };
 
 /* ── Claude OAuth status/import (provider = claude-oauth) ──
@@ -2175,7 +2135,6 @@ function renderScanOptionsHtml(file, prefs, configData) {
             <label class="field"><span class="field-label">Model</span>
               <span class="llm-model-stack">
                 <select id="llm-model-select" class="ctl" hidden></select>
-                <input id="llm-model" class="ctl" type="text" autocomplete="off" placeholder="empty = default"/>
               </span></label>
             <label class="field"><span class="field-label">Parallel calls</span>
               <input id="llm-concurrency" class="ctl" type="number" min="0" max="16" step="1" inputmode="numeric" placeholder="default"
@@ -2545,8 +2504,7 @@ route('home', async function() {
     $('#llm-mode').addEventListener('change', onLlmModeChange);
     $('#llm-enabled')?.addEventListener('change', () => onLlmToggle(false));
     $('#llm-provider')?.addEventListener('change', () => onProviderChange());
-    $('#llm-model-select')?.addEventListener('change', onModelSelectChange);
-    $('#llm-model')?.addEventListener('input', updateRunSummary);
+    $('#llm-model-select')?.addEventListener('change', updateRunSummary);
     $$('#scan-form input[name=decompiler], #assessment-enabled, #ios-native').forEach(el => el.addEventListener('change', updateRunSummary));
     if ($('#llm-provider')) onProviderChange(prefs.provider === $('#llm-provider').value ? (prefs.model || '') : '');
     onLlmToggle(true);
@@ -3353,10 +3311,12 @@ function renderConfigProviderCard(data, provider) {
           <div class="cfgp-desc">${esc(meta.desc)}</div>
           ${cfgpFieldsSummaryHtml(st)}
           ${st.configured ? `<div class="cfgp-meta">${esc(cfgpSourceLabel(st))}</div>` : ''}
+          ${st.options ? `<div class="cfgp-meta"><span class="cfgp-kv">ctx <code>${st.options.num_ctx}</code> · thinking <code>${st.options.think ? 'on' : 'off'}</code> · temp <code>${st.options.temperature ?? 'default'}</code> · keep <code>${esc(st.options.keep_alive)}</code></span></div>` : ''}
+          ${st.models?.length ? `<div class="cfgp-meta"><span class="cfgp-kv">models: ${st.models.map(m => `<code>${esc(m)}</code>`).join(' ')}</span></div>` : ''}
         </div>
       </div>
       <div class="cfgp-actions">
-        <button type="button" class="btn ${st.configured ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="toggleConfigForm('${provider}', ${!openForm})">
+        <button type="button" class="btn ${st.configured ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="${provider === 'ollama' ? 'editOllama()' : `toggleConfigForm('${provider}', ${!openForm})`}">
           ${ico(st.configured ? 'settings' : 'plug')} ${st.configured ? 'Edit' : 'Connect'}
         </button>
         ${st.configured && !isDefault ? `<button type="button" class="btn btn-ghost btn-sm" onclick="setConfigDefault('${provider}')">Set as default</button>` : ''}
@@ -3436,7 +3396,7 @@ window.testConfigProvider = async function(provider) {
   for (const f of meta.fields) {
     const v = (document.getElementById(`cfgp-f-${provider}-${f.key}`)?.value || '').trim();
     if (f.key === 'api_key') body.api_key = v;
-    else if (['access_key_id','secret_access_key','region'].includes(f.key)) body[f.key] = v;
+    else if (['access_key_id','secret_access_key','region','base_url'].includes(f.key)) body[f.key] = v;
   }
   if (btn) { btn.disabled = true; btn.innerHTML = ico('loader', 'ico-spin') + ' Testing…'; }
   try {
@@ -3521,7 +3481,7 @@ const CM_TOP_FIELDS = ['api_key', 'access_key_id', 'secret_access_key'];
 
 window.openCustomProvider = function(editId) {
   const st = editId ? (_configCache?.providers || []).find(p => p.provider === editId) : null;
-  const base = {bf: {}, sel: 'openai', adv: false, msg: '', ok: false, busy: false, force: false, showKey: false};
+  const base = {bf: {}, opts: {...OLLAMA_PRESETS.balanced}, sel: 'openai', adv: false, msg: '', ok: false, busy: false, force: false, showKey: false};
   _cm = st
     ? {...base, tab: 'custom', editing: true, id: st.provider, name: st.name, protocol: st.protocol, base_url: st.fields.base_url || '',
        api_key: '', hasKey: !!st.masked.api_key, models: [...st.models],
@@ -3538,8 +3498,9 @@ function cmCapture() {
   set('cm-id', 'id', x => x.trim().toLowerCase()); set('cm-name', 'name', x => x.trim());
   set('cm-url', 'base_url', x => x.trim()); set('cm-proto', 'protocol'); set('cm-key', 'api_key', x => x.trim());
   set('cm-headers', 'headers');
-  if (el('cm-id')) _cm.models = [...document.querySelectorAll('.cm-model-in')].map(i => i.value.trim());
+  if (el('cm-id') || el('cm-fetch')) _cm.models = [...document.querySelectorAll('.cm-model-in')].map(i => i.value.trim());
   document.querySelectorAll('.cm-bf').forEach(i => { _cm.bf[i.dataset.key] = i.value.trim(); });
+  document.querySelectorAll('.cm-opt').forEach(i => { _cm.opts[i.dataset.key] = i.type === 'checkbox' ? i.checked : i.value.trim(); });
 }
 
 const cmIsBuiltin = () => _cm.tab === 'third' && !_cm.sel.startsWith('p:');
@@ -3562,7 +3523,7 @@ function cmEndpointHtml(m) {
       <option value="anthropic"${m.protocol === 'anthropic' ? ' selected' : ''}>Anthropic Messages</option></select></label>`;
 }
 
-function cmModelsHeadersHtml(m) {
+function cmModelsHtml(m) {
   return `<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem">
       <b style="font-size:.8rem">Models</b>
       <button type="button" class="btn btn-outline btn-sm" id="cm-fetch" onclick="cmFetchModels()">${ico('refresh')} Fetch models</button></div>
@@ -3570,12 +3531,73 @@ function cmModelsHeadersHtml(m) {
         <input class="ctl cm-model-in" value="${escAttr(x)}" placeholder="model-id" autocomplete="off" spellcheck="false"/>
         <button type="button" class="btn btn-outline btn-sm" onclick="cmRemoveModel(${i})" aria-label="Remove model">${ico('trash')}</button></div>`).join('')}</div>
       <div class="cm-hint" style="margin:.35rem 0">You can also add model IDs manually if discovery is unavailable. Left empty, the models the endpoint lists are used.</div>
-      <button type="button" class="btn btn-outline btn-sm" onclick="cmAddModel()">${ico('plus')} Add model</button></div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="cmAddModel()">${ico('plus')} Add model</button></div>`;
+}
+
+function cmModelsHeadersHtml(m) {
+  return cmModelsHtml(m) + `
     <label>Extra headers (optional)<textarea class="ctl" id="cm-headers" rows="2" style="height:auto;padding:.5rem .75rem;font-family:monospace;font-size:.78rem" placeholder="x-custom-header: value" spellcheck="false">${esc(m.headers)}</textarea>
       <span class="cm-hint">One <code>Name: value</code> per line. <code>{session}</code> becomes a stable per-conversation id. Put secrets in the API key field, not here.</span></label>`;
 }
 
-const cmAdv = (m, inner) => `<details class="cm-adv" ${m.adv ? 'open' : ''} ontoggle="_cm && (_cm.adv = this.open)"><summary>Customized settings</summary><div class="cm-adv-body">${inner}</div></details>`;
+/* Ollama request parameters (stored as providers.ollama.options; see llm_config.OLLAMA_DEFAULTS). The hints
+   carry what was measured for this stack so the values are not guesses. */
+const OLLAMA_OPTS = [
+  {key:'num_ctx', min:512, max:1048576, label:'Context length (num_ctx)', type:'number',
+   hint:'Tokens the model can see at once. The AI Assistant already spends ~3.1k on its system prompt + tool schemas, so Ollama\'s default 4096 fails on any tool call. Use 16384+. Costs little RAM (~40 MiB per 1k tokens on a 4B model); the real cost is prompt-processing time.'},
+  {key:'num_predict', min:1, max:131072, label:'Max output tokens (num_predict)', type:'number', ph:'empty = 2048 chat · scan LLM_MAX_TOKENS',
+   hint:'Caps each reply. On CPU-only hardware generation is ~15 tokens/s, so 2048 can take over two minutes. Too low truncates answers and scan JSON.'},
+  {key:'think', label:'Thinking', type:'bool',
+   hint:'Hidden reasoning for thinking models (Qwen3.5, DeepSeek-R1…). Off is much faster and avoids empty replies when reasoning eats the output budget. A model without thinking support may reject “on”.'},
+  {key:'temperature', min:0, max:2, label:'Temperature', type:'number', step:'0.05', hint:'0.2–0.5 keeps tool calls and JSON stable; higher is more varied.'},
+  {key:'top_p', min:0, max:1, label:'Top-p', type:'number', step:'0.05', hint:'Nucleus sampling, 0–1. Empty uses the model’s own default.'},
+  {key:'top_k', min:0, max:1000, label:'Top-k', type:'number', hint:'Sample only from the k likeliest tokens. Empty uses the model’s default.'},
+  {key:'min_p', min:0, max:1, label:'Min-p', type:'number', step:'0.01', hint:'Drops tokens below this share of the best one, 0–1.'},
+  {key:'repeat_penalty', min:0, max:2, label:'Repeat penalty', type:'number', step:'0.05', hint:'Above 1 discourages loops and rambling (try 1.1). Empty uses the model’s default.'},
+  {key:'num_thread', min:1, max:256, label:'CPU threads (num_thread)', type:'number', ph:'auto',
+   hint:'Empty lets Ollama pick (physical cores). Force a value only after benchmarking.'},
+  {key:'num_batch', min:1, max:8192, label:'Prompt batch (num_batch)', type:'number', ph:'512',
+   hint:'Prompt-processing batch size. Larger can speed up CPU prefill at the cost of RAM.'},
+  {key:'keep_alive', label:'Keep model loaded (keep_alive)', type:'text', ph:'30m',
+   hint:'How long the model stays in RAM after the last request: 30m, 2h, -1 = forever. A cold load adds seconds to the next request.'},
+];
+const OLLAMA_PRESETS = {
+  balanced: {num_ctx: 16384, think: false, temperature: 0.3, keep_alive: '30m'},
+  fast: {num_ctx: 8192, num_predict: 1024, think: false, temperature: 0.2, keep_alive: '30m'},
+  long: {num_ctx: 32768, num_predict: 4096, think: false, temperature: 0.3, keep_alive: '1h'},
+};
+const cmOllamaOptsHtml = m => `<div class="cm-presets"><b style="font-size:.78rem">Preset</b>
+    <button type="button" class="btn btn-outline btn-sm" onclick="cmPreset('balanced')" title="16k context, thinking off — recommended">Balanced</button>
+    <button type="button" class="btn btn-outline btn-sm" onclick="cmPreset('fast')" title="8k context, short replies">Fast</button>
+    <button type="button" class="btn btn-outline btn-sm" onclick="cmPreset('long')" title="32k context, longer replies">Long context</button></div>`
+  + OLLAMA_OPTS.map(f => {
+    const v = m.opts[f.key];
+    const input = f.type === 'bool'
+      ? `<input class="cm-opt" data-key="${f.key}" type="checkbox" ${v ? 'checked' : ''}/>`
+      : `<input class="ctl cm-opt" data-key="${f.key}" type="${f.type}" ${f.type === 'number' ? `min="${f.min}" max="${f.max}"` : ''} ${f.step ? `step="${f.step}"` : ''} value="${escAttr(v ?? '')}" placeholder="${escAttr(f.ph || '')}" autocomplete="off" spellcheck="false"/>`;
+    return f.type === 'bool'
+      ? `<label class="cm-opt-chk">${input}<span><b style="font-size:.8rem">${esc(f.label)}</b><span class="cm-hint" style="display:block">${esc(f.hint)}</span></span></label>`
+      : `<label>${esc(f.label)}${input}<span class="cm-hint">${esc(f.hint)}</span></label>`;
+  }).join('')
+  + `<div class="cm-hint">Server-side Ollama settings such as <code>OLLAMA_FLASH_ATTENTION=1</code> and <code>OLLAMA_KV_CACHE_TYPE=q8_0</code> are environment variables of the Ollama process, not per-request options. Applies to the AI Assistant, AI Fix, Auto Enhance and LLM-enriched scans.</div>`;
+
+function cmOllamaOptionsBody() {
+  const o = {};
+  for (const f of OLLAMA_OPTS) {
+    const v = _cm.opts[f.key];
+    if (v === '' || v == null) continue;
+    if (f.type === 'number') {
+      o[f.key] = Number(v);
+      if (!Number.isFinite(o[f.key]) || o[f.key] < f.min || o[f.key] > f.max) throw new Error(`${f.label} must be between ${f.min} and ${f.max}.`);
+    }
+    else o[f.key] = f.type === 'bool' ? !!v : v;
+  }
+  return o;
+}
+
+window.cmPreset = function(name) { cmCapture(); _cm.opts = {...OLLAMA_PRESETS[name]}; _cm.adv = true; renderCustomModal(); };
+
+const cmAdv = (m, inner, title = 'Customized settings') => `<details class="cm-adv" ${m.adv ? 'open' : ''} ontoggle="_cm && (_cm.adv = this.open)"><summary>${title}</summary><div class="cm-adv-body">${inner}</div></details>`;
 
 function cmBodyHtml(m) {
   if (m.tab === 'custom') return cmEndpointHtml(m) + cmKeyHtml(m) + cmModelsHeadersHtml(m);
@@ -3585,9 +3607,11 @@ function cmBodyHtml(m) {
   if (!cmIsBuiltin()) return pick + cmKeyHtml(m) + cmAdv(m, cmEndpointHtml(m) + cmModelsHeadersHtml(m));
   const meta = CONFIG_PROVIDER_META[m.sel];
   const field = f => `<label>${esc(f.label)}<input class="ctl cm-bf" data-key="${f.key}" type="${f.type}" value="${escAttr(m.bf[f.key] || '')}" placeholder="${escAttr(f.placeholder)}" autocomplete="off" spellcheck="false"/></label>`;
-  const top = meta.fields.filter(f => CM_TOP_FIELDS.includes(f.key)), rest = meta.fields.filter(f => !CM_TOP_FIELDS.includes(f.key));
+  const ollama = m.sel === 'ollama';   // its Base URL is the one real setting, so it is not tucked away
+  const top = meta.fields.filter(f => ollama || CM_TOP_FIELDS.includes(f.key)), rest = meta.fields.filter(f => !ollama && !CM_TOP_FIELDS.includes(f.key));
   return pick + `<p class="cm-hint" style="margin:0">${esc(meta.desc)}</p>` + top.map(field).join('')
-    + (top.length ? `<div class="cm-hint">${esc(LLM_KEY_NOTE.replace('It is never stored.', 'It is stored only on this server.'))}</div>` : '')
+    + (top.length && !ollama ? `<div class="cm-hint">${esc(LLM_KEY_NOTE.replace('It is never stored.', 'It is stored only on this server.'))}</div>` : '')
+    + (ollama ? cmModelsHtml(m) + cmAdv(m, cmOllamaOptsHtml(m), 'Advanced parameters') : '')
     + (rest.length ? cmAdv(m, rest.map(field).join('')) : '');
 }
 
@@ -3623,6 +3647,13 @@ function renderCustomModal() {
     </div>`;
 }
 
+window.editOllama = function() {
+  openCustomProvider();
+  const st = (_configCache?.providers || []).find(p => p.provider === 'ollama');
+  if (st?.fields?.base_url) _cm.bf.base_url = st.fields.base_url;
+  cmSelect('ollama');
+};
+
 window.closeCustomProvider = function() { _cm = null; renderCustomModal(); };
 window.cmTab = function(t) { cmCapture(); _cm.tab = t; _cm.msg = ''; _cm.force = false; renderCustomModal(); };
 window.cmSelect = function(v) {
@@ -3630,6 +3661,11 @@ window.cmSelect = function(v) {
   _cm.sel = v; _cm.msg = ''; _cm.force = false;
   const p = CM_PRESETS.find(x => 'p:' + x.id === v);
   if (p) Object.assign(_cm, {id: p.id, name: p.name, base_url: p.url, protocol: 'openai', headers: p.headers || '', models: ['']});
+  else {
+    const st = (_configCache?.providers || []).find(x => x.provider === v);
+    _cm.models = [...(st?.models || [])].concat('').slice(0, 501);
+    if (v === 'ollama') _cm.opts = {...OLLAMA_PRESETS.balanced, ...(st?.options || {})};   // show the values actually in effect
+  }
   renderCustomModal();
 };
 window.cmToggleKey = function() { cmCapture(); _cm.showKey = !_cm.showKey; renderCustomModal(); };
@@ -3650,13 +3686,22 @@ async function cmProbe() {
     body: JSON.stringify({protocol: _cm.protocol, base_url: _cm.base_url, api_key: _cm.api_key, headers: cmHeaders(), provider_id: _cm.editing ? _cm.id : ''})});
 }
 
+const OLLAMA_URL = 'http://localhost:11434';
+async function cmProbeOllama() {
+  const r = await api('/llm/test', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({provider: 'ollama', base_url: _cm.bf.base_url || OLLAMA_URL})});
+  if (r.ok && !Array.isArray(r.models)) throw new Error('The server is running an older version that cannot list Ollama models — restart it.');
+  return r;
+}
+
 window.cmFetchModels = async function() {
   cmCapture();
-  if (!_cm.base_url) { _cm.msg = 'Enter the Base URL first.'; _cm.ok = false; _cm.adv = true; renderCustomModal(); return; }
+  const builtin = cmIsBuiltin();
+  if (!builtin && !_cm.base_url) { _cm.msg = 'Enter the Base URL first.'; _cm.ok = false; _cm.adv = true; renderCustomModal(); return; }
   const btn = document.getElementById('cm-fetch');
   if (btn) { btn.disabled = true; btn.innerHTML = ico('loader', 'ico-spin') + ' Fetching…'; }
   try {
-    const r = await cmProbe();
+    const r = builtin ? await cmProbeOllama() : await cmProbe();
     cmCapture();
     if (r.ok) _cm.models = [...new Set([..._cm.models.filter(Boolean), ...r.models])].slice(0, 500);
     _cm.msg = r.message; _cm.ok = r.ok;
@@ -3673,17 +3718,19 @@ async function cmFinish() {
 async function cmSaveBuiltin(force) {
   const p = _cm.sel, meta = CONFIG_PROVIDER_META[p], body = {};
   for (const f of meta.fields) body[f.key] = _cm.bf[f.key] || '';
-  if (p === 'ollama' && !body.base_url) body.base_url = 'http://localhost:11434';
+  if (p === 'ollama' && !body.base_url) body.base_url = OLLAMA_URL;
   if (p !== 'ollama' && !CM_TOP_FIELDS.some(k => body[k])) {
     _cm.msg = `Enter the ${meta.fields.find(f => CM_TOP_FIELDS.includes(f.key)).label}.`; _cm.ok = false; renderCustomModal(); return;
   }
-  _cm.busy = true; _cm.force = false; _cm.ok = true; _cm.msg = force || p === 'ollama' ? '' : 'Testing connection…'; renderCustomModal();
+  _cm.busy = true; _cm.force = false; _cm.ok = true; _cm.msg = force ? '' : 'Testing connection…'; renderCustomModal();
   try {
-    if (!force && p !== 'ollama') {   // /llm/test cannot probe a typed Ollama URL, so Ollama saves directly
+    if (p === 'ollama') { body.models = _cm.models.filter(Boolean); body.options = cmOllamaOptionsBody(); }
+    if (!force) {
       const r = await api('/llm/test', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({provider: p, api_key: body.api_key || '', access_key_id: body.access_key_id || '',
-                              secret_access_key: body.secret_access_key || '', region: body.region || ''})});
+                              secret_access_key: body.secret_access_key || '', region: body.region || '', base_url: p === 'ollama' ? body.base_url : ''})});
       if (!r.ok) { _cm.busy = false; _cm.force = true; _cm.ok = false; _cm.msg = r.message; renderCustomModal(); return; }
+      if (p === 'ollama' && !body.models.length) body.models = (r.models || []).slice(0, 100);   // nothing typed: keep what Ollama lists
     }
     await api(`/config/providers/${p}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
     await cmFinish();
@@ -4082,6 +4129,20 @@ function chatElapsed(ms) {
    has been running. Callers drive it through setPhase() and must stop() it when the turn ends —
    the persisted history has no equivalent, so leaving it behind would make a reloaded chat look
    different from the live one. */
+/* Follow the newest output only while the reader is at the bottom. Scrolling up pauses it (so they can read
+   or select earlier text while the answer streams); returning to the bottom resumes it. `force` is for the
+   start of a new turn or a freshly rendered history. */
+function chatStick(box, force) {
+  if (!box) return;
+  // `_max` is where the previous call left the view (the bottom then). A reader who scrolled up is
+  // above it, so they are left alone; one back at the bottom follows again. No scroll listener: this
+  // reads the live position, so it cannot go stale between frames.
+  if (force || box._max == null || box.scrollTop >= box._max - 48) {
+    box.scrollTop = box.scrollHeight;
+    box._max = box.scrollTop;
+  }
+}
+
 function chatProgressStart() {
   const box = document.getElementById('chat-msgs');
   const el = document.createElement('div');
@@ -4103,7 +4164,7 @@ function chatProgressStart() {
     el.querySelector('.t').textContent = chatElapsed(Date.now() - t0);
     el.classList.toggle('is-writing', writing);
   };
-  if (box) { box.appendChild(el); box.scrollTop = box.scrollHeight; }
+  if (box) { box.appendChild(el); chatStick(box, true); }
   paint();
   timer = setInterval(paint, 250);
   return {
@@ -4115,7 +4176,7 @@ function chatProgressStart() {
       const b = document.getElementById('chat-msgs');
       if (el.isConnected && b && el.parentNode === b && b.lastElementChild !== el) {
         b.appendChild(el);
-        b.scrollTop = b.scrollHeight;
+        chatStick(b);
       }
     },
     stop() { stopped = true; clearInterval(timer); timer = 0; if (el.isConnected) el.remove(); },
@@ -4198,7 +4259,7 @@ function chatAdd(cls, html) {
   d.className = 'chat-msg ' + cls;
   d.innerHTML = html;
   box.appendChild(d);
-  box.scrollTop = box.scrollHeight;
+  chatStick(box);
   return d;
 }
 
@@ -4285,6 +4346,9 @@ async function exportChat(id, st, detail) {
 function chatRenderHistory(messages, st) {
   const box = document.getElementById('chat-msgs');
   if (!box) return;
+  // Same conversation re-rendered after a turn (not a session switch): stay where a scrolled-up reader was.
+  const keepTop = box._max != null && box.scrollTop < box._max - 48 && st && box.dataset.sid === String(st.sid) ? box.scrollTop : null;
+  box.dataset.sid = st ? String(st.sid) : '';
   box.innerHTML = '';
   const results = {};
   messages.forEach(m => m.content.forEach(b => { if (b.type === 'tool_result') results[b.tool_use_id] = b; }));
@@ -4306,6 +4370,8 @@ function chatRenderHistory(messages, st) {
     }
   });
   if (!messages.length) chatShowPrompts();
+  if (keepTop != null) box.scrollTop = keepTop;
+  else chatStick(box, true);   // a freshly opened conversation starts at its newest message
   if (st) {
     const last = messages[messages.length - 1];
     const pendingIds = last && last.role === 'assistant'
@@ -4347,8 +4413,7 @@ async function tabAssistant(el, id, detail) {
           <select id="chat-provider" title="LLM provider" onchange="onChatProviderChange()">
             ${providerDropdownOptionsHtml(_configCache, '', detail.llm_provider && detail.llm_provider !== 'none' ? 'Scan default (' + providerLabel(detail.llm_provider) + ')' : 'Scan default')}
           </select>
-          <select id="chat-model-select" hidden title="Model override" onchange="onChatModelSelectChange()"></select>
-          <input id="chat-model" placeholder="${escAttr(detail.llm_model || 'model (default)')}" title="Model override"/>
+          <select id="chat-model-select" hidden title="Model"></select>
           <span class="nav-spacer"></span>
           <button class="chat-send-btn" id="chat-send" type="button" title="Send" aria-label="Send">${ico('send')}</button>
           <button class="chat-send-btn stop" id="chat-stop" type="button" title="Stop" aria-label="Stop" style="display:none">${ico('stop')}</button>
@@ -4372,6 +4437,30 @@ async function tabAssistant(el, id, detail) {
   const lsKey = 'malimite.chat.' + id;   // last-open session per scan; best-effort (storage can be blocked)
   const saveSid = sid => { try { sid ? localStorage.setItem(lsKey, sid) : localStorage.removeItem(lsKey); } catch (_) {} };
   const savedSid = () => { try { return localStorage.getItem(lsKey); } catch (_) { return null; } };
+  /* Provider/model last used per chat session (and, under '', the last pick for this scan). The pickers
+     are plain DOM controls that re-render on every tab switch, so without this they fell back to
+     "Scan default" and hid which model a conversation was actually using. Best-effort like saveSid. */
+  const llmKey = 'malimite.chatllm.' + id;
+  const llmMap = () => { try { return JSON.parse(localStorage.getItem(llmKey)) || {}; } catch (_) { return {}; } };
+  const currentLlm = () => {
+    const sel = document.getElementById('chat-model-select');
+    const m = sel && !sel.hidden ? sel.value : '';
+    return {p: document.getElementById('chat-provider')?.value || '', m};
+  };
+  const saveLlm = () => {
+    if (!document.getElementById('chat-provider')) return;
+    const map = llmMap(), cur = currentLlm();
+    map[''] = cur;
+    if (st.sid) map[st.sid] = cur;
+    try { localStorage.setItem(llmKey, JSON.stringify(map)); } catch (_) {}
+  };
+  const applyLlm = e => {
+    const pe = document.getElementById('chat-provider');
+    if (!pe || !e || ![...pe.options].some(o => o.value === e.p)) return;   // provider no longer connected: keep the default
+    pe.value = e.p; onChatProviderChange();
+    const ms = document.getElementById('chat-model-select');
+    if (e.m && ms && !ms.hidden && [...ms.options].some(o => o.value === e.m)) ms.value = e.m;   // a model removed from Config falls back to the first
+  };
   const when = c => { try { return new Date(c * 1000).toLocaleString([], {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'}); } catch (_) { return ''; } };
 
   /* dropdown = "+ New chat" followed by EVERY saved session, so starting a new chat never hides the old ones */
@@ -4398,11 +4487,12 @@ async function tabAssistant(el, id, detail) {
     if (document.querySelector('.chat-card')?.dataset.chatScan !== id) return;
     let data = await api('/scans/' + id + '/chat');
     st.sessions = data.sessions;
-    if (sid === null && st.fresh) { st.sid = null; renderSessions(); if (!document.querySelector('.chat-msg')) chatShowPrompts(); return; }
+    if (sid === null && st.fresh) { st.sid = null; applyLlm(llmMap()['']); renderSessions(); if (!document.querySelector('.chat-msg')) chatShowPrompts(); return; }
     const want = [sid, st.sid, savedSid()].find(x => x && st.sessions.some(s => s.id === x)) || (st.sessions[0] && st.sessions[0].id) || null;
-    if (!want) { st.sid = null; st.fresh = false; renderSessions(); chatShowPrompts(); return; }
+    if (!want) { st.sid = null; st.fresh = false; applyLlm(llmMap()['']); renderSessions(); chatShowPrompts(); return; }
     if (want !== data.session_id) data = await api('/scans/' + id + '/chat?session_id=' + encodeURIComponent(want));
     st.sid = want; st.fresh = false; saveSid(want);
+    applyLlm(llmMap()[want]);   // the model this conversation last used; unknown (older) sessions keep the current pick
     renderSessions();
     // A generation can outlive the page that started it (refresh, another menu). Show what was saved
     // before it, then re-join it so the rest streams in instead of the chat looking dead.
@@ -4443,9 +4533,11 @@ async function tabAssistant(el, id, detail) {
     const paint = () => {
       raf = 0;
       if (!bubble) return;
+      // innerHTML rebuilds every code block, which would snap one the reader is scrolling back to the top
+      const kept = [...bubble.querySelectorAll('pre')].map(e => [e.scrollTop, e.scrollLeft]);
       bubble.innerHTML = (bubble.dataset.pre || '') + chatMd(buf) + (streaming ? '<span class="chat-caret" aria-hidden="true"></span>' : '');
-      const b = document.getElementById('chat-msgs');
-      if (b) b.scrollTop = b.scrollHeight;
+      bubble.querySelectorAll('pre').forEach((e, i) => { if (kept[i]) { e.scrollTop = kept[i][0]; e.scrollLeft = kept[i][1]; } });
+      chatStick(document.getElementById('chat-msgs'));
     };
     const ensureBubble = () => {
       if (bubble) return;
@@ -4466,7 +4558,7 @@ async function tabAssistant(el, id, detail) {
     };
 
     const handle = ev => {
-      if (ev.type === 'session') { st.sid = ev.session_id; st.fresh = false; saveSid(st.sid); }
+      if (ev.type === 'session') { st.sid = ev.session_id; st.fresh = false; saveSid(st.sid); saveLlm(); }
       else if (ev.type === 'token') {
         ensureBubble();
         progress.setPhase('writing');
@@ -4534,11 +4626,7 @@ async function tabAssistant(el, id, detail) {
           ? {kind: 'image', name: f.name, content: f.content, media_type: f.mediaType}
           : {kind: 'text', name: f.name, content: f.content}),
         provider: document.getElementById('chat-provider')?.value || null,
-        model: (() => {
-          const sel = document.getElementById('chat-model-select');
-          if (sel && !sel.hidden && sel.value !== LLM_MODEL_CUSTOM) return sel.value;
-          return document.getElementById('chat-model')?.value.trim() || null;
-        })()};
+        model: currentLlm().m || null};
       const fetchPromise = fetch('/api/v1/scans/' + id + '/chat', {method: 'POST', signal: st.ctrl.signal,
         headers: headers({'Content-Type': 'application/json'}), body: JSON.stringify(body)});
       // Only once the request is actually in flight — not necessarily accepted yet, but
@@ -4728,6 +4816,8 @@ async function tabAssistant(el, id, detail) {
   $in.addEventListener('blur', () => setTimeout(closeSlashMenu, 150));   // delay: let the mousedown above land first
 
   document.getElementById('chat-send').onclick = () => send($in.value);
+  // inline onchange handlers (which repopulate the model list) run first; these then remember the result
+  ['chat-provider', 'chat-model-select'].forEach(i => document.getElementById(i).addEventListener('change', saveLlm));
   // The generation runs server-side now, so closing the stream alone would not stop it.
   document.getElementById('chat-stop').onclick = async () => {
     try { if (st.sid) await fetch('/api/v1/scans/' + id + '/chat/' + encodeURIComponent(st.sid) + '/stop', {method: 'POST', headers: headers()}); } catch (_) {}
@@ -4782,6 +4872,7 @@ async function tabAssistant(el, id, detail) {
     } catch (e) { showErr('Could not fork: ' + e.message); return; }
     saveSid(res.session_id);
     await loadSession(res.session_id);
+    saveLlm();   // the fork starts on the parent's provider/model
   };
 
   // A stream left over from before the user switched menus (or scans) would paint into this page, which
@@ -7576,9 +7667,8 @@ function renderAiFixPanel(v) {
             ${providerDropdownOptionsHtml(_configCache)}
           </select>
         </label>
-        <label>Model override (optional)
-          <select id="aifix-model-select-${v.id}" hidden onchange="onAiFixModelSelectChange(${v.id})"></select>
-          <input type="text" id="aifix-model-${v.id}" placeholder="leave empty for provider default"/>
+        <label>Model
+          <select id="aifix-model-select-${v.id}" hidden></select>
         </label>
         <div class="full">
           <div style="font-size:.72rem;color:var(--muted);margin-bottom:.3rem">Fields to rewrite</div>
@@ -7599,47 +7689,23 @@ window.toggleAiFix = function(id) {
   if (el) el.hidden = !el.hidden;
 };
 
-/* Same dropdown-with-Custom-escape-hatch pattern as the upload form / AI Assistant chat bar
-   (see onProviderChange/onChatProviderChange), parametrized by finding id since several AI Fix
-   panels can be open on the same Vulnerabilities page at once. */
+/* Same catalog-only model picker as the upload form / AI Assistant chat bar (see onProviderChange /
+   onChatProviderChange), parametrized by finding id since several AI Fix panels can be open on the same
+   Vulnerabilities page at once. No catalog (or "Scan default") hides the picker: provider default model. */
 window.onAiFixProviderChange = function(id) {
   const provider = document.getElementById(`aifix-provider-${id}`)?.value || '';
   const modelSelect = document.getElementById(`aifix-model-select-${id}`);
-  const modelEl = document.getElementById(`aifix-model-${id}`);
-  if (!modelSelect || !modelEl) return;
+  if (!modelSelect) return;
   const catalog = modelCatalog(provider);
-  if (catalog) {
-    modelSelect.innerHTML = catalog.map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('')
-      + `<option value="${LLM_MODEL_CUSTOM}">Custom (type model name)…</option>`;
-    modelSelect.value = catalog[0].value;
-    modelSelect.hidden = false;
-    modelEl.hidden = true;
-    modelEl.value = '';
-  } else {
-    // ollama or "Scan default": no fixed catalog, plain text as before.
-    modelSelect.hidden = true;
-    modelEl.hidden = false;
-  }
-};
-
-window.onAiFixModelSelectChange = function(id) {
-  const modelSelect = document.getElementById(`aifix-model-select-${id}`);
-  const modelEl = document.getElementById(`aifix-model-${id}`);
-  if (!modelSelect || !modelEl) return;
-  const custom = modelSelect.value === LLM_MODEL_CUSTOM;
-  modelEl.hidden = !custom;
-  if (custom) { modelEl.value = ''; modelEl.focus(); }
+  modelSelect.innerHTML = (catalog || []).map(m => `<option value="${escAttr(m.value)}">${esc(m.label)}</option>`).join('');
+  modelSelect.hidden = !catalog;
 };
 
 window.runAiFix = async function(id) {
   const msg = document.getElementById('aifix-msg-'+id);
   const provider = document.getElementById(`aifix-provider-${id}`).value;
   const modelSelect = document.getElementById(`aifix-model-select-${id}`);
-  const modelInput = document.getElementById(`aifix-model-${id}`);
-  // Dropdown is shown for providers with a known catalog, unless "Custom…" was chosen.
-  const model = (modelSelect && !modelSelect.hidden && modelSelect.value !== LLM_MODEL_CUSTOM)
-    ? modelSelect.value
-    : modelInput.value.trim();
+  const model = modelSelect && !modelSelect.hidden ? modelSelect.value : '';
   const checked = Array.from(document.querySelectorAll(`#aifix-fields-${id} input:checked`)).map(c => c.value);
   if (!checked.length) {
     msg.textContent = 'Select at least one field to rewrite.';
@@ -7748,9 +7814,9 @@ function aeProviderOptionsHtml(scanDefaultLabel) {
 const AE = {
   scanId: null, detail: null, groups: [],
   selected: new Set(), fields: new Set(AE_FIELDS.map(f => f.key)),
-  tab: 'select', q: '', sev: '', provider: '', model: '', customModel: '',
+  tab: 'select', q: '', sev: '', provider: '', model: '',
   job: null, history: [], poll: null, tick: null, open: false, error: '',
-  sort: 'newest', logView: 'latest', expanded: new Set(), busy: new Set(),
+  sort: 'newest', logView: 'latest', expanded: new Set(), busy: new Set(), runOpen: {},   // runOpen: job_id → whether its Full Log card is open
 };
 
 function aeRows() {
@@ -7782,7 +7848,7 @@ function aeVisibleRows() {
 function aeRunning() { return AE.job && (AE.job.state === 'queued' || AE.job.state === 'running'); }
 
 function aeModelValue() {
-  return AE.model === LLM_MODEL_CUSTOM ? AE.customModel.trim() : AE.model;
+  return AE.model;
 }
 
 /* Called on every Vulnerabilities tab render: remembers the scan for the modal and shows a
@@ -7819,7 +7885,6 @@ window.openAutoEnhance = function(tab) {
     AE.provider = AE.detail.llm_provider;
     const cat = modelCatalog(AE.provider);
     AE.model = cat ? (cat.some(m => m.value === AE.detail.llm_model) ? AE.detail.llm_model : cat[0].value) : '';
-    AE.customModel = cat ? '' : (AE.detail.llm_model || '');
   }
   // Best-effort refresh: a provider connected in the Config tab after this scan page first
   // loaded (no reload in between) should show up in the dropdown next time the modal opens,
@@ -8111,8 +8176,8 @@ function aeLogPane() {
       <div class="ae-act-head"><div class="ae-act-title">Full Activity Log <span class="ae-count">${runs.length} run${runs.length === 1 ? '' : 's'}</span></div>
         ${aeSortSelect()}</div>
       ${runs.map((run, i) => `
-        <details class="ae-run" ${i === 0 ? 'open' : ''}>
-          <summary>
+        <details class="ae-run" ${(AE.runOpen[run.job_id] ?? (i === 0)) ? 'open' : ''}>
+          <summary onclick="AE.runOpen['${run.job_id}'] = !this.parentNode.open">
             ${aeRunPill(run)}
             <strong>${run.succeeded || 0}/${run.total} enhanced</strong>
             <span class="ae-run-meta">${new Date(run.finished_at || run.created_at).toLocaleString()} · ${esc(run.provider)}/${esc(run.model)}
@@ -8157,20 +8222,17 @@ function aeRender() {
   const latestRun = aeRuns()[0];
   const catalog = modelCatalog(AE.provider);
   const modelCtl = catalog
-    ? `<span class="ae-model-row"><select onchange="aeSetModel(this.value)">
+    ? `<select onchange="aeSetModel(this.value)">
          ${catalog.map(m => `<option value="${escAttr(m.value)}" ${AE.model === m.value ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
-         <option value="${LLM_MODEL_CUSTOM}" ${AE.model === LLM_MODEL_CUSTOM ? 'selected' : ''}>Custom (type model name)…</option>
-       </select>
-       ${AE.model === LLM_MODEL_CUSTOM ? `<input type="text" placeholder="model name" value="${escAttr(AE.customModel)}" oninput="AE.customModel=this.value">` : ''}</span>`
-    : `<input type="text" placeholder="${AE.provider ? 'model name' : 'scan default model'}" value="${escAttr(AE.customModel)}"
-              oninput="AE.customModel=this.value" ${AE.provider ? '' : 'disabled'}>`;
+       </select>`
+    : `<select disabled><option>${AE.provider ? 'Provider default model' : 'Scan default model'}</option></select>`;
   const scanDefault = AE.detail?.llm_provider && AE.detail.llm_provider !== 'none'
     ? `Scan default (${AE.detail.llm_provider}${AE.detail.llm_model ? '/' + AE.detail.llm_model : ''})` : 'Scan default';
 
   const nSel = AE.selected.size, nFields = AE.fields.size;
   const runBtn = `<button class="btn btn-primary" type="button" onclick="aeRunFromAnyTab()"
-        ${(aeRunning() || (AE.tab === 'select' && (!nSel || !nFields))) ? 'disabled' : ''}
-        title="${aeRunning() ? 'A batch is already running for this scan' : ''}">
+        ${(aeRunning() || !nSel || !nFields) ? 'disabled' : ''}
+        title="${aeRunning() ? 'A batch is already running for this scan' : !nSel ? 'Select findings in the Select Findings tab first' : !nFields ? 'Choose at least one field to enhance' : ''}">
         ${AE_ICONS.sparkle.replace('<svg ', '<svg width="15" height="15" ')} Run Auto Enhance</button>`;
   let footInfo, actions;
   if (AE.tab === 'log') {
@@ -8280,12 +8342,11 @@ window.aeRetry = async function(jobId, vulnId) {
 window.aeSetQuery = q => { AE.q = q; aeRender(); };
 window.aeSetSev = s => { AE.sev = s; aeRender(); };
 window.aeSetTab = t => { AE.tab = t; AE.error = ''; aeRender(); };
-window.aeSetModel = m => { AE.model = m; if (m !== LLM_MODEL_CUSTOM) AE.customModel = ''; aeRender(); };
+window.aeSetModel = m => { AE.model = m; aeRender(); };
 window.aeSetProvider = p => {
   AE.provider = p;
   const cat = modelCatalog(p);
   AE.model = cat ? cat[0].value : '';
-  AE.customModel = '';
   aeRender();
 };
 window.aeToggleField = (k, on) => { on ? AE.fields.add(k) : AE.fields.delete(k); aeRender(); };

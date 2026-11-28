@@ -17,9 +17,9 @@ _TIMEOUT = httpx.Timeout(15, connect=8)
 
 
 def _result(ok: bool, provider: str, message: str, *, model_found: Optional[bool] = None,
-            used_server_key: bool = False) -> dict:
+            used_server_key: bool = False, models: Optional[list] = None) -> dict:
     return {"ok": ok, "provider": provider, "message": message,
-            "model_found": model_found, "used_server_key": used_server_key}
+            "model_found": model_found, "used_server_key": used_server_key, "models": models or []}
 
 
 def _model_listed(model: str, ids: list[str]) -> Optional[bool]:
@@ -155,7 +155,11 @@ async def probe(provider: str, api_key: str = "", model: str = "",
         return _result(False, p, "Enter an API key (none is configured on the server either).")
 
     if p == "ollama":
-        base = env.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        # a URL typed in the Config dialog wins over the stored/env one (probe before saving)
+        base = ((extra or {}).get("base_url") or "").strip() or env.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        base = base.rstrip("/")
+        if not base.startswith(("http://", "https://")):
+            return _result(False, p, "Base URL must start with http:// or https://.")
         url, headers = f"{base}/api/tags", {}
     elif p == "claude":
         url = "https://api.anthropic.com/v1/models?limit=1000"
@@ -174,7 +178,9 @@ async def probe(provider: str, api_key: str = "", model: str = "",
     try:
         resp = await client.get(url, headers=headers)
     except httpx.HTTPError as e:
-        return _result(False, p, f"Could not reach {p}: {type(e).__name__}.", used_server_key=used_server_key)
+        hint = (f" Is Ollama running at {base}? (From inside Docker, use http://host.docker.internal:11434.)"
+                if p == "ollama" else "")
+        return _result(False, p, f"Could not reach {p}: {type(e).__name__}.{hint}", used_server_key=used_server_key)
     finally:
         if own:
             await client.aclose()
@@ -194,4 +200,4 @@ async def probe(provider: str, api_key: str = "", model: str = "",
     msg = "Connected" + (" using the server's key" if used_server_key else "") + "."
     if found is False:
         msg += f" Model '{model.strip()}' was not in the provider's model list."
-    return _result(True, p, msg, model_found=found, used_server_key=used_server_key)
+    return _result(True, p, msg, model_found=found, used_server_key=used_server_key, models=[i for i in ids if i])
