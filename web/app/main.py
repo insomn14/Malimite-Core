@@ -11,7 +11,7 @@ import zipfile
 from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import aiofiles
 from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
@@ -321,13 +321,14 @@ async def get_strings(
     limit: int = Query(default=200, ge=0, le=2000),
     page: Optional[int] = Query(default=None, ge=1),
     size: int = Query(default=50, ge=10, le=200),
+    kind: Optional[Literal["url", "email", "path", "secret"]] = None,   # heuristic quick filter; an unknown value is a 422
 ):
     _check_auth(request)
     db_path, exe = _require_db(scan_id)
     # Keep the original list response for callers that do not opt into pagination.
     if page is not None:
-        return await db.get_strings_page(db_path, exe, q, page, size)
-    return await db.get_strings(db_path, exe, q, limit)
+        return await db.get_strings_page(db_path, exe, q, page, size, kind)
+    return await db.get_strings(db_path, exe, q, limit, kind)
 
 
 @app.get("/api/v1/scans/{scan_id}/resources")

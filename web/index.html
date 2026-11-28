@@ -501,7 +501,7 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 /* ── Decompiled › Functions: class browser · source viewer · cross-refs ──
    Three columns above 1100px (of the Decompiled shell, not the viewport); Cross-refs becomes an overlay between
    900–1100px and the class browser / cross-refs become full sheets at 900px and below. */
-.fn{--fn-row-h:28px;position:relative;display:grid;grid-template-columns:var(--fn-tree-w,260px) minmax(0,1fr) 240px;height:max(460px,calc(100vh - 250px));border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,.04);overflow:hidden;background:var(--surface)}
+.fn{--fn-row-h:28px;position:relative;display:grid;grid-template-columns:var(--fn-tree-w,260px) minmax(0,1fr) 240px;height:max(460px,calc(100vh - 250px));border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface)}
 .fn.nox{grid-template-columns:var(--fn-tree-w,260px) minmax(0,1fr)}
 .fn.nox .xref{display:none}
 .fn .md{display:none}
@@ -512,33 +512,37 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .fn-chips{display:flex;flex-wrap:wrap;gap:.4rem}
 .fn-chip{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:.2rem .7rem;font:inherit;font-size:.75rem;font-weight:600;color:#4b5563;cursor:pointer}
 .fn-chip:hover:not(:disabled){border-color:#c3c6f2;background:#f7f7ff}
-.fn-chip[aria-pressed=true]{background:#eef0ff;border-color:#c3c6f2;color:var(--accent)}
+.fn-chip[aria-pressed=true],.fn-chip[aria-pressed=true]:hover:not(:disabled){background:#eef0ff;border-color:#c3c6f2;color:var(--accent)}
 .fn-chip:disabled{opacity:.5;cursor:not-allowed}
 .fn-chip:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .fn-count{font-size:.72rem;color:var(--muted)}
 .fn-count:empty{display:none}
-.tlist{flex:1;min-height:0;overflow:auto;font-size:.8rem;outline:none}
+.tlist{flex:1;min-height:0;overflow:auto;padding:4.8px 0;font-size:.8rem;outline:none}
 .tlist:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
 .fn-vs{position:relative;min-width:100%;width:max-content}
 .fn-vw{position:absolute;left:0;right:0;top:0}
-.tn{display:flex;align-items:center;gap:.35rem;height:var(--fn-row-h);padding:0 .55rem;cursor:pointer;white-space:nowrap;box-sizing:border-box}
-.tn:hover{background:var(--bg)}
-.tn.on{background:#eef0ff;color:var(--accent);font-weight:600}
+/* One row per class/folder. Depth (--d) indents it and draws one thin guide line per ancestor level — what the mockup gets
+   from nested .kids{margin-left:.85rem;border-left:1px}. Hover/selected paint on ::before, which starts after the guides. */
+.tn{--d:0;--ix:calc(var(--d)*(.85rem + 1px));position:relative;isolation:isolate;display:flex;align-items:center;gap:.35rem;height:var(--fn-row-h);padding:0 .55rem 0 calc(var(--ix) + .55rem);cursor:pointer;white-space:nowrap;box-sizing:border-box;
+  background:repeating-linear-gradient(90deg,transparent 0 .85rem,#eef0f3 .85rem calc(.85rem + 1px)) 0 0/var(--ix) 100% no-repeat}
+.tn::before{content:"";position:absolute;z-index:-1;inset:0 0 0 var(--ix)}
+.tn:hover::before{background:var(--bg)}
+.tn.on{color:var(--accent);font-weight:600}
+.tn.on::before{background:#eef0ff}
 .tlist:focus-visible .tn.cur{outline:2px solid var(--accent);outline-offset:-2px}
 .tn.hdr{cursor:default;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--bg)}
-.tn.hdr:hover{background:var(--bg)}
+.tn.hdr::before{display:none}
 .tn.hdr.note{text-transform:none;letter-spacing:0;font-weight:500;font-size:.74rem;background:transparent;cursor:default}
 .tn.hdr .n{font-weight:700;color:#4b5563;background:rgba(17,24,39,.06);padding:0 .4rem;border-radius:999px}
 .tn .ar{display:inline-block;width:1em;flex:none;text-align:center;font-size:.7rem;color:var(--muted);transition:transform .12s}
 .tn .ar::before{content:"▸"}
-.tn .ar.leaf::before{content:""}
 .tn[aria-expanded=true]>.ar{transform:rotate(90deg)}
 .tn .lb{overflow:hidden;text-overflow:ellipsis;min-width:0}
 .tn .lb small{color:var(--muted);font-weight:400;font-size:inherit}
 .tn.on .lb small{color:inherit;opacity:.7}
 .tn mark{background:#fde68a;color:inherit;border-radius:3px}
 .fn-dec{display:inline-flex;align-items:center;gap:.4rem;margin-left:auto;flex:none}
-.epi{color:var(--accent);font-size:.8rem}
+.epi{color:var(--accent);font-size:.8rem;font-weight:400;flex:none}
 .fn-tree-sev{display:inline-block;width:7px;height:7px;border-radius:50%;flex:none}
 .fn-tree-sev.CRITICAL{background:#9d174d}
 .fn-tree-sev.HIGH{background:var(--high)}
@@ -547,23 +551,27 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .fn-tree-sev.INFO{background:#9ca3af}
 .roll{font-size:.68rem;font-weight:700}
 .roll.sev-critical{color:#9d174d}.roll.sev-high{color:#b91c1c}.roll.sev-medium{color:#92400e}.roll.sev-low{color:#1d4ed8}.roll.sev-info{color:#4b5563}
+.roll .rd{font-size:inherit}   /* the dot keeps the saturated severity colour (a graphic: 3:1); the number keeps the darker AA tone above */
+.roll.sev-critical .rd{color:#be185d}.roll.sev-high .rd{color:var(--high)}.roll.sev-medium .rd{color:var(--medium)}.roll.sev-low .rd{color:var(--low)}.roll.sev-info .rd{color:#9ca3af}
 .fn-drag-handle{position:absolute;top:0;right:-3px;bottom:0;width:6px;cursor:col-resize;z-index:3}
 .fn-drag-handle:hover,.fn-drag-handle.dragging{background:var(--accent);opacity:.6}
 
 .fn .view{display:flex;flex-direction:column;min-width:0;min-height:0}
-.otabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--border);flex:none;scrollbar-width:thin}
+.otabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--border);flex:none;scrollbar-width:none}
+.otabs::-webkit-scrollbar{display:none}
 .otabs[hidden]{display:none}
-.ot{display:flex;align-items:center;border-right:1px solid var(--border);white-space:nowrap;color:var(--muted)}
+.ot{display:flex;align-items:center;border-right:1px solid var(--border);white-space:nowrap;color:var(--muted);font-size:.78rem}   /* the buttons inside inherit it (font:inherit) */
 .ot.on{background:var(--bg);color:var(--text)}
 .ot button{border:0;background:none;font:inherit;color:inherit;cursor:pointer}
-.ot-main{padding:.4rem .2rem .4rem .7rem;font-size:.78rem}
-.ot-x{display:inline-flex;align-items:center;justify-content:center;min-width:28px;min-height:28px;padding:0}
+.ot-main{padding:.4rem .15rem .4rem .7rem;font-size:.78rem}
+.ot-x{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;padding:0}
 .ot .ot-x{color:#4b5563}   /* a flat colour (no opacity fade): 4.5:1+ at rest, hover and on the selected tab */
 .ot .ot-x:hover{color:var(--text)}
 .ot button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.crumb{display:flex;align-items:center;gap:.4rem;padding:.25rem .75rem;border-bottom:1px solid var(--border);font-size:.74rem;color:var(--muted);flex:none}
+.crumb{display:flex;align-items:center;gap:.4rem;padding:.45rem .75rem;border-bottom:1px solid var(--border);font-size:.74rem;color:var(--muted);flex:none}
 .crumb .btn{flex:none}
 .fn-actions{display:inline-flex;align-items:center;gap:.4rem;flex:none}
+.fn-origin{font-size:.66rem;font-weight:700;letter-spacing:.03em;border-radius:6px;padding:.15rem .5rem;background:#f1f2f4;color:#4b5563;white-space:nowrap}
 .path{display:flex;gap:.2rem;align-items:center;flex:1;min-width:0;overflow:hidden;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .path .anc,.path .anc-ell{display:inline-flex;align-items:center;gap:.2rem;flex:none}
 .path .cur{flex:0 1 auto;min-width:0}
@@ -574,11 +582,11 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .crumb-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 .path .cur{color:var(--text);font-weight:700;overflow:hidden;text-overflow:ellipsis}
 .fn .ic{display:none}
-#fn-refs-btn.on{background:#eef0ff;border-color:#c3c6f2;color:var(--accent)}
 .fn-outline{position:relative}
-.fn-outline summary{cursor:pointer;list-style:none;padding:.3rem .6rem;font-size:.75rem;font-weight:600;border:1px solid var(--border);border-radius:8px;color:var(--muted);background:var(--surface)}
+.fn-outline summary{cursor:pointer;list-style:none;padding:.3rem .7rem;font-size:.78rem;line-height:1.5;font-weight:600;border:1px solid var(--border);border-radius:8px;color:var(--text);background:var(--surface)}
+.fn-outline summary:hover{background:#f7f7ff;border-color:#c3c6f2}
 .fn-outline summary::-webkit-details-marker{display:none}
-.fn-outline[open] summary{color:var(--text);border-color:var(--accent)}
+.fn-outline[open] summary{border-color:var(--accent)}
 .fn-outline summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .fn-outline-list{position:absolute;right:0;top:calc(100% + .3rem);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:300px;overflow-y:auto;z-index:20;min-width:220px}
 .fn-outline-item{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;padding:.4rem .7rem;font-size:.75rem;white-space:nowrap;color:var(--text);cursor:pointer}
@@ -593,21 +601,29 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 @container (max-width:900px){
   .dec-sub{flex-wrap:nowrap}
   .dec-sub .seg{flex:1 1 0;min-width:0}
-  .dec-sub .zip-w,.dec-sp{display:none}
+  .dec-sub .zip-w,.dec-sub .go-w,.dec-sub #dec-go kbd,.dec-sp{display:none}   /* phone: Go to… and the .zip are icon-only (aria-label / title keep the names) */
   .otabs.one{display:none}
 }
 /* one scroll box for gutter + code: the horizontal scrollbar sits at the bottom edge of the viewer, not at the end of the file */
-.codewrap{flex:1;min-height:0;overflow:auto;display:flex;align-items:flex-start;background:#0d1117;color:#abb2bf;font:.78rem/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;scrollbar-width:thin;scrollbar-color:#30363d #0d1117;outline:none}
+.codewrap{flex:1;min-height:0;overflow:auto;display:flex;align-items:flex-start;background:#0d1117;color:#c9d1d9;font:.78rem/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;scrollbar-width:thin;scrollbar-color:#30363d #0d1117;outline:none}
 .codewrap:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
 .codewrap::-webkit-scrollbar{width:10px;height:10px}
 .codewrap::-webkit-scrollbar-track{background:#0d1117}
 .codewrap::-webkit-scrollbar-thumb{background:#30363d;border-radius:6px;border:2px solid #0d1117}
-.gut{position:sticky;left:0;z-index:1;flex:none;text-align:right;user-select:none;padding:.85rem 0;background:#090c10;color:#4b5563;border-right:1px solid #1c232c;min-width:3.2rem}
+.gut{position:sticky;left:0;z-index:1;flex:none;text-align:right;user-select:none;padding:.8rem 0;background:#090c10;color:#4b5563;border-right:1px solid #1c232c;min-width:3.2rem}
 .gut div,.code .ln{height:1.65em;white-space:pre}
 .gut div{padding:0 .7rem;position:relative}
 .gut a{color:inherit;display:block}
 .gut a:hover{text-decoration:none}
-.code{padding:.85rem 1.1rem;min-width:max-content}
+.code{padding:.8rem 1rem;min-width:max-content}
+/* token colours: the mockup's GitHub-dark palette (keyword · type · string · function · comment), overriding the vendored
+   atom-one-dark sheet from here (more specific selectors), so the vendored files stay untouched. All >= 6:1 on #0d1117. */
+.codewrap .hljs-comment,.codewrap .hljs-quote{color:#8b949e;font-style:italic}
+.codewrap .hljs-keyword,.codewrap .hljs-doctag,.codewrap .hljs-formula,.codewrap .hljs-selector-tag,.codewrap .hljs-literal,.codewrap .hljs-variable.language_{color:#ff7b72}
+.codewrap .hljs-string,.codewrap .hljs-regexp,.codewrap .hljs-addition,.codewrap .hljs-attribute,.codewrap .hljs-meta .hljs-string{color:#a5d6ff}
+.codewrap .hljs-type,.codewrap .hljs-built_in,.codewrap .hljs-number,.codewrap .hljs-attr,.codewrap .hljs-symbol,.codewrap .hljs-meta,.codewrap .hljs-variable,.codewrap .hljs-template-variable,.codewrap .hljs-selector-attr,.codewrap .hljs-selector-class,.codewrap .hljs-selector-pseudo,.codewrap .hljs-selector-id,.codewrap .hljs-bullet,.codewrap .hljs-link,.codewrap .hljs-class .hljs-title,.codewrap .hljs-title.class_{color:#79c0ff}
+.codewrap .hljs-title,.codewrap .hljs-title.function_{color:#d2a8ff}
+.codewrap .hljs-name{color:#7ee787}.codewrap .hljs-section{color:#79c0ff;font-weight:700}.codewrap .hljs-subst{color:inherit}
 .gut .m::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--high)}
 .gut .m.sev-critical::before{background:#be185d}.gut .m.sev-medium::before{background:var(--medium)}.gut .m.sev-low::before{background:var(--low)}.gut .m.sev-info::before{background:#9ca3af}
 .gut .m{color:#fecaca;background:rgba(220,38,38,.2)}
@@ -618,8 +634,9 @@ td.truncate{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:n
 .inl.sev-critical{color:#fbcfe8;background:rgba(190,24,93,.3)}.inl.sev-medium{color:#fde68a;background:rgba(217,119,6,.25)}.inl.sev-low{color:#bfdbfe;background:rgba(37,99,235,.28)}.inl.sev-info{color:#d1d5db;background:rgba(156,163,175,.22)}
 .inl:hover{text-decoration:underline}
 .fn .xref{border-left:1px solid var(--border);overflow:auto;font-size:.78rem;background:var(--surface);min-width:0}
-.xref .xh{display:flex;align-items:center;justify-content:space-between;padding:.55rem .8rem .2rem}
-.xref .xh h3,.xref h3{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;padding:.7rem .8rem .3rem}
+.xref .xh{display:none;align-items:center;justify-content:space-between;padding:.55rem .8rem .2rem}
+.fn.x1 .xref .xh{display:flex}
+.xref .xh h3,.xref h3{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;padding:.75rem .8rem .3rem}
 .xref .xh h3{padding:0}
 .xref .xclose{display:none}
 .xe{padding:.8rem;color:var(--muted)}
@@ -1122,9 +1139,10 @@ tr:hover td{background:#fafaff}
 .sd-tabs .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .sd-tabs .tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .sd-tabs .tab .ico{font-size:.95rem}
-.tab-n{font-size:.66rem;font-weight:700;padding:.02rem .42rem;border-radius:999px;background:#eef0f4;color:#4b5563;font-variant-numeric:tabular-nums}
+.tab-n{font-size:.68rem;font-weight:700;padding:0 .4rem;border-radius:999px;background:#eceef3;color:#4b5563;font-variant-numeric:tabular-nums}
 .tab.active .tab-n{background:#eef0ff;color:var(--accent)}
 .tab-n.hot{background:#fee2e2;color:#b91c1c}
+main.main-wide .sd-tabs{margin-bottom:.75rem}
 
 /* ── summary tab ── */
 .sum-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem;margin-bottom:1rem}
@@ -1175,11 +1193,56 @@ a.ep-row.ep-link:focus-visible{outline:2px solid var(--accent);outline-offset:-2
 
 /* ── Decompiled tab (sub-nav shared by Functions · Strings · Resources · Entry Points) ── */
 .dec{container-type:inline-size}   /* the 1100px / 900px breakpoints below measure this shell, not the viewport */
-.dec-sub{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.9rem}
+.dec-sub{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.8rem}
 .dec .seg{flex-wrap:nowrap;max-width:100%;overflow-x:auto;scrollbar-width:none}   /* one scrolling row (with the edge fade) instead of wrapping on a phone */
 .dec .seg::-webkit-scrollbar{display:none}
 .dec .seg button .n:empty{display:none}
+.dec .seg button .n{background:#eceef3}   /* mockup: the count is plain text on the segment; it only gets a pill when the segment is selected */
+.dec .seg button.active .n{background:#eef0ff}
 .dec-sp{flex:1}
+.dec kbd,.go-dlg kbd{font:600 .66rem ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:0 .3rem;background:var(--surface);color:var(--muted)}
+/* Go to… palette (Ctrl/Cmd+K): a modal dialog; on a phone a full-width sheet at the top */
+.go-ov{position:fixed;inset:0;z-index:300;display:flex;align-items:flex-start;justify-content:center;padding:10vh 1rem 1rem;background:rgba(17,24,39,.4)}
+.go-dlg{display:flex;flex-direction:column;width:min(640px,100%);max-height:min(76vh,640px);background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 70px rgba(16,24,40,.3);overflow:hidden}
+.go-in{display:flex;align-items:center;gap:.6rem;padding:.75rem .9rem;border-bottom:1px solid var(--border);color:var(--muted)}
+.go-in:focus-within{box-shadow:inset 0 -2px 0 var(--accent)}
+.go-in input{flex:1;min-width:0;height:28px;border:0;outline:0;background:transparent;font:inherit;font-size:.95rem;color:var(--text)}
+.go-x{border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;background:var(--surface);color:var(--muted);font:600 .66rem ui-monospace,SFMono-Regular,Menlo,monospace;padding:.15rem .45rem;min-height:24px;min-width:24px;cursor:pointer}
+.go-x:hover{color:var(--text)}
+.go-x:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.go-list{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:.2rem 0 .5rem}
+.go-gh{display:flex;align-items:center;gap:.4rem;padding:.6rem .9rem .2rem;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.go-gh .n{font-weight:700;color:#4b5563;background:rgba(17,24,39,.06);padding:0 .4rem;border-radius:999px}
+.go-stale{opacity:.55}
+.go-o{display:flex;align-items:center;gap:.55rem;min-height:34px;padding:.3rem .9rem;font-size:.82rem;cursor:pointer}
+.go-o[aria-selected=true]{background:#eef0ff;box-shadow:inset 3px 0 0 var(--accent)}
+.go-i{display:inline-flex;flex:none;color:var(--muted)}
+.go-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.go-t small{color:var(--muted);font-size:inherit}
+.go-m{flex:none;max-width:35%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;color:var(--muted)}
+.go-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem}
+.go-mem{color:var(--muted)}
+.go-all{color:var(--accent);font-weight:650}
+.go-msg{padding:.4rem .9rem;font-size:.78rem;color:var(--muted)}
+.go-err{color:#b91c1c}
+.go-o mark{background:#fde68a;color:inherit;border-radius:3px}
+.go-c{display:none}
+@media(max-width:640px){.go-ov{padding:0}.go-dlg{width:100%;max-height:85vh;border-radius:0 0 14px 14px;border-top:0}.go-k{display:none}.go-c{display:inline;font-size:.8rem}.go-x{min-width:30px;min-height:30px}}
+.dec-kinds{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;margin-bottom:.7rem}
+.dec-kind-note{margin-left:.3rem;font-size:.72rem;color:var(--muted)}
+.dec-kind-note:empty{display:none}
+.dec .btn{padding:.3rem .7rem;font-family:inherit;font-size:.78rem;line-height:1.5;gap:.35rem;border-radius:8px;white-space:nowrap}
+.dec-sub .btn,.crumb .btn{min-height:30px}   /* icon-only on a phone: still a 30px target */
+.dec .btn-ghost{background:var(--surface);color:var(--text)}
+.dec .btn-ghost:hover{background:#f7f7ff;border-color:#c3c6f2;color:var(--text)}
+.dec .crumb .btn-ghost,.fn-outline summary{color:var(--muted)}   /* mockup: the viewer toolbar's buttons inherit the breadcrumb's muted colour (4.8:1 on white) */
+.dec .crumb .btn-ghost:hover,.fn-outline summary:hover,.fn-outline[open] summary{color:var(--text)}
+.dec .btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.dec .btn[aria-pressed=true],.dec .btn[aria-pressed=true]:hover{background:#eef0ff;border-color:var(--accent);color:var(--accent)}
+.btn .pip{width:8px;height:8px;border-radius:50%;border:1.5px solid currentColor;box-sizing:border-box;flex:none;opacity:.65}   /* on/off that is not colour alone: hollow = off, filled = on */
+.btn[aria-pressed=true] .pip{background:currentColor;opacity:1}
+.dec .search-ctl>.ico{width:15px;height:15px}
+.dec .search-ctl>.ctl{padding:0 .8rem 0 2.2rem}
 /* edge fade where a scrolling strip is clipped (same classes as the tab bar: can-scroll / at-end) */
 .fade-x.can-scroll{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent)}
 .fade-x.can-scroll.at-end{-webkit-mask-image:none;mask-image:none}
@@ -1189,17 +1252,20 @@ a.ep-row.ep-link:focus-visible{outline:2px solid var(--accent);outline-offset:-2
 .dec-list .toolbar,.dec-ep .toolbar{scroll-margin-top:4.5rem}
 .dec-list .toolbar,.dec-ep .toolbar{margin-bottom:.7rem}
 .dec-list .search-ctl,.dec-ep .search-ctl{flex:1 1 260px}
-.panel.dec-panel{padding:0;overflow:hidden}
+.panel.dec-panel{padding:0;overflow:hidden;box-shadow:none}
 .dec-panel .result-line{padding:.6rem .9rem;border-bottom:1px solid var(--border)}
-.dec-panel .pager{margin:0;padding:.6rem .9rem;border-top:1px solid var(--border)}
+.dec-panel .pager{margin:0;padding:.6rem .9rem;border-top:1px solid #f1f2f4}
+.dec-panel .pager-btns button{min-width:30px;height:30px;padding:0 .35rem;font-size:.76rem;color:inherit}
+.dec-panel .pager-btns button.active{color:#fff}
+.dec-panel .pager-btns .pager-size{margin-right:.3rem}
 .dec-panel .pager:empty{display:none}
 .dec-row{display:grid;gap:.75rem;align-items:center;padding:.5rem .9rem;border-bottom:1px solid #f1f2f4;min-width:0}
 .dec-row:last-child{border-bottom:0}
 .dec-head{background:var(--bg);font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .dec-row:not(.dec-head):hover{background:#fafbff}
-.dec-cs{grid-template-columns:minmax(0,1fr) 230px 84px}
-.dec-cr{grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr) 130px 190px}
-.dec-val{font:.78rem/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;min-width:0}
+.dec-cs{grid-template-columns:minmax(0,1fr) 230px 96px}
+.dec-cr{grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr) 150px 170px}
+.dec-val{font:.78rem/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere;min-width:0}
 .dec-val.nw{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dec-val.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .dec-val.open{max-height:24em;overflow:auto}
@@ -1207,12 +1273,24 @@ a.ep-row.ep-link:focus-visible{outline:2px solid var(--accent);outline-offset:-2
 .dec-expand:hover{text-decoration:underline}
 .dec-expand:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 #dec-rows.wrap .dec-val.nw{white-space:pre-wrap;overflow:auto;text-overflow:clip;max-height:12em}
-.dec-where{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;min-width:0}
-.dec-pk{font:.7rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);overflow-wrap:anywhere}
+.dec-where{display:flex;flex-direction:column;align-items:flex-start;min-width:0}   /* never more than two lines: label, then address + segment; together as tall as the 26px action buttons, so rows keep the mockup's 43px */
+.dec-pk{font:.7rem/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);overflow-wrap:anywhere}
+.dec-lbl{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:.7rem/1.15 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}   /* one line, cut with … (never mid-token); the full symbol is the tooltip */
+.dec-wl{display:flex;align-items:center;gap:.35rem;max-width:100%;min-width:0;overflow:hidden}
+.dec-wl .dec-pk{flex:none;white-space:nowrap}
+.dec-wl .ep-badge{min-width:0;overflow:hidden;text-overflow:ellipsis;padding:0 .4rem;font-size:.62rem;line-height:1.35}
+/* Wrap on: only the value cell grows; the Where cell and the hover actions stay at the top of the row */
+#dec-rows.wrap .dec-cs{align-items:start}
+#dec-rows.wrap .dec-cs.has-chip>.dec-val{padding-top:3px}   /* first line level with the 24px class chip / 26px action buttons; the label rows already start on the same line */
+.dec-xchip{display:inline-flex;align-items:center;gap:.25rem;max-width:100%;min-height:24px;padding:.1rem .45rem;border-radius:6px;background:#eef0ff;color:var(--accent);font-size:.72rem;font-weight:600;white-space:nowrap}
+.dec-xchip>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dec-xchip:hover{text-decoration:none;background:#e0e5ff}
+.dec-xchip:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .dec-end{display:flex;align-items:center;justify-content:flex-end;gap:.4rem;flex-wrap:nowrap}   /* chip + actions stay on one line: uniform row height */
 .dec-acts{display:flex;gap:.2rem;justify-content:flex-end;opacity:0}
 .dec-row:hover .dec-acts,.dec-row:focus-within .dec-acts{opacity:1}
-.dec-ib{border:1px solid var(--border);background:var(--surface);border-radius:6px;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;color:var(--muted);cursor:pointer}
+.dec-ib{border:1px solid var(--border);background:var(--surface);border-radius:6px;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--muted);cursor:pointer}
+a.dec-ib:hover{text-decoration:none}
 .dec-ib:hover{color:var(--accent);border-color:#c3c6f2}
 .dec-ib:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .dec-chip{display:inline-flex;align-items:center;gap:.25rem;font-size:.72rem;font-weight:650;color:#b45309;background:#fef3c7;border-radius:6px;padding:.1rem .45rem;min-height:24px;white-space:nowrap}
@@ -1256,6 +1334,7 @@ a.ep-row.ep-link:focus-visible{outline:2px solid var(--accent);outline-offset:-2
 .dec-chip.sev-low{background:#dbeafe;color:#1d4ed8}
 .dec-chip.sev-info{background:#f1f2f4;color:#4b5563}
 select.ctl.pager-size{width:auto;height:32px;font-size:.78rem;padding:0 1.9rem 0 .6rem;border-radius:8px}
+.dec-panel select.ctl.pager-size{height:30px;font-size:.74rem;border-radius:10px;color:var(--muted)}
 select.ctl.dec-more{width:auto}
 select.ctl.dec-more.on{border-color:#c3c6f2;background-color:#eef0ff;color:var(--accent);font-weight:600}
 @container (max-width:900px){
@@ -1927,6 +2006,7 @@ const ICONS = {
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
   refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
   zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   scanSearch: '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.9-1.9"/>',
   wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   crosshair: '<circle cx="12" cy="12" r="10"/><path d="M22 12h-4"/><path d="M6 12H2"/><path d="M12 6V2"/><path d="M12 22v-4"/>',
@@ -3691,7 +3771,7 @@ function tabLabel(t) {
 function compactNum(n) {
   n = Number(n) || 0;
   if (n < 1000) return String(n);
-  if (n < 1e6) return (n / 1000).toFixed(n < 10000 ? 1 : 0).replace(/\.0$/, '') + 'K';
+  if (n < 1e6) return (n / 1000).toFixed(n < 100000 ? 1 : 0).replace(/\.0$/, '') + 'K';
   return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
 }
 
@@ -5152,6 +5232,7 @@ async function tabDecompiled(el, id, detail, nav = {}) {
           `<button type="button" role="tab" id="dec-tab-${k}" data-decsub="${k}" aria-controls="dec-view" aria-keyshortcuts="${i + 1}" title="${label} (${i + 1})">${label}`
           + `<span class="n" id="dec-n-${k}">${k === 'resources' ? '…' : counts[k] != null ? compactNum(counts[k]) : ''}</span></button>`).join('')}</div>
         <span class="dec-sp"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="dec-go" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K" aria-label="Go to…" title="Go to a class, entry point, string or resource (${goKeys})">${ico('search')}<span class="go-w">Go to…</span><kbd>${goKeys}</kbd></button>
         <button type="button" class="btn btn-ghost btn-sm" id="dec-zip" hidden title="Download every decompiled function as a .zip" aria-label="Download all sources as a .zip">${ico('download')} <span class="zip-w">All sources </span><span class="zip-w">(.zip)</span></button>
       </div>
       <div id="dec-view" role="tabpanel"></div>
@@ -5168,6 +5249,7 @@ async function tabDecompiled(el, id, detail, nav = {}) {
       decShow(keys[j]).then(() => document.getElementById('dec-tab-' + keys[j])?.focus());
     });
     root.querySelector('#dec-zip').addEventListener('click', decDownloadZip);
+    root.querySelector('#dec-go').addEventListener('click', goOpen);
     decResourceTotal(id).then(n => {
       const pill = document.getElementById('dec-n-resources');
       if (!pill || decSt?.id !== id) return;
@@ -5223,12 +5305,271 @@ document.addEventListener('keydown', ev => {
   decShow(DEC_SUBS[i][0]);
 });
 
+/* ── Decompiled › Go to… (Ctrl/Cmd+K): one search box over the sub-views, classes, entry points, strings and resources ──
+   Classes and entry points are matched here (the class list is the one Functions uses, fetched at most once); strings and resources
+   are asked of the server — debounced, and a request-sequence guard drops any response that is no longer the newest. It is a modal
+   dialog with a combobox/listbox: focus stays in the input, the arrow keys move aria-activedescendant. Activating a result only
+   navigates; nothing here writes data or talks to the assistant. Every label comes from the scan, so it goes through esc() and
+   decMark()/fnLabelHtml() — plain indexOf marking, never a RegExp built from the query. */
+const GO_LOCAL_MS = 120, GO_REMOTE_MS = 200, GO_MAX_CLASSES = 30, GO_MAX_EPS = 10, GO_MAX_REMOTE = 10;
+const goKeys = /Mac|iPhone|iPad/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '') ? '⌘ K' : 'Ctrl K';
+let goSt = null;   // the open palette: {id, ov, opener, q, res, opts, active, seq, lseq, t1, t2, inert}
+
+const goLowerCache = new WeakMap();   // class list → lower-cased names, built once (72K classes stay responsive per keystroke)
+function goLower(classes) {
+  let l = goLowerCache.get(classes);
+  if (!l) goLowerCache.set(classes, l = classes.map(c => c.toLowerCase()));
+  return l;
+}
+
+/* The best matches first without sorting the list: one pass drops every class into a rank bucket (each capped), then the buckets
+   are concatenated — 0 simple name equals the query · 1 simple name starts with it · 2 full name starts with it · 3 it occurs in
+   the simple name · 4 it occurs in the package path. `q` is lower-cased. */
+function goRankClasses(classes, q) {
+  const lower = goLower(classes), buckets = [[], [], [], [], []];
+  let total = 0;
+  for (let i = 0; i < lower.length; i++) {
+    const lo = lower[i], p = lo.indexOf(q);
+    if (p < 0) continue;
+    total++;
+    const s = Math.max(lo.lastIndexOf('.'), lo.lastIndexOf('$')) + 1, inSimple = lo.indexOf(q, s);
+    const rank = inSimple === s ? (lo.length - s === q.length ? 0 : 1) : p === 0 ? 2 : inSimple > s ? 3 : 4;
+    if (buckets[rank].length < GO_MAX_CLASSES) buckets[rank].push(classes[i]);
+  }
+  return {items: buckets.flat().slice(0, GO_MAX_CLASSES), total};
+}
+
+const decSetCache = new WeakMap();
+function decClassSet(classes) {
+  let s = decSetCache.get(classes);
+  if (!s) decSetCache.set(classes, s = new Set(classes));
+  return s;
+}
+
+function goOpen() {
+  if (!decSt || !document.getElementById('dec-root') || !decSt.detail || decSt.detail.state !== 'done') return;
+  if (goSt) { const q = document.getElementById('go-q'); if (q) { q.focus(); q.select(); } return; }
+  const ov = document.createElement('div');
+  ov.className = 'go-ov'; ov.id = 'go-ov';
+  ov.innerHTML = `<div class="go-dlg" role="dialog" aria-modal="true" aria-labelledby="go-title">
+    <h2 class="sr-only" id="go-title">Go to…</h2>
+    <div class="go-in">${ico('search')}<input id="go-q" type="text" role="combobox" aria-expanded="true" aria-controls="go-list" aria-autocomplete="list" aria-haspopup="listbox"
+      aria-label="Go to a class, entry point, string or resource" placeholder="Go to a class, entry point, string or resource…" autocomplete="off" autocapitalize="off" spellcheck="false"/>
+      <button type="button" class="go-x" id="go-x" aria-label="Close" title="Close (Esc)"><span class="go-k">Esc</span><span class="go-c" aria-hidden="true">✕</span></button></div>
+    <div class="go-list" id="go-list" role="listbox" aria-label="Results"></div>
+    <div class="sr-only" id="go-live" role="status" aria-live="polite"></div></div>`;
+  const g = goSt = {id: decSt.id, ov, opener: document.activeElement, q: '', raw: '', res: {}, opts: [], active: '', seq: 0, lseq: 0, t1: 0, t2: 0, inert: []};
+  document.body.appendChild(ov);
+  for (const c of [...document.body.children]) if (c !== ov && !c.inert) { c.inert = true; g.inert.push(c); }   // nothing behind the dialog is reachable
+  const input = ov.querySelector('#go-q'), list = ov.querySelector('#go-list');
+  input.addEventListener('input', () => goInput(input.value));
+  ov.addEventListener('mousedown', ev => { if (ev.target === ov) { ev.preventDefault(); goClose(true); } });   // preventDefault: the press must not move focus off the opener afterwards
+  ov.querySelector('#go-x').addEventListener('click', () => goClose(true));
+  list.addEventListener('click', ev => { const o = ev.target.closest('.go-o'); if (o && g.opts[Number(o.dataset.i)]) goActivate(g.opts[Number(o.dataset.i)]); });
+  list.addEventListener('mousemove', ev => { const o = ev.target.closest('.go-o'); if (o && o.id !== g.active) goSetActive(o.id, false); });
+  ov.addEventListener('keydown', goKey);
+  goRender();
+  input.focus();
+}
+
+function goClose(restoreFocus, toButton) {
+  const g = goSt;
+  if (!g) return;
+  goSt = null;
+  clearTimeout(g.t1); clearTimeout(g.t2);
+  g.ov.remove();
+  g.inert.forEach(c => { c.inert = false; });
+  if (restoreFocus) {   // back to whatever opened it; after a navigation that element may be about to go away, so the Go to… button takes the focus
+    const op = !toButton && g.opener && g.opener.isConnected && g.opener !== document.body ? g.opener : document.getElementById('dec-go');
+    if (op) op.focus();
+  }
+}
+
+function goKey(ev) {
+  const g = goSt;
+  if (!g) return;
+  if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); goClose(true); return; }
+  if (ev.key === 'Tab') {   // focus trap: input ⇄ close button
+    const els = [...g.ov.querySelectorAll('#go-q, #go-x')], i = els.indexOf(document.activeElement);
+    ev.preventDefault();
+    els[(i + (ev.shiftKey ? els.length - 1 : 1)) % els.length].focus();
+    return;
+  }
+  if (ev.target.id !== 'go-q') return;
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    if (!g.opts.length) return;
+    const i = g.opts.findIndex(o => o.id === g.active), n = g.opts.length, down = ev.key === 'ArrowDown';
+    goSetActive(g.opts[i < 0 ? (down ? 0 : n - 1) : (i + (down ? 1 : n - 1)) % n].id, true);   // wraps at both ends
+  } else if (ev.key === 'Enter') {
+    ev.preventDefault();
+    const o = g.opts.find(x => x.id === g.active);
+    if (o) goActivate(o);
+  }
+}
+
+function goSetActive(id, scroll) {
+  const g = goSt;
+  if (!g) return;
+  g.active = id;
+  g.ov.querySelectorAll('.go-o[aria-selected=true]').forEach(e => e.setAttribute('aria-selected', 'false'));
+  const el = id && document.getElementById(id), input = g.ov.querySelector('#go-q');
+  if (el) { el.setAttribute('aria-selected', 'true'); if (scroll) el.scrollIntoView({block: 'nearest'}); input.setAttribute('aria-activedescendant', id); }
+  else input.removeAttribute('aria-activedescendant');
+}
+
+/* Typing: commands + local matches after a short pause, the two server groups after a longer one. An empty box is instant and
+   shows only the sub-views. Results from the previous text stay (dimmed) until the new ones land, so the list never flashes empty. */
+function goInput(text) {
+  const g = goSt;
+  if (!g) return;
+  clearTimeout(g.t1); clearTimeout(g.t2);
+  g.raw = text; g.seq++; g.lseq++;
+  const q = text.trim().toLowerCase();
+  g.q = q;
+  if (!q) { g.res = {}; goRender(); return; }
+  for (const k of ['cls', 'ep', 'str', 'res']) g.res[k] = g.res[k] && g.res[k].st === 'ok' ? {...g.res[k], stale: true} : {st: 'load'};
+  goRender();
+  g.t1 = setTimeout(() => goLocal(q), GO_LOCAL_MS);
+  g.t2 = setTimeout(() => goRemote(q, text.trim()), GO_REMOTE_MS);
+}
+
+function goLocal(q) {
+  const g = goSt;
+  if (!g) return;
+  const my = ++g.lseq;
+  decClasses(g.id).then(classes => {
+    if (goSt !== g || g.lseq !== my) return;
+    g.res.cls = {st: 'ok', ...goRankClasses(classes, q)};
+    goRender();
+  }).catch(e => { if (goSt === g && g.lseq === my) { g.res.cls = {st: 'err', msg: e.message}; goRender(); } });
+  decEps(g.id).then(raw => {
+    if (goSt !== g || g.lseq !== my) return;
+    const idx = g.epIdx || (g.epIdx = raw.map(r => ({e: parseEntryPoint(r), lo: String(r).toLowerCase()})));
+    const hits = idx.filter(x => x.lo.includes(q));
+    g.res.ep = {st: 'ok', items: hits.slice(0, GO_MAX_EPS).map(x => x.e), total: hits.length};
+    goRender();
+  }).catch(e => { if (goSt === g && g.lseq === my) { g.res.ep = {st: 'err', msg: e.message}; goRender(); } });
+}
+
+function goRemote(q, text) {
+  const g = goSt;
+  if (!g) return;
+  const my = ++g.seq;
+  const ask = (kind, key) => api('/scans/' + g.id + '/' + kind + '?' + new URLSearchParams({page: 1, size: GO_MAX_REMOTE, q: text})).then(d => {
+    if (goSt !== g || g.seq !== my) return;   // a newer keystroke owns the list now
+    g.res[key] = {st: 'ok', items: Array.isArray(d.items) ? d.items : [], total: Math.max(0, Number(d.total) || 0)};
+    goRender();
+  }).catch(e => { if (goSt === g && g.seq === my) { g.res[key] = {st: 'err', msg: e.message}; goRender(); } });
+  ask('strings', 'str'); ask('resources', 'res');
+}
+
+/* One option of the list: `o.t` says what activating it does; ids are stable per group and position (go-o-cls-0 …). */
+function goRender() {
+  const g = goSt;
+  if (!g) return;
+  const list = g.ov.querySelector('#go-list'), q = g.q, opts = [];
+  const opt = (grp, o, inner) => {
+    const j = opts.filter(x => x.grp === grp).length;
+    o.grp = grp; o.id = `go-o-${grp}-${j}`; opts.push(o);
+    return `<div class="go-o" role="option" id="${o.id}" data-i="${opts.length - 1}" aria-selected="false">${inner}</div>`;
+  };
+  const group = (key, title, count, body, stale) => `<div role="group" aria-labelledby="go-h-${key}" class="go-g${stale ? ' go-stale' : ''}"><div class="go-gh" id="go-h-${key}">${title}${count != null ? `<span class="n">${count.toLocaleString()}</span>` : ''}</div>${body}</div>`;
+  const msg = (r, what, ok) => r.st === 'load' ? `<div class="go-msg">Searching ${what}…</div>` : r.st === 'err' ? `<div class="go-msg go-err">Couldn’t search ${what}: ${esc(r.msg || 'request failed')}</div>` : ok();
+  let html = '';
+  const subs = DEC_SUBS.filter(([, label]) => !q || label.toLowerCase().includes(q));
+  if (subs.length) {
+    html += group('sub', 'Go to', null, subs.map(([k, label]) => opt('sub', {t: 'sub', sub: k},
+      `<span class="go-i">${ico('arrowRight')}</span><span class="go-t">Go to <b>${esc(label)}</b></span><span class="go-m">${esc((document.getElementById('dec-n-' + k) || {}).textContent || '')}</span>`)).join(''));
+  }
+  if (!q) html += '<div class="go-msg">Type to search classes, entry points, strings and resources.</div>';
+  else {
+    const c = g.res.cls || {st: 'load'}, e = g.res.ep || {st: 'load'}, s = g.res.str || {st: 'load'}, r = g.res.res || {st: 'load'};
+    html += group('cls', 'Classes', c.st === 'ok' ? c.total : null, msg(c, 'classes', () => c.items.length
+      ? c.items.map(cls => opt('cls', {t: 'cls', cls}, `<span class="go-i">${ico('code')}</span><span class="go-t" title="${escAttr(cls)}">${fnLabelHtml(cls, q)}</span>`)).join('')
+        + (c.total > c.items.length ? `<div class="go-msg">Showing the best ${c.items.length} of ${c.total.toLocaleString()} — keep typing to narrow it down.</div>` : '')
+      : '<div class="go-msg">No class matches.</div>'), c.stale);
+    html += group('ep', 'Entry points', e.st === 'ok' ? e.total : null, msg(e, 'entry points', () => e.items.length
+      ? e.items.map(ep => opt('ep', {t: 'ep', ep}, `<span class="go-i"><span class="ep-badge ${escAttr(ep.type)}">${esc(ep.type || 'entry')}</span></span><span class="go-t" title="${escAttr(ep.raw)}">${decMark(ep.short, q)}${ep.member ? `<span class="go-mem">.${decMark(ep.member, q)}</span>` : ''}${ep.pkg ? ` <small>${decMark(ep.pkg, q)}</small>` : ''}</span>`)).join('')
+        + (e.total > e.items.length ? `<div class="go-msg">Showing ${e.items.length} of ${e.total.toLocaleString()}.</div>` : '')
+      : '<div class="go-msg">No entry point matches.</div>'), e.stale);
+    html += group('str', 'Strings', s.st === 'ok' ? s.total : null, msg(s, 'strings', () => s.items.length
+      ? s.items.map(it => opt('str', {t: 'str', value: String(it.value)}, `<span class="go-i">${ico('fileText')}</span><span class="go-t go-mono" title="${escAttr(String(it.value).slice(0, 300))}">${decMark(String(it.value).slice(0, 160), q)}</span>${it.label ? `<span class="go-m">${esc(it.label)}</span>` : ''}`)).join('')
+        + opt('str', {t: 'allstr', q: g.raw.trim()}, `<span class="go-i">${ico('arrowRight')}</span><span class="go-t go-all">Search all ${s.total.toLocaleString()} in Strings →</span>`)
+      : '<div class="go-msg">No string matches.</div>'), s.stale);
+    html += group('res', 'Resources', r.st === 'ok' ? r.total : null, msg(r, 'resources', () => r.items.length
+      ? r.items.map(it => opt('res', {t: 'res', value: String(it.value)}, `<span class="go-i">${ico('layers')}</span><span class="go-t go-mono" title="${escAttr(String(it.resource_id || ''))}: ${escAttr(String(it.value).slice(0, 300))}"><small>${decMark(String(it.resource_id || ''), q)}</small> ${decMark(String(it.value).slice(0, 140), q)}</span><span class="go-m">${esc(it.type)}</span>`)).join('')
+        + opt('res', {t: 'allres', q: g.raw.trim()}, `<span class="go-i">${ico('arrowRight')}</span><span class="go-t go-all">Search all ${r.total.toLocaleString()} in Resources →</span>`)
+      : '<div class="go-msg">No resource matches.</div>'), r.stale);
+  }
+  g.opts = opts;
+  list.innerHTML = html;
+  goSetActive(opts.some(o => o.id === g.active) ? g.active : (opts[0] ? opts[0].id : ''), false);
+  const pending = q && ['cls', 'ep', 'str', 'res'].some(k => !g.res[k] || g.res[k].st === 'load' || g.res[k].stale);
+  g.ov.querySelector('#go-live').textContent = !q ? `${opts.length} places to go` : pending ? 'Searching…' : opts.length ? `${opts.length} results` : 'No results';
+}
+
+function goActivate(o) {
+  const g = goSt;
+  if (!g) return;
+  const id = g.id, classes = decClassesNow(id);
+  goClose(true, true);
+  if (o.t === 'sub') decShow(o.sub);
+  else if (o.t === 'cls') openDecompiled(id, {sub: 'functions', class: o.cls});
+  else if (o.t === 'ep') {
+    const cls = epClass(o.ep);   // the entry point's class when the scan has it; otherwise the Entry Points list narrowed to it
+    if (cls && classes && decClassSet(classes).has(cls)) openDecompiled(id, {sub: 'functions', class: cls});
+    else openDecompiled(id, {sub: 'entrypoints', q: o.ep.raw.slice(0, 200)});
+  }
+  else if (o.t === 'str') openDecompiled(id, {sub: 'strings', q: o.value.slice(0, 300)});
+  else if (o.t === 'res') openDecompiled(id, {sub: 'resources', q: o.value.slice(0, 500), hl: o.value.slice(0, 2000)});
+  else if (o.t === 'allstr') openDecompiled(id, {sub: 'strings', q: o.q});
+  else if (o.t === 'allres') openDecompiled(id, {sub: 'resources', q: o.q});
+}
+
+// Ctrl+K (⌘K on macOS) anywhere inside the Decompiled tab of a finished scan — also from a text field; other pages keep the browser's own shortcut.
+document.addEventListener('keydown', ev => {
+  if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || ev.shiftKey || String(ev.key).toLowerCase() !== 'k') return;
+  if (!decSt || !document.getElementById('dec-root') || !decSt.detail || decSt.detail.state !== 'done') return;
+  ev.preventDefault();
+  goOpen();
+});
+window.addEventListener('hashchange', () => goClose(false));   // the page underneath changed (Back, a link): the palette's scan may be gone
+
+/* The scan's class names, fetched once and shared: Functions builds its tree from it and the Strings class chips resolve a
+   short name against it. One scan at a time is kept; an open Functions view for the same scan is reused as is. */
+let decClassCache = null;   // {id, p: Promise<string[]>}
+function decClasses(id) {
+  if (fnSt && fnSt.id === id) return Promise.resolve(fnSt.classes);
+  if (!decClassCache || decClassCache.id !== id) {
+    const c = decClassCache = {id, classes: null, p: api('/scans/' + id + '/classes?' + new URLSearchParams({limit: 200000})).then(rows => (c.classes = rows.map(r => r.class)))};
+    c.p.catch(() => { if (decClassCache === c) decClassCache = null; });   // a failure is not cached: the next caller retries
+  }
+  return decClassCache.p;
+}
+function decClassesNow(id) {   // the class list when it is already in memory, else null (never fetches)
+  return fnSt && fnSt.id === id ? fnSt.classes : decClassCache && decClassCache.id === id ? decClassCache.classes : null;
+}
+/* simple name (what follows the last "." — exactly how the Android string label is derived) → the classes carrying it */
+const decSimpleIdx = new WeakMap();
+function decClassesNamed(classes, short) {
+  let m = decSimpleIdx.get(classes);
+  if (!m) {
+    m = new Map();
+    for (const c of classes) { const k = c.slice(c.lastIndexOf('.') + 1); (m.get(k) || m.set(k, []).get(k)).push(c); }
+    decSimpleIdx.set(classes, m);
+  }
+  return m.get(short) || [];
+}
+
 /* ── Decompiled › Functions: class browser · source viewer · Cross-refs ──
    State outlives sub-view switches for the same scan (fnSt.id === id): open files (with their scroll
    positions), expanded folders, the filter. The class list is windowed — only the ~40 rows in view exist in the
    DOM — so a 72K-class app and an uncapped 4.9K-class iOS list stay as responsive as a small one. */
 let fnSt = null;
 const FN_ROW_H = 28;                                  // px; mirrors --fn-row-h in the CSS
+const FN_PAD = 4.8;                                   // px; .tlist's top/bottom padding (the mockup's .3rem): row i starts at FN_PAD + i * FN_ROW_H in the scroller
+const fnListH = n => n * FN_ROW_H;
 const FN_NATIVE = ['Global', 'Imports', 'Libraries'];   // the iOS native engine's pseudo-classes: pinned on top
 const FN_COLL = new Intl.Collator();
 
@@ -5297,8 +5638,7 @@ async function tabFunctions(el, id, detail, params) {
     el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     let classes;
     try {
-      const rows = await api('/scans/'+id+'/classes?'+new URLSearchParams({limit: 200000}));
-      classes = rows.map(r => r.class);
+      classes = await decClasses(id);
     } catch(e) {
       if (decActive('functions', id)) { el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; if (e.status === 404) decNoDb(); }
       return;
@@ -5311,7 +5651,7 @@ async function tabFunctions(el, id, detail, params) {
       return;
     }
     fnSt = {id, detail, classes, classSet: new Set(classes), tree: fnBuildTree(classes, detail), sorted: null, lower: null,
-            query: '', hl: '', chipFind: false, chipEp: false, xref: true, openFiles: [], activePath: null,
+            query: '', qtext: '', hl: '', chipFind: false, chipEp: false, xref: true, openFiles: [], activePath: null,
             rows: [], cur: -1, winA: -1, winB: -1, listTop: 0, byClass: null, epByClass: null, rolled: [], resCache: new Map(), xrAll: false};
     try {
       const savedW = localStorage.getItem('malimite.fnTreeWidth');
@@ -5320,16 +5660,33 @@ async function tabFunctions(el, id, detail, params) {
   }
   fnSt.detail = detail;
   const s = fnSt, cls = ((params && params.get('class')) || '').trim();   // untrusted: only ever sent as an encoded query value and shown via esc()
+  const q = ((params && params.get('q')) || '').trim().slice(0, 200);   // a text to filter the tree by (alone: the user picks; with ?class=: both apply)
   let reset = false;
   if (!cls && s.missing) {   // no (or a blank) ?class= after a "Class not found": drop that state instead of showing it again
-    s.activePath = null; s.missing = false; s.query = s.hl = ''; s.chipFind = s.chipEp = false;
+    s.activePath = null; s.missing = false; fnSetQuery(''); s.chipFind = s.chipEp = false;
     reset = true;
   }
+  if (q) { fnSetQuery(q); s.chipFind = s.chipEp = false; }   // state only: the shell reads it, an existing one is repainted below
   if (!el.querySelector('#fn-root')) fnRenderShell(el);
-  else if (reset) { fnClearFilter(); fnSetActive(); fnRenderViewer(); }
+  else if (reset || q) {
+    if (q) fnApplyFilter(q); else fnClearFilter();
+    if (reset) { fnSetActive(); fnRenderViewer(); }
+  }
   fnLoadSideData(id);
-  if (cls) fnOpenClass(cls.slice(0, 500), {link: true});
-  else decReplaceUrl(s.activePath ? {class: s.activePath} : {});   // also drops a blank/whitespace ?class= from the hash
+  if (cls) fnOpenClass(cls.slice(0, 500), {link: true, keepFilter: !!q});
+  else fnSyncUrl();   // also drops a blank/whitespace ?class= from the hash
+}
+
+/* The tree filter: `qtext` is what was typed or linked, kept as written (the input and the URL show it); matching uses the lower-cased `query`. */
+function fnSetQuery(text) {
+  const s = fnSt;
+  s.qtext = String(text).trim();
+  s.query = s.hl = s.qtext.toLowerCase();
+}
+/* Keep the address bar in step with the open class and the filter, without adding history entries. */
+function fnSyncUrl() {
+  const s = fnSt;
+  if (s) decReplaceUrl({class: s.activePath || '', q: (s.qtext || '').slice(0, 200)});
 }
 
 /* Findings + entry points, joined to classes: severity dots, folder roll-ups, the two filter chips, gutter
@@ -5375,7 +5732,7 @@ function fnRenderShell(el) {
     <div class="fn${s.xref ? '' : ' nox'}" id="fn-root">
       <aside class="tree" id="fn-tree-pane" aria-label="Class browser">
         <div class="tb">
-          <label class="search-ctl">${ico('scanSearch')}<input id="fn-filter" class="ctl" type="search" placeholder="Filter classes — path or name…" autocomplete="off" aria-label="Filter classes by path or name"/></label>
+          <label class="search-ctl">${ico('search')}<input id="fn-filter" class="ctl" type="search" placeholder="Filter classes — path or name…" autocomplete="off" aria-label="Filter classes by path or name"/></label>
           <div class="fn-chips">
             <button type="button" class="fn-chip" data-chip="find" aria-pressed="${s.chipFind}" ${ready ? '' : 'disabled'}>With findings</button>
             <button type="button" class="fn-chip" data-chip="ep" aria-pressed="${s.chipEp}" ${ready ? '' : 'disabled'}>Entry point ⎆</button>
@@ -5402,11 +5759,11 @@ function fnRenderShell(el) {
       </aside>
     </div>`;
   const root = el.querySelector('#fn-root'), list = el.querySelector('#fn-tree-list'), filter = el.querySelector('#fn-filter');
-  filter.value = s.query;
+  filter.value = s.qtext;
   let timer = 0;
   filter.addEventListener('input', () => {   // debounced; only the list re-renders, never this input
     clearTimeout(timer);
-    timer = setTimeout(() => { s.query = filter.value.trim().toLowerCase(); s.hl = s.query; fnRenderTree(); }, 120);
+    timer = setTimeout(() => { fnSetQuery(filter.value); fnRenderTree(); fnSyncUrl(); }, 120);
   });
   list.addEventListener('scroll', () => { s.listTop = list.scrollTop; fnPaintRows(); }, {passive: true});
   list.addEventListener('keydown', fnTreeKey);
@@ -5600,7 +5957,7 @@ function fnRenderTree() {   // full re-render of the class list (filter / chip c
   const n = s.rows.filter(r => !r.hdr).length;
   document.getElementById('fn-count').textContent = s.filtered ? `${n.toLocaleString()} match${n === 1 ? '' : 'es'} · full path` : '';
   if (s.filtered && !n) { list.innerHTML = `<div class="empty" style="padding:.75rem">No classes match${s.chipFind || s.chipEp ? ' these filters' : ''}.</div>`; list.removeAttribute('aria-activedescendant'); return; }
-  list.innerHTML = `<div class="fn-vs" style="height:${s.rows.length * FN_ROW_H}px"><div class="fn-vw"></div></div>`;
+  list.innerHTML = `<div class="fn-vs" style="height:${fnListH(s.rows.length)}px"><div class="fn-vw"></div></div>`;
   list.scrollTop = 0;
   s.listTop = 0;
   fnMarkActive();
@@ -5613,7 +5970,7 @@ function fnRefreshRows() {   // rows changed (a folder opened/closed): keep the 
   s.rows = fnComputeRows();
   s.cur = key ? s.rows.findIndex(r => (r.node || r.cls) === key) : -1;
   const vs = list && list.querySelector('.fn-vs');
-  if (vs) vs.style.height = s.rows.length * FN_ROW_H + 'px';
+  if (vs) vs.style.height = fnListH(s.rows.length) + 'px';
   fnPaintRows(true);
 }
 
@@ -5623,14 +5980,16 @@ function fnToggle(node, open) {
   if (fnSt.cur >= 0) document.getElementById('fn-tree-list').setAttribute('aria-activedescendant', 'fn-r-' + fnSt.cur);
 }
 
-/* Severity dot (class), roll-up (folder) and entry-point marker. Colour is never the only signal: the dot has a
-   role=img label and the roll-up carries its number. */
+/* Entry-point marker (before the name) and, on the right, the severity dot (class) or roll-up (folder). Colour is never the
+   only signal: the dot has a role=img label and the roll-up carries its number. */
+function fnEpHtml(cls) {
+  return cls && fnSt.epByClass && fnSt.epByClass.has(cls) ? '<span class="epi" role="img" aria-label="Entry point" title="Entry point">⎆</span>' : '';
+}
 function fnDecoHtml(cls, node) {
-  const s = fnSt, info = cls && s.byClass && s.byClass.get(cls), ep = cls && s.epByClass && s.epByClass.has(cls);
+  const s = fnSt, info = cls && s.byClass && s.byClass.get(cls);
   let h = '';
-  if (ep) h += '<span class="epi" role="img" aria-label="Entry point" title="Entry point">⎆</span>';
   if (info) h += `<span class="fn-tree-sev ${info.worst}" role="img" aria-label="${info.n} finding${info.n === 1 ? '' : 's'}, worst ${info.worst}" title="${info.n} finding${info.n === 1 ? '' : 's'}, worst ${info.worst}"></span>`;
-  if (node && node.roll) h += `<span class="roll sev-${node.rollWorst.toLowerCase()}" title="${node.roll} class${node.roll === 1 ? '' : 'es'} with findings below (worst ${node.rollWorst})">● ${node.roll}</span>`;
+  if (node && node.roll) h += `<span class="roll sev-${node.rollWorst.toLowerCase()}" title="${node.roll} class${node.roll === 1 ? '' : 'es'} with findings below (worst ${node.rollWorst})"><span class="rd">●</span> ${node.roll}</span>`;
   return h ? `<span class="fn-dec">${h}</span>` : '';
 }
 
@@ -5652,12 +6011,12 @@ function fnRowEl(r, idx) {
   if (node) {
     el.setAttribute('aria-level', r.depth + 1); el.setAttribute('aria-posinset', r.pos); el.setAttribute('aria-setsize', r.size);
     if (folder) el.setAttribute('aria-expanded', String(node.open));
-    el.style.paddingLeft = (0.55 + r.depth * 0.85) + 'rem';
+    el.style.setProperty('--d', r.depth);   // indent + one guide line per ancestor level (CSS)
     el.title = cls || fnNodePath(node);
-    el.innerHTML = `<span class="ar${folder ? '' : ' leaf'}" aria-hidden="true"></span><span class="lb">${esc(node.key)}</span>${fnDecoHtml(cls, node)}`;
+    el.innerHTML = `${folder ? '<span class="ar" aria-hidden="true"></span>' : ''}${fnEpHtml(cls)}<span class="lb">${esc(node.key)}</span>${fnDecoHtml(cls, node)}`;
   } else {
     el.title = cls;
-    el.innerHTML = `<span class="lb">${fnLabelHtml(cls, s.hl)}</span>${fnDecoHtml(cls, null)}`;
+    el.innerHTML = `${fnEpHtml(cls)}<span class="lb">${fnLabelHtml(cls, s.hl)}</span>${fnDecoHtml(cls, null)}`;
   }
   return el;
 }
@@ -5667,7 +6026,7 @@ function fnPaintRows(force) {
   const s = fnSt, list = document.getElementById('fn-tree-list'), win = list && list.querySelector('.fn-vw');
   if (!win) return;
   const top = list.scrollTop, h = list.clientHeight || 400;
-  const a = Math.max(0, Math.floor(top / FN_ROW_H) - 8), b = Math.min(s.rows.length, Math.ceil((top + h) / FN_ROW_H) + 8);
+  const a = Math.max(0, Math.floor((top - FN_PAD) / FN_ROW_H) - 8), b = Math.min(s.rows.length, Math.ceil((top + h - FN_PAD) / FN_ROW_H) + 8);
   if (!force && a === s.winA && b === s.winB) return;
   s.winA = a; s.winB = b;
   win.style.transform = `translateY(${a * FN_ROW_H}px)`;
@@ -5677,8 +6036,8 @@ function fnPaintRows(force) {
 function fnScrollToRow(idx, center) {   // bring a row into view without touching the page scroll
   const list = document.getElementById('fn-tree-list');
   if (!list) return;
-  const top = idx * FN_ROW_H, h = list.clientHeight || 400;
-  if (top < list.scrollTop || top + FN_ROW_H > list.scrollTop + h) list.scrollTop = center ? Math.max(0, top - (h - FN_ROW_H) / 2) : (top < list.scrollTop ? top : top + FN_ROW_H - h);
+  const top = FN_PAD + idx * FN_ROW_H, h = list.clientHeight || 400;   // the row's top edge inside the scroller
+  if (top - FN_PAD < list.scrollTop || top + FN_ROW_H + FN_PAD > list.scrollTop + h) list.scrollTop = center ? Math.max(0, top - (h - FN_ROW_H) / 2) : (top - FN_PAD < list.scrollTop ? top - FN_PAD : top + FN_ROW_H + FN_PAD - h);
 }
 
 /* Move the cursor without replacing any row element (classes and aria-activedescendant only). */
@@ -5733,7 +6092,7 @@ function fnMarkActive() {
     if (!node) return;
     let changed = false;
     for (let n = node.parent; n && n.parent; n = n.parent) if (!n.open) { n.open = true; changed = true; }
-    if (changed) { s.rows = fnComputeRows(); const vs = document.querySelector('#fn-tree-list .fn-vs'); if (vs) vs.style.height = s.rows.length * FN_ROW_H + 'px'; }
+    if (changed) { s.rows = fnComputeRows(); const vs = document.querySelector('#fn-tree-list .fn-vs'); if (vs) vs.style.height = fnListH(s.rows.length) + 'px'; }
   }
   const idx = s.rows.findIndex(r => fnRowCls(r) === cls);
   if (idx >= 0) { s.cur = idx; fnScrollToRow(idx, true); }
@@ -5744,14 +6103,17 @@ function fnMarkActive() {
 /* ── open classes ── */
 function fnActiveFile() { return fnSt && fnSt.activePath ? fnSt.openFiles.find(f => f.class === fnSt.activePath) || null : null; }
 
-function fnClearFilter() {
+/* Set the tree filter from code (a link, the breadcrumb, a missing class): the input shows it and the chips are cleared. */
+function fnApplyFilter(text) {
   const s = fnSt;
-  s.query = s.hl = ''; s.chipFind = s.chipEp = false;
+  fnSetQuery(text); s.chipFind = s.chipEp = false;
   const f = document.getElementById('fn-filter');
-  if (f) f.value = '';
+  if (f) f.value = text;
   document.querySelectorAll('#fn-root [data-chip]').forEach(b => b.setAttribute('aria-pressed', 'false'));
   fnRenderTree();
+  fnSyncUrl();
 }
+function fnClearFilter() { fnApplyFilter(''); }
 
 async function fnOpenClass(className, opts = {}) {
   const s = fnSt;
@@ -5760,7 +6122,7 @@ async function fnOpenClass(className, opts = {}) {
   s.missing = false;
   // A link, a deep link or a tab switch can name a class the filter in the tree hides: drop that filter so the class
   // can be revealed and selected in the plain tree. (A click inside a filtered list keeps the filter it was made in.)
-  if (s.filtered && (opts.link || !s.rows.some(r => fnRowCls(r) === className))) fnClearFilter();
+  if (s.filtered && !opts.keepFilter && (opts.link || !s.rows.some(r => fnRowCls(r) === className))) fnClearFilter();   // keepFilter: a link that carries both ?class= and ?q=
   s.activePath = className;
   fnSetActive();
   if (s.openFiles.some(f => f.class === className)) { fnRenderViewer(); return; }
@@ -5769,10 +6131,13 @@ async function fnOpenClass(className, opts = {}) {
   if (!s.classSet.has(className)) {
     s.missing = true;
     const short = className.split(/[./$:]/).filter(Boolean).pop() || className;
-    s.query = s.hl = short.toLowerCase();
-    const f = document.getElementById('fn-filter');
-    if (f) f.value = short;
-    fnRenderTree();
+    if (!opts.keepFilter) {
+      fnSetQuery(short);
+      const f = document.getElementById('fn-filter');
+      if (f) f.value = short;
+      fnRenderTree();
+      fnSyncUrl();
+    }
     fnRenderViewer('missing');
     return;
   }
@@ -5796,6 +6161,9 @@ async function fnOpenClass(className, opts = {}) {
     // Every function block starts with exactly one header. The native engines (iOS native, Ghidra) already write their own
     // ("// Class: X" then "// Function: Y") — those rows are shown as stored, with no second header injected. Any other row
     // (Android JADX, a native row with no code) keeps the UI's "// Class.function [ORIGIN]" line. The stored code is never altered.
+    // A class stored as ONE '<class>' row (Android JADX / ASC) is shown exactly as stored — its first line is the code's own
+    // `package …` — and its origin moves to a chip in the toolbar. Anything else keeps the header per row, as before.
+    const whole = rows.length === 1 && rows[0].function === '<class>' && String(rows[0].code || '').trim() !== '';
     let code = '', lineNo = 1;   // lineNo: the 1-based line the next appended text starts on
     const outline = rows.length > 1 ? [] : null;
     rows.forEach((r, i) => {
@@ -5803,12 +6171,12 @@ async function fnOpenClass(className, opts = {}) {
       const body = r.code || '';
       const lead = /^(?:[ \t]*\r?\n)*/.exec(body)[0];                       // blank lines before the first real line
       const ownHeader = /^\/\/ Class: /.test(body.slice(lead.length));
-      const text = ownHeader ? body : `// ${r.class}.${r.function} [${r.origin}]\n${body}`;
+      const text = ownHeader || whole ? body : `// ${r.class}.${r.function} [${r.origin}]\n${body}`;
       if (outline) outline.push({name: r.function, line: lineNo + (ownHeader ? lead.split('\n').length - 1 : 0)});   // the header line itself
       code += text;
       lineNo += text.split('\n').length - 1;
     });
-    file = {class: className, code, language: fnLanguageFor(rows[0].origin, s.detail), outline};
+    file = {class: className, code, language: fnLanguageFor(rows[0].origin, s.detail), outline, origin: whole ? String(rows[0].origin || '').toUpperCase() : ''};
   }
   fnCommitFile(file);
 }
@@ -5831,7 +6199,7 @@ async function fnDecompileNow(className, tool) {
     return;
   }
   if (fnSt !== s || s.activePath !== className) return;
-  fnCommitFile({class: className, code: data.code, language: fnLanguageFor(tool, s.detail), outline: null});
+  fnCommitFile({class: className, code: data.code, language: fnLanguageFor(tool, s.detail), outline: null, origin: tool.toUpperCase()});
 }
 
 // New files (fresh fetch, fresh decompile) go through here; switching to an already-open tab does not.
@@ -5863,8 +6231,29 @@ function fnSetActive() {
   fnMarkActive();
   fnRenderActions(fnActiveFile());
   fnRenderXref();
-  decReplaceUrl(s.activePath ? {class: s.activePath} : {});
+  fnSyncUrl();
   fnSyncLayout();
+}
+
+/* Short, unique labels for the open-file strip. A class shows its simple name ("Inner" for Outer$Inner); a native pseudo-class
+   "native:libfoo.so/Global" reads "Global · libfoo.so" (the library is what tells two of them apart); when two open files
+   still share a label, the nearest enclosing segments are added ("C0014a · a00") until they differ. The tab's title keeps the full name. */
+function fnTabLabels(classes) {
+  const info = classes.map(c => {
+    const m = /^native:([^/]+)\/(.+)$/.exec(c);
+    if (m) return {short: m[2], ctx: [m[1]], min: 1};
+    const seg = c.split(/[.$]/).filter(Boolean), short = seg.pop() || c;
+    return {short, ctx: seg.reverse(), min: 0};   // ctx: nearest enclosing segment first
+  });
+  const k = info.map(x => x.min), lab = i => info[i].short + (k[i] ? ' · ' + info[i].ctx.slice(0, k[i]).reverse().join('.') : '');
+  for (let round = 0; round < 12; round++) {
+    const seen = new Map();
+    info.forEach((_, i) => { const l = lab(i); (seen.get(l) || seen.set(l, []).get(l)).push(i); });
+    let moved = false;
+    for (const idx of seen.values()) if (idx.length > 1) for (const i of idx) if (k[i] < info[i].ctx.length) { k[i]++; moved = true; }
+    if (!moved) break;
+  }
+  return info.map((_, i) => lab(i));
 }
 
 function fnRenderOpenTabs() {
@@ -5873,8 +6262,9 @@ function fnRenderOpenTabs() {
   const f = document.activeElement, kept = el.contains(f) ? f.dataset : null;   // keep keyboard focus across the re-render
   el.hidden = !s.openFiles.length;
   el.classList.toggle('one', s.openFiles.length === 1);   // a phone has no room for a one-tab strip: the breadcrumb already names the file
-  el.innerHTML = s.openFiles.map(file => {
-    const short = file.class.split(/[.$]/).pop() || file.class, on = file.class === s.activePath;
+  const labels = fnTabLabels(s.openFiles.map(f => f.class));
+  el.innerHTML = s.openFiles.map((file, i) => {
+    const short = labels[i], on = file.class === s.activePath;
     return `<div class="ot${on ? ' on' : ''}"><button type="button" class="ot-main" role="tab" aria-selected="${on}" data-class="${escAttr(file.class)}" title="${escAttr(file.class)}">${esc(short)}</button>`
       + `<button type="button" class="ot-x" data-close="${escAttr(file.class)}" aria-label="Close ${escAttr(short)}" title="Close">×</button></div>`;
   }).join('');
@@ -5925,19 +6315,21 @@ function fnCrumb(i) {
   if (!p) return;
   if (p.node) {
     if (fnBand() === 'narrow') fnOpenSheet('t1');
-    s.query = s.hl = ''; s.chipFind = s.chipEp = false;
+    fnSetQuery(''); s.chipFind = s.chipEp = false;
     const f = document.getElementById('fn-filter'); if (f) f.value = '';
     document.querySelectorAll('#fn-root [data-chip]').forEach(b => b.setAttribute('aria-pressed', 'false'));
     for (let n = p.node; n && n.parent; n = n.parent) n.open = true;
     fnRenderTree();
+    fnSyncUrl();
     const idx = s.rows.findIndex(r => r.node === p.node);
     if (idx >= 0) fnSetCursor(idx);
   } else if (p.filter) {
     if (fnBand() === 'narrow') fnOpenSheet('t1');
     const f = document.getElementById('fn-filter');
     if (f) f.value = p.filter;
-    s.query = s.hl = p.filter.toLowerCase();
+    fnSetQuery(p.filter);
     fnRenderTree();
+    fnSyncUrl();
   }
 }
 
@@ -5945,7 +6337,7 @@ function fnCrumb(i) {
 function fnRenderActions(file) {
   const el = document.getElementById('fn-actions');
   if (!el) return;
-  el.innerHTML = !file ? '' : `${file.outline ? `<details class="fn-outline"><summary aria-label="Outline (${file.outline.length})" title="Outline"><span class="ic">${ico('braces')}</span><span class="lbl">Outline </span>(${file.outline.length})</summary>
+  el.innerHTML = !file ? '' : `${file.origin ? `<span class="fn-origin" title="Decompiled by ${escAttr(file.origin)}">${esc(file.origin)}</span>` : ''}${file.outline ? `<details class="fn-outline"><summary aria-label="Outline (${file.outline.length})" title="Outline"><span class="ic">${ico('braces')}</span><span class="lbl">Outline </span>(${file.outline.length})</summary>
       <div class="fn-outline-list">${file.outline.map(o => `<button type="button" class="fn-outline-item" data-line="${o.line}">${esc(o.name)}</button>`).join('')}</div></details>` : ''}
     <button type="button" class="btn btn-ghost btn-sm" data-act="ask" aria-label="Ask AI" title="Ask AI"><span class="ic">${ico('sparkles')}</span><span class="lbl">Ask AI</span></button>
     ${file.code != null ? `<button type="button" class="btn btn-ghost btn-sm" data-act="copy" aria-label="Copy source" title="Copy source">${ico('copy')}</button>` : ''}`;
@@ -6100,6 +6492,17 @@ function fnXrefResources(cls) {
    keep keyboard focus. Everything in a row comes from the scan, so it goes through esc()/escAttr(). */
 let decListSeq = 0;
 const DEC_SIZES = [50, 100, 200];   // the API accepts 10–200
+/* Strings quick filters (the server's `kind=`): heuristics, so every chip says what it matches and the view says they can be wrong. */
+const DEC_KINDS = [
+  ['', 'All', 'Every string — no quick filter'],
+  ['url', 'URLs', 'Strings containing a scheme separator: https://, ws://, content://, file://, deep links …'],
+  ['secret', 'Secrets', 'Credential-looking values: API-key / JWT / token formats, key=value pairs and key names mentioning token, secret or password, long hex or base64 values'],
+  ['path', 'Paths', 'Absolute file paths without spaces: /system/bin/su, /proc/self/maps, C:\\Windows …'],
+  ['email', 'Emails', 'Values that contain an e-mail address'],
+];
+const decKindLabel = k => (DEC_KINDS.find(x => x[0] === k) || [, k])[1];
+const decKindOf = v => (DEC_KINDS.some(k => k[0] && k[0] === v) ? v : '');   // an unknown ?kind= means All
+const decKindNote = k => !k ? '' : k === 'secret' ? 'Heuristic match: credential-shaped values and key names — expect false positives.' : 'Heuristic match — expect false positives and misses.';
 
 /* esc() of `text` with the case-insensitive matches of `q` wrapped in <mark> (plain indexOf: no regex to escape). */
 function decMark(text, q) {
@@ -6120,9 +6523,28 @@ async function decCopy(text, btn) {
 }
 
 /* Hover/focus actions of a row; `i` indexes the rendered items, so no scan data ever lands in an attribute. */
-function decActsHtml(i) {
+function decActsHtml(i, open = '') {
   return `<span class="dec-acts"><button type="button" class="dec-ib" data-dact="copy" data-i="${i}" aria-label="Copy" title="Copy">${ico('copy')}</button>`
-    + `<button type="button" class="dec-ib" data-dact="ask" data-i="${i}" aria-label="Ask AI" title="Ask AI">${ico('sparkles')}</button></span>`;
+    + `<button type="button" class="dec-ib" data-dact="ask" data-i="${i}" aria-label="Ask AI" title="Ask AI">${ico('sparkles')}</button>${open}</span>`;
+}
+
+/* Where an Android string's class chip leads. The label is only the declaring class's SHORT name, so it is resolved against the
+   scan's class list: exactly one class with that name → open that class; several, none, or a list not loaded yet → Functions with
+   the tree filtered by the name, so the user picks. A single class is never guessed. */
+function decClassTarget(id, short, classes) {
+  const hits = classes ? decClassesNamed(classes, short) : null;
+  if (hits && hits.length === 1) return {href: decHash(id, 'functions', {class: hits[0]}), tip: `Open ${hits[0]} in Decompiled › Functions`};
+  const why = !hits ? '' : hits.length ? `${hits.length} classes are named ${short} — ` : `No class named ${short} in this scan — `;
+  return {href: decHash(id, 'functions', {q: short}), tip: `${why}${hits ? 'o' : 'O'}pen Decompiled › Functions filtered by “${short}”${hits && hits.length ? ' to pick one' : ''}`};
+}
+/* Re-point the chips / open-class links of the rows on screen once the class list is in (rows paint before it arrives). */
+function decPaintClassLinks(rowsEl, items, id, classes) {
+  rowsEl.querySelectorAll('[data-xi]').forEach(a => {
+    const it = items[Number(a.dataset.xi)];
+    if (!it || !it.label) return;
+    const t = decClassTarget(id, it.label, classes);
+    a.setAttribute('href', t.href); a.title = t.tip; a.setAttribute('aria-label', t.tip);
+  });
 }
 
 /* The scan's findings, fetched once per visit to Decompiled and shared by every sub-view. */
@@ -6150,19 +6572,32 @@ function decResourceFindings(vulns) {
 const DEC_LONG = 240;   // values longer than this get a Show more toggle; a collapsed value renders at most DEC_CUT chars
 const DEC_CUT = 600;
 
+/* Ghidra labels a string "s_<text>_<address>"; the address is shown right below, so the visible label drops that suffix (the tooltip keeps all of it). */
+function decSymbolLabel(s) {
+  const label = String(s.label), tail = '_' + String(s.address || '');
+  return s.address && label.length > tail.length && label.endsWith(tail) ? label.slice(0, -tail.length) : label;
+}
+
 const DEC_LISTS = {
   strings: {
     noun: 'string', ph: 'Search strings…', grid: 'dec-cs',
-    head: kind => `<div role="columnheader">Value</div><div role="columnheader">${kind === 'android' ? 'Class' : kind === 'ios' ? 'Address · segment' : 'Where'}</div><div role="columnheader"><span class="sr-only">Actions</span></div>`,
-    // Android strings carry the declaring class's short name as `label` and a meaningless "jadx:N" address; iOS
-    // ones carry a real address + segment. Whatever a row lacks is left out rather than shown as an empty cell.
-    row: (s, i, st) => {
+    head: kind => `<div role="columnheader">Value</div><div role="columnheader">${kind === 'ios' ? 'Address · segment' : 'Where'}</div><div role="columnheader"><span class="sr-only">Actions</span></div>`,
+    // Android strings carry the declaring class's short name as `label` and a meaningless "jadx:N" address (a class chip); an
+    // Android app's native (Ghidra) strings and iOS ones carry a real address + segment (+ a symbol label on Android) — hence the
+    // neutral "Where" header. Whatever a row lacks is left out rather than shown as an empty cell. The cell is at most two lines:
+    // the label on one line (ellipsis, full text in the tooltip), the address + segment below it.
+    row: (s, i, st, id) => {
       const jadx = /^jadx:\d+$/.test(s.address || '');
-      const where = (s.label ? `<span class="dec-pk" title="Declaring class (short name)">${esc(s.label)}</span>` : '')
-        + (s.address && !jadx ? `<span class="dec-pk">${esc(s.address)}</span>` : '')
-        + (s.segment && s.segment !== '__JADX' ? `<span class="ep-badge">${esc(s.segment)}</span>` : '');
-      return `<div class="dec-row dec-cs" role="row"><div role="cell" class="dec-val nw" title="${escAttr(String(s.value || '').slice(0, 500))}">${decMark(s.value, st.q)}</div>
-        <div role="cell" class="dec-where">${where || '<span class="muted">—</span>'}</div><div role="cell">${decActsHtml(i)}</div></div>`;
+      // Only JADX-extracted strings name a class (by its short name). A Ghidra string in the same app is labelled with its symbol
+      // ("s_androidx/graphics/…_00100ab1") and has a real address + segment: those keep their plain label, address and segment.
+      const t = s.label && s.segment === '__JADX' ? decClassTarget(id, s.label, decClassesNow(id)) : null;
+      const link = t ? `href="${escAttr(t.href)}" data-xi="${i}" title="${escAttr(t.tip)}" aria-label="${escAttr(t.tip)}"` : '';
+      const addr = (s.address && !jadx ? `<span class="dec-pk">${esc(s.address)}</span>` : '')
+        + (s.segment && s.segment !== '__JADX' ? `<span class="ep-badge" title="${escAttr(s.segment)}">${esc(s.segment)}</span>` : '');
+      const where = t ? `<a class="dec-xchip" ${link}><span aria-hidden="true">⎆</span><span>${esc(s.label)}</span><span aria-hidden="true">↗</span></a>`
+        : (s.label ? `<span class="dec-lbl" title="${escAttr(String(s.label).slice(0, 300))}">${esc(decSymbolLabel(s))}</span>` : '') + (addr ? `<span class="dec-wl">${addr}</span>` : '');
+      return `<div class="dec-row dec-cs${t ? ' has-chip' : ''}" role="row"><div role="cell" class="dec-val nw" title="${escAttr(String(s.value || '').slice(0, 500))}">${decMark(s.value, st.q)}</div>
+        <div role="cell" class="dec-where">${where || '<span class="muted">—</span>'}</div><div role="cell">${decActsHtml(i, t ? `<a class="dec-ib" ${link}>${ico('external')}</a>` : '')}</div></div>`;
     },
   },
   resources: {
@@ -6183,20 +6618,23 @@ const DEC_LISTS = {
 
 async function decList(el, id, kind, params) {
   const isRes = kind === 'resources', cfg = DEC_LISTS[kind];
-  const st = decSt[kind] || (decSt[kind] = {q: '', page: 1, size: 50, type: '', hl: '', wrap: false});
+  const st = decSt[kind] || (decSt[kind] = {q: '', page: 1, size: 50, type: '', hl: '', wrap: false, kind: ''});
   if (params && String(params)) {   // seeded from the URL (an xref or a shared link); otherwise keep this scan's last state
     st.q = (params.get('q') || '').slice(0, 500);
     st.hl = isRes ? (params.get('hl') || '').slice(0, 2000) : '';
     st.type = isRes ? (params.get('type') || '').slice(0, 100) : '';
+    st.kind = isRes ? '' : decKindOf(params.get('kind') || '');
     st.page = 1;
   }
   el.innerHTML = `<div class="dec-list">
     <div id="dec-from"></div>
     <div class="toolbar">
-      <label class="search-ctl">${ico('scanSearch')}<input id="dec-q" class="ctl" type="search" autocomplete="off" placeholder="${cfg.ph}" aria-label="${cfg.ph}"/></label>
+      <label class="search-ctl">${ico('search')}<input id="dec-q" class="ctl" type="search" autocomplete="off" placeholder="${cfg.ph}" aria-label="${cfg.ph}"/></label>
       ${isRes ? '<div class="seg fade-x" id="dec-type" role="group" aria-label="Filter by type"></div>'
-              : `<button type="button" class="btn btn-ghost btn-sm" id="dec-wrap" aria-pressed="${st.wrap}" title="Wrap long values">↵ Wrap</button>`}
+              : `<button type="button" class="btn btn-ghost btn-sm" id="dec-wrap" aria-pressed="${st.wrap}" title="Wrap long values onto several lines (off: one line, cut with …)">↵ Wrap <span class="pip" aria-hidden="true"></span></button>`}
     </div>
+    ${isRes ? '' : `<div class="dec-kinds" id="dec-kinds" role="group" aria-label="Quick filters">${DEC_KINDS.map(([k, label, tip]) =>
+      `<button type="button" class="fn-chip" data-kind="${k}" aria-pressed="${st.kind === k}" title="${escAttr(tip)}">${label}</button>`).join('')}<span class="dec-kind-note" id="dec-kind-note"></span></div>`}
     <section class="panel dec-panel">
       <div class="result-line" id="dec-count" role="status"></div>
       <div role="table" aria-label="${cfg.noun === 'string' ? 'Strings' : 'Resources'}">
@@ -6209,7 +6647,7 @@ async function decList(el, id, kind, params) {
   const root = el.firstElementChild, qEl = el.querySelector('#dec-q'), rowsEl = el.querySelector('#dec-rows'), emptyEl = el.querySelector('#dec-empty');
   const view = {items: [], counts: null, finds: new Map(), typesBuilt: false, scrollTop: false};
   qEl.value = st.q;
-  const syncUrl = () => decReplaceUrl(isRes ? {q: st.q, type: st.type, hl: st.hl} : {q: st.q});
+  const syncUrl = () => decReplaceUrl(isRes ? {q: st.q, type: st.type, hl: st.hl} : {q: st.q, kind: st.kind});
 
   const paintFrom = () => {
     el.querySelector('#dec-from').innerHTML = st.hl ? `<div class="dec-from">${ico('alert')}<span>Opened from a finding</span>
@@ -6236,17 +6674,26 @@ async function decList(el, id, kind, params) {
     const more = el.querySelector('#dec-more');
     if (more) { more.value = [...more.options].some(o => o.value === st.type) ? st.type : ''; more.classList.toggle('on', !!more.value); }
   };
+  const paintKinds = () => {
+    el.querySelectorAll('#dec-kinds [data-kind]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.kind === st.kind)));
+    const note = el.querySelector('#dec-kind-note');
+    if (note) note.textContent = decKindNote(st.kind);
+  };
   const paintRows = () => {
     el.querySelector('#dec-head').hidden = !view.items.length;
     rowsEl.innerHTML = view.items.map((r, i) => cfg.row(r, i, st, id, view.finds)).join('');
-    emptyEl.innerHTML = view.items.length ? '' : `<div class="empty-state"><div class="es-ico">${ico('scanSearch')}</div><strong>No ${cfg.noun}s ${st.q || st.type ? 'match' : 'found'}</strong>${
-      st.q ? `Nothing contains “${esc(st.q)}”.` : st.type ? 'Try another type.' : ''}</div>`;
+    emptyEl.innerHTML = view.items.length ? '' : `<div class="empty-state"><div class="es-ico">${ico('scanSearch')}</div><strong>No ${cfg.noun}s ${st.q || st.type || st.kind ? 'match' : 'found'}</strong>${
+      st.q ? `Nothing${st.kind ? ` in ${esc(decKindLabel(st.kind))}` : ''} contains “${esc(st.q)}”.` : st.type ? 'Try another type.' : st.kind ? `No ${esc(decKindLabel(st.kind))} matched. Try another filter.` : ''}</div>`;
     rowsEl.classList.toggle('wrap', !!st.wrap);
+    if (!isRes && view.items.some(r => r.label && r.segment === '__JADX')) {
+      const items = view.items;   // the class list is shared with Functions (one fetch); until it lands the chips lead to a name filter
+      decClasses(id).then(cl => { if (view.items === items && rowsEl.isConnected) decPaintClassLinks(rowsEl, items, id, cl); }).catch(() => {});
+    }
   };
   const paintMeta = d => {
     const total = Math.max(0, Number(d.total) || 0), pages = Math.max(0, Number(d.pages) || 0);
-    const all = isRes ? view.total : decSt.detail.string_count, filtered = !!(st.q || st.type);
-    el.querySelector('#dec-count').innerHTML = `<span>${total.toLocaleString()} ${cfg.noun}${total === 1 ? '' : 's'}${filtered ? ` match${total === 1 ? 'es' : ''}${st.q ? ` “${esc(st.q)}”` : ''}${st.type ? ` · type ${esc(st.type)}` : ''}${all ? ` · of ${Number(all).toLocaleString()}` : ''}` : ''}</span>
+    const all = isRes ? view.total : decSt.detail.string_count, filtered = !!(st.q || st.type || st.kind);
+    el.querySelector('#dec-count').innerHTML = `<span>${total.toLocaleString()} ${cfg.noun}${total === 1 ? '' : 's'}${filtered ? ` match${total === 1 ? 'es' : ''}${st.q ? ` “${esc(st.q)}”` : ''}${st.type ? ` · type ${esc(st.type)}` : ''}${st.kind ? ` · ${esc(decKindLabel(st.kind))}` : ''}${all ? ` · of ${Number(all).toLocaleString()}` : ''}` : ''}</span>
       <span>Searching the <b>Value</b> column</span>`;
     const pager = el.querySelector('#dec-pager'), f = document.activeElement, keep = f && pager.contains(f) ? (f.getAttribute('aria-label') || f.dataset.dpage) : null;
     pager.innerHTML = total ? pagerHtml(st.page, pages, total, st.size, 'dpage', DEC_SIZES) : '';
@@ -6260,6 +6707,7 @@ async function decList(el, id, kind, params) {
       const p = new URLSearchParams({page: st.page, size: st.size});
       if (st.q) p.set('q', st.q);
       if (isRes && st.type) p.set('type', st.type);
+      if (!isRes && st.kind) p.set('kind', st.kind);
       const d = await api('/scans/' + id + '/' + kind + '?' + p);
       if (my !== decListSeq || !rowsEl.isConnected) return;
       view.items = Array.isArray(d.items) ? d.items : [];
@@ -6294,7 +6742,8 @@ async function decList(el, id, kind, params) {
   root.addEventListener('click', ev => {
     const t = ev.target.closest('button');
     if (!t) return;
-    if (t.id === 'dec-from-x') { st.q = st.hl = ''; st.page = 1; qEl.value = ''; paintFrom(); reload(); qEl.focus(); }
+    if (t.dataset.kind != null) { st.kind = decKindOf(t.dataset.kind); st.page = 1; paintKinds(); reload(); }
+    else if (t.id === 'dec-from-x') { st.q = st.hl = ''; st.page = 1; qEl.value = ''; paintFrom(); reload(); qEl.focus(); }
     else if (t.id === 'dec-wrap') { st.wrap = !st.wrap; t.setAttribute('aria-pressed', String(st.wrap)); rowsEl.classList.toggle('wrap', st.wrap); }
     else if (t.dataset.dectype != null) { st.type = t.dataset.dectype; st.page = 1; st.hl = ''; paintFrom(); paintTypes(); reload(); }
     else if (t.dataset.dpage && !t.disabled) { st.page = Number(t.dataset.dpage) || 1; reload(true); }
@@ -6323,6 +6772,7 @@ async function decList(el, id, kind, params) {
   });
 
   paintFrom();
+  paintKinds();
   syncUrl();
   if (isRes) decVulns(id).then(v => {   // chips arrive after the rows; repaint only if nobody is using a row action
     view.finds = decResourceFindings(v);
@@ -6403,7 +6853,7 @@ async function tabEntryPoints(el, id, detail, params) {
   if (st.type !== 'all' && !types.includes(st.type)) st.type = 'all';   // a stale / hand-edited ?type=
   el.innerHTML = `<div class="dec-ep">
     <div class="toolbar">
-      <label class="search-ctl">${ico('scanSearch')}<input id="dec-q" class="ctl" type="search" autocomplete="off" placeholder="Filter class, package, member…" aria-label="Filter entry points by class, package or member"/></label>
+      <label class="search-ctl">${ico('search')}<input id="dec-q" class="ctl" type="search" autocomplete="off" placeholder="Filter class, package, member…" aria-label="Filter entry points by class, package or member"/></label>
       ${types.length > 1 ? '<div class="seg fade-x" id="dec-etype" role="group" aria-label="Filter by type"></div>' : ''}
     </div>
     <section class="panel dec-panel">
