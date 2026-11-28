@@ -175,24 +175,66 @@ async def get_functions(
 
 # ── strings ───────────────────────────────────────────────────────────────────
 
+# Quick filters for Decompiled › Strings (`kind=`). Heuristics, not detectors: each is a FIXED SQL fragment picked from this
+# whitelist by key (the request only ever supplies the key; q stays a bound parameter), tuned on a real Android and a real
+# iOS scan to keep obvious noise out — expect some false positives (and misses) and treat a hit as a lead, not a finding.
+#   url     anything with a scheme separator (http/https/ws/ftp/file/content/…://)
+#   email   the value contains an address (local part, "@", a letter-led domain with a dot) — so "%@" format specifiers and iOS
+#           "icon@2x.png" asset names do not count
+#   path    absolute POSIX paths (/system/bin/su) and Windows drive paths, no spaces, no "%"/"@" format specifiers
+#   secret  known credential shapes (Google API key, AWS key id, JWT, sk-…, GitHub PAT, Slack token, PEM private key,
+#           "Bearer …"); a credential word (token / secret / password / apikey …) either in a key=value / "key": pair or as a bare
+#           key name (short, identifier characters only, not a get…/set…/on…/has…/is… method or an ivar/mangled symbol);
+#           or a random-looking token (32–128 hex characters, or padded base64 that contains a digit)
+_STRING_KINDS = {
+    "url": "value LIKE '%://%'",
+    "email": "value GLOB '*[A-Za-z0-9._+-]@[A-Za-z]*.[A-Za-z][A-Za-z]*'",
+    "path": ("((value GLOB '/[A-Za-z0-9._-]*/*' AND value NOT GLOB '* *' AND value NOT GLOB '*[%@]*') "
+             "OR (value GLOB '[A-Za-z]:\\*' AND value NOT GLOB '* *'))"),
+    "secret": (
+        "(((value GLOB 'AIza*' AND length(value) >= 30) OR (value GLOB 'AKIA[A-Z0-9]*' AND length(value) = 20) "
+        "OR (value GLOB 'eyJ*.*.*' AND value NOT GLOB '* *') OR (value GLOB 'sk-*' AND length(value) >= 20 AND value NOT GLOB '* *') "
+        "OR value GLOB 'sk_live_*' OR value GLOB 'rk_live_*' OR (value GLOB 'ghp_*' AND length(value) >= 36) OR value GLOB 'xox[bp]-*' "
+        "OR value GLOB '*-----BEGIN*PRIVATE KEY-----*' OR (value GLOB 'Bearer *' AND length(value) > 7)) "
+        "OR ((value LIKE '%api_key%' OR value LIKE '%apikey%' OR value LIKE '%api-key%' OR value LIKE '%secret%' "
+        "OR value LIKE '%passwd%' OR value LIKE '%password%' OR value LIKE '%token%') "
+        "AND ((length(value) <= 120 AND (value GLOB '*[A-Za-z_\"]=*' OR value GLOB '*\"*\"*:*') "
+        "AND value NOT GLOB '*[(;]*' AND value NOT GLOB '[-+_$]*') "
+        "OR (length(value) <= 48 AND value NOT GLOB '*[^A-Za-z0-9_.-]*' AND value NOT GLOB '[_+$-]*' AND value NOT GLOB 'N[0-9]*' "
+        "AND value NOT GLOB 'get[A-Z]*' AND value NOT GLOB 'set[A-Z]*' AND value NOT GLOB 'on[A-Z]*' "
+        "AND value NOT GLOB 'has[A-Z]*' AND value NOT GLOB 'is[A-Z]*'))) "
+        "OR (length(value) BETWEEN 32 AND 128 AND value NOT GLOB '*[^0-9A-Fa-f]*') "
+        "OR (length(value) >= 24 AND value GLOB '*=' AND value NOT GLOB '*[^A-Za-z0-9+/=]*' AND value GLOB '*[0-9]*' "
+        "AND value NOT GLOB 'iVBOR*'))"),
+}
+STRING_KINDS = tuple(_STRING_KINDS)
+
+
+def _strings_where(executable: str, query: Optional[str], kind: Optional[str]) -> tuple[str, tuple]:
+    """WHERE clause + bound parameters shared by the list and the paged query. `kind` must be one of STRING_KINDS."""
+    if kind is not None and kind not in _STRING_KINDS:
+        raise ValueError(f"unknown string kind: {kind!r}")
+    sql, params = "ExecutableName=?", [executable]
+    if query:
+        sql += " AND value LIKE ?"
+        params.append(f"%{query}%")
+    if kind:
+        sql += f" AND ({_STRING_KINDS[kind]})"
+    return sql, tuple(params)
+
+
 async def get_strings(
     db_path: str,
     executable: str,
     query: Optional[str],
     limit: int,
+    kind: Optional[str] = None,
 ) -> list[StringItem]:
     limit = min(limit, 2000)
+    where, params = _strings_where(executable, query, kind)
     async with aiosqlite.connect(db_path) as db:
-        if query:
-            sql = """SELECT address, value, segment, label FROM MachoStrings
-                     WHERE ExecutableName=? AND value LIKE ? LIMIT ?"""
-            params = (executable, f"%{query}%", limit)
-        else:
-            sql = """SELECT address, value, segment, label FROM MachoStrings
-                     WHERE ExecutableName=? LIMIT ?"""
-            params = (executable, limit)
-
-        async with db.execute(sql, params) as cur:
+        sql = f"SELECT address, value, segment, label FROM MachoStrings WHERE {where} LIMIT ?"
+        async with db.execute(sql, (*params, limit)) as cur:
             rows = await cur.fetchall()
 
     return [StringItem(address=r[0], value=r[1], segment=r[2], label=r[3]) for r in rows]
@@ -204,27 +246,18 @@ async def get_strings_page(
     query: Optional[str],
     page: int,
     size: int,
+    kind: Optional[str] = None,
 ) -> StringPage:
-    """Return one stable, one-based page of strings and its filtered count."""
+    """Return one stable, one-based page of strings and its filtered count. `kind` (one of STRING_KINDS) narrows the
+    scope with a heuristic filter and combines with `query` by AND; without it the result is unchanged."""
     page = max(page, 1)
     size = max(10, min(size, 200))
     offset = (page - 1) * size
-    normalized_query = (query or "").strip()
-
-    if normalized_query:
-        count_sql = """SELECT COUNT(*) FROM MachoStrings
-                       WHERE ExecutableName=? AND value LIKE ?"""
-        fetch_sql = """SELECT address, value, segment, label FROM MachoStrings
-                       WHERE ExecutableName=? AND value LIKE ?
-                       ORDER BY rowid LIMIT ? OFFSET ?"""
-        where_params = (executable, f"%{normalized_query}%")
-    else:
-        count_sql = """SELECT COUNT(*) FROM MachoStrings
-                       WHERE ExecutableName=?"""
-        fetch_sql = """SELECT address, value, segment, label FROM MachoStrings
-                       WHERE ExecutableName=?
-                       ORDER BY rowid LIMIT ? OFFSET ?"""
-        where_params = (executable,)
+    where, where_params = _strings_where(executable, (query or "").strip(), kind)
+    count_sql = f"SELECT COUNT(*) FROM MachoStrings WHERE {where}"
+    fetch_sql = f"""SELECT address, value, segment, label FROM MachoStrings
+                    WHERE {where}
+                    ORDER BY rowid LIMIT ? OFFSET ?"""
 
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(count_sql, where_params) as cur:
@@ -742,7 +775,7 @@ def _like(q: str) -> str:
 
 async def list_classes(db_path: str, executable: str, query: str, limit: int, offset: int, cap: int = 200) -> list[dict]:
     """`cap` keeps the chat agent's tool (`cap=200`, the default) from flooding the model's context;
-    the Functions tab's tree needs the whole inventory at once, so its route passes a much higher cap."""
+    the Decompiled › Functions class browser needs the whole inventory at once, so its route passes a much higher cap."""
     limit = max(1, min(limit, cap))
     async with _ro(db_path) as db:
         async with db.execute(
@@ -943,7 +976,7 @@ async def get_resources_by_type(db_path: str, types: list[str], query: str, limi
 async def get_resources_page(db_path: str, type_: Optional[str], query: Optional[str],
                               page: int, size: int) -> ResourcePage:
     """One stable, one-based page of ResourceStrings (optionally one `type`, optional substring
-    filter on value) for the Resources tab, mirroring get_strings_page's shape."""
+    filter on value) for Decompiled › Resources, mirroring get_strings_page's shape."""
     page = max(page, 1)
     size = max(10, min(size, 200))
     offset = (page - 1) * size

@@ -14,7 +14,7 @@ SCHEMA = "CREATE TABLE ResourceStrings(id INTEGER PRIMARY KEY, resourceId TEXT, 
 class ResourcesRouteTests(unittest.TestCase):
     """GET /resources: the original flat response is unchanged for callers that don't ask for a
     page (e.g. the raw API link on the Downloads tab); passing `page` switches to the paginated
-    shape the Resources tab's pagination (and the Vulnerabilities tab's "View in Resources" link,
+    shape Decompiled › Resources' pagination (and the Vulnerabilities tab's "View in Decompiled › Resources" link,
     which searches by the exact evidence text) depends on."""
 
     def setUp(self):

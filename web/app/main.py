@@ -11,7 +11,7 @@ import zipfile
 from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import aiofiles
 from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
@@ -249,7 +249,7 @@ async def get_functions(
 
 @app.get("/api/v1/scans/{scan_id}/classes")
 async def get_classes(request: Request, scan_id: str, query: str = "", limit: int = 200_000, offset: int = 0):
-    """Class names only (no decompiled code) — the data source for the Functions tab's file tree.
+    """Class names only (no decompiled code) — the data source for the Decompiled › Functions class browser.
     Unlike the chat agent's list_classes tool, the tree needs the whole inventory at once, so this
     route raises db.list_classes's default 200-row cap (a real app can have tens of thousands)."""
     _check_auth(request)
@@ -280,7 +280,7 @@ class DecompileRequest(BaseModel):
 
 @app.post("/api/v1/scans/{scan_id}/decompile")
 async def post_decompile(request: Request, scan_id: str, req: DecompileRequest):
-    """On-demand decompile of one Android class for the Functions tab, when nothing is stored yet.
+    """On-demand decompile of one Android class for Decompiled › Functions, when nothing is stored yet.
     Android asc/jadx only — ghidra native targets (iOS Mach-O, Android .so) need a symbol/address
     picker this tab doesn't have, and stay reachable only through the AI Assistant's decompile tool.
     Shares its cache (and its concurrency limit) with that tool: both read/write the same
@@ -321,13 +321,14 @@ async def get_strings(
     limit: int = Query(default=200, ge=0, le=2000),
     page: Optional[int] = Query(default=None, ge=1),
     size: int = Query(default=50, ge=10, le=200),
+    kind: Optional[Literal["url", "email", "path", "secret"]] = None,   # heuristic quick filter; an unknown value is a 422
 ):
     _check_auth(request)
     db_path, exe = _require_db(scan_id)
     # Keep the original list response for callers that do not opt into pagination.
     if page is not None:
-        return await db.get_strings_page(db_path, exe, q, page, size)
-    return await db.get_strings(db_path, exe, q, limit)
+        return await db.get_strings_page(db_path, exe, q, page, size, kind)
+    return await db.get_strings(db_path, exe, q, limit, kind)
 
 
 @app.get("/api/v1/scans/{scan_id}/resources")
