@@ -218,6 +218,20 @@ class ResolveTests(unittest.TestCase):
             with self.assertRaises(llm.LlmError):
                 llm.resolve_llm("none", "", provider="evil")
 
+    def test_config_default_used_when_scan_has_no_provider(self):
+        import tempfile, os
+        from web.app.agent import llm_config
+        with tempfile.TemporaryDirectory() as d, \
+             patch.object(llm.settings, "llm_config_path", os.path.join(d, "c.json")), \
+             patch.object(scanner.settings, "llm_provider", "none"):
+            llm_config.set_default("ollama", "qwen3.5:4b")
+            cfg = llm.resolve_llm("none", "")                       # scan ran without LLM: Config default applies
+            self.assertEqual((cfg.provider, cfg.model), ("ollama", "qwen3.5:4b"))
+            cfg = llm.resolve_llm("ollama", "scan-model")           # the scan's own provider/model still wins
+            self.assertEqual(cfg.model, "scan-model")
+            cfg = llm.resolve_llm("none", "", provider="ollama", model="x")   # explicit pick wins over both
+            self.assertEqual(cfg.model, "x")
+
     def test_ollama_needs_no_key(self):
         cfg = llm.resolve_llm("ollama", "")
         self.assertEqual((cfg.provider, cfg.api_key), ("ollama", ""))

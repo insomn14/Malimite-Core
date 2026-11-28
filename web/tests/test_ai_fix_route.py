@@ -121,9 +121,11 @@ class AiFixRouteTests(unittest.TestCase):
                             llm_provider="none", platform="ios",
                             bundle_executable="App", db_path=self.db_path)
         # Isolate from the developer's local web/.env (which may set a real server-wide
-        # llm_provider fallback) so this asserts the "truly nothing configured" path.
+        # llm_provider fallback) and ~/.malimite/llm-config.json (a Config-tab default provider)
+        # so this asserts the "truly nothing configured" path.
         with patch.object(scanner, "get_scan_detail", return_value=detail), \
-             patch.object(main.settings, "llm_provider", "none"):
+             patch.object(main.settings, "llm_provider", "none"), \
+             patch.object(main.settings, "llm_config_path", str(Path(self.db_path).parent / "no-llm-config.json")):
             r = self.client.post(f"/api/v1/scans/s1/vulnerabilities/{self.vuln_id}/ai-fix", json={})
         self.assertEqual(r.status_code, 400)
 

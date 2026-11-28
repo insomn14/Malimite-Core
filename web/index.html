@@ -471,6 +471,7 @@ table.ae-table{width:100%;border-collapse:collapse;font-size:.82rem}
 .ae-chg-meta{font-size:.72rem;color:var(--muted)}
 .ae-empty-lg{display:flex;flex-direction:column;align-items:center;gap:.35rem;padding:2rem 1rem}
 .ae-empty-lg svg{width:28px;height:28px;color:var(--accent)}
+.ae-table tr.locked,.ae-field.locked,.ae-check-btn.locked{cursor:not-allowed;opacity:.6}
 .ae-run{border:1px solid var(--border);border-radius:10px;margin-bottom:.7rem;padding:0 .8rem}
 .ae-run>summary{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.7rem 0;cursor:pointer;font-size:.84rem;list-style:none}
 .ae-run>summary::-webkit-details-marker{display:none}
@@ -2071,13 +2072,28 @@ function providerDropdownOptionsHtml(configData, selected, defaultLabel) {
   return opts.join('');
 }
 
+/** Provider/model the Config tab marked as default, if that provider is still connected (else null). The model is
+    the saved default, or the provider's first catalog entry. Every picker starts here unless it has its own memory. */
+function configDefaultLlm(configData = _configCache) {
+  const p = configData?.default_provider || '';
+  if (!p || !configuredProviderValues(configData).has(p)) return null;
+  const cat = modelCatalog(p);
+  const saved = configData.default_model || '';
+  return {p, m: cat ? (cat.some(m => m.value === saved) ? saved : cat[0].value) : ''};
+}
+/** <option> list of a provider's models ('' when it has none), `selected` pre-picked. */
+function modelOptionsHtml(provider, selected) {
+  return (modelCatalog(provider) || []).map(m => `<option value="${escAttr(m.value)}"${m.value === selected ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
+}
+
 function renderScanOptionsHtml(file, prefs, configData) {
   const kind = packageKindOf(file.name);
   const xapk = file.name.toLowerCase().endsWith('.xapk');
   const mode = SCAN_MODES[prefs.mode] ? prefs.mode : 'summarize';
   const configuredSet = configuredProviderValues(configData);
   const anyConfigured = configuredSet.size > 0;
-  const provider = configuredSet.has(prefs.provider) ? prefs.provider
+  const dflt = configDefaultLlm(configData);
+  const provider = dflt ? dflt.p : configuredSet.has(prefs.provider) ? prefs.provider
     : (allProviders().find(p => configuredSet.has(p.value))?.value || prefs.provider || '');
   const modeOpts = Object.entries(SCAN_MODES)
     .map(([v, m]) => `<option value="${v}"${v === mode ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
@@ -2506,7 +2522,10 @@ route('home', async function() {
     $('#llm-provider')?.addEventListener('change', () => onProviderChange());
     $('#llm-model-select')?.addEventListener('change', updateRunSummary);
     $$('#scan-form input[name=decompiler], #assessment-enabled, #ios-native').forEach(el => el.addEventListener('change', updateRunSummary));
-    if ($('#llm-provider')) onProviderChange(prefs.provider === $('#llm-provider').value ? (prefs.model || '') : '');
+    if ($('#llm-provider')) {
+      const cur = $('#llm-provider').value, d = configDefaultLlm();
+      onProviderChange(prefs.provider === cur ? (prefs.model || '') : d?.p === cur ? d.m : '');
+    }
     onLlmToggle(true);
     onLlmModeChange();
     paintDupWarn();
@@ -4392,6 +4411,7 @@ function chatShowPrompts() {
 async function tabAssistant(el, id, detail) {
   if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'The AI Assistant'); return; }
   const st = chatSt(id);
+  const dflt = configDefaultLlm();   // starting pick; a remembered per-session choice replaces it in loadSession()
   el.innerHTML = `
     <div class="card chat-card" data-chat-scan="${escAttr(id)}">
       <div class="chat-bar">
@@ -4411,9 +4431,9 @@ async function tabAssistant(el, id, detail) {
         <div class="chat-comp-bar">
           <button class="chat-icon-btn" id="chat-attach" type="button" title="Attach up to 5 text/code files or images" aria-label="Attach files">${ico('paperclip')}</button>
           <select id="chat-provider" title="LLM provider" onchange="onChatProviderChange()">
-            ${providerDropdownOptionsHtml(_configCache, '', detail.llm_provider && detail.llm_provider !== 'none' ? 'Scan default (' + providerLabel(detail.llm_provider) + ')' : 'Scan default')}
+            ${providerDropdownOptionsHtml(_configCache, dflt?.p || '', detail.llm_provider && detail.llm_provider !== 'none' ? 'Scan default (' + providerLabel(detail.llm_provider) + ')' : 'Scan default')}
           </select>
-          <select id="chat-model-select" hidden title="Model"></select>
+          <select id="chat-model-select" ${modelCatalog(dflt?.p || '') ? '' : 'hidden'} title="Model">${modelOptionsHtml(dflt?.p || '', dflt?.m)}</select>
           <span class="nav-spacer"></span>
           <button class="chat-send-btn" id="chat-send" type="button" title="Send" aria-label="Send">${ico('send')}</button>
           <button class="chat-send-btn stop" id="chat-stop" type="button" title="Stop" aria-label="Stop" style="display:none">${ico('stop')}</button>
@@ -7651,6 +7671,7 @@ const AI_FIX_FIELDS = [
 ];
 
 function renderAiFixPanel(v) {
+  const dflt = configDefaultLlm();
   const isAiFixed = v.ai_fix_status === 'applied';
   const statusLine = isAiFixed
     ? `<div class="aifix-status">✨ Applied${v.ai_fix_provider ? ` by <strong>${esc(v.ai_fix_provider)}</strong>${v.ai_fix_model ? '/' + esc(v.ai_fix_model) : ''}` : ''}${v.ai_fix_at ? ` on ${new Date(v.ai_fix_at).toLocaleString()}` : ''}.</div>`
@@ -7664,11 +7685,11 @@ function renderAiFixPanel(v) {
       <form class="triage-form" onsubmit="return false">
         <label>LLM Provider
           <select id="aifix-provider-${v.id}" onchange="onAiFixProviderChange(${v.id})">
-            ${providerDropdownOptionsHtml(_configCache)}
+            ${providerDropdownOptionsHtml(_configCache, dflt?.p || '')}
           </select>
         </label>
         <label>Model
-          <select id="aifix-model-select-${v.id}" hidden></select>
+          <select id="aifix-model-select-${v.id}" ${modelCatalog(dflt?.p || '') ? '' : 'hidden'}>${modelOptionsHtml(dflt?.p || '', dflt?.m)}</select>
         </label>
         <div class="full">
           <div style="font-size:.72rem;color:var(--muted);margin-bottom:.3rem">Fields to rewrite</div>
@@ -7877,19 +7898,27 @@ function aeRenderBanner() {
     <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="openAutoEnhance('log')">View progress</button></div>`;
 }
 
-window.openAutoEnhance = function(tab) {
-  if (!AE.scanId) return;
-  AE.open = true; AE.error = '';
-  AE.tab = tab || (aeRunning() ? 'log' : AE.tab || 'select');
-  if (!AE.provider && AE.detail?.llm_provider && aeProviders().some(p => p.value === AE.detail.llm_provider)) {
+/** First pick for the modal: the Config tab's default provider, else this scan's own provider (never overrides a pick already made). */
+function aeInitProvider() {
+  if (AE.provider) return;
+  const d = configDefaultLlm();
+  if (d && aeProviders().some(p => p.value === d.p)) { AE.provider = d.p; AE.model = d.m; return; }
+  if (AE.detail?.llm_provider && aeProviders().some(p => p.value === AE.detail.llm_provider)) {
     AE.provider = AE.detail.llm_provider;
     const cat = modelCatalog(AE.provider);
     AE.model = cat ? (cat.some(m => m.value === AE.detail.llm_model) ? AE.detail.llm_model : cat[0].value) : '';
   }
+}
+
+window.openAutoEnhance = function(tab) {
+  if (!AE.scanId) return;
+  AE.open = true; AE.error = '';
+  AE.tab = tab || (aeRunning() ? 'log' : AE.tab || 'select');
+  aeInitProvider();
   // Best-effort refresh: a provider connected in the Config tab after this scan page first
   // loaded (no reload in between) should show up in the dropdown next time the modal opens,
   // not just after a hard refresh. Silently keeps the existing _configCache on failure.
-  fetchConfigProviders().then(() => { if (AE.open) aeRender(); }).catch(() => {});
+  fetchConfigProviders().then(() => { if (AE.open) { aeInitProvider(); aeRender(); } }).catch(() => {});
   let ov = document.getElementById('ae-overlay');
   if (!ov) {
     ov = document.createElement('div');
@@ -7938,10 +7967,11 @@ function aeSelectPane() {
   const rows = aeVisibleRows();
   const selectable = rows.filter(r => !r.allFixed);
   const allSel = selectable.length > 0 && selectable.every(r => AE.selected.has(r.id));
+  const lock = aeRunning(), dis = lock ? 'disabled' : '';   // the batch is fixed once started: no changing the selection under it
   const sevOpt = (v, l) => `<option value="${v}" ${AE.sev === v ? 'selected' : ''}>${l}</option>`;
   const body = rows.length ? rows.map(r => `
-      <tr class="${AE.selected.has(r.id) ? 'sel' : ''}" onclick="aeToggleRow(event, ${r.id})">
-        <td class="c"><input type="checkbox" ${AE.selected.has(r.id) ? 'checked' : ''} aria-label="Select ${escAttr(r.title)}"></td>
+      <tr class="${AE.selected.has(r.id) ? 'sel' : ''}${lock ? ' locked' : ''}" onclick="aeToggleRow(event, ${r.id})">
+        <td class="c"><input type="checkbox" ${dis} ${AE.selected.has(r.id) ? 'checked' : ''} aria-label="Select ${escAttr(r.title)}"></td>
         <td>${esc(r.title)}<span class="ae-rule">${esc(r.rule_id)}${r.occ > 1 ? ` · ${r.occ} occurrences` : ''}</span></td>
         <td><span class="badge badge-${r.sev.toLowerCase()}">${esc(r.sev)}</span></td>
         <td class="c">${r.cvss.toFixed(1)}</td>
@@ -7951,8 +7981,8 @@ function aeSelectPane() {
       </tr>`).join('')
     : `<tr><td colspan="7" class="ae-empty">No findings match the current filter.</td></tr>`;
   const fieldCards = AE_FIELDS.map(f => `
-      <label class="ae-field ${AE.fields.has(f.key) ? 'on' : ''}">
-        <input type="checkbox" ${AE.fields.has(f.key) ? 'checked' : ''} onchange="aeToggleField('${f.key}', this.checked)">
+      <label class="ae-field ${AE.fields.has(f.key) ? 'on' : ''}${lock ? ' locked' : ''}">
+        <input type="checkbox" ${dis} ${AE.fields.has(f.key) ? 'checked' : ''} onchange="aeToggleField('${f.key}', this.checked)">
         ${AE_ICONS[f.key]}
         <div class="ae-field-t">${f.title}</div>
         <div class="ae-field-d">${f.desc}</div>
@@ -7963,15 +7993,15 @@ function aeSelectPane() {
       <select onchange="aeSetSev(this.value)">
         ${sevOpt('', 'All severities')}${sevOpt('CRITICAL', 'Critical')}${sevOpt('HIGH', 'High')}${sevOpt('MEDIUM', 'Medium')}${sevOpt('LOW', 'Low')}${sevOpt('INFO', 'Info')}
       </select>
-      <label class="ae-check-btn" title="Selects every visible finding that is not AI-enhanced yet">
-        <input type="checkbox" ${allSel ? 'checked' : ''} onchange="aeSelectAll(this.checked)"> Select all
+      <label class="ae-check-btn${lock ? ' locked' : ''}" title="Selects every visible finding that is not AI-enhanced yet">
+        <input type="checkbox" ${dis} ${allSel ? 'checked' : ''} onchange="aeSelectAll(this.checked)"> Select all
       </label>
-      <button class="btn btn-ghost" type="button" onclick="aeClear()">Clear</button>
+      <button class="btn btn-ghost" type="button" ${dis} onclick="aeClear()">Clear</button>
     </div>
     <div class="ae-table-wrap">
       <table class="ae-table">
         <thead><tr>
-          <th class="c"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="aeSelectAll(this.checked)" aria-label="Select all"></th>
+          <th class="c"><input type="checkbox" ${dis} ${allSel ? 'checked' : ''} onchange="aeSelectAll(this.checked)" aria-label="Select all"></th>
           <th>Finding</th><th>Severity</th><th class="c">CVSS</th><th class="hide-sm">Category</th><th class="hide-sm">Status</th><th></th>
         </tr></thead>
         <tbody>${body}</tbody>
@@ -8349,18 +8379,19 @@ window.aeSetProvider = p => {
   AE.model = cat ? cat[0].value : '';
   aeRender();
 };
-window.aeToggleField = (k, on) => { on ? AE.fields.add(k) : AE.fields.delete(k); aeRender(); };
+window.aeToggleField = (k, on) => { if (aeRunning()) return; on ? AE.fields.add(k) : AE.fields.delete(k); aeRender(); };
 window.aeToggleRow = (ev, id) => {
-  if (ev.target.closest('.ae-chev')) return;
+  if (ev.target.closest('.ae-chev') || aeRunning()) return;
   AE.selected.has(id) ? AE.selected.delete(id) : AE.selected.add(id);
   aeRender();
 };
 window.aeSelectAll = on => {
+  if (aeRunning()) return;
   // Only findings not yet AI-enhanced; a re-run stays an explicit per-row choice.
   for (const r of aeVisibleRows()) if (!r.allFixed) on ? AE.selected.add(r.id) : AE.selected.delete(r.id);
   aeRender();
 };
-window.aeClear = () => { AE.selected.clear(); aeRender(); };
+window.aeClear = () => { if (aeRunning()) return; AE.selected.clear(); aeRender(); };
 window.aeJumpTo = (ev, id) => {
   ev.stopPropagation();
   closeAutoEnhance();
