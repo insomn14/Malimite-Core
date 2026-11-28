@@ -6362,16 +6362,17 @@ function fnSplitHighlighted(html) {
 /* Where a FUNCTION finding lands in the code: the function's header line. Multi-row classes (native engine) carry a
    header per function, found through the outline. A single decompiled blob (Android) has no line data, so the one
    declaration of that name is located — and when it is absent or ambiguous the finding stays class-level instead of
-   being pinned to a guessed line. */
+   being pinned to a guessed line. The pattern runs on the indentation-stripped line: with a leading \s* the indent itself
+   satisfied "type + whitespace", so every indented call (`m5118a(x);`, `return m5118a(x)`) counted as a second declaration. */
 function fnFunctionLine(file, fn) {
   if (!fn) return 0;
   if (file.outline) { const o = file.outline.find(x => x.name === fn); return o ? o.line : 0; }
-  const re = new RegExp('^\\s*(?:@\\w+(?:\\([^)]*\\))?\\s+)*(?:(?:public|protected|private|static|final|abstract|synchronized|native|default)\\s+)*(?!return\\b|new\\b|else\\b|throw\\b|case\\b)[\\w$<>\\[\\].,? ]+?\\s+'
+  const re = new RegExp('^(?:@\\w+(?:\\([^)]*\\))?\\s+)*(?:(?:public|protected|private|static|final|abstract|synchronized|native|default)\\s+)*(?!return\\b|new\\b|else\\b|throw\\b|case\\b)[\\w$<>\\[\\].,? ]+?\\s+'
     + fn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\(');
   let hit = 0;
   for (let i = 0; i < file.lines.length; i++) {
     const l = file.lines[i];
-    if (l.length < 400 && l.includes(fn) && re.test(l)) { if (hit) return 0; hit = i + 1; }
+    if (l.length < 400 && l.includes(fn) && re.test(l.trimStart())) { if (hit) return 0; hit = i + 1; }
   }
   return hit;
 }
