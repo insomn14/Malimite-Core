@@ -471,6 +471,7 @@ table.ae-table{width:100%;border-collapse:collapse;font-size:.82rem}
 .ae-chg-meta{font-size:.72rem;color:var(--muted)}
 .ae-empty-lg{display:flex;flex-direction:column;align-items:center;gap:.35rem;padding:2rem 1rem}
 .ae-empty-lg svg{width:28px;height:28px;color:var(--accent)}
+.ae-table tr.locked,.ae-field.locked,.ae-check-btn.locked{cursor:not-allowed;opacity:.6}
 .ae-run{border:1px solid var(--border);border-radius:10px;margin-bottom:.7rem;padding:0 .8rem}
 .ae-run>summary{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.7rem 0;cursor:pointer;font-size:.84rem;list-style:none}
 .ae-run>summary::-webkit-details-marker{display:none}
@@ -7966,10 +7967,11 @@ function aeSelectPane() {
   const rows = aeVisibleRows();
   const selectable = rows.filter(r => !r.allFixed);
   const allSel = selectable.length > 0 && selectable.every(r => AE.selected.has(r.id));
+  const lock = aeRunning(), dis = lock ? 'disabled' : '';   // the batch is fixed once started: no changing the selection under it
   const sevOpt = (v, l) => `<option value="${v}" ${AE.sev === v ? 'selected' : ''}>${l}</option>`;
   const body = rows.length ? rows.map(r => `
-      <tr class="${AE.selected.has(r.id) ? 'sel' : ''}" onclick="aeToggleRow(event, ${r.id})">
-        <td class="c"><input type="checkbox" ${AE.selected.has(r.id) ? 'checked' : ''} aria-label="Select ${escAttr(r.title)}"></td>
+      <tr class="${AE.selected.has(r.id) ? 'sel' : ''}${lock ? ' locked' : ''}" onclick="aeToggleRow(event, ${r.id})">
+        <td class="c"><input type="checkbox" ${dis} ${AE.selected.has(r.id) ? 'checked' : ''} aria-label="Select ${escAttr(r.title)}"></td>
         <td>${esc(r.title)}<span class="ae-rule">${esc(r.rule_id)}${r.occ > 1 ? ` · ${r.occ} occurrences` : ''}</span></td>
         <td><span class="badge badge-${r.sev.toLowerCase()}">${esc(r.sev)}</span></td>
         <td class="c">${r.cvss.toFixed(1)}</td>
@@ -7979,8 +7981,8 @@ function aeSelectPane() {
       </tr>`).join('')
     : `<tr><td colspan="7" class="ae-empty">No findings match the current filter.</td></tr>`;
   const fieldCards = AE_FIELDS.map(f => `
-      <label class="ae-field ${AE.fields.has(f.key) ? 'on' : ''}">
-        <input type="checkbox" ${AE.fields.has(f.key) ? 'checked' : ''} onchange="aeToggleField('${f.key}', this.checked)">
+      <label class="ae-field ${AE.fields.has(f.key) ? 'on' : ''}${lock ? ' locked' : ''}">
+        <input type="checkbox" ${dis} ${AE.fields.has(f.key) ? 'checked' : ''} onchange="aeToggleField('${f.key}', this.checked)">
         ${AE_ICONS[f.key]}
         <div class="ae-field-t">${f.title}</div>
         <div class="ae-field-d">${f.desc}</div>
@@ -7991,15 +7993,15 @@ function aeSelectPane() {
       <select onchange="aeSetSev(this.value)">
         ${sevOpt('', 'All severities')}${sevOpt('CRITICAL', 'Critical')}${sevOpt('HIGH', 'High')}${sevOpt('MEDIUM', 'Medium')}${sevOpt('LOW', 'Low')}${sevOpt('INFO', 'Info')}
       </select>
-      <label class="ae-check-btn" title="Selects every visible finding that is not AI-enhanced yet">
-        <input type="checkbox" ${allSel ? 'checked' : ''} onchange="aeSelectAll(this.checked)"> Select all
+      <label class="ae-check-btn${lock ? ' locked' : ''}" title="Selects every visible finding that is not AI-enhanced yet">
+        <input type="checkbox" ${dis} ${allSel ? 'checked' : ''} onchange="aeSelectAll(this.checked)"> Select all
       </label>
-      <button class="btn btn-ghost" type="button" onclick="aeClear()">Clear</button>
+      <button class="btn btn-ghost" type="button" ${dis} onclick="aeClear()">Clear</button>
     </div>
     <div class="ae-table-wrap">
       <table class="ae-table">
         <thead><tr>
-          <th class="c"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="aeSelectAll(this.checked)" aria-label="Select all"></th>
+          <th class="c"><input type="checkbox" ${dis} ${allSel ? 'checked' : ''} onchange="aeSelectAll(this.checked)" aria-label="Select all"></th>
           <th>Finding</th><th>Severity</th><th class="c">CVSS</th><th class="hide-sm">Category</th><th class="hide-sm">Status</th><th></th>
         </tr></thead>
         <tbody>${body}</tbody>
@@ -8377,18 +8379,19 @@ window.aeSetProvider = p => {
   AE.model = cat ? cat[0].value : '';
   aeRender();
 };
-window.aeToggleField = (k, on) => { on ? AE.fields.add(k) : AE.fields.delete(k); aeRender(); };
+window.aeToggleField = (k, on) => { if (aeRunning()) return; on ? AE.fields.add(k) : AE.fields.delete(k); aeRender(); };
 window.aeToggleRow = (ev, id) => {
-  if (ev.target.closest('.ae-chev')) return;
+  if (ev.target.closest('.ae-chev') || aeRunning()) return;
   AE.selected.has(id) ? AE.selected.delete(id) : AE.selected.add(id);
   aeRender();
 };
 window.aeSelectAll = on => {
+  if (aeRunning()) return;
   // Only findings not yet AI-enhanced; a re-run stays an explicit per-row choice.
   for (const r of aeVisibleRows()) if (!r.allFixed) on ? AE.selected.add(r.id) : AE.selected.delete(r.id);
   aeRender();
 };
-window.aeClear = () => { AE.selected.clear(); aeRender(); };
+window.aeClear = () => { if (aeRunning()) return; AE.selected.clear(); aeRender(); };
 window.aeJumpTo = (ev, id) => {
   ev.stopPropagation();
   closeAutoEnhance();
