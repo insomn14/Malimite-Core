@@ -2071,13 +2071,28 @@ function providerDropdownOptionsHtml(configData, selected, defaultLabel) {
   return opts.join('');
 }
 
+/** Provider/model the Config tab marked as default, if that provider is still connected (else null). The model is
+    the saved default, or the provider's first catalog entry. Every picker starts here unless it has its own memory. */
+function configDefaultLlm(configData = _configCache) {
+  const p = configData?.default_provider || '';
+  if (!p || !configuredProviderValues(configData).has(p)) return null;
+  const cat = modelCatalog(p);
+  const saved = configData.default_model || '';
+  return {p, m: cat ? (cat.some(m => m.value === saved) ? saved : cat[0].value) : ''};
+}
+/** <option> list of a provider's models ('' when it has none), `selected` pre-picked. */
+function modelOptionsHtml(provider, selected) {
+  return (modelCatalog(provider) || []).map(m => `<option value="${escAttr(m.value)}"${m.value === selected ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
+}
+
 function renderScanOptionsHtml(file, prefs, configData) {
   const kind = packageKindOf(file.name);
   const xapk = file.name.toLowerCase().endsWith('.xapk');
   const mode = SCAN_MODES[prefs.mode] ? prefs.mode : 'summarize';
   const configuredSet = configuredProviderValues(configData);
   const anyConfigured = configuredSet.size > 0;
-  const provider = configuredSet.has(prefs.provider) ? prefs.provider
+  const dflt = configDefaultLlm(configData);
+  const provider = dflt ? dflt.p : configuredSet.has(prefs.provider) ? prefs.provider
     : (allProviders().find(p => configuredSet.has(p.value))?.value || prefs.provider || '');
   const modeOpts = Object.entries(SCAN_MODES)
     .map(([v, m]) => `<option value="${v}"${v === mode ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
@@ -2506,7 +2521,10 @@ route('home', async function() {
     $('#llm-provider')?.addEventListener('change', () => onProviderChange());
     $('#llm-model-select')?.addEventListener('change', updateRunSummary);
     $$('#scan-form input[name=decompiler], #assessment-enabled, #ios-native').forEach(el => el.addEventListener('change', updateRunSummary));
-    if ($('#llm-provider')) onProviderChange(prefs.provider === $('#llm-provider').value ? (prefs.model || '') : '');
+    if ($('#llm-provider')) {
+      const cur = $('#llm-provider').value, d = configDefaultLlm();
+      onProviderChange(prefs.provider === cur ? (prefs.model || '') : d?.p === cur ? d.m : '');
+    }
     onLlmToggle(true);
     onLlmModeChange();
     paintDupWarn();
@@ -4392,6 +4410,7 @@ function chatShowPrompts() {
 async function tabAssistant(el, id, detail) {
   if (detail.state !== 'done') { el.innerHTML = notReadyHtml(detail, 'The AI Assistant'); return; }
   const st = chatSt(id);
+  const dflt = configDefaultLlm();   // starting pick; a remembered per-session choice replaces it in loadSession()
   el.innerHTML = `
     <div class="card chat-card" data-chat-scan="${escAttr(id)}">
       <div class="chat-bar">
@@ -4411,9 +4430,9 @@ async function tabAssistant(el, id, detail) {
         <div class="chat-comp-bar">
           <button class="chat-icon-btn" id="chat-attach" type="button" title="Attach up to 5 text/code files or images" aria-label="Attach files">${ico('paperclip')}</button>
           <select id="chat-provider" title="LLM provider" onchange="onChatProviderChange()">
-            ${providerDropdownOptionsHtml(_configCache, '', detail.llm_provider && detail.llm_provider !== 'none' ? 'Scan default (' + providerLabel(detail.llm_provider) + ')' : 'Scan default')}
+            ${providerDropdownOptionsHtml(_configCache, dflt?.p || '', detail.llm_provider && detail.llm_provider !== 'none' ? 'Scan default (' + providerLabel(detail.llm_provider) + ')' : 'Scan default')}
           </select>
-          <select id="chat-model-select" hidden title="Model"></select>
+          <select id="chat-model-select" ${modelCatalog(dflt?.p || '') ? '' : 'hidden'} title="Model">${modelOptionsHtml(dflt?.p || '', dflt?.m)}</select>
           <span class="nav-spacer"></span>
           <button class="chat-send-btn" id="chat-send" type="button" title="Send" aria-label="Send">${ico('send')}</button>
           <button class="chat-send-btn stop" id="chat-stop" type="button" title="Stop" aria-label="Stop" style="display:none">${ico('stop')}</button>
@@ -7651,6 +7670,7 @@ const AI_FIX_FIELDS = [
 ];
 
 function renderAiFixPanel(v) {
+  const dflt = configDefaultLlm();
   const isAiFixed = v.ai_fix_status === 'applied';
   const statusLine = isAiFixed
     ? `<div class="aifix-status">✨ Applied${v.ai_fix_provider ? ` by <strong>${esc(v.ai_fix_provider)}</strong>${v.ai_fix_model ? '/' + esc(v.ai_fix_model) : ''}` : ''}${v.ai_fix_at ? ` on ${new Date(v.ai_fix_at).toLocaleString()}` : ''}.</div>`
@@ -7664,11 +7684,11 @@ function renderAiFixPanel(v) {
       <form class="triage-form" onsubmit="return false">
         <label>LLM Provider
           <select id="aifix-provider-${v.id}" onchange="onAiFixProviderChange(${v.id})">
-            ${providerDropdownOptionsHtml(_configCache)}
+            ${providerDropdownOptionsHtml(_configCache, dflt?.p || '')}
           </select>
         </label>
         <label>Model
-          <select id="aifix-model-select-${v.id}" hidden></select>
+          <select id="aifix-model-select-${v.id}" ${modelCatalog(dflt?.p || '') ? '' : 'hidden'}>${modelOptionsHtml(dflt?.p || '', dflt?.m)}</select>
         </label>
         <div class="full">
           <div style="font-size:.72rem;color:var(--muted);margin-bottom:.3rem">Fields to rewrite</div>
@@ -7877,19 +7897,27 @@ function aeRenderBanner() {
     <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="openAutoEnhance('log')">View progress</button></div>`;
 }
 
-window.openAutoEnhance = function(tab) {
-  if (!AE.scanId) return;
-  AE.open = true; AE.error = '';
-  AE.tab = tab || (aeRunning() ? 'log' : AE.tab || 'select');
-  if (!AE.provider && AE.detail?.llm_provider && aeProviders().some(p => p.value === AE.detail.llm_provider)) {
+/** First pick for the modal: the Config tab's default provider, else this scan's own provider (never overrides a pick already made). */
+function aeInitProvider() {
+  if (AE.provider) return;
+  const d = configDefaultLlm();
+  if (d && aeProviders().some(p => p.value === d.p)) { AE.provider = d.p; AE.model = d.m; return; }
+  if (AE.detail?.llm_provider && aeProviders().some(p => p.value === AE.detail.llm_provider)) {
     AE.provider = AE.detail.llm_provider;
     const cat = modelCatalog(AE.provider);
     AE.model = cat ? (cat.some(m => m.value === AE.detail.llm_model) ? AE.detail.llm_model : cat[0].value) : '';
   }
+}
+
+window.openAutoEnhance = function(tab) {
+  if (!AE.scanId) return;
+  AE.open = true; AE.error = '';
+  AE.tab = tab || (aeRunning() ? 'log' : AE.tab || 'select');
+  aeInitProvider();
   // Best-effort refresh: a provider connected in the Config tab after this scan page first
   // loaded (no reload in between) should show up in the dropdown next time the modal opens,
   // not just after a hard refresh. Silently keeps the existing _configCache on failure.
-  fetchConfigProviders().then(() => { if (AE.open) aeRender(); }).catch(() => {});
+  fetchConfigProviders().then(() => { if (AE.open) { aeInitProvider(); aeRender(); } }).catch(() => {});
   let ov = document.getElementById('ae-overlay');
   if (!ov) {
     ov = document.createElement('div');

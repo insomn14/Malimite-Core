@@ -124,7 +124,10 @@ def resolve_llm(scan_provider: str, scan_model: str,
     """Scan's provider/model unless overridden; key only from server settings (never meta.json)."""
     def known(x: str) -> bool:
         return x in PROVIDERS or llm_config.get_custom(x) is not None
+    cfg_default = llm_config.load()   # Config tab "Set as default": used when neither the request nor the scan names a provider
+    default_p, default_m = cfg_default["default_provider"], cfg_default["default_model"]
     p = (provider or "").strip().lower() or (scan_provider if known(scan_provider) else "") \
+        or (default_p if known(default_p) else "") \
         or (settings.llm_provider if known(settings.llm_provider) else "")
     if not known(p):
         raise LlmError("No LLM provider configured for this scan; choose one in the Assistant tab.")
@@ -132,6 +135,8 @@ def resolve_llm(scan_provider: str, scan_model: str,
     m = (model or "").strip()
     if not m and p == scan_provider:
         m = scan_model
+    if not m and p == default_p:
+        m = default_m
     if not m and p == settings.llm_provider:
         m = settings.llm_model
     if p not in PROVIDERS:
