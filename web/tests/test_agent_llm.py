@@ -155,6 +155,48 @@ class RequestBodyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("tools", await self._body("claude", allow_tools=False))  # history has tool blocks: defs must stay
 
 
+class OllamaNativeTests(unittest.IsolatedAsyncioTestCase):
+    def test_to_ollama_uses_object_args_and_tool_name(self):
+        out = llm.to_ollama("S", CONVO)
+        self.assertEqual(out[2]["tool_calls"][0]["function"], {"name": "get_source", "arguments": {"class_name": "a.B"}})
+        self.assertEqual(out[3], {"role": "tool", "tool_name": "get_source", "content": "CODE"})
+
+    def test_to_ollama_images_are_base64_list(self):
+        msgs = [{"role": "user", "content": [{"type": "text", "text": "look"},
+                {"type": "image", "source": {"media_type": "image/png", "data": "QUJD"}}]}]
+        self.assertEqual(llm.to_ollama("S", msgs)[1], {"role": "user", "content": "look", "images": ["QUJD"]})
+
+    async def test_request_uses_native_endpoint_with_options(self):
+        import httpx
+        seen = {}
+
+        def handler(req):
+            seen["url"] = str(req.url)
+            seen["body"] = json.loads(req.content)
+            return httpx.Response(200, text='{"message":{"content":"hi"},"done":true,"done_reason":"stop"}\n')
+        opts = {"num_ctx": 16384, "think": False, "temperature": 0.3, "keep_alive": "30m"}
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            cfg = llm.LlmCfg("ollama", "qwen3.5:4b", "", "http://h:11434", options=opts)
+            evs = await _collect(llm.chat_step(cfg, "S", CONVO, [{"name": "t", "description": "d", "schema": {}}], client=c))
+        self.assertEqual(seen["url"], "http://h:11434/api/chat")
+        b = seen["body"]
+        self.assertEqual((b["options"]["num_ctx"], b["options"]["num_predict"], b["think"], b["keep_alive"]),
+                         (16384, 2048, False, "30m"))
+        self.assertIn("tools", b)
+        self.assertEqual(evs[0], {"type": "text", "text": "hi"})
+
+    async def test_parse_tool_call_error_and_length(self):
+        evs = await _collect(llm.parse_ollama(_feed(
+            {"message": {"content": "", "tool_calls": [{"function": {"name": "t", "arguments": {"a": 1}}}]}, "done": False},
+            {"done": True, "done_reason": "stop"})))
+        self.assertEqual(evs[0], {"type": "tool_use", "id": "call_0", "name": "t", "input": {"a": 1}})
+        self.assertEqual(evs[-1], {"type": "stop", "reason": "tool_use"})
+        evs = await _collect(llm.parse_ollama(_feed({"message": {"content": "x"}, "done": True, "done_reason": "length"})))
+        self.assertEqual(evs[-1], {"type": "stop", "reason": "length"})
+        with self.assertRaises(llm.LlmError):
+            await _collect(llm.parse_ollama(_feed({"error": "boom"})))
+
+
 class ResolveTests(unittest.TestCase):
     def test_key_from_settings_and_scan_provider_model(self):
         with patch.object(scanner.settings, "anthropic_api_key", "K"), \

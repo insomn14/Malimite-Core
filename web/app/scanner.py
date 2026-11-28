@@ -538,6 +538,7 @@ def llm_env(provider: str, per_req_key: str = "") -> dict[str, str]:
             env["DEEPSEEK_BASE_URL"] = base
     elif provider == "ollama":
         env["OLLAMA_BASE_URL"] = fields.get("base_url") or settings.ollama_base_url or "http://localhost:11434"
+        env["OLLAMA_OPTIONS"] = json.dumps(llm_config.ollama_options())   # read by core's OllamaProvider
     elif provider == "bedrock":
         if fields.get("access_key_id"):
             env["AWS_ACCESS_KEY_ID"] = fields["access_key_id"]

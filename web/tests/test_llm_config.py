@@ -67,6 +67,25 @@ class LlmConfigStoreTests(unittest.TestCase):
         self.assertTrue(llm_config.is_configured("openai"))
         self.assertEqual(llm_config.effective_fields("openai")["api_key"], "sk-abc123456789")
 
+    def test_ollama_models_are_stored_and_reported(self):
+        llm_config.set_provider("ollama", base_url="http://h:11434", models=["qwen3.5:4b"])
+        st = llm_config.provider_status("ollama")
+        self.assertEqual(st["models"], ["qwen3.5:4b"])
+        self.assertNotIn("models", st["fields"])
+        llm_config.set_provider("ollama", base_url="http://h2:11434", models=None)   # partial update keeps them
+        self.assertEqual(llm_config.provider_status("ollama")["models"], ["qwen3.5:4b"])
+
+    def test_ollama_options_defaults_validation_and_override(self):
+        self.assertEqual(llm_config.ollama_options()["num_ctx"], 16384)
+        self.assertIs(llm_config.ollama_options()["think"], False)
+        llm_config.set_provider("ollama", options=llm_config.clean_ollama_options({"num_ctx": "8192", "temperature": 0.7, "top_k": ""}))
+        eff = llm_config.ollama_options()
+        self.assertEqual((eff["num_ctx"], eff["temperature"], eff["keep_alive"]), (8192, 0.7, "30m"))
+        self.assertEqual(llm_config.provider_status("ollama")["options"]["num_ctx"], 8192)
+        for bad in ({"num_ctx": 10}, {"think": "yes"}, {"bogus": 1}, {"keep_alive": "soon"}, {"temperature": 9}):
+            with self.assertRaises(ValueError, msg=bad):
+                llm_config.clean_ollama_options(bad)
+
     def test_set_provider_merges_partial_updates(self):
         llm_config.set_provider("deepseek", api_key="sk-first", base_url="https://custom.example")
         llm_config.set_provider("deepseek", api_key="sk-rotated")  # base_url omitted

@@ -77,6 +77,27 @@ class ProbeTests(unittest.TestCase):
                                  client=_client(lambda req: httpx.Response(200, json=body))))
         self.assertTrue(r["ok"] and r["model_found"])
 
+    def test_ollama_probes_typed_base_url_and_returns_models(self):
+        seen = {}
+
+        def handler(req):
+            seen["url"] = str(req.url)
+            return httpx.Response(200, json={"models": [{"name": "qwen3.5:4b"},
+                                                        {"name": "hf.co/x/y-GGUF:Q6_K"}]})
+
+        r = _run(llm_probe.probe("ollama", "", "", client=_client(handler),
+                                 extra={"base_url": "http://gpu-box:11434/"}))
+        self.assertEqual(seen["url"], "http://gpu-box:11434/api/tags")
+        self.assertEqual(r["models"], ["qwen3.5:4b", "hf.co/x/y-GGUF:Q6_K"])
+
+    def test_ollama_unreachable_hints_docker(self):
+        def handler(req):
+            raise httpx.ConnectError("boom")
+
+        r = _run(llm_probe.probe("ollama", "", "", client=_client(handler)))
+        self.assertFalse(r["ok"])
+        self.assertIn("host.docker.internal", r["message"])
+
     def test_network_error(self):
         def handler(req):
             raise httpx.ConnectError("boom")

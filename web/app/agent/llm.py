@@ -104,6 +104,7 @@ class LlmCfg:
     # base_url is then the full prefix the user entered (version path included).
     protocol: str = ""
     headers: Optional[dict] = None   # custom providers: extra request headers, {session} already expanded
+    options: Optional[dict] = None   # ollama only: effective request parameters (llm_config.ollama_options())
 
 
 def _resolve_custom(pid: str, model: str, session: str) -> LlmCfg:
@@ -163,7 +164,7 @@ def resolve_llm(scan_provider: str, scan_model: str,
             "deepseek": env.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
             "ollama": env.get("OLLAMA_BASE_URL", "http://localhost:11434"),
             "glm": env.get("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")}[p]
-    return LlmCfg(p, m, key, base.rstrip("/"))
+    return LlmCfg(p, m, key, base.rstrip("/"), options=llm_config.ollama_options() if p == "ollama" else None)
 
 
 # ── message translation ───────────────────────────────────────────────────────
@@ -205,6 +206,46 @@ def to_openai(system: str, messages: list[dict]) -> list[dict]:
             elif text:
                 out.append({"role": "user", "content": text})
     return out
+
+
+def to_ollama(system: str, messages: list[dict]) -> list[dict]:
+    """Native /api/chat shape: tool-call arguments are objects (not JSON strings), tool results carry
+    the tool's name instead of an id, and images ride in a per-message base64 `images` list."""
+    out: list[dict] = [{"role": "system", "content": system}]
+    names: dict[str, str] = {}
+    for m in messages:
+        blocks = m["content"]
+        if m["role"] == "assistant":
+            for b in blocks:
+                if b["type"] == "tool_use":
+                    names[b["id"]] = b["name"]
+            calls = [{"function": {"name": b["name"], "arguments": b["input"]}}
+                     for b in blocks if b["type"] == "tool_use"]
+            msg: dict = {"role": "assistant", "content": "".join(b["text"] for b in blocks if b["type"] == "text")}
+            if calls:
+                msg["tool_calls"] = calls
+            out.append(msg)
+        else:
+            for b in blocks:
+                if b["type"] == "tool_result":
+                    out.append({"role": "tool", "tool_name": names.get(b["tool_use_id"], ""), "content": b["content"]})
+            text = "".join(b["text"] for b in blocks if b["type"] == "text")
+            images = [b["source"]["data"] for b in blocks if b["type"] == "image"]
+            if text or images:
+                out.append({"role": "user", "content": text, **({"images": images} if images else {})})
+    return out
+
+
+# Ollama option keys that live inside the request's `options` object; `think` and `keep_alive` are top-level.
+_OLLAMA_OPTION_KEYS = ("num_ctx", "num_predict", "temperature", "top_p", "top_k", "min_p",
+                       "repeat_penalty", "num_thread", "num_batch")
+OLLAMA_CHAT_PREDICT = 2048   # CPU generates ~15 tok/s: the 8192 default meant minutes per round
+
+
+def ollama_body_parts(o: dict, default_predict: int = OLLAMA_CHAT_PREDICT) -> dict:
+    opts = {k: o[k] for k in _OLLAMA_OPTION_KEYS if k in o}
+    opts.setdefault("num_predict", default_predict)
+    return {"options": opts, "think": bool(o.get("think", False)), "keep_alive": o.get("keep_alive", "30m")}
 
 
 def _tools_anthropic(tools):
@@ -303,12 +344,43 @@ async def parse_openai(data: AsyncIterator[str]) -> AsyncIterator[dict]:
     yield {"type": "stop", "reason": "tool_use" if calls else reason}
 
 
+async def parse_ollama(data: AsyncIterator[str]) -> AsyncIterator[dict]:
+    """Native /api/chat stream: one JSON object per line; tool calls arrive whole (args as an object)."""
+    calls: list[dict] = []
+    reason = "stop"
+    async for d in data:
+        try:
+            ev = json.loads(d)
+        except ValueError:
+            continue
+        if ev.get("error"):
+            raise LlmError(f"ollama: {str(ev['error'])[:200]}")
+        m = ev.get("message") or {}
+        if m.get("content"):
+            yield {"type": "text", "text": m["content"]}
+        for tc in m.get("tool_calls") or []:
+            fn = tc.get("function") or {}
+            calls.append({"id": tc.get("id") or f"call_{len(calls)}", "name": fn.get("name", ""),
+                          "input": _args(fn.get("arguments"))})
+        if ev.get("done"):
+            reason = ev.get("done_reason") or reason
+    for c in calls:
+        yield {"type": "tool_use", **c}
+    yield {"type": "stop", "reason": "tool_use" if calls else reason}
+
+
 # ── HTTP ──────────────────────────────────────────────────────────────────────
 
 async def _sse(resp: httpx.Response) -> AsyncIterator[str]:
     async for line in resp.aiter_lines():
         if line.startswith("data:"):
             yield line[5:].strip()
+
+
+async def _ndjson(resp: httpx.Response) -> AsyncIterator[str]:
+    async for line in resp.aiter_lines():
+        if line.strip():
+            yield line
 
 
 async def _bedrock_sse(resp: httpx.Response) -> AsyncIterator[str]:
@@ -342,7 +414,9 @@ async def chat_step(cfg: LlmCfg, system: str, messages: list[dict], tools: list[
                     client: Optional[httpx.AsyncClient] = None, allow_tools: bool = True) -> AsyncIterator[dict]:
     """allow_tools=False keeps the tool definitions (history may contain tool blocks) but forbids new calls."""
     own = client is None
-    client = client or httpx.AsyncClient(timeout=httpx.Timeout(120, connect=15))
+    # a CPU-only Ollama can prefill a long prompt for minutes before the first token
+    client = client or httpx.AsyncClient(timeout=httpx.Timeout(600 if cfg.provider == "ollama" else 120, connect=15))
+    lines = _sse
 
     if cfg.provider == "bedrock":
         # Bedrock's Anthropic-model wire format is the Messages API body (system/messages/
@@ -443,6 +517,14 @@ async def chat_step(cfg: LlmCfg, system: str, messages: list[dict], tools: list[
         if not allow_tools:
             body["tool_choice"] = {"type": "none"}
         parse = parse_anthropic
+    elif cfg.provider == "ollama":
+        # Native endpoint, not the OpenAI-compat /v1 one: /v1 silently ignores num_ctx (the model stays
+        # at Ollama's 4096 default) and cannot switch thinking off per request.
+        url, headers, lines, parse = f"{cfg.base_url}/api/chat", {}, _ndjson, parse_ollama
+        body = {"model": cfg.model, "stream": True, "messages": to_ollama(system, messages),
+                **ollama_body_parts(cfg.options or {}, min(settings.chat_max_output_tokens, OLLAMA_CHAT_PREDICT))}
+        if allow_tools:
+            body["tools"] = _tools_openai(tools)
     else:
         url = f"{cfg.base_url}/chat/completions" if cfg.protocol else f"{cfg.base_url}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {cfg.api_key}"} if cfg.api_key else {}
@@ -492,7 +574,7 @@ async def chat_step(cfg: LlmCfg, system: str, messages: list[dict], tools: list[
                             "on Pro/Max subscription usage during bursts of requests, independent of "
                             "the server's ANTHROPIC_API_KEY quota. Wait a bit and try again.")
                     raise LlmError(f"{cfg.provider} returned HTTP {resp.status_code}: {(msg or '')[:200]}")
-                async for ev in parse(_sse(resp)):
+                async for ev in parse(lines(resp)):
                     yield ev
                 return
     except httpx.HTTPError as e:

@@ -998,6 +998,7 @@ class LlmTestRequest(BaseModel):
     access_key_id: str = Field("", max_length=256)
     secret_access_key: str = Field("", max_length=256)
     region: str = Field("", max_length=64)
+    base_url: str = Field("", max_length=500)   # ollama: probe the URL typed in the dialog, not the saved one
 
 
 @app.post("/api/v1/llm/test")
@@ -1007,7 +1008,8 @@ async def llm_test_connection(request: Request, req: LlmTestRequest):
     Never spends a completion and never echoes the key back."""
     _check_auth(request)
     extra = {"access_key_id": req.access_key_id, "secret_access_key": req.secret_access_key,
-            "region": req.region} if req.provider == "bedrock" else None
+            "region": req.region} if req.provider == "bedrock" else \
+            {"base_url": req.base_url} if req.provider == "ollama" else None
     try:
         return await llm_probe.probe(req.provider, req.api_key, req.model, extra=extra)
     except ValueError as e:
@@ -1026,6 +1028,8 @@ class LlmProviderConfigRequest(BaseModel):
     secret_access_key: str = Field("", max_length=256)
     region: str = Field("", max_length=64)
     model_id: str = Field("", max_length=200)
+    models: list[str] = Field(default_factory=list, max_length=500)   # ollama: locally pulled model names
+    options: Optional[dict] = None   # ollama: request parameters (num_ctx, think, …); {} resets to defaults
 
 
 class LlmDefaultRequest(BaseModel):
@@ -1119,9 +1123,15 @@ async def set_config_provider(request: Request, provider: str, req: LlmProviderC
                                                      "/api/v1/auth/claude-oauth/start + /exchange "
                                                      "(Login with Claude) or /import-claude-code instead.")
     p = _require_known_provider(provider)
+    try:
+        options = llm_config.clean_ollama_options(req.options) if req.options is not None and p == "ollama" else None
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     stored = llm_config.set_provider(
         p, api_key=req.api_key, base_url=req.base_url, access_key_id=req.access_key_id,
         secret_access_key=req.secret_access_key, region=req.region, model_id=req.model_id,
+        models=[m.strip()[:200] for m in req.models if m.strip()] or None,
+        options=options,
     )
     return {"ok": True, "status": llm_config.provider_status(p), "updated_at": stored.get("updated_at")}
 
